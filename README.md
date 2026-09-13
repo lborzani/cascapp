@@ -1465,6 +1465,59 @@ A versão do Godot está escrita uma vez, em `env.GODOT_VERSION`, e tem de
 acompanhar o `config/features` do `project.godot`. O download e os modelos de
 exportação ficam em cache por versão, em `.github/actions/godot`.
 
+### Release por tag
+
+`.github/workflows/release.yml` publica um APK **assinado** a partir de uma tag:
+
+```bash
+git tag v1.16 && git push origin v1.16
+```
+
+A esteira roda as suítes de novo, confere que a tag e o `version/name` do
+`export_presets.cfg` dizem o mesmo número, exporta em release, verifica a
+assinatura com o `apksigner` e cria a release no GitHub com o APK anexado.
+
+A conferência de versão existe porque este projeto já errou isso: o preset em
+1.5 e o `project.godot` em 1.4, um APK que se instala com um número e se
+apresenta com outro. `version/name` é a fonte única — o addon `version_stamp`
+carimba esse valor dentro do pacote —, e uma tag que discorda dele produz uma
+release cujo número ninguém consegue citar sem errar.
+
+Disparada à mão pelo botão do GitHub, a esteira faz tudo menos publicar: o APK
+sai como artefato do trabalho. É o caminho para testar a assinatura sem queimar
+uma tag.
+
+#### Os três segredos
+
+O keystore não está no repositório e não deve estar. Ele vive como segredo, em
+base64, e no runner é escrito em `$RUNNER_TEMP` — fora da área de trabalho, onde
+não há como acabar num artefato ou num commit — com permissão `600`, e apagado
+no fim mesmo quando o export falha.
+
+| Segredo | O que é |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | o `.jks` inteiro, em base64 |
+| `ANDROID_KEYSTORE_ALIAS` | o alias da chave dentro do keystore |
+| `ANDROID_KEYSTORE_PASSWORD` | a senha do keystore e da chave |
+
+Para gerar o base64 e descobrir o alias:
+
+```bash
+base64 -w0 release-keystore.jks > keystore.b64
+```
+
+```bash
+keytool -list -v -keystore release-keystore.jks | grep -i "Alias name"
+```
+
+Os três entram em **Settings › Secrets and variables › Actions › New repository
+secret**, no GitHub. Apague o `keystore.b64` depois de colar — ele é o keystore
+inteiro em texto.
+
+O Godot lê os três por variável de ambiente
+(`GODOT_ANDROID_KEYSTORE_RELEASE_PATH` / `_USER` / `_PASSWORD`) em vez de pelo
+`export_presets.cfg`, que é arquivo de projeto e vai versionado.
+
 ### Testes
 
 ```bash

@@ -1,0 +1,223 @@
+name: Release
+
+# Publica um APK **assinado** a partir de uma tag.
+#
+# Disparado por tag e não por empurrão em `main`: uma versão é uma decisão, e
+# `git tag v1.16 && git push --tags` é essa decisão dita em voz alta. Todo commit
+# em `main` já produz um APK de depuração na esteira de CI; o que esta esteira
+# acrescenta é a assinatura, que é o que um aparelho de outra pessoa aceita
+# instalar.
+#
+# ## Os três segredos
+#
+# O keystore **não** está no repositório e não deve estar. Ele entra como segredo
+# do repositório, em base64, e é escrito num arquivo temporário fora da área de
+# trabalho — nunca dentro dela, para não haver como ele acabar num artefato ou
+# num commit por acidente.
+#
+#   ANDROID_KEYSTORE_BASE64     o .jks inteiro, em base64
+#   ANDROID_KEYSTORE_ALIAS      o alias da chave dentro do keystore
+#   ANDROID_KEYSTORE_PASSWORD   a senha do keystore e da chave
+#
+# O Godot lê os três por variável de ambiente
+# (`GODOT_ANDROID_KEYSTORE_RELEASE_*`) em vez de pelo `export_presets.cfg`, que é
+# arquivo de projeto e vai versionado.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.1-stable
+
+permissions:
+  contents: write
+
+jobs:
+  testes:
+    name: Testes antes de publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instalar o Godot
+        uses: ./.github/actions/godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Importar e conferir os scripts
+        run: |
+          godot --headless --path . --import 2>&1 | tee import.log
+          if grep -qE "SCRIPT ERROR|Parse Error|Failed to load script" import.log; then
+            echo "::error::erro de script durante a importação"
+            grep -E "SCRIPT ERROR|Parse Error|Failed to load script" import.log
+            exit 1
+          fi
+
+      # As mesmas suítes do CI, menos as de rede: aqui elas exigiriam subir o
+      # relay para provar de novo o que a esteira de CI já provou naquele commit.
+      # O que não pode faltar é o que quebra silencioso — regras e cenas.
+      - name: Suítes
+        run: |
+          godot --headless --path . --script res://tests/test_runner.gd
+          godot --headless --path . res://tests/scene_probe.tscn
+          godot --headless --path . res://tests/pairing_probe.tscn
+          godot --headless --path . res://tests/ludo_probe.tscn
+          godot --headless --path . --script res://tests/monopoly_probe.gd
+          godot --headless --path . --script res://tests/bomber_probe.gd
+
+  apk:
+    name: APK assinado
+    needs: testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      # A tag e a versão do preset têm de dizer a mesma coisa.
+      #
+      # É a versão automatizada de um erro que este projeto já cometeu: o preset
+      # em 1.5 e o `project.godot` em 1.4, um APK que se instala com um número e
+      # se apresenta com outro. `version/name` é a fonte única do que sai num
+      # build — o addon `version_stamp` carimba esse valor dentro do pacote —, e
+      # uma tag que discorda dele é uma release cujo número ninguém consegue
+      # citar sem errar.
+      - name: Conferir a versão
+        id: versao
+        run: |
+          preset=$(grep -oP '(?<=^version/name=")[^"]+' export_presets.cfg)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "preset=$preset  tag=$tag"
+          if [ "${{ github.event_name }}" = "push" ] && [ "$preset" != "$tag" ]; then
+            echo "::error::a tag diz $tag e o export_presets.cfg diz $preset"
+            exit 1
+          fi
+          echo "version=$preset" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Instalar o Godot
+        uses: ./.github/actions/godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Construir o plugin Android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :plugin:assembleRelease --no-daemon
+          cp plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar ../android/plugins/
+        working-directory: android_plugin
+
+      # Fora da área de trabalho de propósito: em `$RUNNER_TEMP` o arquivo não
+      # tem como entrar num artefato, num `git add -A` ou num cache. E `600`
+      # porque um keystore legível por qualquer processo da máquina é um keystore
+      # a menos.
+      - name: Escrever o keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::falta o segredo ANDROID_KEYSTORE_BASE64 — veja a seção de release no README"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          chmod 600 "$RUNNER_TEMP/release.jks"
+
+      - name: Apontar o SDK do Android para o Godot
+        run: |
+          minor=$(echo "$GODOT_VERSION" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-$minor.tres <<TRES
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          TRES
+
+      - name: Importar
+        run: godot --headless --path . --import
+
+      # Mesmo laço do APK de depuração, e pelo mesmo motivo: o Godot em headless
+      # não encerra o processo depois de exportar — a thread de varredura do
+      # sistema de arquivos o segura com o pacote já escrito e assinado. Quem
+      # decide o resultado é o artefato.
+      - name: Exportar assinado
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/release.jks
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p build/android
+          apk="build/android/cascapp-${{ steps.versao.outputs.version }}.apk"
+          echo "apk=$apk" >> "$GITHUB_ENV"
+          godot --headless --path . \
+            --install-android-build-template \
+            --export-release "Android" "$apk" > export.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 360); do
+            grep -q "DONE.*export" export.log && break
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 5
+          done
+          kill "$pid" 2>/dev/null || true
+
+          if [ ! -s "$apk" ]; then
+            echo "::error::o APK não foi gerado"
+            # O log é impresso **filtrado**: o Gradle repete a linha de comando
+            # dele em alguns erros, e ela carrega a senha do keystore.
+            tail -60 export.log | sed -E 's/(pass[^ ]*|keyPassword|storePassword)[= ][^ ]+/\1=***/gi'
+            exit 1
+          fi
+
+      # Um APK sem assinatura instala em aparelho de desenvolvedor e é recusado
+      # por todo o resto. O erro aparece no telefone de outra pessoa, dias depois
+      # — então ele é conferido aqui, onde ainda custa um minuto.
+      - name: Conferir a assinatura
+        run: |
+          apksigner="$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner"
+          "$apksigner" verify --verbose "$apk" | tee assinatura.txt
+          # O `: true` no fim importa: o `apksigner` imprime uma linha por esquema
+          # de assinatura, e a do v2 aparece igualmente com `false` num APK que só
+          # tem a assinatura velha do JAR.
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" assinatura.txt
+
+      # Só por tag. Disparado à mão, `github.ref_name` é o nome da **branch**, e
+      # uma release chamada "develop" é lixo que alguém precisa apagar depois —
+      # o APK sai como artefato do trabalho, logo abaixo, que é o que quem
+      # disparou à mão queria.
+      - name: Publicar a release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notas="APK assinado da versão ${{ steps.versao.outputs.version }}, gerado por \`${{ github.workflow }}\` a partir de \`${{ github.sha }}\`."
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" "$apk" --clobber
+          else
+            gh release create "${{ github.ref_name }}" "$apk" \
+              --title "${{ github.ref_name }}" --notes "$notas" --verify-tag
+          fi
+
+      - name: Guardar o APK como artefato
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v5
+        with:
+          name: cascapp-release-apk
+          path: build/android/*.apk
+          retention-days: 7
+
+      # `always()` para apagar o keystore mesmo quando o export falha: o caminho
+      # de erro é justamente aquele em que ninguém lembra do arquivo.
+      - name: Apagar o keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
