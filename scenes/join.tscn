@@ -1,0 +1,87 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/join.gd" id="1_join"]
+[ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
+[ext_resource type="PackedScene" path="res://ui/join_panel.tscn" id="3_panel"]
+[ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
+[ext_resource type="Script" path="res://ui/app_bar.gd" id="2_bar"]
+
+[node name="Join" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_join")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 1)
+
+[node name="Safe" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("9_safe")
+
+[node name="VBox" type="VBoxContainer" parent="Safe"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="AppBar" type="MarginContainer" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_bar")
+
+[node name="Page" type="ScrollContainer" parent="Safe/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Pad" type="MarginContainer" parent="Safe/VBox/Page"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="Safe/VBox/Page/Pad"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="Unavailable" type="Label" parent="Safe/VBox/Page/Pad/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"Subtitle"
+text = "Este build não tem servidor de partidas configurado, então não dá para entrar em nenhuma sala."
+autowrap_mode = 3
+
+[node name="JoinPanel" parent="Safe/VBox/Page/Pad/Content" instance=ExtResource("3_panel")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ToastLayer" type="Control" parent="Safe"]
+mouse_filter = 2
+layout_mode = 2
+
+[node name="Toast" type="Control" parent="Safe/ToastLayer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 120.0
+grow_horizontal = 2
+script = ExtResource("4_banner")

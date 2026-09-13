@@ -1,0 +1,11 @@
+.git
+.godot
+.shots
+android
+build
+relay
+docs
+tests
+export_presets.cfg
+*.jks
+*.keystore

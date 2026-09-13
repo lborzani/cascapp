@@ -1,0 +1,52 @@
+# Servidor de Bomberman no Fly.io.
+#
+# App separado do relay (`relay/fly.toml`): o relay serve os cinco jogos por turno
+# e não roda simulação; este roda uma partida a 30 Hz por sala e fala UDP. São
+# dois processos, dois apps, e é de propósito.
+#
+# Gerado por `fly launch` e corrigido à mão. O `launch` acrescenta um
+# `[http_service]` por padrão, **removido de propósito** — ver o aviso antes do
+# serviço abaixo.
+
+app = 'bomber'
+
+# Uma região, a mais perto de quem joga. Num jogo em grade a 30 Hz, cada 10 ms de
+# ida e volta encolhe a janela em que o comando ainda chega a tempo. Um servidor
+# nos EUA soma ~120 ms pra quem joga no Brasil.
+primary_region = 'gru'
+
+[build]
+
+# A imagem é neutra: quem sabe onde ela roda é este arquivo. O Fly entrega UDP no
+# `fly-global-services` e não no coringa — escutando em 0.0.0.0 o servidor sobe,
+# os logs ficam limpos e nenhum pacote chega.
+[env]
+  BOMBER_BIND = 'fly-global-services'
+  BOMBER_PORT = '27016'
+
+# NÃO acrescentar `[http_service]` aqui, e apagar se o `fly launch` puser de novo.
+# Ele diz ao Fly que há um servidor HTTP na porta — não há, o processo só fala UDP
+# — e traz `auto_stop_machines` por ociosidade de HTTP. Tráfego UDP não acorda
+# máquina parada, então o servidor sumiria sozinho e não voltaria.
+
+# UDP, e aqui mora a pegadinha do Fly: o `internal_port` **tem que ser igual** ao
+# externo. O proxy reescreve o IP dos pacotes UDP e não reescreve a porta, então
+# uma porta interna diferente entrega o pacote onde ninguém escuta.
+[[services]]
+  protocol = 'udp'
+  internal_port = 27016
+
+  # A partida vive na memória do processo: as salas são um dicionário, e uma sala
+  # criada numa máquina não existe na outra. Duas máquinas dariam código de sala
+  # que às vezes funciona e às vezes não, conforme o balanceamento. `fly scale
+  # count 1`, e só.
+  auto_stop_machines = 'off'
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 27016
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'

@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'org.chessandcheckers.plugins'
+    compileSdk versions.compileSdk
+    buildToolsVersion versions.buildTools
+
+    defaultConfig {
+        minSdk versions.minSdk
+        //noinspection ExpiredTargetSdkVersion
+        targetSdk versions.targetSdk
+    }
+
+    compileOptions {
+        sourceCompatibility versions.javaVersion
+        targetCompatibility versions.javaVersion
+    }
+
+    kotlinOptions {
+        jvmTarget = versions.javaVersion.toString()
+    }
+
+    libraryVariants.configureEach { variant ->
+        // Godot only cares about one artifact; name it predictably so the copy
+        // into res://android/plugins/ is scriptable.
+        variant.outputs.configureEach { output ->
+            output.outputFileName = "ChessAndCheckersPlugins.${variant.name}.aar"
+        }
+    }
+}
+
+dependencies {
+    // Provided by the Godot runtime at execution time — must NOT be bundled,
+    // or the app ends up with two copies of the engine's Java classes.
+    compileOnly "org.godotengine:godot:${versions.godot}"
+
+    implementation "androidx.annotation:annotation:1.9.1"
+    // Câmera embutida na própria activity do jogo. O Google Code Scanner, que
+    // estava aqui antes, abria uma activity do Play Services e mandava o jogo
+    // para segundo plano — de onde o Android o recolhia por memória no meio da
+    // leitura. Sem troca de activity o problema deixa de existir.
+    implementation "androidx.camera:camera-core:${versions.cameraX}"
+    implementation "androidx.camera:camera-camera2:${versions.cameraX}"
+    implementation "androidx.camera:camera-lifecycle:${versions.cameraX}"
+    implementation "androidx.camera:camera-view:${versions.cameraX}"
+    implementation "com.google.mlkit:barcode-scanning:${versions.mlkitBarcode}"
+    // Fixado: abaixo de 2.6 o LifecycleOwner ainda é interface Java com
+    // getLifecycle(), e o plugin precisa ser um LifecycleOwner para o CameraX.
+    implementation "androidx.lifecycle:lifecycle-runtime:${versions.lifecycle}"
+}

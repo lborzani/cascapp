@@ -1,0 +1,49 @@
+# fly.toml app configuration file generated for chess-checkers-relay on 2026-08-05T13:45:12-03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+# ATENÇÃO: este app tem de rodar em UMA máquina só.
+#
+#     fly scale count 1
+#
+# As salas moram na memória do processo. Com duas máquinas atrás do mesmo
+# endereço, anfitrião e convidado caem em processos diferentes e nunca se acham
+# — e o jogador vê "nenhuma partida com esse código", que parece erro de
+# digitação. O `fly launch` cria duas por padrão, então isto acontece sozinho.
+#
+# Confirmar depois de cada deploy (com uma sala aberta, o número tem de ser
+# estável e a máquina sempre a mesma):
+#
+#     curl https://chess-checkers-relay.fly.dev/healthz
+#
+# Detalhes em README.md, "Escala".
+
+app = 'chess-checkers-relay'
+primary_region = 'gru'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 500
+    soft_limit = 400
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/healthz'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

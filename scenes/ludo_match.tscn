@@ -1,0 +1,165 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scenes/ludo_match.gd" id="1_ludo"]
+[ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
+[ext_resource type="Script" path="res://ui/ludo_view.gd" id="2_board"]
+[ext_resource type="Script" path="res://ui/die_view.gd" id="3_die"]
+[ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
+[ext_resource type="Script" path="res://ui/leave_button.gd" id="5_leave"]
+
+[node name="LudoMatch" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_ludo")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+script = ExtResource("9_safe")
+
+[node name="Row" type="HBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Scoreboard" type="VBoxContainer" parent="Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BackButton" type="Button" parent="Margin/Row/Scoreboard"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("5_leave")
+
+[node name="Board" type="Control" parent="Margin/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("2_board")
+
+[node name="DieColumn" type="VBoxContainer" parent="Margin/Row"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="DieSpacer" type="Control" parent="Margin/Row/DieColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Die" type="Control" parent="Margin/Row/DieColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("3_die")
+
+[node name="StatusLabel" type="Label" parent="Margin/Row/DieColumn"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Subtitle"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BottomSpacer" type="Control" parent="Margin/Row/DieColumn"]
+layout_mode = 2
+size_flags_vertical = 3
+
+
+[node name="ToastLayer" type="Control" parent="Margin"]
+mouse_filter = 2
+layout_mode = 2
+
+[node name="Toast" type="Control" parent="Margin/ToastLayer"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 120.0
+grow_horizontal = 2
+script = ExtResource("4_banner")
+
+[node name="Overlay" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="Overlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.78)
+
+[node name="Center" type="CenterContainer" parent="Overlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Overlay/Center"]
+layout_mode = 2
+theme_type_variation = &"Card"
+
+[node name="Box" type="VBoxContainer" parent="Overlay/Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="OverlayTitle" type="Label" parent="Overlay/Center/Panel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "Fim de partida"
+horizontal_alignment = 1
+
+[node name="OverlaySubtitle" type="Label" parent="Overlay/Center/Panel/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Subtitle"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="AgainButton" type="Button" parent="Overlay/Center/Panel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 54)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Jogar de novo"
+
+[node name="OverlayLeaveButton" type="Button" parent="Overlay/Center/Panel/Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Sair"

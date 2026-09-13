@@ -1,0 +1,26 @@
+{
+  "name": "chess-checkers-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Relay WebSocket que liga dois aparelhos em redes diferentes.",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js",
+    "dev": "node --watch --experimental-strip-types src/main.ts",
+    "test": "tsc && node --test dist/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.2"
+  }
+}

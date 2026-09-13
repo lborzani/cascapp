@@ -1,0 +1,22 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Saídas de build. O APK e o pacote exportado são gerados a partir do que está
+# versionado; guardá-los é guardar o mesmo código duas vezes, e em 78 MB.
+/build/
+
+# Chave de assinatura. **Nunca** versionada, nem em repositório privado: quem tem
+# este arquivo e a senha assina um APK que o Android aceita como sendo este app.
+# O caminho e a senha entram por `GODOT_ANDROID_KEYSTORE_RELEASE_*` na hora de
+# exportar — ver a seção de release no README.
+*.jks
+*.keystore
+
+# Relay (Node/TypeScript)
+relay/node_modules/
+relay/dist/
+
+# Ajustes locais do Claude Code: permissões deste aparelho, com caminhos
+# absolutos desta máquina. O que vale para o projeto inteiro mora em CLAUDE.md.
+.claude/settings.local.json

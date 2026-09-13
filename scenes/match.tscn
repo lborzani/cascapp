@@ -1,0 +1,279 @@
+[gd_scene format=3 uid="uid://q7abve7epp4u"]
+
+[ext_resource type="Script" uid="uid://c3j6uv2jbuslc" path="res://scenes/match.gd" id="1_match"]
+[ext_resource type="Script" path="res://ui/leave_button.gd" id="9_leave"]
+[ext_resource type="Script" uid="uid://c5ufyl0o0t7os" path="res://scenes/board_view.gd" id="2_board"]
+[ext_resource type="Script" uid="uid://btp10g4hofovo" path="res://ui/player_card.gd" id="3_card"]
+[ext_resource type="Script" uid="uid://6ooh7oflwmd2" path="res://ui/banner.gd" id="4_banner"]
+[ext_resource type="Script" uid="uid://bul13hsycc7ib" path="res://ui/last_move.gd" id="6_last"]
+[ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
+
+[node name="Match" type="Control" unique_id=256687662]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_match")
+
+[node name="Background" type="ColorRect" parent="." unique_id=1296462392]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=478921014]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 18
+script = ExtResource("9_safe")
+
+[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=1179290069]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TopCardSlot" type="Control" parent="Margin/VBox" unique_id=513716548]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+
+[node name="TopCard" type="Control" parent="Margin/VBox/TopCardSlot" unique_id=461007153]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_card")
+
+[node name="TopLastMoveSlot" type="Control" parent="Margin/VBox" unique_id=1922933009]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+
+[node name="TopLastMove" type="Control" parent="Margin/VBox/TopLastMoveSlot" unique_id=959114296]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_last")
+
+[node name="BoardArea" type="Control" parent="Margin/VBox" unique_id=118403670]
+custom_minimum_size = Vector2(0, 300)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Board" type="Control" parent="Margin/VBox/BoardArea" unique_id=127514372]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_board")
+
+[node name="Banner" type="Control" parent="Margin/VBox/BoardArea" unique_id=465729966]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 46.0
+grow_horizontal = 2
+script = ExtResource("4_banner")
+
+[node name="BottomLastMoveSlot" type="Control" parent="Margin/VBox" unique_id=602407345]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+
+[node name="BottomLastMove" type="Control" parent="Margin/VBox/BottomLastMoveSlot" unique_id=1670282287]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_last")
+
+[node name="BottomCardSlot" type="Control" parent="Margin/VBox" unique_id=1032445483]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+
+[node name="BottomCard" type="Control" parent="Margin/VBox/BottomCardSlot" unique_id=724208209]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_card")
+
+[node name="StatusLabel" type="Label" parent="Margin/VBox" unique_id=536855256]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox" unique_id=751477147]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ExitButton" type="Button" parent="Margin/VBox/ButtonRow" unique_id=988794576]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("9_leave")
+
+[node name="PromotionLayer" type="Control" parent="." unique_id=1213063222]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PromotionLayer" unique_id=1027344871]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.72)
+
+[node name="Center" type="CenterContainer" parent="PromotionLayer" unique_id=1217195894]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="PromotionLayer/Center" unique_id=202475910]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="PromotionLayer/Center/Panel" unique_id=146198390]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 22
+
+[node name="VBox" type="VBoxContainer" parent="PromotionLayer/Center/Panel/Margin" unique_id=2042366062]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="PromotionLayer/Center/Panel/Margin/VBox" unique_id=1878465444]
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "Promover peão"
+horizontal_alignment = 1
+
+[node name="PromotionRow" type="HBoxContainer" parent="PromotionLayer/Center/Panel/Margin/VBox" unique_id=2057560358]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResultLayer" type="Control" parent="." unique_id=235486838]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="ResultLayer" unique_id=1723283029]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.78)
+
+[node name="Center" type="CenterContainer" parent="ResultLayer" unique_id=2058058106]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="ResultLayer/Center" unique_id=468738548]
+custom_minimum_size = Vector2(320, 0)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="ResultLayer/Center/Panel" unique_id=394080821]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 26
+
+[node name="VBox" type="VBoxContainer" parent="ResultLayer/Center/Panel/Margin" unique_id=1316577102]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResultTitle" type="Label" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=878223379]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "Fim de jogo"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ResultDetail" type="Label" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=887869457]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Subtitle"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Spacer" type="Control" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=2123722852]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="RematchButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=853705282]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Jogar de novo"
+
+[node name="RematchDeclineButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Agora não"
+
+[node name="ResultExitButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=866953306]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Voltar ao menu"

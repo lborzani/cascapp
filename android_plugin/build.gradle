@@ -1,0 +1,23 @@
+// Versions mirror what Godot 4.7.1 uses for its own Android build (see
+// config.gradle inside android_source.zip). Drifting from them is the usual
+// cause of "duplicate class" and Kotlin metadata errors at export time.
+buildscript {
+    ext.versions = [
+        androidGradlePlugin: '8.6.1',
+        kotlin             : '2.1.21',
+        compileSdk         : 36,
+        minSdk             : 24,
+        targetSdk          : 36,
+        buildTools         : '36.1.0',
+        javaVersion        : JavaVersion.VERSION_17,
+        godot              : '4.7.1.stable',
+        cameraX            : '1.4.1',
+        mlkitBarcode       : '17.3.0',
+        lifecycle          : '2.8.7',
+    ]
+}
+
+plugins {
+    id 'com.android.library' version '8.6.1' apply false
+    id 'org.jetbrains.kotlin.android' version '2.1.21' apply false
+}

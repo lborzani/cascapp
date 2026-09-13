@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      A lista inteira de permissões do app. Nenhuma é *dangerous* fora da câmera,
+      e nenhuma toca em rádio do aparelho.
+
+      Saíram, nesta ordem: Bluetooth e proximidade de Wi-Fi junto com o Nearby
+      Connections; localização, mudança de Wi-Fi e de rede junto com o hotspot
+      local e a descoberta por UDP. Com a partida acontecendo numa sala do relay,
+      o app precisa de internet e de nada mais — pedir permissão que não se usa é
+      o tipo de coisa que faz o jogador desconfiar da tela de instalação.
+    -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.nfc.hce"
+        android:required="false" />
+
+    <application>
+        <!--
+          Godot 4 discovers plugins through these meta-data entries: the name
+          after "v2." is the singleton name seen from GDScript, the value is the
+          class to instantiate. No .gdap file is needed for v2 plugins.
+        -->
+        <meta-data
+            android:name="org.godotengine.plugin.v2.GodotNfc"
+            android:value="org.chessandcheckers.nfc.GodotNfcPlugin" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.GodotQrScanner"
+            android:value="org.chessandcheckers.qr.GodotQrScannerPlugin" />
+
+        <!--
+          Host Card Emulation: enquanto a sala está aberta, este aparelho
+          responde ao SELECT do convidado com o código dela.
+        -->
+        <service
+            android:name="org.chessandcheckers.nfc.NfcHceService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NFC_SERVICE">
+            <intent-filter>
+                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.cardemulation.host_apdu_service"
+                android:resource="@xml/apduservice" />
+        </service>
+    </application>
+
+</manifest>

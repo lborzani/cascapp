@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  res/xml/apduservice.xml of the NFC plugin module.
+
+  The AID must match GodotNfcPlugin.AID (0xF0 + "CHESS"). Anything in the
+  F0..FF range is a proprietary AID and does not need to be registered with
+  anyone, which is exactly what an app-to-app tap needs.
+-->
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+	android:description="@string/nfc_service_description"
+	android:requireDeviceUnlock="false">
+	<aid-group
+		android:category="other"
+		android:description="@string/nfc_aid_group_description">
+		<aid-filter android:name="F04348455353" />
+	</aid-group>
+</host-apdu-service>

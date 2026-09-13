@@ -1,0 +1,286 @@
+[gd_scene format=3 uid="uid://bq4nxv1twaship"]
+
+[ext_resource type="Script" path="res://scenes/battleship_match.gd" id="1_match"]
+[ext_resource type="Script" path="res://ui/leave_button.gd" id="9_leave"]
+[ext_resource type="Script" path="res://ui/waters_view.gd" id="2_waters"]
+[ext_resource type="Script" uid="uid://btp10g4hofovo" path="res://ui/player_card.gd" id="3_card"]
+[ext_resource type="Script" uid="uid://6ooh7oflwmd2" path="res://ui/banner.gd" id="4_banner"]
+[ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
+
+[node name="BattleshipMatch" type="Control" unique_id=311000001]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_match")
+
+[node name="Background" type="ColorRect" parent="." unique_id=311000002]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 1)
+
+[node name="Margin" type="MarginContainer" parent="." unique_id=311000003]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 18
+script = ExtResource("9_safe")
+
+[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=311000004]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TopCardSlot" type="Control" parent="Margin/VBox" unique_id=311000005]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+
+[node name="TopCard" type="Control" parent="Margin/VBox/TopCardSlot" unique_id=311000006]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_card")
+
+[node name="WatersArea" type="Control" parent="Margin/VBox" unique_id=311000007]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EnemyWaters" type="Control" parent="Margin/VBox/WatersArea" unique_id=311000008]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_waters")
+
+[node name="Banner" type="Control" parent="Margin/VBox/WatersArea" unique_id=311000014]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 46.0
+grow_horizontal = 2
+script = ExtResource("4_banner")
+
+[node name="OwnCaption" type="Label" parent="Margin/VBox" unique_id=311000009]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "SEU MAR"
+
+[node name="OwnWaters" type="Control" parent="Margin/VBox" unique_id=311000010]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 132)
+layout_mode = 2
+script = ExtResource("2_waters")
+
+[node name="BottomCardSlot" type="Control" parent="Margin/VBox" unique_id=311000011]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 2
+
+[node name="BottomCard" type="Control" parent="Margin/VBox/BottomCardSlot" unique_id=311000012]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_card")
+
+[node name="ExitButton" type="Button" parent="Margin/VBox" unique_id=311000013]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("9_leave")
+
+[node name="PlaceLayer" type="Control" parent="." unique_id=311000020]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PlaceLayer" unique_id=311000021]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 1)
+
+[node name="Margin" type="MarginContainer" parent="PlaceLayer" unique_id=311000022]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 18
+script = ExtResource("9_safe")
+
+[node name="VBox" type="VBoxContainer" parent="PlaceLayer/Margin" unique_id=311000023]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PlaceTitle" type="Label" parent="PlaceLayer/Margin/VBox" unique_id=311000024]
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "Posicione sua frota"
+
+[node name="PlaceHint" type="Label" parent="PlaceLayer/Margin/VBox" unique_id=311000025]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+theme_type_variation = &"Caption"
+text = "Toque numa casa para pousar o navio."
+
+[node name="PlaceWaters" type="Control" parent="PlaceLayer/Margin/VBox" unique_id=311000026]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_waters")
+
+[node name="FleetLabel" type="Label" parent="PlaceLayer/Margin/VBox" unique_id=311000027]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+text = "Encouraçado"
+
+[node name="ButtonRow" type="HBoxContainer" parent="PlaceLayer/Margin/VBox" unique_id=311000028]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RotateButton" type="Button" parent="PlaceLayer/Margin/VBox/ButtonRow" unique_id=311000029]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ChipButton"
+text = "Deitado"
+
+[node name="ShuffleButton" type="Button" parent="PlaceLayer/Margin/VBox/ButtonRow" unique_id=311000030]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ChipButton"
+text = "Sortear"
+
+[node name="ClearButton" type="Button" parent="PlaceLayer/Margin/VBox/ButtonRow" unique_id=311000031]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ChipButton"
+text = "Limpar"
+
+[node name="ConfirmButton" type="Button" parent="PlaceLayer/Margin/VBox" unique_id=311000032]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Confirmar frota"
+
+[node name="OverlayLayer" type="Control" parent="." unique_id=311000040]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="OverlayLayer" unique_id=311000041]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0745098, 0.0627451, 0.054902, 0.85)
+
+[node name="Margin" type="MarginContainer" parent="OverlayLayer" unique_id=311000042]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_right = 24
+
+[node name="Center" type="CenterContainer" parent="OverlayLayer/Margin" unique_id=311000043]
+layout_mode = 2
+
+[node name="Panel" type="PanelContainer" parent="OverlayLayer/Margin/Center" unique_id=311000044]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="OverlayLayer/Margin/Center/Panel" unique_id=311000045]
+layout_mode = 2
+theme_override_constants/margin_left = 22
+theme_override_constants/margin_top = 22
+theme_override_constants/margin_right = 22
+theme_override_constants/margin_bottom = 22
+
+[node name="VBox" type="VBoxContainer" parent="OverlayLayer/Margin/Center/Panel/Margin" unique_id=311000046]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ResultTitle" type="Label" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000047]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+theme_type_variation = &"Title"
+text = "Fim"
+
+[node name="ResultDetail" type="Label" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000048]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+horizontal_alignment = 1
+theme_type_variation = &"Caption"
+text = ""
+
+[node name="RematchButton" type="Button" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000049]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_type_variation = &"PrimaryButton"
+text = "Revanche"
+
+[node name="RematchDeclineButton" type="Button" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000051]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Recusar"
+
+[node name="LeaveButton" type="Button" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000050]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Voltar ao menu"
