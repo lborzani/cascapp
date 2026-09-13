@@ -1,0 +1,202 @@
+name: CI
+
+# O que roda a cada empurrão e a cada proposta de junção.
+#
+# Três tarefas, na ordem em que o erro costuma aparecer: o relay tem suíte
+# própria em Node e é a mais rápida; os testes do jogo abrem as cenas de verdade
+# com os autoloads de verdade; e o APK só é montado depois que os dois passaram,
+# porque exportar código quebrado é gastar dez minutos para produzir um pacote
+# que ninguém deveria instalar.
+#
+# A versão do Godot está escrita **uma vez**, aqui. Ela tem de ser a mesma do
+# `config/features` no `project.godot` — uma máquina de CI com outra versão
+# reimporta o projeto inteiro e passa a testar algo que ninguém roda.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.1-stable
+
+# Um empurrão novo na mesma branch cancela o anterior: o resultado do commit de
+# trás deixou de interessar no instante em que existe um da frente.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  relay:
+    name: Relay (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+
+      # `npm ci` e não `npm install`: ele obedece ao lockfile em vez de resolver
+      # versões de novo, que é a diferença entre testar o que está no repositório
+      # e testar o que o registro publicou hoje de manhã.
+      - run: npm ci
+        working-directory: relay
+
+      - run: npm run typecheck
+        working-directory: relay
+
+      - run: npm test
+        working-directory: relay
+
+  jogo:
+    name: Testes do jogo (Godot headless)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+
+      - name: Instalar o Godot
+        uses: ./.github/actions/godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      # A importação é o primeiro teste, e não uma preparação para ele: é aqui
+      # que um erro de sintaxe aparece. Sem esta verificação o erro não falha
+      # nada — a cena simplesmente não carrega, o processo não termina, e o
+      # trabalho morre no tempo limite meia hora depois.
+      - name: Importar e conferir os scripts
+        run: |
+          godot --headless --path . --import 2>&1 | tee import.log
+          if grep -qE "SCRIPT ERROR|Parse Error|Failed to load script" import.log; then
+            echo "::error::erro de script durante a importação"
+            grep -E "SCRIPT ERROR|Parse Error|Failed to load script" import.log
+            exit 1
+          fi
+
+      - name: Regras (perft, damas, QR, prefs)
+        run: godot --headless --path . --script res://tests/test_runner.gd
+
+      - name: Camada de cena
+        run: godot --headless --path . res://tests/scene_probe.tscn
+
+      - name: Menu e pareamento
+        run: godot --headless --path . res://tests/pairing_probe.tscn
+
+      - name: Ludo
+        run: godot --headless --path . res://tests/ludo_probe.tscn
+
+      - name: Metrópole
+        run: godot --headless --path . --script res://tests/monopoly_probe.gd
+
+      - name: Bomberman
+        run: godot --headless --path . --script res://tests/bomber_probe.gd
+
+      # O caminho pela internet, contra um relay de verdade. É o único teste que
+      # exercita o aperto de mão inteiro — sala aberta de um lado, código do
+      # outro — e o único que pegaria uma divergência entre o protocolo do jogo e
+      # o do servidor, que são dois repositórios de linguagens diferentes dentro
+      # do mesmo.
+      - name: Subir o relay
+        run: |
+          npm ci
+          npm run build
+          nohup node dist/main.js > relay.log 2>&1 &
+          # Espera a porta abrir em vez de dormir um número redondo: numa máquina
+          # lenta o `sleep 2` falha, e numa rápida ele desperdiça dois segundos
+          # por execução.
+          for _ in $(seq 1 30); do
+            if nc -z 127.0.0.1 8080; then exit 0; fi
+            sleep 1
+          done
+          echo "::error::o relay não subiu"
+          cat relay.log
+          exit 1
+        working-directory: relay
+
+      - name: Partida ponta a ponta
+        env:
+          CHESS_RELAY_URL: ws://127.0.0.1:8080/ws
+        run: |
+          godot --headless --path . --script res://tests/relay_smoke.gd
+          godot --headless --path . --script res://tests/table_smoke.gd
+
+  apk:
+    name: APK de depuração
+    needs: [relay, jogo]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # O Godot chama o Gradle, que precisa de um JDK 17 — o mesmo da build do
+      # plugin logo abaixo, para os dois não compilarem contra bibliotecas
+      # diferentes.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Instalar o Godot
+        uses: ./.github/actions/godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      # O `.aar` é saída de build e não está versionado; o `.gdap` ao lado dele
+      # está, porque é configuração. Reconstruir aqui é o que garante que o
+      # Kotlin do plugin ainda compila — um plugin quebrado só apareceria no
+      # aparelho, na primeira vez que alguém apontasse a câmera para um QR.
+      - name: Construir o plugin Android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :plugin:assembleRelease --no-daemon
+          cp plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar ../android/plugins/
+        working-directory: android_plugin
+
+      # O Godot procura o SDK nos ajustes do **editor**, que numa máquina de CI
+      # não existem. O arquivo é escrito à mão com os dois caminhos, que é mais
+      # curto que abrir o editor para clicar neles.
+      #
+      # O nome do arquivo carrega a versão **menor** do Godot — `4.7.1-stable`
+      # grava em `editor_settings-4.7.tres`. Com outro nome o Godot não reclama:
+      # ele cria o dele, vazio, e a exportação falha dizendo que não achou o SDK.
+      - name: Apontar o SDK do Android para o Godot
+        run: |
+          minor=$(echo "$GODOT_VERSION" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-$minor.tres <<TRES
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          TRES
+
+      - name: Preparar o projeto
+        run: |
+          godot --headless --path . --import
+          godot --headless --path . --install-android-build-template
+
+      - name: Exportar
+        run: |
+          mkdir -p build/android
+          godot --headless --path . --export-debug "Android" build/android/cascapp.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cascapp-debug-apk
+          path: build/android/cascapp.apk
+          # Sete dias: o APK de um commit serve para testar aquele commit, e
+          # depois disso o que se quer é o da ponta.
+          retention-days: 7

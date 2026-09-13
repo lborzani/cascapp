@@ -1437,6 +1437,34 @@ Debug. Para publicar, crie um keystore próprio e passe as senhas por
 `GODOT_ANDROID_KEYSTORE_RELEASE_PATH` / `_USER` / `_PASSWORD` em vez de gravá-las
 no `export_presets.cfg`, que é arquivo de projeto.
 
+### Integração contínua
+
+`.github/workflows/ci.yml` roda a cada empurrão em `main` e `develop`, a cada
+proposta de junção, e à mão pelo botão do GitHub. São as mesmas linhas de
+comando da seção **Testes**, logo abaixo — o CI não tem suíte própria, e isso é
+de propósito: um teste que só existe no servidor é um teste que ninguém roda antes de commitar.
+
+Três tarefas:
+
+| Tarefa | O que faz | Quando falha |
+|--------|-----------|--------------|
+| `relay` | `npm ci`, `typecheck` e `npm test` | o protocolo do servidor quebrou |
+| `jogo` | importa o projeto, roda as seis suítes headless e as duas de rede contra um relay de verdade | as regras, as cenas ou o aperto de mão quebraram |
+| `apk` | compila o plugin Kotlin, instala o modelo de build e exporta o APK de depuração | o export quebrou, ou o plugin não compila mais |
+
+A importação é tratada como teste: a saída é lida à procura de `SCRIPT ERROR` e
+`Parse Error`. Sem isso um erro de sintaxe não derruba nada — a cena não carrega,
+o processo não termina, e a tarefa morre no tempo limite meia hora depois.
+
+O APK sai como artefato do trabalho, guardado por sete dias. É **de depuração**:
+o de release precisa do keystore, que não está no repositório e não deve estar.
+Para publicar, veja a seção de release — as senhas entram por
+`GODOT_ANDROID_KEYSTORE_RELEASE_*`, e no CI elas seriam segredos do repositório.
+
+A versão do Godot está escrita uma vez, em `env.GODOT_VERSION`, e tem de
+acompanhar o `config/features` do `project.godot`. O download e os modelos de
+exportação ficam em cache por versão, em `.github/actions/godot`.
+
 ### Testes
 
 ```bash

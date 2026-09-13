@@ -1,0 +1,60 @@
+name: Instalar o Godot
+description: Baixa o Godot headless e os modelos de exportação da versão pedida.
+
+# Ação composta e não três blocos repetidos: as tarefas de teste e de APK
+# precisam exatamente da mesma instalação, e duas cópias do mesmo download são
+# duas cópias que divergem no dia em que uma delas subir de versão.
+#
+# Os modelos de exportação entram sempre, mesmo na tarefa que só roda testes: a
+# instalação fica em cache por versão, e um cache a mais custa menos que dois
+# caches quase iguais.
+
+inputs:
+  version:
+    description: "Versão do Godot como aparece no lançamento, por exemplo 4.7.1-stable."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/bin/godot
+          ~/.local/share/godot/export_templates
+        key: godot-${{ inputs.version }}-linux
+
+    - name: Baixar
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        version="${{ inputs.version }}"
+        base="https://github.com/godotengine/godot/releases/download/$version"
+        # A pasta dos modelos é nomeada pela versão com ponto no lugar do hífen:
+        # `4.7.1-stable` vira `4.7.1.stable`. Errar isso não dá erro nenhum — o
+        # Godot só diz que não há modelo para a plataforma, na hora de exportar.
+        templates="${version/-/.}"
+
+        mkdir -p ~/.local/bin ~/.local/share/godot/export_templates
+
+        curl -fsSL -o godot.zip "$base/Godot_v${version}_linux.x86_64.zip"
+        unzip -q godot.zip
+        mv Godot_v${version}_linux.x86_64 ~/.local/bin/godot
+        chmod +x ~/.local/bin/godot
+
+        curl -fsSL -o templates.tpz "$base/Godot_v${version}_export_templates.tpz"
+        unzip -q templates.tpz
+        mv templates ~/.local/share/godot/export_templates/"$templates"
+
+    - name: Pôr no caminho
+      shell: bash
+      run: |
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Conferir
+      shell: bash
+      run: |
+        ~/.local/bin/godot --version

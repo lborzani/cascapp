@@ -1,6 +1,15 @@
 # Godot 4+ specific ignores
 .godot/
-/android/
+
+# O diretório de build do Android é gerado pelo Godot
+# (`--install-android-build-template`) e reconstruído a cada release. A exceção é
+# o `.gdap` do plugin: ele é **configuração** — declara o AAR e as dependências
+# Maven que o Gradle vai buscar —, e sem ele versionado nem o CI nem outra
+# máquina conseguem exportar o APK.
+/android/*
+!/android/plugins/
+/android/plugins/*
+!/android/plugins/*.gdap
 
 # Saídas de build. O APK e o pacote exportado são gerados a partir do que está
 # versionado; guardá-los é guardar o mesmo código duas vezes, e em 78 MB.

@@ -1,0 +1,11 @@
+[config]
+
+name="ChessAndCheckersPlugins"
+binary_type="local"
+binary="ChessAndCheckersPlugins.release.aar"
+
+[dependencies]
+
+remote=["androidx.annotation:annotation:1.9.1", "androidx.lifecycle:lifecycle-runtime:2.8.7", "androidx.camera:camera-core:1.4.1", "androidx.camera:camera-camera2:1.4.1", "androidx.camera:camera-lifecycle:1.4.1", "androidx.camera:camera-view:1.4.1", "com.google.mlkit:barcode-scanning:17.3.0"]
+local=[]
+custom_maven_repos=[]
