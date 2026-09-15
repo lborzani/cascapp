@@ -57,6 +57,8 @@ export interface RelayOptions {
   rateMaxMessages?: number;
   /** Teto da lista pública. Rolagem infinita não é o problema deste jogo. */
   roomListLimit?: number;
+  /** Teto de salas na memória. Ver `RoomRegistry`. */
+  roomLimit?: number;
 }
 
 /**
@@ -76,6 +78,11 @@ const DEFAULTS = {
   rateWindowMs: 1_000,
   rateMaxMessages: 40,
   roomListLimit: 40,
+  // Mil salas são duas mil pessoas jogando ao mesmo tempo, bem acima do que uma
+  // máquina compartilhada aguenta em conexões (o `hard_limit` do Fly é 500).
+  // O teto não existe para limitar o jogo: existe para o abuso bater num número
+  // antes de bater na memória.
+  roomLimit: 1_000,
 } as const satisfies Required<RelayOptions>;
 
 /**
@@ -93,13 +100,14 @@ interface Session {
 }
 
 const ERROR_DETAIL: Record<
-  'room_taken' | 'room_not_found' | 'room_full' | 'bad_seats',
+  'room_taken' | 'room_not_found' | 'room_full' | 'bad_seats' | 'too_many_rooms',
   string
 > = {
   room_taken: 'Já existe uma partida com esse código.',
   room_not_found: 'Nenhuma partida com esse código.',
   room_full: 'Essa partida já está cheia.',
   bad_seats: 'Número de jogadores fora do que o servidor aceita.',
+  too_many_rooms: 'O servidor está cheio. Tente de novo em alguns minutos.',
 };
 
 export interface Relay {
@@ -112,7 +120,11 @@ export interface Relay {
 export function createRelay(options: RelayOptions = {}): Relay {
   const config = { ...DEFAULTS, ...options };
   const sessions = new WeakMap<WebSocket, Session>();
-  const registry = new RoomRegistry<WebSocket>(config.roomGraceMs, config.roomMaxMs);
+  const registry = new RoomRegistry<WebSocket>(
+    config.roomGraceMs,
+    config.roomMaxMs,
+    config.roomLimit
+  );
 
   const httpServer = http.createServer((request, response) => {
     // Lista pública de salas esperando alguém. Só entra quem pediu para

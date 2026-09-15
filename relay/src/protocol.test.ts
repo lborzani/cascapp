@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { cleanName, MAX_NAME_LENGTH, parseClientMessage } from './protocol.js';
+import {
+  cleanGame,
+  cleanName,
+  cleanTimeControl,
+  MAX_GAME_LENGTH,
+  MAX_NAME_LENGTH,
+  parseClientMessage,
+} from './protocol.js';
 
 /**
  * A limpeza do apelido, que é a única string deste serviço que sai do teclado de
@@ -65,5 +72,43 @@ describe('parseClientMessage host', () => {
       JSON.stringify({ t: 'host', room: 'ABC123', name: 'Ana\nSilva' })
     );
     assert.equal(message?.t === 'host' && message.name, 'AnaSilva');
+  });
+});
+
+/**
+ * O identificador do jogo e o índice do ritmo. Eles chegam pelo mesmo `host` que
+ * o apelido e saem pela mesma porta aberta (`/rooms`) — e eram os dois campos que
+ * atravessavam a fronteira sem passar por nada.
+ */
+describe('cleanGame', () => {
+  it('deixa passar os identificadores do catálogo', () => {
+    for (const id of ['chess', 'checkers', 'battleship', 'ludo', 'monopoly', 'uno', 'bomberman']) {
+      assert.equal(cleanGame(id), id);
+    }
+  });
+
+  it('corta o que não é identificador', () => {
+    assert.equal(cleanGame('Chess Master!'), 'chessmaster');
+    assert.equal(cleanGame('a'.repeat(5000)).length, MAX_GAME_LENGTH);
+    assert.equal(cleanGame(42), '');
+    assert.equal(cleanGame(undefined), '');
+  });
+});
+
+describe('cleanTimeControl', () => {
+  it('aceita um índice, e só um índice', () => {
+    assert.equal(cleanTimeControl(3), 3);
+    assert.equal(cleanTimeControl(0), 0);
+  });
+
+  it('devolve o padrão para tudo o que não é', () => {
+    // `NaN` e `Infinity` viram `null` no JSON da lista pública, e o cliente que
+    // espera um índice recebe um buraco.
+    assert.equal(cleanTimeControl(Number.NaN), 0);
+    assert.equal(cleanTimeControl(Number.POSITIVE_INFINITY), 0);
+    assert.equal(cleanTimeControl(-1), 0);
+    assert.equal(cleanTimeControl(9999), 0);
+    assert.equal(cleanTimeControl(1.5), 0);
+    assert.equal(cleanTimeControl('3'), 0);
   });
 });

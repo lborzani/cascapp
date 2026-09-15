@@ -14,17 +14,36 @@ class FakeSocket {
 }
 
 /** Chaves previsíveis, para o teste poder falar sobre uma delas. */
-function registry(now: () => number = Date.now): RoomRegistry<FakeSocket> {
+function registry(now: () => number = Date.now, roomLimit = 1_000): RoomRegistry<FakeSocket> {
   let issued = 0;
   return new RoomRegistry<FakeSocket>(
     90_000,
     4 * 60 * 60 * 1000,
+    roomLimit,
     now,
     () => `k${issued++}`
   );
 }
 
 describe('RoomRegistry', () => {
+  it('recusa salas novas depois do teto, e ainda assim deixa voltar às antigas', () => {
+    const rooms = registry(Date.now, 2);
+    const first = new FakeSocket();
+    const second = new FakeSocket();
+
+    assert.equal(rooms.openRoom('AAA111', 'chess', first).ok, true);
+    assert.equal(rooms.openRoom('BBB222', 'chess', second).ok, true);
+
+    const overflow = rooms.openRoom('CCC333', 'chess', new FakeSocket());
+    assert.equal(overflow.ok, false);
+    assert.equal(!overflow.ok && overflow.reason, 'too_many_rooms');
+
+    // Abrir sala é o que o teto barra; **voltar** para uma sala que já existe não
+    // cria nada, e barrar isso mataria a reconexão de quem já estava jogando.
+    first.kill();
+    assert.equal(rooms.openRoom('AAA111', 'chess', new FakeSocket()).ok, true);
+  });
+
   it('junta dois jogadores na mesma sala', () => {
     const rooms = registry();
     const host = new FakeSocket();

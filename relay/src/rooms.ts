@@ -54,7 +54,10 @@ export interface Room<S extends OpenState> {
 
 export type SeatOutcome<S extends OpenState> =
   | { ok: true; room: Room<S>; seat: Seat; key: string; evicted: S | null }
-  | { ok: false; reason: 'room_taken' | 'room_not_found' | 'room_full' | 'bad_seats' };
+  | {
+      ok: false;
+      reason: 'room_taken' | 'room_not_found' | 'room_full' | 'bad_seats' | 'too_many_rooms';
+    };
 
 export function isOpen<S extends OpenState>(socket: S | null | undefined): socket is S {
   return socket !== null && socket !== undefined && socket.readyState === OPEN;
@@ -88,6 +91,22 @@ export class RoomRegistry<S extends OpenState> {
   constructor(
     private readonly graceMs: number,
     private readonly maxAgeMs: number,
+    /**
+     * Teto de salas simultâneas.
+     *
+     * Abrir sala é a única coisa que um estranho consegue pedir a este processo
+     * sem dar nada em troca, e cada sala fica na memória por até quatro horas
+     * (`maxAgeMs`) mesmo depois de esvaziar. Sem teto, um laço de conexões que
+     * abre e desliga enche a máquina de 256 MB com salas que ninguém vai usar, e
+     * o sintoma para quem está jogando é o processo sendo reiniciado pelo Fly no
+     * meio da partida.
+     *
+     * É a mesma defesa que o servidor de Bomberman já tinha
+     * (`BomberProtocol.MAX_ROOMS`) e que faltava deste lado. Recusar uma sala
+     * nova é ruim; ficar sem servidor para todo mundo é pior, e a recusa tem
+     * texto próprio para quem a vê saber que não foi o código dele.
+     */
+    private readonly roomLimit: number,
     private readonly now: () => number = Date.now,
     private readonly newKey: () => string = () => randomUUID().slice(0, 8)
   ) {}
@@ -129,6 +148,12 @@ export class RoomRegistry<S extends OpenState> {
         return { ok: false, reason: 'room_taken' };
       }
       return this.take(existing, 0, socket);
+    }
+    // A checagem vem **depois** da sala existente: voltar para uma sala que já
+    // está na memória não cria nada, e recusar essa volta por causa do teto
+    // mataria justamente a reconexão de quem já estava jogando.
+    if (this.rooms.size >= this.roomLimit) {
+      return { ok: false, reason: 'too_many_rooms' };
     }
     const room: Room<S> = {
       code,

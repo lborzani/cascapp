@@ -38,6 +38,7 @@ export type ErrorReason =
   | 'room_taken'
   | 'room_not_found'
   | 'room_full'
+  | 'too_many_rooms'
   | 'hello_timeout'
   | 'rate_limited'
   | 'not_in_room';
@@ -161,6 +162,50 @@ export function cleanName(value: unknown): string {
 }
 
 /**
+ * Teto do identificador de jogo. Os do catálogo têm no máximo dez caracteres
+ * (`battleship`), então vinte e quatro é folga para dois jogos novos com nome
+ * comprido sem ser folga para nada mais.
+ */
+export const MAX_GAME_LENGTH = 24;
+
+/**
+ * O identificador do jogo, reduzido ao que ele pode ser.
+ *
+ * `name` já era limpo aqui e `game` não era, e os dois chegam pelo mesmo caminho
+ * e saem pela mesma porta: `/rooms`, aberta, sem autenticação. Um socket qualquer
+ * mandava um `game` de trinta e dois mil caracteres — o teto de `maxPayload` — e
+ * o processo o guardava na sala e o repetia a todo mundo que pedisse a lista. Com
+ * quarenta salas assim, cada chamada a `/rooms` devolvia mais de um megabyte.
+ *
+ * Alfabeto estreito de propósito: um identificador é uma chave que o cliente
+ * compara, não um texto que alguém lê. O que não for `[a-z0-9_-]` some, e uma
+ * string que ficar vazia é uma sala sem jogo declarado — que é como todas as
+ * salas de um cliente antigo já eram.
+ */
+export function cleanGame(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  let clean = '';
+  for (const character of value.toLowerCase()) {
+    if (/[a-z0-9_-]/.test(character)) clean += character;
+    if (clean.length >= MAX_GAME_LENGTH) break;
+  }
+  return clean;
+}
+
+/**
+ * O índice do ritmo, reduzido a um inteiro são.
+ *
+ * Ele é repassado cru para a lista pública, e `tc` vinha como `number` sem mais
+ * nada: `NaN` e `Infinity` viram `null` no JSON da lista, e o cliente que espera
+ * um índice recebe um buraco. Um número fora da faixa não é uma escolha — é um
+ * cliente adulterado ou um bug —, e zero é o ritmo padrão.
+ */
+export function cleanTimeControl(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return 0;
+  return value >= 0 && value <= 63 ? value : 0;
+}
+
+/**
  * Um frame que chegou pela rede não é `ClientMessage` só porque o TypeScript
  * gostaria que fosse. Esta é a única fronteira do processo, e é onde a validação
  * acontece.
@@ -188,9 +233,11 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         ? {
             t: 'host',
             room: record.room,
-            game: typeof record.game === 'string' ? record.game : '',
+            // Limpos já na fronteira, pelo mesmo motivo de `name`: assim não há
+            // nenhum ponto do processo em que o valor sujo está guardado.
+            game: cleanGame(record.game),
             listed: record.listed === true,
-            tc: typeof record.tc === 'number' ? record.tc : 0,
+            tc: cleanTimeControl(record.tc),
             seats: typeof record.seats === 'number' ? record.seats : MIN_SEATS,
             // Limpo já na fronteira, e não na hora de listar: assim não existe
             // nenhum ponto do processo em que o nome sujo está guardado. Um

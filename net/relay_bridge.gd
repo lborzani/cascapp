@@ -99,6 +99,7 @@ const ERROR_TEXT := {
 	"room_taken": "Já existe uma partida com esse código. Volte e gere outro.",
 	"room_not_found": "Nenhuma partida on-line com esse código.",
 	"room_full": "Essa partida já está cheia.",
+	"too_many_rooms": "O servidor está cheio agora. Tente de novo em alguns minutos.",
 	"rate_limited": "Mensagens demais; a conexão foi encerrada.",
 	"hello_timeout": "O servidor encerrou a conexão antes do pareamento.",
 	"bad_code": "Código de sala inválido.",
