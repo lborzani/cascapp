@@ -30,6 +30,7 @@ func _ready() -> void:
 	await _test_checkers_capture_taps()
 	await _test_rematch()
 	await _test_premove()
+	await _test_premove_limit()
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
@@ -513,6 +514,22 @@ func _test_premove() -> void:
 	scene._on_square_tapped(_square("d2"))
 	_equals(scene._premove_pick, _square("d2"), "peça nossa é erguida")
 	_check(scene._board.targets.has(_square("d4")), "com os destinos que ela teria na nossa vez")
+	# E **sem** o *en passant* do nosso próprio avanço duplo.
+	#
+	# O plano é montado numa cópia do estado com a vez trocada, e o `ep` que está
+	# escrito ali veio do lance anterior — que é nosso, porque agora é a vez do
+	# outro. Com a vez trocada e o campo intacto, o peão de d2 ganhava uma
+	# diagonal grátis para e3: um destino que a revalidação depois recusa, e que o
+	# jogador não tem como entender ter sido oferecido.
+	# As duas listas, e a segunda é a que importa: o lance fantasma carrega uma
+	# casa em `captured`, então ele entrava em `capture_targets` e a tela marcava
+	# e3 como **captura** — uma peça inimiga que não existe, na casa por onde o
+	# nosso próprio peão acabou de passar.
+	_check(
+		not scene._board.targets.has(_square("e3"))
+		and not scene._board.capture_targets.has(_square("e3")),
+		"e sem a diagonal fantasma do nosso próprio avanço duplo"
+	)
 
 	scene._on_square_tapped(_square("d4"))
 	_equals(scene._premove_pick, Board.NO_SQUARE, "escolhido o destino, a peça baixa")
@@ -521,8 +538,8 @@ func _test_premove() -> void:
 	_check(scene._board.premove.has(_square("d2")), "a casa de origem fica marcada")
 	_check(scene._board.premove.has(_square("d4")), "e a de destino")
 
-	# Um toque fora de peça nossa cancela o plano: é o gesto que todo mundo tenta,
-	# e poupa um botão numa tela que não tem espaço para ele.
+	# Um toque fora de peça nossa apaga o último elo — com um elo só, é o gesto de
+	# sempre: cancelar o plano.
 	scene._on_square_tapped(_square("h5"))
 	_check(scene._premove.is_empty(), "tocar em outro lugar cancela o plano")
 	scene._on_square_tapped(_square("d2"))
@@ -541,6 +558,8 @@ func _test_premove() -> void:
 		Board.square_name(scene._state.history[2]["p"][1]), "d4", "e é o lance que foi planejado"
 	)
 	_check(scene._premove.is_empty(), "o plano se consome ao sair")
+
+	await _test_premove_chain(scene)
 
 	Game.mode = Game.Mode.HOTSEAT
 	_check(not scene._premove_allowed(), "no mesmo aparelho não se planeja: não há espera")
@@ -594,6 +613,109 @@ func _test_premove() -> void:
 	Net.connected = false
 	Game.mode = Game.Mode.HOTSEAT
 	Game.game_id = Game.CHESS
+
+
+## A corrente: mais de um lance planejado, saindo um por vez.
+##
+## O que ela tem de diferente de um plano só, e é o que este teste persegue: o
+## segundo elo é escolhido numa posição **hipotética**, onde o primeiro já
+## aconteceu. A peça é pega onde ela vai estar, e não onde ela está — se isso
+## estiver errado, o jogador toca na casa de destino do elo anterior e o tabuleiro
+## não responde.
+##
+## Chega com a partida em 1.e4 e5 2.d4, vez das pretas.
+func _test_premove_chain(scene: Node) -> void:
+	print("corrente de lances planejados")
+	_check(scene._premove_allowed(), "ainda é a vez do oponente")
+
+	scene._on_square_tapped(_square("g1"))
+	scene._on_square_tapped(_square("f3"))
+	_equals(scene._premove.size(), 2, "primeiro elo armado")
+
+	# A peça está em g1 de verdade e em f3 na hipótese. É f3 que o dedo procura.
+	scene._on_square_tapped(_square("f3"))
+	_equals(scene._premove_pick, _square("f3"), "a peça é pega onde ela **vai** estar")
+	_check(
+		scene._board.targets.has(_square("g5")),
+		"com os destinos da posição em que o elo anterior já aconteceu"
+	)
+	scene._on_square_tapped(_square("g5"))
+	_equals(scene._premove.size(), 4, "a corrente tem dois elos")
+
+	# Um toque fora apaga **um** elo, e não a corrente: quatro decisões perdidas
+	# por um toque errado seria caro demais.
+	scene._on_square_tapped(_square("h5"))
+	_equals(scene._premove.size(), 2, "o toque fora apaga só o último elo")
+	scene._on_square_tapped(_square("f3"))
+	scene._on_square_tapped(_square("g5"))
+	_equals(scene._premove.size(), 4, "e o elo volta com dois toques")
+
+	# Sai um por vez: o primeiro agora, o segundo na vez seguinte.
+	#
+	# O `n` é o índice do lance no histórico, e ele **tem** de ser o tamanho atual:
+	# a tela descarta um `n` que já está no histórico (é o reenvio de uma
+	# reconexão) e pede sincronia para um que pule lance. Aqui isso importa porque
+	# cada elo que sai empurra o histórico dois de uma vez — o do oponente e o
+	# nosso.
+	scene._on_remote_move({"p": [_square("b8"), _square("c6")], "pr": 0, "n": 3, "seat": 1})
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(scene._state.history.size(), 5, "o oponente jogou e o primeiro elo saiu atrás")
+	_equals(Board.square_name(scene._state.history[4]["p"][1]), "f3", "e o elo foi o planejado")
+	_equals(scene._premove.size(), 2, "com o segundo ainda esperando a vez dele")
+
+	scene._on_remote_move({"p": [_square("d7"), _square("d6")], "pr": 0, "n": 5, "seat": 1})
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(Board.square_name(scene._state.history[6]["p"][1]), "g5", "o segundo elo saiu depois")
+	_check(scene._premove.is_empty(), "e a corrente acabou")
+
+
+## O teto de elos. Ele é recusado em voz alta: sem o aviso, o toque na quinta peça
+## não faz nada e a tela fica muda, que é o que o app evita em todo lugar.
+func _test_premove_limit() -> void:
+	print("teto da corrente")
+	Game.mode = Game.Mode.ONLINE
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.connected = true
+	Game.game_id = Game.CHESS
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	# Uma torre num tabuleiro quase vazio: ela anda para frente e para trás, então
+	# a corrente cresce sem que a posição hipotética fique impossível.
+	var state: MatchState = scene._state
+	state.squares = Board.empty_squares()
+	_put(state, "a1", Board.Side.WHITE, Board.Kind.KING)
+	_put(state, "h1", Board.Side.WHITE, Board.Kind.ROOK)
+	_put(state, "a8", Board.Side.BLACK, Board.Kind.KING)
+	state.side_to_move = Board.Side.BLACK
+	state.meta = {"castle": 0, "ep": Board.NO_SQUARE, "halfmove": 0}
+	state.history.clear()
+	state.ply = 0
+	scene._clear_premove()
+	scene._recompute()
+
+	var path := ["h1", "h4", "h1", "h4", "h1"]
+	for index in range(path.size() - 1):
+		scene._on_square_tapped(_square(path[index]))
+		scene._on_square_tapped(_square(path[index + 1]))
+	_equals(scene._premove.size() / 2, scene.PREMOVE_MAX_LINKS, "a corrente para no teto")
+
+	# Na hipótese, depois dos quatro elos a torre está de volta em h1 — é lá que o
+	# dedo a acha, e é lá que o teto tem de recusar em voz alta.
+	scene._on_square_tapped(_square("h1"))
+	_equals(scene._premove.size() / 2, scene.PREMOVE_MAX_LINKS, "e o elo a mais não entra")
+	_equals(scene._premove_pick, Board.NO_SQUARE, "sem deixar a peça erguida")
+	_check(
+		scene._banner._message.contains("sequência"),
+		"com aviso, para a tela não ficar muda (obtido: '%s')" % scene._banner._message
+	)
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.connected = false
+	Game.mode = Game.Mode.HOTSEAT
 
 
 ## O bot dentro da partida. A busca em si é testada no `test_runner`; o que se

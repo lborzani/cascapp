@@ -46,12 +46,25 @@ var _clock_shown := -1
 ## dono. Só no jogo no mesmo aparelho.
 var _table_mode := false
 
-## Lance planejado para a vez seguinte, `[origem, destino]`, e a peça erguida
-## enquanto ele é montado. Guardado em casas e não como `Move`: o lance ainda não
-## existe na posição atual, e só vai existir — ou não — depois que o oponente
-## jogar.
+## Corrente de lances planejados, achatada em pares `[origem, destino, …]`, e a
+## casa erguida enquanto o elo seguinte é montado.
+##
+## Guardada em casas e não como `Move`: o lance ainda não existe na posição atual,
+## e só vai existir — ou não — depois que o oponente jogar. Um elo sai por vez, e
+## o que falhar leva o resto junto. Ver [method _run_premove].
 var _premove := PackedInt32Array()
 var _premove_pick := Board.NO_SQUARE
+
+## Teto de elos na corrente.
+##
+## Não é limite de memória — são oito inteiros. É limite de duas outras coisas: do
+## que cabe legível no tabuleiro (quatro elos já são oito casas marcadas, com o
+## número da ordem em cada destino) e do que vale a pena planejar sobre uma
+## hipótese que ignora o oponente. O quinto elo pressupõe quatro lances seguidos
+## do adversário sem consequência nenhuma, e a chance de ele ainda ser jogável
+## quando chegar a vez dele é baixa o bastante para o plano atrapalhar mais que
+## ajudar.
+const PREMOVE_MAX_LINKS := 4
 
 ## O adversário local. Existe sempre; só é acionado no modo solo.
 var _bot := Bot.new()
@@ -481,29 +494,52 @@ func _premove_allowed() -> bool:
 func _on_premove_tapped(square: int) -> void:
 	if not _premove_allowed():
 		return
+	var planned := _premove_state()
 	if _premove_pick == Board.NO_SQUARE:
-		# Com um plano no ar, qualquer toque que não pegue uma peça nossa cancela.
-		# É o gesto que todo mundo já tenta, e poupa um botão numa tela sem espaço
-		# para ele.
-		if _owns(square):
-			_premove = PackedInt32Array()
+		if _premove_owns(planned, square):
+			# Corrente cheia: o toque na própria peça não pode virar um elo, e
+			# também não pode apagar um — apagar aqui faria o jogador perder o
+			# quarto lance por tentar montar o quinto. Ele é recusado em voz alta.
+			if _premove_links() >= PREMOVE_MAX_LINKS:
+				_banner.show_message(
+					"A sequência planejada já tem %d lances." % PREMOVE_MAX_LINKS,
+					Banner.Kind.ALERT
+				)
+				return
 			_premove_pick = square
 		elif not _premove.is_empty():
-			_premove = PackedInt32Array()
+			# O toque que não continua a corrente **apaga o último elo**, e não a
+			# corrente inteira.
+			#
+			# Com um lance só, os dois são a mesma coisa — e era o gesto documentado:
+			# qualquer toque fora cancela, sem gastar um botão numa tela que não tem
+			# espaço para ele. Encadeando, apagar tudo passa a ser caro demais para um
+			# toque errado: quatro decisões perdidas de uma vez. Voltando um elo por
+			# toque, cancelar tudo continua possível (são N toques) e desfazer um
+			# engano custa um só.
+			_premove = _premove.slice(0, _premove.size() - 2)
 		_refresh()
 		return
 	if square == _premove_pick:
 		_premove_pick = Board.NO_SQUARE
-	elif _owns(square):
+	elif _premove_owns(planned, square):
 		_premove_pick = square
+	elif _premove_find(planned, _premove_pick, square) != null:
+		_premove.append(_premove_pick)
+		_premove.append(square)
+		_premove_pick = Board.NO_SQUARE
 	else:
-		_premove = PackedInt32Array([_premove_pick, square])
+		# Destino que a hipótese não oferece: o elo não nasce. Sem isto, o toque
+		# armava um lance que a revalidação recusaria depois — e o jogador só
+		# descobriria na vez seguinte, quando o plano inteiro fosse descartado.
 		_premove_pick = Board.NO_SQUARE
 	_refresh()
 
 
-func _owns(square: int) -> bool:
-	var piece := _state.squares[square]
+## A peça é nossa **na hipótese**, que não é a posição de verdade: com elos já
+## planejados, a peça de d2 está em d4, e é d4 que o dedo precisa achar.
+func _premove_owns(state: MatchState, square: int) -> bool:
+	var piece := state.squares[square]
 	return piece != 0 and Board.side_of(piece) == Game.local_side
 
 
@@ -512,63 +548,114 @@ func _clear_premove() -> void:
 	_premove_pick = Board.NO_SQUARE
 
 
-## Os lances que a peça teria se a vez já fosse nossa. É hipótese, não verdade —
-## o lance do oponente ainda vai mudar o tabuleiro, e por isso o plano é
-## revalidado contra a lista legal de verdade antes de sair. Serve para o jogador
-## ver para onde a peça pode ir; sem isso, planejar seria adivinhar.
-func _premove_moves(from: int) -> Array[Move]:
+## Quantos elos a corrente tem.
+func _premove_links() -> int:
+	return _premove.size() / 2
+
+
+## A posição hipotética sobre a qual o **próximo** elo é escolhido: a de agora com
+## a vez trocada, e com todos os elos já planejados aplicados por cima.
+##
+## É hipótese em dois níveis, e os dois são assumidos:
+##
+## - a vez é nossa, quando na verdade é do oponente;
+## - o oponente **não joga** entre um elo e o seguinte.
+##
+## A segunda é grosseira e é justamente o que torna a corrente barata: simular o
+## que o oponente faria exigiria uma busca por elo, e a resposta dela seria um
+## chute de qualquer forma. O preço é pago na hora certa — cada elo é revalidado
+## contra a lista legal de verdade no instante em que sai, e o primeiro que não
+## existir mais leva a corrente inteira junto.
+##
+## O `ep` é zerado a cada elo pelo mesmo motivo que no primeiro: o direito de
+## *en passant* pertence a quem joga na posição real, e aqui ninguém jogou.
+func _premove_state() -> MatchState:
 	var hypothetical := _state.clone()
-	hypothetical.side_to_move = Game.local_side
-	var found: Array[Move] = []
-	for move in _ruleset.generate_moves(hypothetical):
-		if move.from_square() == from:
-			found.append(move)
-	return found
+	_premove_take_turn(hypothetical)
+	for index in range(0, _premove.size(), 2):
+		var link := _premove_find(hypothetical, _premove[index], _premove[index + 1])
+		if link == null:
+			break
+		_ruleset.apply_move(hypothetical, link)
+		_premove_take_turn(hypothetical)
+	return hypothetical
 
 
-## O plano sai assim que a vez chega — mas depois de o lance do oponente terminar
-## de andar. É o lance dele que o jogador está esperando ver, e cortá-lo pela
-## metade esconderia justamente a informação que motivou o plano.
-func _run_premove() -> void:
-	if _premove.size() != 2:
-		return
-	var wait := _board.remaining_animation()
-	if wait > 0.0:
-		var expected := _state.ply
-		await get_tree().create_timer(wait).timeout
-		if _state.ply != expected or _premove.size() != 2:
-			return
-	if not _is_local_turn() or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
-		_clear_premove()
-		_refresh()
-		return
-
-	var planned := _premove_match()
-	_clear_premove()
-	if planned == null:
-		# Acontece o tempo todo e não é erro: o lance do oponente tornou o plano
-		# impossível. O aviso existe para o jogador não concluir que o toque dele
-		# se perdeu no caminho.
-		_banner.show_message("O lance planejado deixou de ser possível.", Banner.Kind.ALERT)
-		_refresh()
-		return
-	_play(planned, true)
-	_refresh()
+## Devolve a vez a nós e apaga o *en passant*. Ver [method _premove_state].
+func _premove_take_turn(state: MatchState) -> void:
+	state.side_to_move = Game.local_side
+	state.meta["ep"] = Board.NO_SQUARE
 
 
-## Promoção planejada vira dama. É a escolha em quase toda partida, e a única que
-## dá para assumir sem perguntar: perguntar aqui pararia o lance justamente para
+## O lance desta posição que vai de `from` a `to`, ou nulo se ele não existe.
+##
+## Promoção planejada vira dama: é a escolha em quase toda partida, e a única que
+## dá para assumir sem perguntar. Perguntar aqui pararia o lance justamente para
 ## gastar o tempo que o plano existia para economizar.
-func _premove_match() -> Move:
+func _premove_find(state: MatchState, from: int, to: int) -> Move:
 	var fallback: Move = null
-	for move in _legal:
-		if move.from_square() != _premove[0] or move.to_square() != _premove[1]:
+	for move in _ruleset.generate_moves(state):
+		if move.from_square() != from or move.to_square() != to:
 			continue
 		if move.promotion == Board.Kind.QUEEN:
 			return move
 		if fallback == null:
 			fallback = move
 	return fallback
+
+
+## Os lances que a peça teria se a vez já fosse nossa, na posição em que os elos
+## anteriores já aconteceram. Serve para o jogador ver para onde a peça pode ir;
+## sem isso, planejar seria adivinhar.
+func _premove_moves(from: int) -> Array[Move]:
+	var found: Array[Move] = []
+	for move in _ruleset.generate_moves(_premove_state()):
+		if move.from_square() == from:
+			found.append(move)
+	return found
+
+
+## O primeiro elo sai assim que a vez chega — mas depois de o lance do oponente
+## terminar de andar. É o lance dele que o jogador está esperando ver, e cortá-lo
+## pela metade esconderia justamente a informação que motivou o plano.
+##
+## Sai **um** elo por vez, e o resto da corrente fica esperando a vez seguinte. O
+## que não pode acontecer é a corrente sobreviver ao elo que falhou: os elos
+## seguintes foram escolhidos numa posição que pressupunha o anterior, e jogar o
+## segundo sem o primeiro é jogar um lance que ninguém planejou.
+func _run_premove() -> void:
+	if _premove.size() < 2:
+		return
+	var wait := _board.remaining_animation()
+	if wait > 0.0:
+		var expected := _state.ply
+		await get_tree().create_timer(wait).timeout
+		if _state.ply != expected or _premove.size() < 2:
+			return
+	if not _is_local_turn() or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
+		_clear_premove()
+		_refresh()
+		return
+
+	var head := _premove_find(_state, _premove[0], _premove[1])
+	if head == null:
+		# Acontece o tempo todo e não é erro: o lance do oponente tornou o plano
+		# impossível. O aviso existe para o jogador não concluir que o toque dele
+		# se perdeu no caminho.
+		var lost := _premove_links()
+		_clear_premove()
+		_banner.show_message(
+			"O lance planejado deixou de ser possível."
+			if lost == 1
+			else "O lance planejado deixou de ser possível — a sequência inteira saiu.",
+			Banner.Kind.ALERT
+		)
+		_refresh()
+		return
+	_premove = _premove.slice(2)
+	_premove_pick = Board.NO_SQUARE
+	_play(head, true)
+	_refresh()
 
 
 # --- game flow ---------------------------------------------------------------

@@ -564,10 +564,25 @@ func _add_pawn_moves(state: MatchState, from: int, side: int, out: Array[Move]) 
 			move.captured = PackedInt32Array([to])
 			_push_pawn_move(move, last_rank, out)
 		elif to == ep_square:
-			var move := Move.simple(from, to)
-			move.captured = PackedInt32Array([Board.square(f, rank)])
-			move.tags["en_passant"] = true
-			out.append(move)
+			# A casa capturada tem de ter um peão inimigo de verdade.
+			#
+			# Numa partida ela sempre tem: `ep` só é escrito pelo avanço duplo de
+			# quem acabou de jogar, e quem acabou de jogar é o inimigo. A conferência
+			# existe porque o gerador também é chamado com posições **hipotéticas** —
+			# o lance planejado monta uma cópia do estado com a vez trocada
+			# (`match.gd`, `_premove_moves`) —, e ali o `ep` é do lado errado: o peão
+			# que ele descreve é nosso, e a casa ao lado dele fica vazia. Sem esta
+			# linha, o tabuleiro oferecia ao jogador uma diagonal grátis para uma casa
+			# vazia, que a revalidação depois recusava sem ele entender por quê.
+			var eaten := Board.square(f, rank)
+			if (
+				state.has_enemy(eaten, side)
+				and Board.kind_of(state.squares[eaten]) == Board.Kind.PAWN
+			):
+				var move := Move.simple(from, to)
+				move.captured = PackedInt32Array([eaten])
+				move.tags["en_passant"] = true
+				out.append(move)
 
 
 func _push_pawn_move(move: Move, last_rank: int, out: Array[Move]) -> void:

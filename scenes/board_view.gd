@@ -31,6 +31,8 @@ var preview_to := Board.NO_SQUARE
 ## Lance planejado para a vez seguinte (`[origem, destino]`), e a peça erguida
 ## enquanto ele é montado. Só marcação: a peça continua onde está, porque o
 ## tabuleiro ainda é do oponente.
+## A corrente planejada, achatada em pares `[origem, destino, …]` na ordem em que
+## os lances vão sair. Ver [method _draw_premove].
 var premove := PackedInt32Array()
 var premove_pick := Board.NO_SQUARE
 
@@ -264,16 +266,67 @@ func _draw_targets() -> void:
 		)
 
 
-## O lance planejado, marcado nas duas casas. A peça fica onde está: mostrá-la
-## já no destino seria desenhar uma posição que ainda não existe — e que pode
-## nunca existir, porque o lance do oponente ainda pode torná-la impossível.
+## A corrente planejada, marcada nas casas de cada elo. A peça fica onde está:
+## mostrá-la já no destino seria desenhar uma posição que ainda não existe — e que
+## pode nunca existir, porque o lance do oponente ainda pode torná-la impossível.
+##
+## Com mais de um elo, **a ordem precisa ser legível**, e é a única informação que
+## a marcação sozinha não carrega: quatro pares de casas azuis não dizem qual sai
+## primeiro, e uma corrente cuja ordem não se lê é uma corrente que o jogador não
+## consegue conferir antes de ela sair. Duas pistas, e as duas contínuas:
+##
+## - o elo mais próximo é o mais forte, e os seguintes desbotam. É a mesma ideia
+##   do rastro que se apaga, e já separa "o próximo" de "depois" de relance;
+## - um número na casa de destino, para quando desbotar não bastar — a partir de
+##   três elos a diferença entre o terceiro e o quarto vira gradação fina.
 func _draw_premove() -> void:
-	for square in premove:
-		var rect := rect_of(square)
-		draw_rect(rect, Color(AppTheme.PREMOVE, 0.28))
-		draw_rect(rect.grow(-2.0), Color(AppTheme.PREMOVE, 0.75), false, maxf(2.0, _cell * 0.045))
+	var links := premove.size() / 2
+	for index in links:
+		# Do último para o primeiro: assim, quando dois elos dividem uma casa (uma
+		# peça que anda duas vezes), quem fica por cima é o elo que sai antes.
+		var link := links - 1 - index
+		var fade := 1.0 - 0.45 * (float(link) / maxf(1.0, float(links - 1)))
+		for slot in [premove[link * 2], premove[link * 2 + 1]]:
+			var rect := rect_of(slot)
+			draw_rect(rect, Color(AppTheme.PREMOVE, 0.28 * fade))
+			draw_rect(
+				rect.grow(-2.0), Color(AppTheme.PREMOVE, 0.75 * fade), false,
+				maxf(2.0, _cell * 0.045)
+			)
+		if links > 1:
+			# O selo **não** desbota junto.
+			#
+			# O desbotamento é a pista grosseira, para o olho pegar "o próximo" de
+			# relance; o número é a pista exata, e é justamente para quando a
+			# gradação deixa de bastar. Um número apagado na casa do terceiro elo
+			# apaga a resposta na hora em que ela começa a ser necessária.
+			_draw_premove_order(premove[link * 2 + 1], link + 1)
 	if premove_pick != Board.NO_SQUARE:
 		draw_rect(rect_of(premove_pick), Color(AppTheme.PREMOVE, 0.32))
+
+
+## O número da ordem, num selo no canto de cima à esquerda da casa de destino.
+##
+## Naquele canto e não no meio: o meio é onde a peça está desenhada nas casas de
+## origem, e um número por cima dela esconderia justamente o que o jogador precisa
+## reconhecer para conferir o plano.
+func _draw_premove_order(square: int, order: int) -> void:
+	var rect := rect_of(square)
+	var body := maxf(10.0, _cell * 0.32)
+	var center := rect.position + Vector2.ONE * body * 0.60
+	draw_circle(center, body * 0.55, Color(AppTheme.BACKGROUND, 0.94))
+	draw_arc(
+		center, body * 0.55, 0.0, TAU, 20, Color(AppTheme.PREMOVE, 0.95),
+		maxf(1.0, _cell * 0.024), true
+	)
+	var font := AppTheme.font(700)
+	var text := str(order)
+	var size := int(body * 0.86)
+	var wide := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(
+		font, center + Vector2(-wide * 0.5, size * 0.35), text,
+		HORIZONTAL_ALIGNMENT_CENTER, wide, size, AppTheme.TEXT
+	)
 
 
 ## A peça sob o dedo, um pouco maior, e a casa em que ela vai cair contornada.

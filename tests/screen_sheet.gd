@@ -225,12 +225,19 @@ func _next() -> void:
 		_scene._show_overlay("Brancas venceram", "Você venceu em 10 lances.", true)
 		_scene._on_rematch_requested()
 	elif shot == "10_planejado":
-		# Vez do oponente, com o nosso lance seguinte já escolhido. O que precisa
-		# ser julgado é o azul: ele não pode ser confundido nem com o latão do
-		# último lance nem com o destaque de "é sua vez".
+		# Vez do oponente, com os **três** lances seguintes já escolhidos. Duas
+		# coisas precisam ser julgadas aqui:
+		#
+		# - o azul, que não pode ser confundido nem com o latão do último lance nem
+		#   com o destaque de "é sua vez";
+		# - a ordem da corrente. Ela é a única informação que a marcação sozinha não
+		#   carrega, e sai em duas pistas — o elo mais próximo é o mais forte, e o
+		#   número no destino diz a posição na fila. Três elos é onde as duas
+		#   começam a ser exigidas ao mesmo tempo.
 		_play_opening(_scene, 9)
-		_scene._on_square_tapped(_sq("d2"))
-		_scene._on_square_tapped(_sq("d4"))
+		for link: Array in [["d2", "d4"], ["d4", "d5"], ["d1", "d3"]]:
+			_scene._on_square_tapped(_sq(link[0]))
+			_scene._on_square_tapped(_sq(link[1]))
 	elif shot == "15_frota":
 		# Metade da frota pousada: é o estado em que a tela precisa dizer qual
 		# navio vem agora e quantos faltam, sem o jogador contar sozinho.
