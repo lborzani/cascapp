@@ -39,6 +39,7 @@ func _ready() -> void:
 
 	await _probe_opening()
 	await _probe_shot()
+	await _probe_aim()
 	await _probe_hand()
 
 	_done = true
@@ -112,6 +113,44 @@ func _probe_shot() -> void:
 	scene.free()
 
 
+## O ponto de contato, que é a conta que a mira inteira depende de acertar.
+##
+## A branca **não** para a dois raios medidos ao longo da mira: ela para quando os
+## dois centros ficam a duas bolas de distância, e no triângulo formado pela linha
+## de mira, pela perpendicular e pela linha dos centros isso é Pitágoras. Na batida
+## frontal os dois números coincidem — é de raspão que eles se separam, e é de
+## raspão que a linha de saída da bola atingida muda de lado.
+func _probe_aim() -> void:
+	print("ponto de contato")
+	var scene := await _open()
+	var view: PoolView = scene._view
+	var radius := PoolRules.BALL_RADIUS
+	var touch := radius * 2.0
+
+	# Frontal: a bola um pouco à direita da branca, na mesma altura.
+	_place(scene, Vector2(0.4, 0.5), Vector2(1.0, 0.5))
+	var head := view._impact(Vector2.RIGHT)
+	_equals(head["ball"], 1, "a bola em frente é a atingida")
+	_near(head["stop"], 0.6 - touch, "e na batida frontal ela para a duas bolas")
+
+	# De raspão: a bola deslocada de um raio para o lado. O cateto que falta é
+	# sqrt((2r)² - r²) = r·sqrt(3), e não 2r — a diferença é de meio raio.
+	_place(scene, Vector2(0.4, 0.5), Vector2(1.0, 0.5 + radius))
+	var clip := view._impact(Vector2.RIGHT)
+	_equals(clip["ball"], 1, "de raspão ela continua sendo a atingida")
+	_near(clip["stop"], 0.6 - radius * sqrt(3.0), "e a branca para mais tarde que a dois raios")
+	_check(
+		float(clip["stop"]) > 0.6 - touch,
+		"que é depois de onde a conta ingênua a punha"
+	)
+
+	# Fora do corredor: passa raspando por fora e não conta como batida.
+	_place(scene, Vector2(0.4, 0.5), Vector2(1.0, 0.5 + touch * 1.05))
+	_equals(view._impact(Vector2.RIGHT)["ball"], -1, "e o que passa por fora não é batida")
+
+	scene.free()
+
+
 ## A branca na mão recusa lugar ocupado. É a única validação de posição do jogo, e
 ## sem ela dá para largar a branca dentro de outra bola — as duas explodem no
 ## primeiro passo da simulação.
@@ -151,6 +190,22 @@ func _open() -> Node:
 	# gesto depende da escala que ele calcula.
 	await get_tree().process_frame
 	return scene
+
+
+## Uma mesa de duas bolas, posta à mão. As sondas de mira não querem o triângulo:
+## elas querem uma geometria que dê para conferir com uma conta de papel.
+func _place(scene: Node, cue: Vector2, ball: Vector2) -> void:
+	scene._state.meta[PoolRules.POS] = PackedFloat64Array([cue.x, cue.y, ball.x, ball.y])
+	scene._state.meta[PoolRules.LIVE] = PackedByteArray([1, 1])
+	scene._state.meta[PoolRules.KIND] = PackedInt32Array([0, 0])
+	scene._view.state = scene._state
+
+
+func _near(actual: float, expected: float, label: String) -> void:
+	_check(
+		absf(actual - expected) < 0.0005,
+		"%s (esperado %.4f, obtido %.4f)" % [label, expected, actual]
+	)
 
 
 func _check(condition: bool, label: String) -> void:

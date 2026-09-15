@@ -39,12 +39,41 @@ const RAIL_EDGE := Color("302014")
 const POCKET_INK := Color("0d0b0a")
 const LINE := Color("2b4d3c")
 
+## O taco. Madeira clara, cabo escuro, virola branca e a sola de couro azul — as
+## quatro faixas que fazem um bastão marrom ler como taco de sinuca.
+const CUE_WOOD := Color("c8a06a")
+const CUE_GRIP := Color("3a2a1c")
+const CUE_FERRULE := Color("efe6d8")
+const CUE_LEATHER := Color("4b7fb5")
+
 ## Largura da tabela em volta do pano, em unidades de mesa.
 const RAIL_WIDTH := 0.055
 ## Quanto do arrasto vale força cheia, em fração da largura da mesa desenhada.
 const PULL_FULL := 0.30
 ## Abaixo disto o arrasto não é tacada: é um toque que escorregou.
 const PULL_DEAD := 0.02
+
+## Comprimento do taco, em unidades de mesa. Um taco de verdade mede quase o
+## comprimento da mesa; este mede pouco mais da metade, porque o que sobra sai
+## pela borda da tela e o que importa é a metade que encosta na bola.
+const CUE_LENGTH := 1.15
+## Raio do taco na ponta e no cabo. A diferença é o que dá o afunilamento — um
+## retângulo de largura constante lê como régua.
+const CUE_TIP := 0.011
+const CUE_BUTT := 0.024
+## Quanto o taco recua com a força, em unidades de mesa. O recuo **é** a barra de
+## força: um taco puxado para trás diz quanta pancada vem sem nenhum número na
+## tela, que é como se lê força numa mesa de verdade.
+const CUE_PULL_MIN := 0.03
+const CUE_PULL_MAX := 0.22
+
+## Comprimento da linha que sai da bola atingida, em unidades de mesa.
+##
+## Curta de propósito. Ela é uma **direção**, não uma trajetória: a bola objeto
+## sai pela linha dos centros no instante do contato, e isso é exato; para onde
+## ela vai depois de bater numa tabela ou noutra bola já não é, e prometer isso
+## seria prometer o que a régua não mede.
+const OBJECT_HINT := 0.42
 
 var state: MatchState = null:
 	set(value):
@@ -74,6 +103,10 @@ var _origin := Vector2.ZERO
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# O taco é mais comprido que a folga entre a mesa e a borda da tela, e sem
+	# recorte ele atravessaria a coluna dos jogadores. Recortado, ele some pela
+	# borda — que é o que um taco faz quando o jogador se afasta da mesa.
+	clip_contents = true
 	set_process(false)
 
 
@@ -209,8 +242,11 @@ func _draw() -> void:
 		return
 	_layout()
 	_draw_table()
+	# As linhas correm **por baixo** das bolas e o taco **por cima** delas, que é a
+	# ordem física: a régua está no pano, o taco está na mão.
 	_draw_aim()
 	_draw_balls()
+	_draw_cue()
 
 
 func _draw_table() -> void:
@@ -241,65 +277,196 @@ func _draw_table() -> void:
 func _draw_aim() -> void:
 	if not _aiming or _pull.length() < size.x * PULL_DEAD:
 		return
-	var cue := _cue_screen()
 	var direction := -_pull.normalized()
+	var cue_spot := _ball_spot(0)
+
 	# Até a tabela, e nunca além dela: uma linha que sai do pano promete uma
 	# trajetória fora da mesa, e o pior tipo de ajuda é a que mente.
-	var reach := _cushion_reach(direction)
-	var blocked := _first_in_path(direction)
-	if blocked > 0.0:
-		reach = minf(reach, blocked)
+	var impact := _impact(direction)
+	var reach: float = _cushion_reach(direction)
+	var hit: int = impact["ball"]
+	if hit >= 0:
+		reach = minf(reach, float(impact["stop"]))
 
-	var tip := cue + direction * reach
-	draw_line(cue, tip, Color(AppTheme.ACCENT, 0.55), maxf(2.0, _scale * 0.006))
-	draw_arc(tip, Rules.BALL_RADIUS * _scale, 0.0, TAU, 24, Color(AppTheme.ACCENT, 0.75), 2.0, true)
+	var ghost_spot := cue_spot + direction * reach
+	draw_line(
+		_to_screen(cue_spot), _to_screen(ghost_spot),
+		Color(AppTheme.ACCENT, 0.55), maxf(2.0, _scale * 0.006)
+	)
+	if hit < 0:
+		# Sem bola no caminho, a linha morre na tabela e mais nada. Um círculo
+		# vazado ali marcaria um ponto de contato que não existe.
+		return
 
-	# A força, num arco atrás da bola: ele cresce com o arrasto e fica no lado de
-	# onde o dedo puxou, que é onde o olho já está.
-	var power := clampf(_pull.length() / (size.x * PULL_FULL), 0.0, 1.0)
-	var back := cue - direction * Rules.BALL_RADIUS * _scale * 2.4
+	# A bola fantasma: onde a branca **para**, e não onde a linha acaba. É a partir
+	# do centro dela que a linha dos centros sai, então desenhá-la é mostrar de
+	# onde veio a resposta do traço seguinte.
 	draw_arc(
-		back, Rules.BALL_RADIUS * _scale * (1.1 + power * 1.6), 0.0, TAU, 28,
-		Color(AppTheme.ACCENT, 0.25 + 0.5 * power), maxf(2.0, _scale * 0.008), true
+		_to_screen(ghost_spot), Rules.BALL_RADIUS * _scale, 0.0, TAU, 24,
+		Color(AppTheme.ACCENT, 0.75), maxf(1.5, _scale * 0.004), true
+	)
+	_draw_object_line(hit, ghost_spot)
+
+
+## Para onde a **bola atingida** sai, e por que a linha é exatamente essa.
+##
+## Numa batida entre duas esferas de mesma massa, a bola parada sai pela **linha
+## dos centros** no instante do contato — não pela direção da tacada. É a regra
+## de bolso que todo jogador usa e a única coisa da mesa que dá para prometer sem
+## mentir: a partir dali, a primeira tabela já depende de quanto sobrou de
+## velocidade.
+##
+## Por isso a linha é curta e é da **cor da bola**. Curta porque é uma direção e
+## não uma trajetória; da cor da bola porque no mata-mata a pergunta não é só
+## "para onde", é "qual" — e uma segunda linha em latão diria que ela é a mesma
+## coisa que a mira, que é justamente o que ela não é.
+func _draw_object_line(ball: int, contact: Vector2) -> void:
+	var target := _ball_spot(ball)
+	var away := target - contact
+	if away.length() < 0.0001:
+		return
+	away = away.normalized()
+	var span := minf(OBJECT_HINT, _cushion_reach_from(target, away))
+	# A cor da bola, clareada quando ela é escura demais para riscar o pano.
+	#
+	# A preta do 7 é quase a cor do fundo do app, e uma seta preta sobre verde
+	# escuro é uma seta que não existe. Clarear em vez de trocar por uma cor fixa
+	# mantém a resposta que a linha dá — **qual** bola vai —, que é metade do que
+	# ela serve para dizer.
+	var tint := Rules.color_of_ball(state, ball)
+	if tint.get_luminance() < 0.32:
+		tint = tint.lerp(AppTheme.TEXT, 0.6)
+	var head := target + away * Rules.BALL_RADIUS
+	var tail := target + away * (Rules.BALL_RADIUS + span)
+	draw_line(_to_screen(head), _to_screen(tail), Color(tint, 0.85), maxf(2.0, _scale * 0.007))
+
+	# A seta é o que separa "esta bola" de "para lá": sem ponta, a linha lida de
+	# relance é o traço da mira continuando por trás da bola.
+	var wing := Vector2(away.y, -away.x) * 0.019
+	var base := tail - away * 0.034
+	draw_colored_polygon(
+		PackedVector2Array([
+			_to_screen(tail), _to_screen(base + wing), _to_screen(base - wing)
+		]),
+		Color(tint, 0.9)
 	)
 
 
-## Distância até a tabela, na direção mirada. Em pixels de tela.
+## O taco, atrás da branca e recuado pela força.
+##
+## Ele não é enfeite: é a **barra de força** do jogo. Um taco puxado para trás diz
+## quanta pancada vem sem nenhum número na tela, que é como se lê força numa mesa
+## de verdade — e o arco que fazia esse papel antes dizia a mesma coisa numa
+## língua que não é a da sinuca.
+##
+## Só enquanto o dedo está na tela. Um taco parado atrás da bola pediria uma
+## direção que ninguém escolheu ainda, e apontá-lo para um lado qualquer seria a
+## tela inventando a mira.
+func _draw_cue() -> void:
+	if not _aiming or _pull.length() < size.x * PULL_DEAD:
+		return
+	var cue_spot := _ball_spot(0)
+	var away := _pull.normalized()
+	var power := clampf(_pull.length() / (size.x * PULL_FULL), 0.0, 1.0)
+	var gap := Rules.BALL_RADIUS + lerpf(CUE_PULL_MIN, CUE_PULL_MAX, power)
+	var tip := cue_spot + away * gap
+	var side := Vector2(away.y, -away.x)
+
+	# Quatro trechos ao longo do mesmo eixo, cada um um pouco mais grosso que o
+	# anterior: couro, virola, madeira, cabo. O afunilamento é o que faz um bastão
+	# marrom ler como taco em vez de régua.
+	var marks := [0.0, 0.022, 0.055, 0.52, 1.0]
+	var tints := [CUE_LEATHER, CUE_FERRULE, CUE_WOOD, CUE_GRIP]
+	for part in tints.size():
+		var near: float = marks[part]
+		var far: float = marks[part + 1]
+		_draw_taper(tip, away, side, near, far, tints[part])
+
+	# Um fio escuro por baixo dá volume sem uma segunda passada de desenho: o taco
+	# deixa de ser uma forma chapada e passa a ter um lado iluminado.
+	var butt := tip + away * CUE_LENGTH
+	draw_line(
+		_to_screen(tip + side * CUE_TIP * 0.6), _to_screen(butt + side * CUE_BUTT * 0.6),
+		Color(0, 0, 0, 0.30), maxf(1.0, _scale * 0.004)
+	)
+
+
+## Um trecho cônico do taco, entre duas frações do comprimento dele.
+func _draw_taper(
+	tip: Vector2, away: Vector2, side: Vector2, near: float, far: float, tint: Color
+) -> void:
+	var near_at := tip + away * CUE_LENGTH * near
+	var far_at := tip + away * CUE_LENGTH * far
+	var near_wide := side * lerpf(CUE_TIP, CUE_BUTT, near)
+	var far_wide := side * lerpf(CUE_TIP, CUE_BUTT, far)
+	draw_colored_polygon(
+		PackedVector2Array([
+			_to_screen(near_at + near_wide),
+			_to_screen(far_at + far_wide),
+			_to_screen(far_at - far_wide),
+			_to_screen(near_at - near_wide),
+		]),
+		tint
+	)
+
+
+## Distância da branca até a tabela, na direção mirada. Em unidades de mesa.
 func _cushion_reach(direction: Vector2) -> float:
-	var cue := _ball_spot(0)
+	return _cushion_reach_from(_ball_spot(0), direction)
+
+
+## O mesmo, a partir de um ponto qualquer. A linha da bola atingida também para na
+## tabela: ela é curta, mas com a bola já encostada na borda ela sairia do pano.
+func _cushion_reach_from(spot: Vector2, direction: Vector2) -> float:
 	var aim := direction.normalized()
 	var reach := Rules.TABLE_WIDTH + Rules.TABLE_HEIGHT
 	var edge := Rules.BALL_RADIUS
 	if aim.x > 0.0001:
-		reach = minf(reach, (Rules.TABLE_WIDTH - edge - cue.x) / aim.x)
+		reach = minf(reach, (Rules.TABLE_WIDTH - edge - spot.x) / aim.x)
 	elif aim.x < -0.0001:
-		reach = minf(reach, (edge - cue.x) / aim.x)
+		reach = minf(reach, (edge - spot.x) / aim.x)
 	if aim.y > 0.0001:
-		reach = minf(reach, (Rules.TABLE_HEIGHT - edge - cue.y) / aim.y)
+		reach = minf(reach, (Rules.TABLE_HEIGHT - edge - spot.y) / aim.y)
 	elif aim.y < -0.0001:
-		reach = minf(reach, (edge - cue.y) / aim.y)
-	return maxf(0.0, reach) * _scale
+		reach = minf(reach, (edge - spot.y) / aim.y)
+	return maxf(0.0, reach)
 
 
-## Distância até a primeira bola no caminho da branca, ou -1.
-func _first_in_path(direction: Vector2) -> float:
+## A primeira bola no caminho da branca e **onde a branca encosta nela**, em
+## unidades de mesa. `ball` é -1 com o caminho livre.
+##
+## O recuo não é "dois raios": é o cateto que falta.
+##
+## A branca para quando os dois centros ficam a duas bolas de distância, e no
+## triângulo formado pela linha de mira, pela perpendicular até o centro da outra
+## bola e pela linha dos centros, isso é Pitágoras — `sqrt((2r)² - lateral²)`.
+## Subtrair `2r` direto só acerta na batida frontal, e é justamente na batida de
+## raspão que o erro fica grande: a bola fantasma aparecia depois do ponto de
+## contato, e a linha de saída — que sai da **linha dos centros** — apontava para
+## o lado errado.
+func _impact(direction: Vector2) -> Dictionary:
 	var cue := _ball_spot(0)
-	var aim := direction / _scale
+	var aim := direction.normalized()
+	var touch := Rules.BALL_RADIUS * 2.0
 	var best := -1.0
+	var hit := -1
 	for ball in range(1, Rules.ball_count(state)):
 		if not _ball_live(ball):
 			continue
 		var to_ball := _ball_spot(ball) - cue
-		var along := to_ball.dot(aim.normalized())
+		var along := to_ball.dot(aim)
 		if along <= 0.0:
 			continue
-		var side := (to_ball - aim.normalized() * along).length()
-		if side > Rules.BALL_RADIUS * 2.0:
+		var lateral := (to_ball - aim * along).length()
+		if lateral > touch:
 			continue
-		var stop := along - Rules.BALL_RADIUS * 2.0
+		var stop := along - sqrt(maxf(0.0, touch * touch - lateral * lateral))
+		if stop < 0.0:
+			continue
 		if best < 0.0 or stop < best:
 			best = stop
-	return best * _scale if best >= 0.0 else -1.0
+			hit = ball
+	return {"ball": hit, "stop": best}
 
 
 func _draw_balls() -> void:

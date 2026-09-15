@@ -1028,10 +1028,40 @@ para a bola, e a distância é a força. Puxar para frente pareceria empurrar a 
 com o dedo, e num celular o dedo estaria justamente em cima do que ele precisa
 ver.
 
-Enquanto o dedo está na tela, a linha mostra **onde a branca vai bater** — ela
-para na primeira bola do caminho, ou na tabela, e ali aparece o ponto de contato.
-Uma linha que atravessasse a mesa inteira prometeria uma trajetória que não
-existe, que é o pior tipo de ajuda: a que mente.
+**O taco é a barra de força.** Ele aparece atrás da branca enquanto o dedo está
+na tela e recua conforme o arrasto cresce — quanta pancada vem se lê no recuo,
+sem nenhum número, que é como se lê força numa mesa de verdade. Só enquanto o
+dedo está na tela: um taco parado atrás da bola pediria uma direção que ninguém
+escolheu ainda, e apontá-lo para um lado qualquer seria a tela inventando a mira.
+
+Três traços saem do gesto, e cada um responde uma pergunta diferente:
+
+1. **a linha da branca**, em latão, até onde ela para — na primeira bola do
+   caminho ou na tabela. Uma linha que atravessasse a mesa inteira prometeria uma
+   trajetória que não existe, que é o pior tipo de ajuda: a que mente;
+2. **a bola fantasma**, um círculo vazado onde a branca encosta. É dela que sai a
+   resposta seguinte;
+3. **a seta da bola atingida**, na cor da própria bola. Numa batida entre esferas
+   de mesma massa, a bola parada sai pela **linha dos centros** no instante do
+   contato — não pela direção da tacada. É a regra de bolso que todo jogador usa,
+   e a única coisa da mesa que dá para prometer sem mentir. Por isso a seta é
+   curta: ela é uma direção, não uma trajetória, e a primeira tabela depois disso
+   já depende de quanto sobrou de velocidade. Da cor da bola porque no mata-mata
+   a pergunta não é só "para onde", é **qual** — e a preta do 7 é clareada para
+   riscar o pano, senão a seta some no verde.
+
+#### O ponto de contato não é "dois raios"
+
+Foi o erro que a primeira versão cometeu, e ele só aparece de raspão.
+
+A branca não para a duas bolas medidas **ao longo da mira**: ela para quando os
+dois centros ficam a duas bolas de distância. No triângulo formado pela linha de
+mira, pela perpendicular até o centro da outra bola e pela linha dos centros, o
+recuo é `sqrt((2r)² - lateral²)` — Pitágoras. Na batida frontal os dois números
+coincidem, e é por isso que o erro passa despercebido; de raspão eles se separam
+por até meio raio, a bola fantasma aparece **depois** do contato, e a seta — que
+nasce da linha dos centros — aponta para o lado errado. `tests/pool_scene_probe.gd`
+confere os dois casos com a conta feita à mão.
 
 #### Na boca da caçapa não há tabela
 
