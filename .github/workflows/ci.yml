@@ -99,8 +99,26 @@ jobs:
       - name: Metrópole
         run: godot --headless --path . --script res://tests/monopoly_probe.gd
 
+      - name: Uno
+        run: |
+          godot --headless --path . res://tests/uno_probe.tscn
+          godot --headless --path . res://tests/uno_scene_probe.tscn
+
+      # As quatro suítes do Bomberman, e não só a simulação.
+      #
+      # Só `bomber_probe` rodava aqui, e as outras três existiam no repositório
+      # sem nunca serem executadas por ninguém além de quem as escreveu. São
+      # justamente as que cobrem o que o jogo tem de mais difícil de depurar
+      # depois: a sala autoritativa (que é o servidor), a previsão do cliente e a
+      # serialização do snapshot — três lugares onde um erro aparece como
+      # "desincronizou" no celular de outra pessoa, dias depois.
       - name: Bomberman
-        run: godot --headless --path . --script res://tests/bomber_probe.gd
+        run: |
+          godot --headless --path . --script res://tests/bomber_probe.gd
+          godot --headless --path . --script res://tests/bomber_room_probe.gd
+          godot --headless --path . --script res://tests/bomber_snapshot_probe.gd
+          godot --headless --path . --script res://tests/bomber_predict_probe.gd
+          godot --headless --path . res://tests/bomber_match_offline_probe.tscn
 
       # O caminho pela internet, contra um relay de verdade. É o único teste que
       # exercita o aperto de mão inteiro — sala aberta de um lado, código do
@@ -124,12 +142,47 @@ jobs:
           exit 1
         working-directory: relay
 
+      # Os seis caminhos pela internet, e não dois.
+      #
+      # Quatro destes existiam sem rodar. Eles não são repetição do `relay_smoke`:
+      # aquele prova o aperto de mão de **dois** assentos, e o que estes cobrem é
+      # o que cada jogo acrescentou em cima dele — a mesa de quatro do Ludo, os
+      # assentos que viram máquina quando ela não enche, a semente e a regra da
+      # casa do Uno, e o formato de Metrópole. Todos são coisas que viajam no
+      # `welcome`, e uma divergência ali não dá erro: dá duas partidas diferentes
+      # com a mesma cara, cada uma num aparelho.
       - name: Partida ponta a ponta
         env:
           CHESS_RELAY_URL: ws://127.0.0.1:8080/ws
         run: |
           godot --headless --path . --script res://tests/relay_smoke.gd
           godot --headless --path . --script res://tests/table_smoke.gd
+          godot --headless --path . --script res://tests/ludo_net_smoke.gd
+          godot --headless --path . --script res://tests/ludo_bots_smoke.gd
+          godot --headless --path . --script res://tests/uno_net_smoke.gd
+          godot --headless --path . --script res://tests/monopoly_net_smoke.gd
+
+      # O Bomberman não passa pelo relay: ele fala UDP com um servidor que é o
+      # mesmo projeto Godot, sem tela. Este é o único teste que sobe os dois e
+      # prova que eles se entendem — conectar, criar sala, começar, mandar
+      # comando, receber snapshot que decodifica, e ver o tique do servidor andar.
+      - name: Bomberman ponta a ponta
+        run: |
+          godot --headless --path . res://server/main.tscn -- --port 27200 > bomber-server.log 2>&1 &
+          server=$!
+          for _ in $(seq 1 20); do
+            grep -q "servidor ouvindo" bomber-server.log && break
+            sleep 1
+          done
+          if ! grep -q "servidor ouvindo" bomber-server.log; then
+            echo "::error::o servidor de Bomberman não subiu"
+            cat bomber-server.log
+            exit 1
+          fi
+          godot --headless --path . res://tests/bomber_net_smoke.tscn -- --port 27200 --create
+          status=$?
+          kill "$server" 2>/dev/null || true
+          exit $status
 
   apk:
     name: APK de depuração
