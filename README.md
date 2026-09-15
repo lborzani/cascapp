@@ -1,18 +1,20 @@
 # Jogos de Rolê — multiplayer por código, sem cadastro
 
-Coleção de jogos de tabuleiro para celular, hoje com **xadrez**, **damas** e
-**batalha naval**. Dá para jogar contra um bot, com alguém no mesmo aparelho, ou
-pela internet: um **abre uma sala** e o outro entra digitando o **código de 6
-caracteres** — de qualquer lugar, cada um na sua rede, um deles em dados móveis
-se quiser. Também dá para entrar apontando a câmera para o **QR Code** ou
-**encostando os celulares (NFC)**.
+Coleção de jogos para celular, hoje com **xadrez**, **damas**, **batalha
+naval**, **Ludo**, **Metrópole**, **Uno** e **Bomberman**. Dá para jogar contra
+um bot, com alguém no mesmo aparelho, ou pela internet: um **abre uma sala** e o
+outro entra digitando o **código de 6 caracteres** — de qualquer lugar, cada um
+na sua rede, um deles em dados móveis se quiser. Também dá para entrar apontando
+a câmera para o **QR Code** ou **encostando os celulares (NFC)**.
 
-Cada jogo declara em `Game.GAMES` como pode ser jogado: xadrez e damas aceitam os
-três modos, batalha naval só a sala — os dois jogadores não podem ver o mar um do
-outro, e num aparelho só isso exigiria uma cortina entre cada tiro.
+Cada jogo declara em `Game.GAMES` como pode ser jogado, e nenhuma tela precisa
+saber o nome de jogo nenhum para desenhar o menu: xadrez e damas aceitam os três
+modos; batalha naval e Uno só a sala e o solo, porque mão escondida num aparelho
+só exigiria uma cortina de "passe o celular" a cada jogada; Ludo e Metrópole
+sentam até quatro e seis.
 
-> O nome vem de a coleção ser o ponto, e não os dois jogos que existem hoje:
-> Ludo, Dominó, Truco e Campo Minado estão no plano, e um título que precisa ser
+> O nome vem de a coleção ser o ponto, e não os jogos que existem hoje: Dominó,
+> Truco, Campo Minado e sinuca estão no plano, e um título que precisa ser
 > reescrito a cada jogo novo é um título que não descreve o app. O identificador
 > do projeto (`chess-checkers`) e o pacote Android
 > (`org.chessandcheckers.game`) ficaram como estavam de propósito — mudar o
@@ -108,6 +110,18 @@ exige número exato.
 **No mesmo aparelho e pela internet.** A sala do relay passou a ter N assentos e
 o aperto de mão do `Net` a contar até a mesa encher; `Game.GAMES` declara
 `players: 4`, e é daí que sai o tamanho da sala.
+
+**Uma silhueta por assento, além da cor.** Vermelho joga com peões, verde com
+cavalos, amarelo com bispos e azul com torres — as mesmas peças que o xadrez
+desenha, tingidas. A cor continua sendo a identidade do jogo (o curral, a trilha
+e a reta final são pintados dela); a forma é a segunda leitura, para quem não
+separa o vermelho do verde não ver quatro peças idênticas em dois tons. É a
+mesma decisão de Metrópole, e sai sem nenhum desenho novo: as quatro escolhidas
+são as que menos se confundem no tamanho de uma casa — cabeça redonda, perfil de
+cavalo, mitra com fenda, ameia quadrada. Dama e rei ficaram de fora porque a
+coroa dos dois é a mesma mancha nesse tamanho. Não há hierarquia nisso: os
+dezesseis peões seguem sendo a mesma peça com as mesmas regras, e a forma é
+crachá, não patente.
 
 Em rede, **o assento é a cor**: quem abre é o vermelho, quem entra depois é o
 verde, e assim por diante (`Game.local_seat`). Só o dono da vez rola o dado; os
@@ -847,6 +861,97 @@ dia, e o menu abrindo deitado sem ninguém entender por quê.
 reage a `size_changed`, então o recorte da câmera indo para a lateral já estava
 tratado.
 
+### Uno
+
+2 a 6 jogadores, 108 cartas, mão oculta. Sem tabuleiro: o que existe é um monte
+de compra, um descarte e uma mão por assento — tudo em `meta`.
+
+#### O acaso mora na semente, não em `randi()`
+
+O embaralhamento inicial precisa ser igual nos N aparelhos **antes** do primeiro
+lance, e não existe lance nenhum onde ele pudesse viajar; e a compra acontece
+várias vezes por turno, então mandar cada carta comprada dentro do `Move`
+publicaria a mão de quem comprou. Então o gerador é um xorshift de 32 bits
+guardado em `meta`, semeado por um número que em rede chega no `welcome`. Duas
+partidas com a mesma semente são o mesmo baralho, e repetir o histórico
+reconstrói tudo — a reconexão continua sendo a mesma dos outros jogos.
+
+Vale para o **rembaralho** também, e ali é onde o arquivo erraria mais caro: o
+monte que acaba no meio da partida é refeito a partir do descarte pelo mesmo
+gerador. Um `randi()` solto ali faria os N aparelhos divergirem em silêncio, numa
+partida longa, sem nada falhar.
+
+Consequência assumida: **a mão não é segredo do modelo.** Todos os aparelhos
+derivam todas as mãos da semente, como na batalha naval — é o desenho que
+esconde. Guardar o segredo de verdade obrigaria a confiar na resposta do outro
+lado ("comprei uma carta, confie em mim") e mataria o replay. Por isso **não há
+modo mesa**: seis mãos ocultas num aparelho só pediriam uma cortina a cada turno.
+
+#### O grito, numa mesa que não é em tempo real
+
+Gritar UNO é a regra que menos cabe num jogo por turnos: na mesa de verdade a
+denúncia vale para quem vir primeiro, e aqui não existe "ao mesmo tempo" —
+existe a vez de alguém.
+
+O desenho é este: gritar é um **lance livre**, oferecido a quem está com duas
+cartas e prestes a ficar com uma. Ele não gasta a vez — quem grita ainda joga a
+carta no mesmo turno. Quem não gritar fica exposto, e **quem jogar em seguida**
+pode pegá-lo: mais dois na mão de quem esqueceu, sem custar a vez de quem pegou.
+
+Um denunciante e não todos, de propósito: dar a chance à mesa inteira faria um
+esquecimento custar cinco denúncias em fila. E é *quem jogou por último*, não o
+assento anterior na roda — depois de um pular ou de um +2 os dois são pessoas
+diferentes, e o anterior é justamente quem acabou de ser passado para trás.
+
+Receber carta apaga o grito: quem voltou a ter mão deve o anúncio de novo quando
+descer a duas. A regra mora em `_give`, que é por onde toda entrada de carta
+passa — escrevê-la em cada chamador seria um deles esquecendo um dia, e um
+assento gritado para sempre.
+
+#### O +2 e o +4 empilham
+
+Quem recebe pode responder com uma carta da **mesma espécie** e passar a conta
+adiante, somada; quem não responder engole tudo e perde a vez. Um +4 não segura
+um +2 nem o contrário — misturar as duas deixaria uma mesa de seis acumular
+catorze cartas com dois curingas no meio, que é outro jogo.
+
+A conta é acumulada (`meta`) em vez de entregue na hora, e é isso que faz o
+empilhamento existir: a entrega imediata dá o mesmo resultado quando ninguém tem
+como responder, e nenhum resultado quando alguém tem — que é justamente a jogada
+que faltava. Enquanto a pilha está de pé, a lista de lances legais é só
+"responder, duvidar ou engolir": jogar um azul qualquer ali seria ignorar a carta
+que está na mesa.
+
+#### A dúvida ao +4
+
+A regra oficial só deixa jogar o +4 sem carta da cor ativa na mão, e dá a quem
+recebe o direito de exigir a prova. Acertou a dúvida, quem blefou engole a pilha
+inteira e quem duvidou segue com a vez dele; errou, engole a pilha **mais dois**
+e perde a vez. Esses dois são a razão de a dúvida ser uma decisão — sem custo,
+duvidar sempre seria certo e a restrição do +4 viraria enfeite.
+
+O veredito é calculado no instante do lance, com a mão que existia ali, e
+guardado no estado. Recalculá-lo depois exigiria refazer a mão a partir do
+histórico, e o histórico é justamente o que a dúvida questiona.
+
+**O bot não duvida**, e é a mesma decisão do bot de Metrópole, que responde
+trocas e não as propõe: o veredito está guardado no estado, e um bot que o lesse
+acertaria todas as dúvidas da partida — o que não é um adversário, é um juiz com
+a resposta no bolso.
+
+#### A mão em leque
+
+Uma mão de Uno passa de vinte cartas com facilidade. Em fila, vinte cartas numa
+tela de 432 dão 21 px cada — menos que a largura de um dedo. Em leque elas se
+cobrem, e o que sobra visível de cada uma é a faixa da esquerda, que é onde o
+canto pequeno mora. O passo encolhe conforme a mão cresce, e **a última carta
+nunca sai da tela** — que é o que uma fila rolável não garante sem um gesto a
+mais.
+
+O que pode ser jogado **sobe** alguns pixels e fica opaco; o resto fica apagado e
+no lugar. Apagadas e não escondidas: a mão inteira é o que decide se vale
+comprar, e sumir com as injogáveis esconde metade da conta.
+
 ### Transporte: uma sala, e só
 
 O anfitrião abre uma **sala** no relay e mostra um código de 6 caracteres. O
@@ -1290,22 +1395,58 @@ Em partida **em rede**, dá para escolher o lance enquanto o oponente pensa. Ele
 sai sozinho no instante em que a vez chega. Num ritmo curto é o que separa um
 final jogável de uma corrida de toque.
 
-O plano é guardado como **duas casas**, não como um `Move`: o lance ainda não
-existe na posição atual, e só vai existir — ou não — depois que o oponente jogar.
-Quando a vez volta, ele é procurado na lista legal **de verdade**, a da posição
-que o oponente deixou. Não achou, é descartado com um aviso; acontece o tempo
-todo e não é erro, mas sem o aviso o jogador conclui que o toque dele se perdeu
-no caminho.
+O plano é guardado como **casas**, não como `Move`: o lance ainda não existe na
+posição atual, e só vai existir — ou não — depois que o oponente jogar. Quando a
+vez volta, ele é procurado na lista legal **de verdade**, a da posição que o
+oponente deixou. Não achou, é descartado com um aviso; acontece o tempo todo e
+não é erro, mas sem o aviso o jogador conclui que o toque dele se perdeu no
+caminho.
 
-Enquanto o plano espera, o tabuleiro **não mexe**. As duas casas ficam marcadas
-em azul, e a peça continua onde está: mostrá-la já no destino seria desenhar uma
-posição que ainda não existe e que pode nunca existir. O azul é deliberadamente
-não-latão — o latão quer dizer "é sua vez, aja aqui", e um plano é o contrário
-disso.
+#### A corrente
 
-Os destinos oferecidos ao escolher vêm de uma cópia do estado com a vez trocada
-(`_premove_moves`). É hipótese, não verdade, e é por isso que a revalidação
-existe; mas sem ela planejar seria adivinhar.
+Dá para encadear **até quatro** lances. Cada elo é escolhido numa posição
+hipotética em que os anteriores já aconteceram — a peça é pega onde ela *vai*
+estar, e não onde está —, e sai **um por vez**: o primeiro na vez que chega, o
+segundo na seguinte.
+
+São duas hipóteses empilhadas, e as duas são assumidas: que a vez é nossa, e que
+o oponente não joga entre um elo e o outro. A segunda é grosseira de propósito —
+simular o que ele faria pediria uma busca por elo, e a resposta seria um chute de
+qualquer forma. O preço é pago na hora certa: cada elo é revalidado contra a
+lista legal de verdade no instante em que sai, e **o primeiro que falhar leva a
+corrente inteira junto**. Os elos seguintes foram escolhidos numa posição que
+pressupunha o anterior; jogar o segundo sem o primeiro é jogar um lance que
+ninguém planejou.
+
+A ordem precisa ser legível, e é a única informação que a marcação sozinha não
+carrega: quatro pares de casas azuis não dizem qual sai primeiro. Duas pistas,
+as duas contínuas — o elo mais próximo é o mais forte e os seguintes desbotam, e
+um **número** na casa de destino diz a posição na fila. O número não desbota
+junto: ele é a pista exata, e existe justamente para quando a gradação deixa de
+bastar.
+
+Um toque que não continua a corrente apaga **o último elo**, e não a corrente
+inteira. Com um lance só os dois são a mesma coisa, que é como era antes;
+encadeando, perder quatro decisões por um toque errado seria caro demais.
+Cancelar tudo continua possível — são N toques —, e desfazer um engano custa um.
+
+Enquanto o plano espera, o tabuleiro **não mexe**. As casas de cada elo ficam
+marcadas em azul, e as peças continuam onde estão: mostrá-las já no destino seria
+desenhar uma posição que ainda não existe e que pode nunca existir. O azul é
+deliberadamente não-latão — o latão quer dizer "é sua vez, aja aqui", e um plano
+é o contrário disso.
+
+Os destinos oferecidos ao escolher vêm de uma cópia do estado com a vez trocada e
+com os elos anteriores aplicados (`_premove_state`). É hipótese, não verdade, e é
+por isso que a revalidação existe; mas sem ela planejar seria adivinhar.
+
+Um detalhe que custou um bug: o direito de *en passant* **não** atravessa a troca
+de vez. Ele pertence a quem joga na posição real, e na posição real quem joga é o
+oponente — então o `ep` que está escrito ali veio do nosso próprio avanço duplo, e
+na hipótese descreve um peão nosso. Sem apagá-lo, o peão vizinho ganhava uma
+diagonal marcada como **captura** para uma casa por onde o nosso peão tinha
+acabado de passar; a revalidação recusava depois, e o jogador não tinha como
+entender o que havia sido oferecido.
 
 Sai depois de a animação do lance do oponente terminar. É esse lance que o
 jogador está esperando ver, e cortá-lo pela metade esconderia justamente a
@@ -1752,6 +1893,10 @@ core/                 regras e estado, sem nenhuma dependência de UI ou de rede
   checkers_rules.gd
   battleship_rules.gd resolução dos tiros e posicionamento da frota
   ludo_rules.gd       percurso, dado dentro do lance e captura na trilha
+  monopoly_board.gd   as 40 casas, os grupos e as tabelas de aluguel
+  monopoly_rules.gd   o turno em fases, a troca por predicado e a falência
+  uno_rules.gd        baralho semeado, pilha de compra, grito e dúvida
+  bomber_rules.gd     a simulação de passo fixo, sem tela e sem rede
   bot.gd              busca alfa-beta, sem saber qual jogo está jogando
 
 net/
@@ -1779,6 +1924,9 @@ scenes/
   match.tscn/.gd      fluxo da partida de xadrez e damas, reconexão e resync
   battleship_match.tscn/.gd  posicionamento, dois mares e tiro
   ludo_match.tscn/.gd  o ciclo role-e-escolha, com quatro cores num aparelho
+  monopoly_match.tscn/.gd  o turno em fases, a coluna de jogadores e o 3D
+  uno_match.tscn/.gd   a mesa, a mão em leque e os botões de lance sem carta
+  bomber_match.tscn/.gd  o relógio de passo fixo e os dois controles de polegar
   board_view.gd       desenho do tabuleiro e das peças (herda GridView)
   piece_renderer.gd   ponto único de desenho de peça (textura, ou polígono)
 
@@ -2815,9 +2963,10 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
   reflexão a um vigésimo do tempo que resta a ele, o que dá umas vinte jogadas de
   folga a qualquer altura. Mas ele não pensa mais na posição difícil e menos na
   fácil, e não acelera quando está ganhando — gasta o teto sempre.
-- **O lance planejado é de um lance só.** Encadear uma sequência inteira
-  (chess.com deixa) pediria simular a posição a cada elo, e a primeira falha
-  invalidaria todo o resto — mais estado para pouco ganho num celular.
+- **A corrente de lances planejados para em quatro.** Não é limite de memória —
+  são oito inteiros. É limite do que cabe legível no tabuleiro e do que vale a
+  pena planejar sobre uma hipótese que ignora o oponente: o quinto elo pressupõe
+  quatro lances seguidos dele sem consequência nenhuma.
 - **Empate por repetição tripla não é detectado** no xadrez (50 lances e material
   insuficiente estão). Falta guardar o hash das posições.
 - **Sem desfazer.** O `MatchState` guarda a lista de lances (`history`) e a tela
@@ -2869,9 +3018,6 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
 6. Metrópole num aparelho de verdade. É o único lugar do app com um `SubViewport`
    de 1536² **mais** uma cena 3D, em paisagem, e o risco térmico nunca foi
    medido — só o desenho foi julgado, em prints de desktop.
-7. Formas além da cor no Ludo. As peças de Metrópole passaram a ter silhueta
-   própria por assento; lá os quatro peões continuam sendo o mesmo desenho em
-   quatro cores, e a cor é a identidade inteira do jogo.
-8. Timbre no som, se um dia ele for pedido. As oito ondas sintetizadas acertam o
+7. Timbre no som, se um dia ele for pedido. As oito ondas sintetizadas acertam o
    sinal e não fazem textura — é onde um pacote de amostras entraria, trocando só
    a tabela de `_bake`.
