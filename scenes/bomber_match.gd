@@ -81,7 +81,7 @@ var _outbox := PackedByteArray()
 
 var _view: BomberView = null
 var _pad: BomberPad = null
-var _bomb: Button = null
+var _bomb: BombButton = null
 var _status: Label = null
 var _result: Control = null
 var _result_title: Label = null
@@ -393,10 +393,7 @@ func _build() -> void:
 	_pad.offset_bottom = -PAD_MARGIN
 	stage.add_child(_pad)
 
-	_bomb = Button.new()
-	_bomb.text = "💣"
-	_bomb.focus_mode = Control.FOCUS_NONE
-	_bomb.add_theme_font_size_override("font_size", 34)
+	_bomb = BombButton.new()
 	_bomb.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_bomb.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_bomb.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -404,9 +401,9 @@ func _build() -> void:
 	_bomb.offset_right = -PAD_MARGIN
 	_bomb.offset_top = -(PAD_MARGIN + BOMB_SIZE)
 	_bomb.offset_bottom = -PAD_MARGIN
-	# `button_down` e não `pressed`: o segundo só dispara quando o dedo **sai** do
+	# No encostar, e não no soltar: o segundo só dispara quando o dedo **sai** do
 	# botão, e num jogo de reação isso é meio segundo entre querer a bomba e ela cair.
-	_bomb.button_down.connect(_pad.press_bomb)
+	_bomb.pressed_down.connect(_pad.press_bomb)
 	stage.add_child(_bomb)
 
 	_status = Label.new()
@@ -414,6 +411,16 @@ func _build() -> void:
 	_status.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.offset_top = 2
+	# Contorno, e não uma faixa atrás.
+	#
+	# O mapa ocupa a tela inteira e este rótulo cai **em cima** dele: sobre a
+	# parede de concreto, que é um cinza médio, o texto apagado do tema ficava
+	# cinza sobre cinza. Uma faixa escura atrás resolveria o contraste e tiraria
+	# duas casas do mapa; o contorno resolve o mesmo sem ocupar pixel nenhum, e
+	# continua funcionando quando o fogo passa por baixo dele.
+	_status.add_theme_color_override("font_color", AppTheme.TEXT)
+	_status.add_theme_constant_override("outline_size", 6)
+	_status.add_theme_color_override("font_outline_color", Color(AppTheme.BACKGROUND, 0.85))
 	stage.add_child(_status)
 
 	var leave := LeaveButton.new()

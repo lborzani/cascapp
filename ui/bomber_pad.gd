@@ -33,7 +33,6 @@ const PAD_SHARE := 0.86
 const RING := Color("3a322c")
 const RING_LIVE := Color("d9a441")
 const ARROW := Color("a2968a")
-const ARROW_LIVE := Color("f2eae0")
 
 var _pointer := -1
 var _offset := Vector2.ZERO
@@ -132,21 +131,36 @@ func _pad_center() -> Vector2:
 func _draw() -> void:
 	var center := _pad_center()
 	var radius := _pad_radius()
-	draw_circle(center, radius, Color(RING, 0.35))
-	draw_arc(center, radius, 0.0, TAU, 48, RING, 3.0, true)
+
+	# O direcional é o **único** alvo permanente desta tela, e ele estava
+	# desenhado com um marrom escuro a 35% em cima de um fundo quase preto: no
+	# celular, com a tela inclinada e o polegar por cima, o jogador procurava onde
+	# pôr o dedo. Um controle que precisa ser procurado já perdeu a partida.
+	#
+	# São três camadas, e nenhuma custa uma textura: um disco da superfície do
+	# tema (opaco, que é o que o separa do fundo), uma calota mais clara em cima
+	# que dá a curvatura de borracha, e um aro. É o mesmo vocabulário dos cartões
+	# do app — superfície, borda, latão quando vivo — aplicado a um círculo.
+	draw_circle(center, radius, Color(AppTheme.SURFACE, 0.92))
+	draw_circle(center - Vector2(0.0, radius * 0.10), radius * 0.86, Color(AppTheme.SURFACE_HIGH, 0.85))
+	draw_arc(center, radius, 0.0, TAU, 64, Color(RING_LIVE if _direction != 0 else RING, 0.95), 3.0, true)
 
 	for bit: int in [BomberRules.IN_UP, BomberRules.IN_DOWN, BomberRules.IN_LEFT, BomberRules.IN_RIGHT]:
 		var step := _step_of(bit)
 		var live := (_direction & bit) != 0
-		var tip := center + step * radius * 0.78
-		var wing := Vector2(step.y, step.x) * radius * 0.22
+		var tip := center + step * radius * 0.80
+		var wing := Vector2(step.y, step.x) * radius * 0.24
 		draw_colored_polygon(
-			PackedVector2Array([tip, tip - step * radius * 0.3 + wing, tip - step * radius * 0.3 - wing]),
-			ARROW_LIVE if live else ARROW
+			PackedVector2Array([tip, tip - step * radius * 0.32 + wing, tip - step * radius * 0.32 - wing]),
+			RING_LIVE if live else ARROW
 		)
 
-	if _direction != 0:
-		draw_circle(center + _offset.limit_length(1.0) * radius * 0.5, radius * 0.22, Color(RING_LIVE, 0.5))
+	# O polegar. Ele existe parado também: sem nada no meio, o direcional em
+	# repouso é um anel vazio e não se lê como um manche que se empurra.
+	var knob := center + _offset.limit_length(1.0) * radius * 0.42
+	var awake := _direction != 0
+	draw_circle(knob, radius * 0.30, Color(AppTheme.SURFACE_HIGH if not awake else RING_LIVE, 0.95))
+	draw_arc(knob, radius * 0.30, 0.0, TAU, 40, Color(RING_LIVE if awake else RING, 0.9), 2.0, true)
 
 
 static func _step_of(bit: int) -> Vector2:
