@@ -16,6 +16,7 @@ var _failures := 0
 func _initialize() -> void:
 	_test_advances()
 	_test_grace()
+	_test_name_is_cleaned()
 	_test_repeat_masks_bomb()
 	_test_known_keeps_bomb()
 	_test_empty_seat_is_bot()
@@ -63,6 +64,38 @@ func _test_grace() -> void:
 	var soon := room.state.tick + 1
 	room.receive(100, soon, PackedByteArray([BomberRules.IN_LEFT]))
 	_check(room._inbox[0].has(soon), "comando fresco é guardado")
+
+	# E o outro lado da janela, que é o que faltava: um tique absurdamente
+	# adiantado não entra. O tique vem num `s32` do cliente, e sem este teto ele
+	# ficava guardado para sempre — `_forget_before` só apaga o que ficou para
+	# trás, e nada que esteja à frente do tique atual fica. Era memória que só
+	# crescia, num servidor com a porta aberta para a internet.
+	var absurd := 2_000_000_000
+	room.receive(100, absurd, PackedByteArray([BomberRules.IN_DOWN]))
+	_check(not room._inbox[0].has(absurd), "comando adiantado demais é descartado")
+
+	# O limite exato continua servindo: quem está com a rede ruim manda o comando
+	# com folga, e essa folga é legítima.
+	var edge := room.state.tick + BomberProtocol.INPUT_LEAD
+	room.receive(100, edge, PackedByteArray([BomberRules.IN_RIGHT]))
+	_check(room._inbox[0].has(edge), "a folga inteira ainda é aceita")
+
+
+## O nome vem do teclado de uma pessoa e vai desenhado para a tela das outras.
+## Um peer adulterado é a hipótese normal, então a sala corta o que não se desenha
+## em vez de confiar no cliente.
+func _test_name_is_cleaned() -> void:
+	print("nome de assento higienizado")
+	var room := _room()
+	room.seat_for(100, "An\na\tBeta")
+	_check(not room.names[0].contains("\n"), "quebra de linha não entra no nome")
+	_check(not room.names[0].contains("\t"), "nem tabulação")
+
+	room.seat_for(101, "                                        ")
+	_equals(room.names[1], "Jogador 2", "só espaço é o mesmo que nome vazio")
+
+	room.seat_for(102, "Um nome absurdamente comprido para um cartão")
+	_equals(room.names[2].length(), BomberRoom.NAME_LIMIT, "e o comprido é cortado no limite")
 
 
 ## Byte faltante repete o movimento, nunca a bomba. Repetir a última tecla

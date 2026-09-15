@@ -58,6 +58,27 @@ const HISTORY := 4
 ## que já aconteceu na tela de todo mundo.
 const INPUT_GRACE := 12
 
+## Tiques de **adiantamento** que o servidor aceita num comando, e é o outro lado
+## de [constant INPUT_GRACE].
+##
+## O atraso tinha teto e o adiantamento não tinha, e a falta era um vazamento de
+## memória com endereço na internet. O tique do comando é um `s32` que vem do
+## cliente; um cliente adulterado carimbava dois bilhões e a sala guardava aquilo
+## na caixa de entrada do assento **para sempre** — `_forget_before` só apaga o
+## que ficou para trás do tique atual, e o que está adiante dele nunca fica.
+## Nenhum desses comandos chega a ser usado: a sala procura pelo tique do passo
+## seguinte, que jamais alcança o número. Seis bytes por mensagem, dezenas de
+## mensagens por segundo, sessenta e quatro peers — e a máquina de 512 MB cai sem
+## que nenhuma regra do jogo tenha sido quebrada.
+##
+## Doze e não três: o cliente carimba o comando para [constant
+## bomber_match.SEND_LEAD] tiques à frente do último snapshot e o relógio dele
+## escorrega de propósito para manter essa folga. O teto tem de caber a folga
+## legítima mais a oscilação da rede, e não a folga exata — o custo de ser
+## generoso aqui é uma caixa de entrada com doze entradas a mais, e o custo de ser
+## apertado é descartar o comando de quem está com a rede ruim.
+const INPUT_LEAD := 12
+
 ## Teto de salas simultâneas. Numa porta aberta pra internet, criar sala é a única
 ## coisa que um estranho pede sem nada em troca, e cada sala custa uma simulação a
 ## 30 Hz. Sem teto, um laço de pedidos derruba a máquina.

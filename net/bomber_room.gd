@@ -131,21 +131,49 @@ func release(peer: int) -> int:
 
 ## Nome vazio vira um padrão com o número do assento. Um humano **sempre** tem
 ## nome, e é isso que deixa "nome vazio" significar máquina sem ambiguidade.
+##
+## O corte de caracteres de controle **não** é zelo excessivo, e é a mesma regra
+## que o relay aplica em `cleanName` (`relay/src/protocol.ts`) pelo mesmo motivo:
+## esta string sai do teclado de uma pessoa e vai desenhada para a tela de todas
+## as outras da sala, e quem a manda é um peer qualquer — cliente adulterado é a
+## hipótese normal, não a exótica. Uma quebra de linha aqui estica a lista de
+## assentos para fora do cartão no lobby de quem nem escolheu o nome.
+##
+## Não há escape de HTML porque não há HTML: quem desenha é `draw_string` num
+## `Control`, e ali uma tag é literalmente o texto "<b>".
 func _clean(wanted: String, index: int) -> String:
-	var clean := wanted.strip_edges().substr(0, NAME_LIMIT)
+	var printable := ""
+	for character in wanted:
+		var point := character.unicode_at(0)
+		if point >= 0x20 and point != 0x7f:
+			printable += character
+	var clean := printable.strip_edges().substr(0, NAME_LIMIT)
 	return "Jogador %d" % (index + 1) if clean == "" else clean
 
 
-## Guarda os comandos que chegaram. Ignora o que é velho demais pra ser aplicado:
-## reescrever um tique que já foi seria mudar uma jogada que todo mundo já viu.
+## Guarda os comandos que chegaram, dentro da janela em que eles ainda servem.
+##
+## Ignora o que é velho demais pra ser aplicado: reescrever um tique que já foi
+## seria mudar uma jogada que todo mundo já viu. E ignora o que está adiantado
+## demais, que é a mesma pergunta pelo outro lado — com uma diferença de
+## consequência.
+##
+## O teto de cima **não é** simetria por elegância: o tique vem do cliente, num
+## `s32`, e sem ele um número absurdo entrava na caixa de entrada e não saía mais.
+## [method _forget_before] varre o que ficou para trás do tique atual, e nada que
+## esteja à frente dele fica para trás; [method _command_for] procura pelo tique
+## do passo seguinte, que nunca alcança dois bilhões. O comando não era usado,
+## não era apagado, e a cada varredura era percorrido de novo — memória e CPU
+## crescendo juntas, num servidor com a porta aberta para a internet.
 func receive(peer: int, first_tick: int, commands: PackedByteArray) -> void:
 	var index := seat_of(peer)
 	if index < 0:
 		return
 	var floor_tick := state.tick - BomberProtocol.INPUT_GRACE
+	var ceiling_tick := state.tick + BomberProtocol.INPUT_LEAD
 	for offset in commands.size():
 		var at := first_tick + offset
-		if at < floor_tick:
+		if at < floor_tick or at > ceiling_tick:
 			continue
 		_inbox[index][at] = commands[offset]
 
