@@ -24,6 +24,14 @@ func _ready() -> void:
 
 
 func _apply() -> void:
+	# Trocar a base de escala (`Orientation._set_base`) emite `size_changed` na
+	# janela, e isso acontece **dentro** do `_exit_tree` da partida que está
+	# saindo: o container já saiu da árvore e `get_viewport_rect()` grita. Quem
+	# está saindo não tem margem a ajustar, então voltar aqui é a resposta certa —
+	# sem isto, toda troca de tela deitada escreve quatro erros no log, e um log
+	# com erro de rotina é um log em que ninguém repara no erro de verdade.
+	if not is_inside_tree():
+		return
 	var insets := _safe_area_insets()
 	add_theme_constant_override("margin_left", int(_base["left"] + insets.position.x))
 	add_theme_constant_override("margin_top", int(_base["top"] + insets.position.y))
