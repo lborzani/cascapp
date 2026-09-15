@@ -131,7 +131,7 @@ func _open_setup(mode: int) -> void:
 			# e prometer ritmo num jogo sem cronômetro seria prometer um controle
 			# que a tela seguinte não tem.
 			var inherited := "no ritmo escolhido aqui" if Game.supports_clock() else (
-				"no formato escolhido aqui" if Game.supports_rounds()
+				"no formato escolhido aqui" if not Game.formats_of().is_empty()
 				else "com as regras escolhidas aqui"
 			)
 			%SetupSubtitle.text = "%s • quem entrar joga %s." % [title, inherited]
@@ -163,9 +163,11 @@ func _open_setup(mode: int) -> void:
 	%ClockCaption.visible = Game.supports_clock()
 	%ClockGrid.visible = Game.supports_clock()
 
-	# E só Metrópole acaba por número de rodadas.
-	%RoundsCaption.visible = Game.supports_rounds()
-	%RoundsGrid.visible = Game.supports_rounds()
+	# O formato: as rodadas de Metrópole ou a regra da sinuca. Os dois perguntam a
+	# mesma coisa com palavras diferentes, e a tela não precisa saber qual é qual.
+	var formats := not Game.formats_of().is_empty()
+	%RoundsCaption.visible = formats
+	%RoundsGrid.visible = formats
 
 	# Tamanho da mesa só onde há mais de um. O Ludo são quatro cantos e os outros
 	# são dois lados — perguntar ali seria uma escolha com uma resposta.
@@ -283,9 +285,10 @@ func _select_players(count: int) -> void:
 func _build_rounds_grid() -> void:
 	for child in %RoundsGrid.get_children():
 		child.queue_free()
-	for index in Game.ROUND_LIMITS.size():
+	var formats := Game.formats_of()
+	for index in formats.size():
 		var button := Button.new()
-		button.text = str(Game.ROUND_LIMITS[index]["label"])
+		button.text = str(formats[index]["label"])
 		button.custom_minimum_size = Vector2(96, 46)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.add_theme_font_size_override("font_size", 15)
@@ -295,19 +298,25 @@ func _build_rounds_grid() -> void:
 
 
 func _select_rounds(index: int) -> void:
-	Game.round_limit = int(Game.ROUND_LIMITS[clampi(index, 0, Game.ROUND_LIMITS.size() - 1)]["rounds"])
+	var formats := Game.formats_of()
+	if formats.is_empty():
+		return
+	Game.set_format(int(formats[clampi(index, 0, formats.size() - 1)]["value"]))
 	var buttons := %RoundsGrid.get_children()
 	for position in buttons.size():
 		var button: Button = buttons[position]
 		button.theme_type_variation = &"ChipSelected" if position == index else &"ChipButton"
 
 
-## Onde o formato guardado cai na lista. O que fica guardado é o **número de
-## rodadas**, e não o índice: é ele que as regras leem e que viaja pela rede, e
-## guardar o índice obrigaria os dois lados a concordar sobre a ordem da lista.
+## Onde o formato guardado cai na lista. O que fica guardado é o **valor** — o
+## número de rodadas, a regra da sinuca —, e não o índice: é ele que as regras
+## leem e que viaja pela rede, e guardar o índice obrigaria os dois lados a
+## concordar sobre a ordem de uma lista de tela.
 func _rounds_index() -> int:
-	for index in Game.ROUND_LIMITS.size():
-		if int(Game.ROUND_LIMITS[index]["rounds"]) == Game.round_limit:
+	var formats := Game.formats_of()
+	var wanted := Game.format_value()
+	for index in formats.size():
+		if int(formats[index]["value"]) == wanted:
 			return index
 	return 0
 

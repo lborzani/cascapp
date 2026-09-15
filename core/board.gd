@@ -46,6 +46,11 @@ enum Kind {
 	# bomba, só o rosto do jogo no menu — o Uno não tem peça nenhuma, tem 108
 	# cartas, e nenhuma delas representa o jogo melhor que a forma de carta.
 	CARD,
+	# sinuca: o taco e a branca. Como a casinha, a bomba e a carta, ela é só o
+	# rosto do jogo no menu — sinuca não tem peça de tabuleiro, tem nove bolas
+	# iguais em forma e diferentes em cor, e nenhuma delas diz "sinuca" sozinha.
+	# O taco diz.
+	CUE,
 }
 
 const SIZE := 8

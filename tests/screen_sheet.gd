@@ -33,6 +33,8 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/game_menu.tscn", "19_metropole_ajustes"],
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
+	["res://scenes/pool_match.tscn", "22_sinuca"],
+	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -68,7 +70,7 @@ func _ready() -> void:
 ## nenhuma, e ali `game_id` é o resto do print anterior.
 const LANDSCAPE_SHOTS := [
 	"17_ludo", "17b_ludo_bots", "17c_ludo_andando", "17d_ludo_pilha",
-	"21_bomberman",
+	"21_bomberman", "22_sinuca", "22b_sinuca_brasileira",
 ]
 const PORTRAIT_WINDOW := Vector2i(432, 768)
 ## Deitado num formato de celular de verdade, e **não** em 16:9.
@@ -171,6 +173,16 @@ func _next() -> void:
 			Game.game_id = Game.BATTLESHIP
 			Game.local_side = Board.Side.WHITE
 			Net.connected = true
+		"22_sinuca":
+			# Mata-mata, no mesmo aparelho: é o formato padrão e é o que a mesa de bar
+			# joga. O print sai com o triângulo já aberto — ver `_stage_pool`.
+			Game.pool_format = PoolRules.Format.KNOCKOUT
+			Game.start_hotseat(Game.POOL)
+		"22b_sinuca_brasileira":
+			# A brasileira existe para o print mostrar o que ela tem de diferente: as
+			# sete numeradas, e a bola da vez anunciada embaixo do placar.
+			Game.pool_format = PoolRules.Format.BRAZILIAN
+			Game.start_hotseat(Game.POOL)
 	# A janela gira **antes** de a cena existir: é o `_ready` dela que escreve a
 	# base de 768x432, e escrevê-la numa janela em pé desenha a tela deitada
 	# espremida dentro dela.
@@ -250,6 +262,8 @@ func _next() -> void:
 		_scene._refresh()
 	elif shot == "16_naval":
 		_stage_battleship(_scene)
+	elif shot == "22_sinuca" or shot == "22b_sinuca_brasileira":
+		_stage_pool(_scene)
 	elif shot == "17_ludo":
 		_stage_ludo(_scene)
 	elif shot == "17d_ludo_pilha":
@@ -434,6 +448,26 @@ func _process(_delta: float) -> void:
 ##
 ## Posição montada à mão e não jogada: uma partida de dado leva centenas de
 ## rolagens até ter peão em reta final, e nenhuma delas sai igual duas vezes.
+## Uma mesa já aberta, e com o taco puxado.
+##
+## O triângulo intocado não mostra o que o jogo faz: ele é o mesmo em toda
+## partida e não tem uma decisão à vista. Uma tacada de saída espalha as bolas, e
+## o arrasto congelado é o que põe na foto a coisa que precisa ser julgada — a
+## linha de mira, o ponto de contato e o anel de força.
+func _stage_pool(scene: Node) -> void:
+	scene._rules.trace_every = 0
+	scene._rules.apply_move(scene._state, PoolRules.shot(Vector2.RIGHT, 1.0))
+	scene._rules.trace_every = PoolRules.TRACE_EVERY
+	scene._view.state = scene._state
+	scene._refresh()
+
+	# O arrasto, armado à mão: o gesto de verdade precisa de um dedo, e a folha
+	# não tem um. O que vai para a foto é o estado que ele produz.
+	scene._view._aiming = true
+	scene._view._pull = Vector2(150.0, -46.0)
+	scene._view.queue_redraw()
+
+
 func _stage_ludo(scene: Node) -> void:
 	var progress := LudoRules.progress(scene._state)
 	var placed := [

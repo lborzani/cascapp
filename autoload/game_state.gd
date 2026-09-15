@@ -14,6 +14,7 @@ const LUDO := &"ludo"
 const MONOPOLY := &"monopoly"
 const BOMBERMAN := &"bomberman"
 const UNO := &"uno"
+const POOL := &"pool"
 
 ## Categorias do catálogo, na ordem em que a tela inicial as oferece.
 ##
@@ -227,6 +228,43 @@ const GAMES := [
 		"landscape": true,
 		"visible": true,
 	},
+	# Sinuca em `CAT_BOARD`, e a escolha merece uma linha.
+	#
+	# O corte das categorias é pelo que o jogador reconhece de fora, e não pela
+	# família de regras: uma mesa de sinuca é uma superfície marcada onde se movem
+	# peças, que é a mesma resposta que xadrez, damas e batalha naval dão. "Ação" é
+	# boneco que corre e o relógio não para — aqui a vez é de um por vez, com todo o
+	# tempo do mundo para mirar. Uma categoria nova só para ela seria uma categoria
+	# por jogo, que é o mesmo que categoria nenhuma.
+	#
+	# `bot_levels` falso pelo motivo dos outros: o adversário daqui não é busca — é
+	# simular um punhado de tacadas candidatas e ficar com a melhor. Não há
+	# profundidade para regular, e três nomes para o mesmo jogador não são três
+	# níveis.
+	{
+		"id": POOL,
+		"title": "Sinuca",
+		"category": CAT_BOARD,
+		"icon": Board.Kind.CUE,
+		"scene": "res://scenes/pool_match.tscn",
+		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
+		"clock": false,
+		"bot_levels": false,
+		# Deitado pelo motivo mais literal do catálogo: a mesa é duas vezes mais
+		# larga que alta. Em retrato ela ocuparia um terço da tela.
+		"landscape": true,
+		"visible": true,
+	},
+]
+
+## Os dois formatos da sinuca.
+##
+## Mata-mata primeiro, e é o padrão: é o jogo que se joga em bar no Brasil, e é o
+## mais curto — duas cores, limpe a sua. A brasileira é a regra nacional, com a
+## bola da vez e pontos, e leva mais tempo.
+const POOL_FORMATS := [
+	{"label": "Mata-mata", "value": PoolRules.Format.KNOCKOUT},
+	{"label": "Brasileira", "value": PoolRules.Format.BRAZILIAN},
 ]
 
 ## Formatos de Metrópole. O primeiro é jogar até sobrar um, e é o padrão: é o
@@ -267,6 +305,14 @@ var table_size := 0
 ## de quem joga, não da sessão.
 var uno_sevens := Prefs.sevens_on()
 
+## Formato da sinuca: mata-mata (as duas cores) ou brasileira (a bola da vez).
+##
+## Como o limite de rodadas de Metrópole, quem hospeda decide e viaja no
+## `welcome`. É o único campo de `option` que **não** carrega semente nenhuma — a
+## sinuca é o único jogo do app sem sorteio: a mesa nasce sempre igual e a única
+## entrada é a tacada.
+var pool_format := PoolRules.Format.KNOCKOUT
+
 ## Bit alto de [method host_option], acima da semente do baralho do Uno.
 ##
 ## Empacotado em vez de um campo novo no `welcome` porque `net_link.gd` não é
@@ -288,6 +334,38 @@ func round_limit_label() -> String:
 		if int(entry["rounds"]) == round_limit:
 			return str(entry["label"])
 	return "%d rodadas" % round_limit
+
+
+## Os formatos que este jogo oferece, como `{label, value}`, ou vazio.
+##
+## Existe porque **dois** jogos passaram a perguntar a mesma coisa de formas
+## diferentes: Metrópole escolhe um limite de rodadas e a sinuca escolhe entre
+## duas regras. A tela do menu não precisa saber a diferença — ela desenha uma
+## fileira de botões e devolve o `value` escolhido —, e sem isto ela teria uma
+## seção por jogo, cada uma com o mesmo código e um `if` diferente.
+func formats_of(id: StringName = game_id) -> Array:
+	if supports_rounds(id):
+		var limits := []
+		for entry in ROUND_LIMITS:
+			limits.append({"label": entry["label"], "value": entry["rounds"]})
+		return limits
+	if id == POOL:
+		return POOL_FORMATS
+	return []
+
+
+## O formato escolhido agora, no vocabulário do jogo. Ver [method formats_of].
+func format_value(id: StringName = game_id) -> int:
+	if supports_rounds(id):
+		return round_limit
+	return pool_format if id == POOL else 0
+
+
+func set_format(value: int, id: StringName = game_id) -> void:
+	if supports_rounds(id):
+		round_limit = value
+	elif id == POOL:
+		pool_format = value
 
 ## O número que quem abre a sala decide e que viaja no `welcome` (`Net.option`).
 ##
@@ -317,6 +395,10 @@ func host_option(id: StringName = game_id) -> int:
 		# semeado em zero é as 108 cartas na ordem de fábrica.
 		var packed := (randi() & 0x3FFFFFFF) | 1
 		return packed | UNO_SEVENS_BIT if uno_sevens else packed
+	if id == POOL:
+		# Sem semente: a sinuca é o único jogo do app sem sorteio nenhum. A mesa
+		# nasce sempre igual e a única entrada é a tacada.
+		return pool_format
 	if supports_rounds(id):
 		return round_limit
 	return 0
@@ -571,6 +653,10 @@ func make_ruleset(id: StringName = game_id) -> Ruleset:
 			monopoly.seats = players_of(MONOPOLY)
 			monopoly.round_limit = round_limit
 			return monopoly
+		POOL:
+			var pool := PoolRules.new()
+			pool.format = pool_format
+			return pool
 		_:
 			return ChessRules.new()
 

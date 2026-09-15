@@ -104,6 +104,15 @@ jobs:
           godot --headless --path . res://tests/uno_probe.tscn
           godot --headless --path . res://tests/uno_scene_probe.tscn
 
+      # A sinuca é o único jogo do app com física, e é a suíte que mais se paga:
+      # o que ela persegue não é o que uma tacada faz, é que a mesa **para**, que
+      # as bolas ficam no pano, e que a mesma tacada dá a mesma mesa bit a bit —
+      # que é a propriedade em que a rede inteira dela se apoia.
+      - name: Sinuca
+        run: |
+          godot --headless --path . --script res://tests/pool_probe.gd
+          godot --headless --path . res://tests/pool_scene_probe.tscn
+
       # As quatro suítes do Bomberman, e não só a simulação.
       #
       # Só `bomber_probe` rodava aqui, e as outras três existiam no repositório

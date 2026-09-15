@@ -74,6 +74,7 @@ const TEXTURE_NAMES := {
 	# oval no meio — indistinguível de um ícone genérico de documento no tamanho da
 	# grade do menu. O leque é o que diz "baralho".
 	Board.Kind.CARD: "card",
+	Board.Kind.CUE: "cue",
 }
 const TEXTURE_DIR := "res://assets/pieces"
 

@@ -1,11 +1,12 @@
 # Jogos de Rolê — multiplayer por código, sem cadastro
 
-Coleção de jogos para celular, hoje com **xadrez**, **damas**, **batalha
-naval**, **Ludo**, **Metrópole**, **Uno** e **Bomberman**. Dá para jogar contra
-um bot, com alguém no mesmo aparelho, ou pela internet: um **abre uma sala** e o
-outro entra digitando o **código de 6 caracteres** — de qualquer lugar, cada um
-na sua rede, um deles em dados móveis se quiser. Também dá para entrar apontando
-a câmera para o **QR Code** ou **encostando os celulares (NFC)**.
+Coleção de jogos para celular, hoje com **xadrez**, **damas**, **batalha naval**,
+**Ludo**, **Metrópole**, **Uno**, **Bomberman** e **sinuca**. Dá para jogar
+contra um bot, com alguém no mesmo aparelho, ou pela internet: um **abre uma
+sala** e o outro entra digitando o **código de 6 caracteres** — de qualquer
+lugar, cada um na sua rede, um deles em dados móveis se quiser. Também dá para
+entrar apontando a câmera para o **QR Code** ou **encostando os celulares
+(NFC)**.
 
 Cada jogo declara em `Game.GAMES` como pode ser jogado, e nenhuma tela precisa
 saber o nome de jogo nenhum para desenhar o menu: xadrez e damas aceitam os três
@@ -14,7 +15,7 @@ só exigiria uma cortina de "passe o celular" a cada jogada; Ludo e Metrópole
 sentam até quatro e seis.
 
 > O nome vem de a coleção ser o ponto, e não os jogos que existem hoje: Dominó,
-> Truco, Campo Minado e sinuca estão no plano, e um título que precisa ser
+> Truco e Campo Minado estão no plano, e um título que precisa ser
 > reescrito a cada jogo novo é um título que não descreve o app. O identificador
 > do projeto (`chess-checkers`) e o pacote Android
 > (`org.chessandcheckers.game`) ficaram como estavam de propósito — mudar o
@@ -951,6 +952,101 @@ mais.
 O que pode ser jogado **sobe** alguns pixels e fica opaco; o resto fica apagado e
 no lugar. Apagadas e não escondidas: a mão inteira é o que decide se vale
 comprar, e sumir com as injogáveis esconde metade da conta.
+
+### Sinuca
+
+Dois jogadores, uma mesa de bar, dois formatos. É o jogo mais diferente do
+catálogo, e a diferença tem um nome: aqui o lance não **é** o resultado, ele é a
+**causa** dele. No xadrez "e2-e4" já descreve a posição seguinte; aqui uma tacada
+é uma direção e uma força, e o que acontece com as nove bolas depois disso sai de
+uma simulação.
+
+#### Os dois formatos
+
+- **Mata-mata** — o jogo que se joga em bar no Brasil: quatro amarelas, quatro
+  azuis e a branca. O grupo de cada um é decidido pela **primeira bola
+  encaçapada**, e ganha quem limpar o seu primeiro. É o padrão, e é o mais curto;
+- **Brasileira** — a regra nacional: a branca e sete coloridas de 1 a 7. A **bola
+  da vez** é a de menor número ainda na mesa, e é nela que a branca tem de bater
+  primeiro. Cada bola vale o número dela, a falta entrega sete ao adversário, e a
+  mesa limpa decide pelo maior placar.
+
+O formato é escolhido por quem abre e viaja no `welcome` como `Net.option`, como
+o limite de rodadas de Metrópole. Duas mesas com formatos diferentes não seriam a
+mesma partida.
+
+#### A física mora em `core/`, junto das regras
+
+Porque ela **é** a regra. Se ela morasse na tela, o aparelho do adversário
+receberia "taquei para lá com essa força" e teria de acreditar no resultado que
+viesse junto — e um resultado que viaja é um resultado que pode ser inventado.
+Com a simulação dentro das regras, os dois aparelhos rodam a mesma tacada e
+chegam à mesma mesa, e repetir o histórico reconstrói a partida como em todos os
+outros jogos. A reconexão da sinuca é a mesma de sempre, sem uma linha nova.
+
+#### A tacada é um par de inteiros, e não um ângulo
+
+Esta é a decisão que torna tudo acima possível.
+
+Um lance carrega a velocidade inicial da branca em **milésimos de unidade por
+segundo**, dois inteiros. Não carrega ângulo — e a diferença não é de gosto.
+Ângulo obrigaria os dois lados a chamar `cos` e `sin`, e essas duas, ao contrário
+de `+`, `-`, `*`, `/` e `sqrt`, **não** têm resultado garantido bit a bit entre
+plataformas: a biblioteca matemática de um ARM pode devolver um último bit
+diferente da de um x86. Um bit na direção vira um centímetro depois da terceira
+tabela, e um centímetro é a bola entrando ou não entrando.
+
+Então quem mira converte ângulo em vetor **uma vez**, no aparelho de quem está
+jogando, e o que viaja é o vetor já quantizado. Daí para frente a simulação usa só
+as cinco operações que a IEEE-754 obriga a arredondar corretamente, e as duas
+mesas são a mesma mesa. O teste que persegue isso está em `tests/pool_probe.gd`:
+a mesma tacada tem de parar as nove bolas no mesmo lugar, e uma mira um milésimo
+diferente tem de dar uma mesa diferente — se não desse, a quantização estaria
+grossa demais para o jogo ter mira.
+
+Pelo mesmo motivo **não há efeito** (nem "inglês"): ele pediria rotação, atrito
+lateral e uma integração bem mais sensível a erro, e a primeira coisa a quebrar
+seria justamente a igualdade entre os dois aparelhos.
+
+#### E não há acaso nenhum
+
+É o único jogo do app sem sorteio: o triângulo nasce sempre igual, a física é
+determinística, e a única entrada é a tacada. Não há semente para combinar nem
+carta para sortear.
+
+#### A animação é a própria simulação
+
+A tela não recalcula nada. As regras guardam retratos da mesa a cada quatro
+passos e a tela os reproduz em ordem, no mesmo ritmo em que foram gravados. Uma
+segunda física no desenho seria a forma clássica de a partida animada divergir da
+partida jogada — a bola entrando na tela e não entrando na regra, ou o contrário.
+
+#### A mira é um arrasto, e ele é ao contrário
+
+O dedo puxa **para trás** da branca, como se puxa um taco: a direção é do dedo
+para a bola, e a distância é a força. Puxar para frente pareceria empurrar a bola
+com o dedo, e num celular o dedo estaria justamente em cima do que ele precisa
+ver.
+
+Enquanto o dedo está na tela, a linha mostra **onde a branca vai bater** — ela
+para na primeira bola do caminho, ou na tabela, e ali aparece o ponto de contato.
+Uma linha que atravessasse a mesa inteira prometeria uma trajetória que não
+existe, que é o pior tipo de ajuda: a que mente.
+
+#### Na boca da caçapa não há tabela
+
+A borracha some perto de cada buraco. Sem isso ela atravessa a entrada e a bola
+**quica** no lugar em que deveria cair — uma bola mandada no canto volta para o
+pano, e o jogo fica com seis buracos que só engolem quem chega pelo meio.
+
+#### O bot simula, não procura
+
+Ele não usa o `Bot` do app. Aquele procura em profundidade contando lances
+discretos, e uma tacada não é discreta: o galho seguinte depende de onde nove
+bolas pararam. O daqui monta um punhado de tacadas candidatas — uma por bola na
+mesa, em três forças —, **simula cada uma de verdade** numa cópia da mesa, e fica
+com a que encaçapa o que interessa sem fazer falta. Um passo só, simulado, joga
+melhor que uma árvore rasa sobre uma aproximação.
 
 ### Transporte: uma sala, e só
 
@@ -1896,6 +1992,7 @@ core/                 regras e estado, sem nenhuma dependência de UI ou de rede
   monopoly_board.gd   as 40 casas, os grupos e as tabelas de aluguel
   monopoly_rules.gd   o turno em fases, a troca por predicado e a falência
   uno_rules.gd        baralho semeado, pilha de compra, grito e dúvida
+  pool_rules.gd       a mesa, a física determinística e os dois formatos
   bomber_rules.gd     a simulação de passo fixo, sem tela e sem rede
   bot.gd              busca alfa-beta, sem saber qual jogo está jogando
 
@@ -1927,6 +2024,7 @@ scenes/
   monopoly_match.tscn/.gd  o turno em fases, a coluna de jogadores e o 3D
   uno_match.tscn/.gd   a mesa, a mão em leque e os botões de lance sem carta
   bomber_match.tscn/.gd  o relógio de passo fixo e os dois controles de polegar
+  pool_match.tscn/.gd  a mesa, o arrasto que vira tacada e a tacada assistida
   board_view.gd       desenho do tabuleiro e das peças (herda GridView)
   piece_renderer.gd   ponto único de desenho de peça (textura, ou polígono)
 
@@ -3021,3 +3119,12 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
 7. Timbre no som, se um dia ele for pedido. As oito ondas sintetizadas acertam o
    sinal e não fazem textura — é onde um pacote de amostras entraria, trocando só
    a tabela de `_bake`.
+8. Sinuca em rede numa partida de verdade, e um smoke dela na esteira. A física é
+   determinística por construção e há teste provando que a mesma tacada dá a mesma
+   mesa **no mesmo binário**; o que nunca foi exercitado é um ARM e um x86
+   chegando ao mesmo resultado, que é exatamente o que a quantização da tacada
+   existe para garantir.
+9. Efeito na sinuca, se ele um dia valer o preço. Ele pede rotação, atrito lateral
+   e uma integração mais sensível a erro — e a primeira coisa a quebrar seria a
+   igualdade entre os dois aparelhos, que é a propriedade em que a rede do jogo
+   inteiro se apoia.
