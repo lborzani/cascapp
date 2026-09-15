@@ -138,6 +138,27 @@ const YARD_SPOTS := [
 const COLORS := [
 	Color("c9524d"), Color("5f9e63"), Color("d9a441"), Color("4b7fb5"),
 ]
+## Uma silhueta por assento, e não quatro vezes o mesmo peão tingido.
+##
+## A cor **continua** sendo a identidade do Ludo — o curral, a trilha e a reta
+## final são pintados dela, e nada disso muda. O que a forma acrescenta é a
+## segunda leitura: quem não separa o vermelho do verde via quatro peças idênticas
+## em quatro tons que, para ele, eram dois. Era o único jogo do app onde a cor
+## carregava a identidade sozinha — Metrópole já dá uma peça por assento.
+##
+## São as peças de xadrez que o app **já desenha**, e é o ponto: o traço é o
+## mesmo, o arquivo é o mesmo, e o dia em que o desenho da peça mudar ele muda
+## aqui junto. Uma coleção de fichas próprias custaria quatro SVGs novos para
+## dizer o que estes quatro já dizem.
+##
+## As quatro escolhidas são as que menos se confundem no tamanho de uma casa:
+## cabeça redonda (peão), perfil de cavalo (assimétrico), mitra com fenda (bispo)
+## e ameia quadrada (torre). Dama e rei saíram — a coroa dos dois é a mesma mancha
+## a esta escala.
+##
+## Não há hierarquia nenhuma nisto: os quatro peões do Ludo continuam sendo a
+## mesma peça, com as mesmas regras. A forma aqui é crachá, e não patente.
+const TOKEN_KINDS := [Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK]
 const CENTER := Vector2(7.0, 7.0)
 ## Para onde fica o quarto do centro de cada cor — o mesmo lado por onde a reta
 ## final dela chega.
@@ -619,10 +640,11 @@ func _knock_ratio(player: int, token: int) -> float:
 	return -1.0
 
 
-## O peão **é o peão do xadrez**, tingido. Um disco colorido diria a mesma coisa
-## e diria em outra língua: o app inteiro desenha peça com o mesmo traço, e o
-## Ludo com fichas chapadas pareceria emprestado de outro lugar. Como é a mesma
-## textura, o dia em que o desenho da peça mudar ele muda aqui junto.
+## O peão **é uma peça de xadrez**, tingida — uma por assento, de [constant
+## TOKEN_KINDS]. Um disco colorido diria a mesma coisa e diria em outra língua: o
+## app inteiro desenha peça com o mesmo traço, e o Ludo com fichas chapadas
+## pareceria emprestado de outro lugar. Como é a mesma textura, o dia em que o
+## desenho da peça mudar ele muda aqui junto.
 func _draw_token(player: int, token: int, is_turn: bool) -> void:
 	var middle := _token_center(player, token)
 	var home := LudoRules.progress(state)[LudoRules.slot(player, token)] == LudoRules.GOAL
@@ -672,7 +694,7 @@ func _draw_token(player: int, token: int, is_turn: bool) -> void:
 	if _on_home_stretch(player, token):
 		draw_circle(middle, radius * 0.92, Color(AppTheme.BOARD_LIGHT, 0.85))
 	PieceRenderer.draw_piece(
-		self, Board.piece(Board.Side.WHITE, Board.Kind.PAWN),
+		self, Board.piece(Board.Side.WHITE, TOKEN_KINDS[player % TOKEN_KINDS.size()]),
 		middle, _cell * scale, 1.0, 1.0, false, COLORS[player], spin
 	)
 	_draw_stack_count(player, token, middle, radius)
