@@ -11,7 +11,7 @@ extends Node3D
 ## ## A divisão: o que é plano é textura, o que tem altura é volume
 ##
 ## O tampo inteiro — casas, faixas de cor, barras de dono, nomes, preços, ícones
-## e o miolo — é desenhado por [monopoly_face.gd] num `SubViewport` de 2048² e
+## e o miolo — é desenhado por [monopoly_face.gd] num `SubViewport` de 1536² e
 ## colado como textura. Peças, construções e os dois baralhos são malhas de
 ## verdade, de pé, com sombra.
 ##
@@ -125,6 +125,16 @@ const FOLLOW_DISTANCE := 10.8
 ## o põe no meio do quadro sem se ver aonde ele vai; mirando adiante, ele desce e
 ## o que se vê é o caminho.
 const FOLLOW_AHEAD := 2.6
+## Quanto a mira desce **abaixo** do tampo, seguindo o peão.
+##
+## Mirar no tampo põe o horizonte no meio da tela: metade do quadro vira mesa
+## vazia, e o tabuleiro — a única coisa que se está olhando — fica espremido na
+## metade de baixo. Baixar a mira inclina a câmera mais para o chão, o horizonte
+## sobe para fora do quadro e o tampo sobe junto.
+##
+## É a mesma ideia de [constant LOOK_HEIGHT], que já fazia isto no enquadramento
+## de tabuleiro inteiro; o acompanhamento simplesmente não tinha o equivalente.
+const FOLLOW_LOOK_DROP := 1.7
 ## Quanto a mira é puxada para o meio do tabuleiro. Zero é olhar só à frente do
 ## peão, e sai do tampo nos cantos; um é olhar sempre para o centro, e o
 ## acompanhamento deixa de existir.
@@ -160,7 +170,26 @@ const LOOK_HEIGHT := -0.9
 ## caixa projeta não tem onde aparecer, e a mesa deixa de servir para a única
 ## coisa que ela faz.
 const TABLE_COLOR := Color("2a2119")
-const TABLE_SPAN := Face.SPAN * 3.0
+## Nove vezes o tabuleiro, e não três.
+##
+## Três acabava **dentro do quadro**: seguindo o peão, a câmera olha para o tampo,
+## então o horizonte cai no meio da tela e a metade de cima era a borda da mesa e,
+## depois dela, o vazio chapado da cor do fundo do app. Um terço da tela do jogo
+## mais caro do catálogo era um retângulo preto.
+##
+## O plano custa dois triângulos, então o tamanho é de graça; o que não é de graça
+## é a borda aparecer. Quem a esconde não é o tamanho sozinho — é [constant
+## TABLE_FADE_AT], que apaga a mesa **para a própria cor do fundo** antes de ela
+## terminar. Com os dois, não existe distância nem inclinação de câmera livre em
+## que se veja onde a mesa acaba.
+const TABLE_SPAN := Face.SPAN * 9.0
+## Onde a mesa começa e termina de apagar, em fração do raio da textura.
+##
+## O tabuleiro ocupa pouco mais de 1/9 do raio, então a poça de luz vai até aí e o
+## resto é a sala escura em volta. Terminar exatamente em `AppTheme.BACKGROUND` é
+## o truque inteiro: a mesa e o fundo viram a mesma cor antes da geometria acabar.
+const TABLE_LIT_AT := 0.10
+const TABLE_FADE_AT := 0.42
 ## Quanto o tampo avança sobre o corpo da caixa, de cada lado. Um lábio: o tampo
 ## é a tampa impressa e o corpo é a caixa embaixo dela, que é como uma caixa de
 ## jogo é de verdade.
@@ -367,7 +396,7 @@ func _build_environment() -> void:
 
 ## O tampo desenhado, num alvo de render próprio.
 ##
-## `UPDATE_ONCE` e não `UPDATE_ALWAYS`: são 2048² pixels e o tampo fica idêntico
+## `UPDATE_ONCE` e não `UPDATE_ALWAYS`: são 1536² pixels e o tampo fica idêntico
 ## por dezenas de segundos: ele só muda quando alguém compra, hipoteca ou quebra.
 ## Redesenhá-lo a cada quadro é o gasto mais fácil de fazer sem perceber neste
 ## arranjo.
@@ -392,14 +421,59 @@ func _build_face() -> void:
 	_face_viewport.add_child(_face)
 
 
+## A mesa: uma poça de luz sob o tabuleiro que se apaga para o fundo do app.
+##
+## É um degradê radial gerado em código, não um arquivo. Três paradas: o miolo
+## claro onde a caixa pousa, a queda, e o fim exatamente em `AppTheme.BACKGROUND`
+## — que é a cor do `background_color` do ambiente. A partir dali a mesa é
+## indistinguível do vazio, então a borda dela não existe para o olho, por mais
+## que a câmera livre se afaste ou se abaixe.
+##
+## Sem textura o mesmo plano era um cinza chapado até a borda, e a borda **era**
+## vista: uma linha reta atravessando o fundo da tela no enquadramento que segue o
+## peão. Com ela, o tabuleiro passa a estar numa sala escura em vez de num vazio.
+##
+## Material próprio e não `MonopolyToken.plastic()`: aquele devolve recursos de um
+## cache compartilhado, e escrever uma textura num deles pintaria de degradê todo
+## objeto que dividisse a mesma cor.
+func _table_material() -> StandardMaterial3D:
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, TABLE_LIT_AT, TABLE_FADE_AT, 1.0])
+	ramp.colors = PackedColorArray([
+		TABLE_COLOR.lightened(0.10),
+		TABLE_COLOR,
+		TABLE_COLOR.lerp(AppTheme.BACKGROUND, 0.75),
+		AppTheme.BACKGROUND,
+	])
+
+	var glow := GradientTexture2D.new()
+	glow.gradient = ramp
+	glow.fill = GradientTexture2D.FILL_RADIAL
+	glow.fill_from = Vector2(0.5, 0.5)
+	glow.fill_to = Vector2(1.0, 0.5)
+	# 256 basta: é um degradê sem detalhe nenhum, esticado por 109 unidades de
+	# mundo. O que contaria como banda a esta escala é a profundidade de cor, e
+	# não a resolução.
+	glow.width = 256
+	glow.height = 256
+
+	var felt := StandardMaterial3D.new()
+	felt.albedo_texture = glow
+	felt.roughness = 0.98
+	felt.metallic = 0.0
+	# Sem realce especular: a mesa é feltro, e um ponto de brilho nela chamaria
+	# atenção para o único objeto da cena que não deve ser olhado.
+	felt.metallic_specular = 0.0
+	return felt
+
+
 func _build_board() -> void:
 	# A mesa primeiro: é ela que recebe a sombra de tudo o que vem depois.
 	var table := MeshInstance3D.new()
 	var surface := PlaneMesh.new()
 	surface.size = Vector2(TABLE_SPAN, TABLE_SPAN)
 	table.mesh = surface
-	var felt := MonopolyToken.plastic(TABLE_COLOR, 0.98)
-	table.set_surface_override_material(0, felt)
+	table.set_surface_override_material(0, _table_material())
 	table.position.y = -0.002
 	table.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(table)
@@ -708,7 +782,7 @@ func _place_camera() -> void:
 
 	if follow >= 0:
 		_camera.position = Vector3(0.0, sin(pitch), cos(pitch)) * FOLLOW_DISTANCE
-		_camera.look_at(_focus, Vector3.UP)
+		_camera.look_at(_focus + Vector3.DOWN * FOLLOW_LOOK_DROP, Vector3.UP)
 		return
 
 	# A distância **respira com o giro**, e é preciso.

@@ -28,6 +28,9 @@ signal tile_chosen(tile: int)
 signal action_requested(action: int, tile: int)
 
 const ROW_HEIGHT := 14
+## Largura reservada à barra de rolagem do corpo. Ver a canaleta em [method
+## _ready].
+const SCROLL_GUTTER := 10
 ## Largura do painel, e ela é **fixa**.
 ##
 ## Duzentos, e não os 168 da barra de baixo. Ele é o bloco que carrega **texto** —
@@ -167,10 +170,27 @@ func _ready() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
 
+	# Uma canaleta para a barra de rolagem, sempre reservada.
+	#
+	# O `ScrollContainer` desenha a barra **por cima** do conteúdo quando a largura
+	# mínima do filho já ocupa a faixa toda, e a coluna de valores da direita é
+	# exatamente o que fica embaixo: numa propriedade com a tabela inteira, o "200"
+	# do preço saía com a barra atravessada no último algarismo. Ler um aluguel
+	# errado por causa de um pixel de barra é o pior tipo de defeito de tela —
+	# silencioso e plausível.
+	#
+	# Reservada **sempre**, e não só quando a barra aparece: uma canaleta que nasce
+	# e some faz a coluna de números pular para o lado a cada troca de casa, e o
+	# olho segue o pulo em vez de ler o número.
+	var gutter := MarginContainer.new()
+	gutter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gutter.add_theme_constant_override("margin_right", SCROLL_GUTTER)
+	scroll.add_child(gutter)
+
 	_body = VBoxContainer.new()
 	_body.add_theme_constant_override("separation", 2)
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_body)
+	gutter.add_child(_body)
 
 	# Empilhados, e não lado a lado. O painel tem 168 de largura e o par
 	# "Construir | Vender" dividido em dois cortava os dois rótulos no meio — um
