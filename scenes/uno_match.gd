@@ -47,6 +47,25 @@ const AFTER_MOVE := 0.35
 ## Quanto tempo o aviso de efeito fica na tela. Um +4 aplicado sem aviso é uma mão
 ## que cresce quatro cartas sem motivo visível.
 const READ_EFFECT := 0.9
+## O que a máquina leva para gritar UNO ou para pegar quem esqueceu.
+##
+## Curto de propósito. As duas são ações **livres** — não gastam a vez —, então
+## elas acontecem *antes* da jogada de verdade, e com o tempo de reflexão normal a
+## vez de um bot passaria a durar dois segundos e meio: um para gritar, outro para
+## jogar. O grito é um reflexo, e é assim que ele lê.
+const BOT_QUICK := 0.25
+
+## O peso de cada botão de ação, e nenhum é decorativo.
+##
+## "Duvidar" é vermelho porque é a única jogada da mesa que pode custar mais do
+## que evita; "UNO!" é o latão da ação da vez; "Comprar N" e "Pegar" são neutros —
+## o primeiro é desistir, o segundo é rotina.
+const _ACTION_STYLE := {
+	UnoRules.CHALLENGE: &"DangerButton",
+	UnoRules.TAKE: &"Button",
+	UnoRules.CALL: &"PrimaryButton",
+	UnoRules.CATCH: &"AccentButton",
+}
 
 var _rules := UnoRules.new()
 var _state: MatchState
@@ -67,6 +86,8 @@ var _bot_seats := PackedInt32Array()
 var _bot_pending := false
 ## A faixa de cada jogador na coluna da esquerda, na ordem dos assentos.
 var _chips: Array[PanelContainer] = []
+## Os botões de lance que não é carta, por espécie. Ver [method _build_actions].
+var _actions := {}
 
 @onready var _table: UnoView = %Table
 @onready var _hand: UnoHand = %Hand
@@ -90,6 +111,7 @@ func _ready() -> void:
 	_table.deck_tapped.connect(_on_deck_tapped)
 	_hand.card_tapped.connect(_on_card_tapped)
 	%PassButton.pressed.connect(_on_pass)
+	_build_actions()
 	%BackButton.confirmed.connect(_leave)
 	%AgainButton.pressed.connect(_restart)
 	%OverlayLeaveButton.pressed.connect(_leave)
@@ -232,8 +254,18 @@ func _play(move: Move, from_network := false) -> void:
 	Sound.play(Sound.Cue.CARD if kind == UnoRules.PLAY else Sound.Cue.TAP)
 	_refresh_table()
 
+	# A pausa de leitura não vale para as ações livres.
+	#
+	# Elas têm aviso — o grito e a denúncia são justamente o que os outros
+	# precisam ver —, mas o aviso é um toast, que some sozinho no tempo dele. O que
+	# está em jogo aqui é outra coisa: quanto a **mesa** fica parada. Gritar UNO e
+	# continuar segurando a carta por quase um segundo lê como travamento, e é o
+	# próprio jogador que está esperando por si mesmo.
 	var told := _announce(seat, move, before)
-	await _wait(READ_EFFECT if told else AFTER_MOVE)
+	var pause := AFTER_MOVE
+	if told:
+		pause = BOT_QUICK if _is_free_action(kind) else READ_EFFECT
+	await _wait(pause)
 	if not _alive():
 		return
 
@@ -251,18 +283,43 @@ func _play(move: Move, from_network := false) -> void:
 ## precisa de aviso: a carta está no descarte, à vista. Um +4 precisa, porque
 ## quatro cartas entram numa mão que não é a de quem jogou.
 func _announce(seat: int, move: Move, before: Array) -> bool:
-	if UnoRules.kind_of(move) != UnoRules.PLAY:
-		return false
-	var value := UnoRules.value_of_card(UnoRules.card_of(move))
+	var kind := UnoRules.kind_of(move)
 	var who := _seat_name(seat)
 
+	# Os lances que não são carta, e os três novos são justamente os que mexem em
+	# mão alheia sem nada mudar no descarte — sem aviso, uma mão cresce seis cartas
+	# e a mesa não diz por quê.
+	match kind:
+		UnoRules.CALL:
+			_banner.show_message("%s gritou UNO!" % who, Banner.Kind.ALERT)
+			return true
+		UnoRules.CATCH:
+			_banner.show_message(
+				"%s pegou %s sem gritar: +%d." % [
+					who, _seat_name(UnoRules.target_of(move)), UnoRules.CATCH_PENALTY
+				],
+				Banner.Kind.ALERT
+			)
+			return true
+		UnoRules.TAKE:
+			var ate: int = UnoRules.hand_size(_state, seat) - int(before[seat])
+			_banner.show_message("%s comprou %d." % [who, ate], Banner.Kind.ALERT)
+			return true
+		UnoRules.CHALLENGE:
+			return _announce_challenge(seat, before)
+	if kind != UnoRules.PLAY:
+		return false
+
+	var value := UnoRules.value_of_card(UnoRules.card_of(move))
+
 	if value == UnoRules.DRAW_TWO or value == UnoRules.WILD_FOUR:
-		var count := UnoRules.DRAW_TWO_CARDS if value == UnoRules.DRAW_TWO else UnoRules.WILD_FOUR_CARDS
-		# Quem comprou sai do estado **anterior**: depois do lance a vez já andou
-		# duas casas, e o vizinho de então não é o vizinho de agora.
-		var victim := _victim_of(seat)
+		# A carta **acumula** em vez de entregar: o aviso conta quanto está de pé
+		# na mesa e de quem é a resposta, que é a pergunta do momento seguinte.
+		var stack := UnoRules.pending(_state)
 		_banner.show_message(
-			"%s comprou %d de %s." % [_seat_name(victim), count, who], Banner.Kind.ALERT
+			"%s jogou. São %d cartas para %s responder ou engolir."
+			% [who, stack, _seat_name(UnoRules.turn_of(_state))],
+			Banner.Kind.ALERT
 		)
 		return true
 
@@ -286,13 +343,26 @@ func _announce(seat: int, move: Move, before: Array) -> bool:
 	return false
 
 
-## Quem levou o +2 ou o +4: o vizinho de quem jogou, no sentido de então.
-##
-## O sentido é lido do estado **depois** do lance porque nem o +2 nem o +4 mexem
-## nele — só o inverte mexe, e ele não castiga ninguém. A vez, essa sim, já andou.
-func _victim_of(seat: int) -> int:
-	var count := UnoRules.seats_of(_state)
-	return posmod(seat + UnoRules.direction_of(_state), count)
+## Quem pagou a dúvida, lido pelas mãos: o veredito mora no estado e some junto
+## com a pilha, então perguntá-lo depois do lance não dá resposta. A diferença de
+## tamanho dá, e ela diz a mesma coisa em linguagem de mesa — quem comprou perdeu.
+func _announce_challenge(seat: int, before: Array) -> bool:
+	var mine: int = UnoRules.hand_size(_state, seat) - int(before[seat])
+	if mine > 0:
+		_banner.show_message(
+			"%s duvidou e errou: +%d." % [_seat_name(seat), mine], Banner.Kind.DANGER
+		)
+		return true
+	for other in UnoRules.seats_of(_state):
+		var grew: int = UnoRules.hand_size(_state, other) - int(before[other])
+		if grew > 0:
+			_banner.show_message(
+				"%s duvidou e acertou: %s comprou %d."
+				% [_seat_name(seat), _seat_name(other), grew],
+				Banner.Kind.ALERT
+			)
+			return true
+	return false
 
 
 func _wait(seconds: float) -> void:
@@ -397,7 +467,16 @@ func _sender_for(seat: int) -> int:
 ## histórico não distingue quem o produziu, que é o que mantém a reconexão igual.
 func _run_bot() -> void:
 	_bot_pending = true
-	await _wait(BOT_THINK)
+	# O tempo de reflexão é escolhido **antes** da espera, olhando o que a máquina
+	# vai fazer: gritar UNO e pegar quem esqueceu são reflexos, não decisões, e com
+	# o tempo cheio a vez de um bot passaria a durar dois segundos e meio.
+	#
+	# A escolha é refeita depois da espera porque a mesa pode ter mudado no meio —
+	# um lance de rede que estava na fila, alguém que saiu. O primeiro cálculo
+	# serve só para cronometrar.
+	var peek := _rules.best_move(_state, _rules.generate_moves(_state))
+	var quick := peek != null and _is_free_action(UnoRules.kind_of(peek))
+	await _wait(BOT_QUICK if quick else BOT_THINK)
 	if not _alive() or _busy:
 		_bot_pending = false
 		return
@@ -412,6 +491,11 @@ func _run_bot() -> void:
 	if choice == null:
 		return
 	_play(choice)
+
+
+## Lance que **não** gasta a vez: depois dele, quem jogou continua jogando.
+static func _is_free_action(kind: int) -> bool:
+	return kind == UnoRules.CALL or kind == UnoRules.CATCH
 
 
 # --- rede ---------------------------------------------------------------------
@@ -579,6 +663,63 @@ func _refresh_hand() -> void:
 	_hand.playable = _playable_now()
 	_hand.enabled = _can_act()
 	%PassButton.visible = _can_act() and _move_of_kind(UnoRules.PASS) != null
+	_refresh_actions()
+
+
+## Os botões da coluna da direita: um por lance que não é uma carta.
+##
+## Eles são construídos em código e não na cena pelo mesmo motivo que o resto
+## deste app: cada um existe só quando o lance dele existe, e a regra de quando é
+## `generate_moves` — pôr cinco botões na cena e escondê-los deixaria a lista de
+## quem aparece em dois lugares, um deles desatualizado.
+##
+## Um botão que existe e não funciona é pior que a ausência dele; aqui a ausência
+## é a regra, e é por isso que nenhum deles fica cinza.
+func _build_actions() -> void:
+	var column: VBoxContainer = %PassButton.get_parent()
+	for kind: int in [UnoRules.CHALLENGE, UnoRules.TAKE, UnoRules.CALL, UnoRules.CATCH]:
+		var button := Button.new()
+		button.custom_minimum_size.y = 46
+		button.visible = false
+		button.clip_text = true
+		button.theme_type_variation = _ACTION_STYLE[kind]
+		button.pressed.connect(_on_action.bind(kind))
+		# Acima do "Passar", que é o mais comum e por isso o mais perto do polegar
+		# na base da coluna.
+		column.add_child(button)
+		column.move_child(button, %PassButton.get_index())
+		_actions[kind] = button
+
+
+func _refresh_actions() -> void:
+	for kind: int in _actions:
+		var button: Button = _actions[kind]
+		var move := _move_of_kind(kind)
+		button.visible = _can_act() and move != null
+		if button.visible:
+			button.text = _action_label(kind, move)
+
+
+func _action_label(kind: int, move: Move) -> String:
+	match kind:
+		UnoRules.TAKE:
+			return "Comprar %d" % UnoRules.pending(_state)
+		UnoRules.CHALLENGE:
+			return "Duvidar"
+		UnoRules.CALL:
+			return "UNO!"
+		_:
+			return "Pegar %s" % _seat_name(UnoRules.target_of(move))
+
+
+func _on_action(kind: int) -> void:
+	if not _can_act():
+		return
+	var move := _move_of_kind(kind)
+	if move == null:
+		return
+	Sound.play(Sound.Cue.TAP)
+	_play(move)
 
 
 ## As cartas que a regra aceita **agora**, sem repetição.

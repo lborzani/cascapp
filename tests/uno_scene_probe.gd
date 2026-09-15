@@ -35,6 +35,7 @@ func _ready() -> void:
 	await _probe_draw_then_pass()
 	await _probe_wild()
 	await _probe_seven()
+	await _probe_action_buttons()
 	await _probe_bot_turn()
 	await _probe_finish()
 
@@ -66,6 +67,12 @@ func _rig(scene: Node, hands: Array, top: int, seats := 4) -> void:
 	state.meta[UnoRules.TURN] = 0
 	state.meta[UnoRules.DIR] = 1
 	state.meta[UnoRules.DREW] = 0
+	state.meta[UnoRules.PEND] = 0
+	state.meta[UnoRules.PKIND] = -1
+	state.meta[UnoRules.FOURBY] = -1
+	state.meta[UnoRules.FOURBAD] = 0
+	state.meta[UnoRules.LAST] = -1
+	state.meta[UnoRules.SAID] = 0
 	state.meta[UnoRules.PILE] = PackedInt32Array([top])
 	state.meta[UnoRules.COLOR] = UnoRules.color_of_card(top)
 	var deck := PackedInt32Array()
@@ -309,6 +316,11 @@ func _probe_seven() -> void:
 		[UnoRules.card(UnoRules.CardColor.GREEN, 2)],
 	], UnoRules.card(UnoRules.CardColor.RED, 5))
 
+	# Grita antes de jogar: a mão vai ficar com uma carta, e sem o grito o bot do
+	# assento 1 pega — que é o certo, e aqui atrapalharia a conta da troca.
+	scene._on_action(UnoRules.CALL)
+	await get_tree().create_timer(0.7).timeout
+
 	scene._on_card_tapped(seven)
 	await get_tree().process_frame
 	_check(scene.get_node("%ChoiceLayer").visible, "o 7 abre a pergunta do alvo")
@@ -340,6 +352,57 @@ func _probe_seven() -> void:
 		"numa mesa de dois o 7 não pergunta com quem trocar"
 	)
 	duel.free()
+
+
+## Os botões da coluna da direita: um por lance que não é carta.
+##
+## O que se verifica é que eles aparecem **só quando o lance existe** e que o
+## rótulo carrega o número da decisão — "Comprar 6" e "Comprar 2" são escolhas
+## diferentes, e um botão escrito "Comprar" não diz qual delas está na mesa.
+func _probe_action_buttons() -> void:
+	print("botões de ação")
+	var scene := await _open()
+	var two := UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)
+	await _rig(scene, [
+		[UnoRules.card(UnoRules.CardColor.BLUE, 3), UnoRules.card(UnoRules.CardColor.BLUE, 4)],
+		[two],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+
+	# Duas cartas na mão: gritar é lance, e nenhum dos outros é.
+	_check(_action(scene, UnoRules.CALL).visible, "com duas cartas, o botão de gritar aparece")
+	_equals(_action(scene, UnoRules.CALL).text, "UNO!", "com o rótulo curto")
+	_check(not _action(scene, UnoRules.TAKE).visible, "e nenhum botão de pilha")
+	_check(not _action(scene, UnoRules.CHALLENGE).visible, "nem o de duvidar")
+
+	# Pilha de seis na mesa, esperando resposta de quem olha.
+	scene._state.meta[UnoRules.PEND] = 6
+	scene._state.meta[UnoRules.PKIND] = UnoRules.DRAW_TWO
+	scene._refresh()
+	await get_tree().process_frame
+	_check(_action(scene, UnoRules.TAKE).visible, "com a pilha no ar, engolir é botão")
+	_equals(_action(scene, UnoRules.TAKE).text, "Comprar 6", "e ele diz quantas")
+	_check(
+		not _action(scene, UnoRules.CHALLENGE).visible,
+		"e não se duvida de uma pilha de +2"
+	)
+
+	# A mesma pilha, mas de +4 e com autor: agora duvidar existe.
+	scene._state.meta[UnoRules.PKIND] = UnoRules.WILD_FOUR
+	scene._state.meta[UnoRules.FOURBY] = 1
+	scene._state.meta[UnoRules.hand_key(0)] = PackedInt32Array(
+		[UnoRules.card(UnoRules.CardColor.BLUE, 3)]
+	)
+	scene._refresh()
+	await get_tree().process_frame
+	_check(_action(scene, UnoRules.CHALLENGE).visible, "numa pilha de +4, duvidar é botão")
+	_equals(_action(scene, UnoRules.CHALLENGE).text, "Duvidar", "com o rótulo dele")
+
+	scene.free()
+
+
+## O botão de uma espécie de lance.
+func _action(scene: Node, kind: int) -> Button:
+	return scene._actions[kind]
 
 
 ## A vez da máquina anda sozinha, e anda **uma vez só**.

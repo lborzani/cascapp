@@ -36,6 +36,9 @@ func _ready() -> void:
 	_probe_actions()
 	_probe_draw()
 	_probe_sevens()
+	_probe_stack()
+	_probe_challenge()
+	_probe_shout()
 	_probe_clone_isolation()
 	_probe_last_card()
 	_probe_reshuffle()
@@ -186,9 +189,15 @@ func _probe_playable() -> void:
 	var doubled := _rig(4, true, [
 		[UnoRules.card(UnoRules.CardColor.RED, 3), UnoRules.card(UnoRules.CardColor.RED, 3)],
 	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	# Três e não dois: a mão de duas cartas está a um lance de ficar com uma, então
+	# gritar UNO também é lance legal aqui.
 	_equals(
-		_rules.generate_moves(doubled).size(), 2,
-		"duas cartas iguais na mão dão um lance de jogar, mais o de comprar"
+		_rules.generate_moves(doubled).size(), 3,
+		"duas cartas iguais dão um lance de jogar, o de comprar e o de gritar"
+	)
+	_equals(
+		_of_kind(doubled, UnoRules.CALL).size(), 1,
+		"e o grito é oferecido uma vez só"
 	)
 
 
@@ -218,10 +227,18 @@ func _probe_actions() -> void:
 	var two := _rig(4, true, [
 		[UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO), UnoRules.card(UnoRules.CardColor.BLUE, 1)],
 	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	# O +2 **acumula** em vez de entregar na hora: a vez vai para o vizinho, que
+	# ainda não comprou nada e tem a chance de responder.
 	var before := UnoRules.hand_size(two, 1)
 	_rules.apply_move(two, _find(two, UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)))
-	_equals(UnoRules.hand_size(two, 1), before + 2, "o +2 faz o vizinho comprar duas")
-	_equals(UnoRules.turn_of(two), 2, "e ele perde a vez")
+	_equals(UnoRules.pending(two), 2, "o +2 põe duas cartas na mesa")
+	_equals(UnoRules.hand_size(two, 1), before, "sem entregar nada ainda")
+	_equals(UnoRules.turn_of(two), 1, "e a vez é de quem tem de responder")
+	# Sem resposta na mão, ele engole e perde a vez — que é o resultado de caixa.
+	_rules.apply_move(two, _find_kind(two, UnoRules.TAKE))
+	_equals(UnoRules.hand_size(two, 1), before + 2, "engolir entrega as duas")
+	_equals(UnoRules.pending(two), 0, "e limpa a mesa")
+	_equals(UnoRules.turn_of(two), 2, "com ele perdendo a vez")
 
 	var four := _rig(4, true, [
 		[UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD_FOUR), UnoRules.card(UnoRules.CardColor.BLUE, 1)],
@@ -229,8 +246,10 @@ func _probe_actions() -> void:
 	var before_four := UnoRules.hand_size(four, 1)
 	var wild_move := _find_colored(four, UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD_FOUR), UnoRules.CardColor.GREEN)
 	_rules.apply_move(four, wild_move)
-	_equals(UnoRules.hand_size(four, 1), before_four + 4, "o +4 faz o vizinho comprar quatro")
-	_equals(UnoRules.turn_of(four), 2, "e ele perde a vez")
+	_equals(UnoRules.pending(four), 4, "o +4 põe quatro na mesa")
+	_rules.apply_move(four, _find_kind(four, UnoRules.TAKE))
+	_equals(UnoRules.hand_size(four, 1), before_four + 4, "e quem engole compra quatro")
+	_equals(UnoRules.turn_of(four), 2, "e perde a vez")
 	_equals(UnoRules.active_color(four), UnoRules.CardColor.GREEN, "a cor declarada passa a valer")
 	# O curinga entra no descarte **sem** a cor declarada: pintá-lo faria o
 	# rembaralho devolver ao monte um curinga que já não é curinga.
@@ -261,15 +280,18 @@ func _probe_draw() -> void:
 	_equals(UnoRules.turn_of(lucky), 0, "comprar carta que serve não passa a vez")
 	_check(UnoRules.drew(lucky), "e o estado marca que já se comprou")
 
-	var moves := _rules.generate_moves(lucky)
-	_equals(moves.size(), 2, "e sobram dois lances: jogar a comprada ou passar")
+	# Jogar a comprada, passar — e gritar, porque a mão ficou com duas cartas e a
+	# próxima jogada deixa uma. O grito é ação livre e entra em qualquer lista.
+	var plays := _of_kind(lucky, UnoRules.PLAY)
+	_equals(plays.size(), 1, "sobra um lance de jogar")
 	_equals(
-		UnoRules.card_of(moves[0]), UnoRules.card(UnoRules.CardColor.RED, 2),
-		"o de jogar é o da carta comprada, não o da mão antiga"
+		UnoRules.card_of(plays[0]), UnoRules.card(UnoRules.CardColor.RED, 2),
+		"e ele é o da carta comprada, não o da mão antiga"
 	)
-	_equals(UnoRules.kind_of(moves[1]), UnoRules.PASS, "e o outro é passar")
+	_check(_find_kind(lucky, UnoRules.PASS) != null, "passar continua possível")
+	_check(_find_kind(lucky, UnoRules.DRAW) == null, "comprar de novo não")
 
-	_rules.apply_move(lucky, moves[1])
+	_rules.apply_move(lucky, _find_kind(lucky, UnoRules.PASS))
 	_equals(UnoRules.turn_of(lucky), 1, "passar entrega a vez")
 	_check(not UnoRules.drew(lucky), "e limpa a marca da compra")
 
@@ -338,9 +360,12 @@ func _probe_sevens() -> void:
 	var duel := _make(2, true)
 	var heads_up := _rig(2, true, [[seven, UnoRules.card(UnoRules.CardColor.BLUE, 1)], []],
 		UnoRules.card(UnoRules.CardColor.RED, 5))
-	var duel_moves := duel.generate_moves(heads_up)
-	_equals(duel_moves.size(), 2, "numa mesa de dois o 7 dá um lance só")
-	_equals(UnoRules.target_of(duel_moves[0]), 1, "com o alvo já resolvido")
+	var duel_plays: Array[Move] = []
+	for move in duel.generate_moves(heads_up):
+		if UnoRules.kind_of(move) == UnoRules.PLAY:
+			duel_plays.append(move)
+	_equals(duel_plays.size(), 1, "numa mesa de dois o 7 dá um lance só")
+	_equals(UnoRules.target_of(duel_plays[0]), 1, "com o alvo já resolvido")
 
 	# O 0 roda a mesa no sentido do jogo: cada um recebe a mão de quem joga antes.
 	var zero := UnoRules.card(UnoRules.CardColor.RED, 0)
@@ -629,6 +654,147 @@ func replayed_apply(rules: UnoRules, state: MatchState, data: Dictionary) -> voi
 ##
 ## O monte fica cheio de cartas que não servem, para que comprar não resolva a
 ## posição por acidente — os testes de compra escrevem o deles por cima.
+# --- as três que faltavam -----------------------------------------------------
+
+
+## O +2 e o +4 empilham, e a espécie separa as duas pilhas.
+func _probe_stack() -> void:
+	print("pilha de compra")
+	var two := UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)
+	var blue_two := UnoRules.card(UnoRules.CardColor.BLUE, UnoRules.DRAW_TWO)
+	var state := _rig(4, true, [
+		[two, UnoRules.card(UnoRules.CardColor.RED, 1)],
+		[blue_two, UnoRules.card(UnoRules.CardColor.GREEN, 3)],
+		[UnoRules.card(UnoRules.CardColor.GREEN, 4), UnoRules.card(UnoRules.CardColor.GREEN, 5)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+
+	_rules.apply_move(state, _find(state, two))
+	_equals(UnoRules.pending(state), 2, "o primeiro +2 acumula dois")
+	_equals(UnoRules.pending_kind(state), UnoRules.DRAW_TWO, "e a pilha é de +2")
+
+	# Com a pilha no ar, a mesa entra numa fase própria: responder ou engolir, e
+	# nada mais. A carta verde da mão do assento 1 não aparece.
+	var answers := _rules.generate_moves(state)
+	_equals(answers.size(), 2, "só responder e engolir")
+	_check(_find(state, blue_two) != null, "o +2 responde mesmo sendo de outra cor")
+	_check(
+		_find(state, UnoRules.card(UnoRules.CardColor.GREEN, 3)) == null,
+		"e uma carta comum não responde, mesmo jogável"
+	)
+
+	_rules.apply_move(state, _find(state, blue_two))
+	_equals(UnoRules.pending(state), 4, "responder soma à pilha")
+	_equals(UnoRules.turn_of(state), 2, "e a conta anda para o próximo")
+
+	var before := UnoRules.hand_size(state, 2)
+	_rules.apply_move(state, _find_kind(state, UnoRules.TAKE))
+	_equals(UnoRules.hand_size(state, 2), before + 4, "quem não responde engole a soma")
+	_equals(UnoRules.pending(state), 0, "a mesa limpa")
+	_equals(UnoRules.turn_of(state), 3, "e quem engoliu perde a vez")
+
+	# +4 não segura +2: as espécies não se misturam.
+	var mixed := _rig(4, true, [
+		[UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)],
+		[UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD_FOUR)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(mixed, _find(mixed, UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)))
+	_check(
+		_find(mixed, UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD_FOUR)) == null,
+		"um +4 não responde a um +2"
+	)
+
+
+## A dúvida ao +4: a regra oficial só o deixa sair de uma mão sem a cor ativa.
+func _probe_challenge() -> void:
+	print("dúvida ao +4")
+	var four := UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD_FOUR)
+
+	# Quem jogou o +4 **tinha** vermelho na mão: a dúvida acerta, e a pilha volta
+	# para ele. Quem duvidou segue com a vez dele, sem comprar nada.
+	var cheat := _rig(4, true, [
+		[four, UnoRules.card(UnoRules.CardColor.RED, 8)],
+		[UnoRules.card(UnoRules.CardColor.GREEN, 3)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(cheat, _find_colored(cheat, four, UnoRules.CardColor.GREEN))
+	_equals(UnoRules.turn_of(cheat), 1, "a vez vai para quem recebeu o +4")
+	var liar_hand := UnoRules.hand_size(cheat, 0)
+	var doubter_hand := UnoRules.hand_size(cheat, 1)
+	_rules.apply_move(cheat, _find_kind(cheat, UnoRules.CHALLENGE))
+	_equals(UnoRules.hand_size(cheat, 0), liar_hand + 4, "quem blefou compra as quatro")
+	_equals(UnoRules.hand_size(cheat, 1), doubter_hand, "quem duvidou não compra nada")
+	_equals(UnoRules.turn_of(cheat), 1, "e segue com a vez dele")
+
+	# Quem jogou **não** tinha a cor: a dúvida erra e custa a pilha mais dois.
+	var honest := _rig(4, true, [
+		[four, UnoRules.card(UnoRules.CardColor.BLUE, 8)],
+		[UnoRules.card(UnoRules.CardColor.GREEN, 3)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(honest, _find_colored(honest, four, UnoRules.CardColor.GREEN))
+	var honest_hand := UnoRules.hand_size(honest, 0)
+	var wrong_hand := UnoRules.hand_size(honest, 1)
+	_rules.apply_move(honest, _find_kind(honest, UnoRules.CHALLENGE))
+	_equals(UnoRules.hand_size(honest, 0), honest_hand, "quem jogou limpo não compra")
+	_equals(
+		UnoRules.hand_size(honest, 1), wrong_hand + 4 + UnoRules.CHALLENGE_PENALTY,
+		"e a dúvida errada custa a pilha mais dois"
+	)
+	_equals(UnoRules.turn_of(honest), 2, "com a vez perdida")
+
+	# Numa pilha de +2 não há de que duvidar.
+	var plain := _rig(4, true, [
+		[UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(plain, _find(plain, UnoRules.card(UnoRules.CardColor.RED, UnoRules.DRAW_TWO)))
+	_check(_find_kind(plain, UnoRules.CHALLENGE) == null, "não se duvida de um +2")
+
+
+## O grito, e a denúncia de quem esqueceu.
+func _probe_shout() -> void:
+	print("grito de UNO")
+	var red_one := UnoRules.card(UnoRules.CardColor.RED, 1)
+	var red_two := UnoRules.card(UnoRules.CardColor.RED, 2)
+
+	# Esqueceu: desce a uma carta sem gritar, e quem joga em seguida pode pegar.
+	var quiet := _rig(4, true, [
+		[red_one, red_two],
+		[UnoRules.card(UnoRules.CardColor.GREEN, 3)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_check(_find_kind(quiet, UnoRules.CALL) != null, "com duas cartas, gritar é lance")
+	_rules.apply_move(quiet, _find(quiet, red_one))
+	_check(UnoRules.vulnerable(quiet, 0), "quem não gritou fica exposto")
+	var catcher := _find_kind(quiet, UnoRules.CATCH)
+	_check(catcher != null, "e quem joga agora pode pegar")
+	_equals(UnoRules.target_of(catcher), 0, "com o alvo certo")
+
+	var caught_before := UnoRules.hand_size(quiet, 0)
+	_rules.apply_move(quiet, catcher)
+	_equals(
+		UnoRules.hand_size(quiet, 0), caught_before + UnoRules.CATCH_PENALTY,
+		"pegar faz o esquecido comprar duas"
+	)
+	_equals(UnoRules.turn_of(quiet), 1, "e quem pegou não gasta a vez")
+	_check(_find_kind(quiet, UnoRules.CATCH) == null, "não dá para pegar duas vezes")
+
+	# Gritou: ninguém pega.
+	var loud := _rig(4, true, [
+		[red_one, red_two],
+		[UnoRules.card(UnoRules.CardColor.GREEN, 3)],
+	], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(loud, _find_kind(loud, UnoRules.CALL))
+	_check(UnoRules.called(loud, 0), "o grito fica registrado")
+	_equals(UnoRules.turn_of(loud), 0, "e não gasta a vez")
+	_rules.apply_move(loud, _find(loud, red_one))
+	_check(not UnoRules.vulnerable(loud, 0), "quem gritou não fica exposto")
+	_check(_find_kind(loud, UnoRules.CATCH) == null, "e não há o que pegar")
+
+	# Receber carta apaga o grito: quem voltou a ter mão deve o anúncio de novo.
+	var again := _rig(4, true, [[red_one, red_two]], UnoRules.card(UnoRules.CardColor.RED, 5))
+	_rules.apply_move(again, _find_kind(again, UnoRules.CALL))
+	_check(UnoRules.called(again, 0), "gritou")
+	_rules.apply_move(again, _find_kind(again, UnoRules.DRAW))
+	_check(not UnoRules.called(again, 0), "e comprar apaga o grito")
+
+
 func _rig(seats: int, sevens: bool, hands: Array, top: int) -> MatchState:
 	var state := MatchState.new()
 	state.meta[UnoRules.SEATS] = seats
@@ -637,6 +803,12 @@ func _rig(seats: int, sevens: bool, hands: Array, top: int) -> MatchState:
 	state.meta[UnoRules.TURN] = 0
 	state.meta[UnoRules.DIR] = 1
 	state.meta[UnoRules.DREW] = 0
+	state.meta[UnoRules.PEND] = 0
+	state.meta[UnoRules.PKIND] = -1
+	state.meta[UnoRules.FOURBY] = -1
+	state.meta[UnoRules.FOURBAD] = 0
+	state.meta[UnoRules.LAST] = -1
+	state.meta[UnoRules.SAID] = 0
 	state.meta[UnoRules.PILE] = PackedInt32Array([top])
 	state.meta[UnoRules.COLOR] = UnoRules.color_of_card(top)
 
@@ -688,6 +860,16 @@ func _find_kind(state: MatchState, kind: int) -> Move:
 		if UnoRules.kind_of(move) == kind:
 			return move
 	return null
+
+
+## Todos os lances de uma espécie. Serve para contar sem depender da ordem da
+## lista, que é detalhe de geração e não de regra.
+func _of_kind(state: MatchState, kind: int) -> Array[Move]:
+	var found: Array[Move] = []
+	for move in _rules.generate_moves(state):
+		if UnoRules.kind_of(move) == kind:
+			found.append(move)
+	return found
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:
