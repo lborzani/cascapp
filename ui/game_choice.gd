@@ -160,18 +160,12 @@ func _fit_row() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	var pressed := false
-	var at := Vector2.ZERO
-	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		pressed = touch.pressed
-		at = touch.position
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		pressed = click.pressed and click.button_index == MOUSE_BUTTON_LEFT
-		at = click.position
-	if not pressed:
+	# Por [Tap] e não pelas duas espécies de evento: um clique chega duas vezes, e
+	# contá-lo duas vezes marcava e desmarcava o favorito no mesmo toque — a
+	# estrela simplesmente não funcionava.
+	if not Tap.began(event):
 		return
+	var at := Tap.at(event)
 	accept_event()
 	# A estrela é um segundo alvo dentro do primeiro, e por isso responde antes:
 	# a linha inteira leva ao jogo, menos o pedaço que guarda o jogo.

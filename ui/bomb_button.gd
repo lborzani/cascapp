@@ -40,17 +40,13 @@ func _ready() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	var down := false
-	if event is InputEventScreenTouch:
-		down = (event as InputEventScreenTouch).pressed
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		down = click.pressed and click.button_index == MOUSE_BUTTON_LEFT
-	else:
+	if not Tap.began(event):
+		# O soltar também é aceito, senão o `Control` deixa o evento seguir e o nó de
+		# baixo recebe metade de um gesto.
+		if Tap.ended(event):
+			accept_event()
 		return
 	accept_event()
-	if not down:
-		return
 	pressed_down.emit()
 	_flash = FLASH_SECONDS
 	set_process(true)

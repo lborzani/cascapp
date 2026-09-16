@@ -152,13 +152,10 @@ func _ready() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	var pressed := false
-	if event is InputEventScreenTouch:
-		pressed = (event as InputEventScreenTouch).pressed
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		pressed = click.pressed and click.button_index == MOUSE_BUTTON_LEFT
-	if pressed:
+	# Por [Tap]: um clique chega duas vezes, e o segundo pedido cairia no dado que
+	# já está rolando. Contar uma vez é a diferença entre ignorar um evento e nunca
+	# tê-lo recebido.
+	if Tap.began(event):
 		accept_event()
 		roll()
 

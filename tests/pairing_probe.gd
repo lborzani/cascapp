@@ -24,6 +24,7 @@ var _failures := 0
 
 func _ready() -> void:
 	await _probe_game_picker()
+	await _probe_favorite()
 	await _probe_setup_panel()
 	await _probe_room_list()
 	await _probe_host()
@@ -34,6 +35,66 @@ func _ready() -> void:
 	else:
 		printerr("%d teste(s) falharam." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## A estrela guarda o jogo, e guarda **uma vez**.
+##
+## Um clique chega duas vezes: o projeto liga `emulate_touch_from_mouse`, então
+## todo botão do mouse também vira toque, e no Android o dedo também vira mouse.
+## Num alvo que **alterna**, contar os dois é marcar e desmarcar no mesmo clique —
+## e o sintoma não é um estado errado, é a estrela simplesmente não funcionar.
+##
+## O teste manda os dois eventos porque é o que o aparelho manda. Sem isso, um
+## teste que mandasse só um passaria com o defeito inteiro de pé.
+func _probe_favorite() -> void:
+	print("favorito")
+	Prefs.forget_favorites()
+	var card := GameChoice.new()
+	card.favoritable = true
+	card.size = Vector2(140.0, 96.0)
+	add_child(card)
+	await get_tree().process_frame
+
+	var count := [0]
+	card.favorite_toggled.connect(func() -> void: count[0] += 1)
+	var at := card._star_zone().get_center()
+	_check(card._star_zone().has_point(at), "a estrela tem um alvo de toque")
+
+	card._gui_input(_touch(at))
+	card._gui_input(_click(at))
+	_equals(count[0], 1, "um clique conta uma vez, e não duas")
+
+	# E o toque fora dela continua abrindo o jogo, também uma vez só.
+	var picks := [0]
+	card.chosen.connect(func() -> void: picks[0] += 1)
+	var middle := Vector2(card.size.x * 0.3, card.size.y * 0.7)
+	card._gui_input(_touch(middle))
+	card._gui_input(_click(middle))
+	_equals(picks[0], 1, "e o toque no cartão também")
+
+	# De ponta a ponta: a tela grava no disco e a estrela volta preenchida.
+	_check(not Prefs.is_favorite(Game.CHESS), "o xadrez começa sem estrela")
+	Prefs.toggle_favorite(Game.CHESS)
+	_check(Prefs.is_favorite(Game.CHESS), "e favoritar sobrevive à leitura seguinte")
+	Prefs.forget_favorites()
+
+	card.queue_free()
+	await get_tree().process_frame
+
+
+func _touch(at: Vector2) -> InputEventScreenTouch:
+	var event := InputEventScreenTouch.new()
+	event.pressed = true
+	event.position = at
+	return event
+
+
+func _click(at: Vector2) -> InputEventMouseButton:
+	var event := InputEventMouseButton.new()
+	event.pressed = true
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = at
+	return event
 
 
 ## A primeira tela responde uma pergunta só: qual jogo. Tocar num cartão grava o

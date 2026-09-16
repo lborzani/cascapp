@@ -97,13 +97,8 @@ func _ready() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	var pressed := false
-	if event is InputEventScreenTouch:
-		pressed = (event as InputEventScreenTouch).pressed
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		pressed = click.pressed and click.button_index == MOUSE_BUTTON_LEFT
-	if pressed and _player >= 0:
+	# Por [Tap]: ver o cabeçalho dele. Um clique chega duas vezes.
+	if Tap.began(event) and _player >= 0:
 		accept_event()
 		chosen.emit(_player)
 

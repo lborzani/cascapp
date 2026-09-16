@@ -178,11 +178,7 @@ func _pick(route: StringName) -> void:
 
 
 func _on_scrim_input(event: InputEvent) -> void:
-	var pressed := false
-	if event is InputEventScreenTouch:
-		pressed = (event as InputEventScreenTouch).pressed
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		pressed = click.pressed and click.button_index == MOUSE_BUTTON_LEFT
-	if pressed:
+	# Por [Tap]: um clique chega duas vezes, e fechar duas vezes é inofensivo — mas
+	# a gaveta usa a mesma porta que o resto do app, e uma porta só é uma porta.
+	if Tap.began(event):
 		close()

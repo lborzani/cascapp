@@ -244,9 +244,6 @@ static func _let_touch_through(node: Node) -> void:
 func _on_shade_input(event: InputEvent) -> void:
 	if not _settled:
 		return
-	var tapped: bool = (
-		(event is InputEventScreenTouch and event.pressed)
-		or (event is InputEventMouseButton and event.pressed)
-	)
-	if tapped:
+	# Por [Tap]: ver o cabeçalho dele.
+	if Tap.began(event):
 		close()

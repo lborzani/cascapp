@@ -299,21 +299,12 @@ func _process(delta: float) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
-	var position := Vector2.ZERO
-	if event is InputEventScreenTouch:
-		var touch := event as InputEventScreenTouch
-		if not touch.pressed:
-			return
-		position = touch.position
-	elif event is InputEventMouseButton:
-		var click := event as InputEventMouseButton
-		if not click.pressed or click.button_index != MOUSE_BUTTON_LEFT:
-			return
-		position = click.position
-	else:
+	# Por [Tap]: um clique chega duas vezes, e o segundo escolheria o peão de novo
+	# — no Ludo isso é o lance saindo em dobro.
+	if not Tap.began(event):
 		return
 	accept_event()
-	var token := _token_at(position)
+	var token := _token_at(Tap.at(event))
 	if token >= 0:
 		token_tapped.emit(token)
 
