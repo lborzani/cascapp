@@ -1,0 +1,199 @@
+name: Deploy
+
+# Publica os **dois** servidores no Fly.
+#
+# São dois apps e não um, de propósito: o relay serve os jogos por turno e não
+# roda simulação nenhuma; o de Bomberman roda uma partida a 30 Hz por sala e fala
+# UDP. Dois processos, duas escalas, dois ciclos de vida — e por isso duas
+# tarefas aqui, cada uma disparada pelo que de fato a afeta.
+#
+# ## O segredo
+#
+#   FLY_API_TOKEN   um token do Fly com acesso aos dois apps
+#
+# Sem ele a tarefa **falha dizendo isso**, em vez de tentar o deploy e morrer
+# dentro do `flyctl` com uma mensagem de autenticação que não explica o que
+# fazer. Criar com `fly tokens create deploy -a chess-checkers-relay` e
+# `-a bomber`, ou um token de organização que cubra os dois.
+#
+# ## Por que só em `main`
+#
+# Deploy é uma mudança que os jogadores veem no mesmo minuto. Numa branch de
+# trabalho ele derrubaria a partida de quem está jogando para publicar código que
+# ainda está sendo escrito. `workflow_dispatch` existe para o caso de precisar
+# publicar sem um commit novo.
+#
+# ## E por que os filtros de caminho
+#
+# O servidor de Bomberman é o **mesmo projeto Godot** do cliente rodando sem
+# tela, então quase toda mudança de regra o afeta — mas uma mudança de tela, não.
+# Sem o filtro, cada ajuste de cor num cartão de menu reconstruiria uma imagem de
+# Godot e reiniciaria as partidas em curso.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # O relay é um projeto Node inteiro, dentro de uma pasta só.
+      - "relay/**"
+      # O de Bomberman é o projeto Godot sem as telas: regras, rede, autoloads e
+      # a cena do servidor. `ui/` e `scenes/` ficam de fora porque ele não
+      # desenha nada — é essa separação que `core/` não conhecer `ui/` garante.
+      - "core/**"
+      - "net/**"
+      - "autoload/**"
+      - "server/**"
+      - "project.godot"
+      - "Dockerfile"
+      - "fly.toml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+# Um deploy por vez, e o da frente espera em vez de ser cancelado: metade de uma
+# publicação abandonada é um app em estado desconhecido, que é pior que um
+# minuto de espera.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  # Os mesmos testes da esteira de CI, e não um atalho: publicar código quebrado
+  # é pior que não publicar. As suítes de rede ficam de fora — elas precisariam
+  # subir um relay para provar de novo o que a CI já provou neste commit.
+  testes:
+    name: Testes antes de publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: relay/package-lock.json
+
+      - run: npm ci
+        working-directory: relay
+
+      - run: npm run typecheck
+        working-directory: relay
+
+      - run: npm test
+        working-directory: relay
+
+      - name: Instalar o Godot
+        uses: ./.github/actions/godot
+        with:
+          version: 4.7.1-stable
+
+      - name: Importar e conferir os scripts
+        run: |
+          godot --headless --path . --import 2>&1 | tee import.log
+          if grep -qE "SCRIPT ERROR|Parse Error|Failed to load script" import.log; then
+            echo "::error::erro de script durante a importação"
+            grep -E "SCRIPT ERROR|Parse Error|Failed to load script" import.log
+            exit 1
+          fi
+
+      # Só o que o **servidor** roda: as regras de Bomberman e a sala
+      # autoritativa. O resto das suítes é da CI, e este commit já passou por ela.
+      - name: Regras e sala de Bomberman
+        run: |
+          godot --headless --path . --script res://tests/bomber_probe.gd
+          godot --headless --path . --script res://tests/bomber_room_probe.gd
+          godot --headless --path . --script res://tests/bomber_snapshot_probe.gd
+
+  relay:
+    name: Relay (Node)
+    needs: testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Conferir o segredo
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::falta o segredo FLY_API_TOKEN — veja o cabeçalho deste arquivo"
+            exit 1
+          fi
+
+      - name: Publicar
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --config relay/fly.toml --dockerfile relay/Dockerfile relay
+
+      # **Uma máquina, e isto não é otimização de custo.**
+      #
+      # As salas moram na memória do processo. Com duas máquinas atrás do mesmo
+      # endereço, anfitrião e convidado caem em processos diferentes e nunca se
+      # acham — e o sintoma, do lado do jogador, é "nenhuma partida com esse
+      # código", que parece erro de digitação. O `fly deploy` pode criar a
+      # segunda sozinho, então a esteira desfaz isso a cada publicação em vez de
+      # depender de alguém lembrar.
+      - name: Uma máquina só
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl scale count 1 --yes --config relay/fly.toml
+
+      # A prova de que subiu, e ela não é o código de saída do `deploy`: o que
+      # decide é o processo **respondendo**. `machine` é o mesmo campo que o
+      # README manda conferir à mão — duas chamadas com valores diferentes são a
+      # segunda máquina de volta.
+      - name: Conferir que responde
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS https://chess-checkers-relay.fly.dev/healthz > health.json; then
+              cat health.json
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::o relay não respondeu ao /healthz depois do deploy"
+          exit 1
+
+  bomber:
+    name: Servidor de Bomberman (Godot)
+    needs: testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Conferir o segredo
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::falta o segredo FLY_API_TOKEN — veja o cabeçalho deste arquivo"
+            exit 1
+          fi
+
+      # `--remote-only`: a imagem baixa o Godot e constrói o projeto, e o
+      # construtor do Fly faz isso mais perto do registro do que este runner.
+      - name: Publicar
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only
+
+      # Mesma regra do relay, e aqui ela é ainda mais dura: a partida inteira
+      # vive na memória do processo, a 30 Hz. Duas máquinas dariam um código de
+      # sala que às vezes funciona e às vezes não, conforme o balanceamento.
+      - name: Uma máquina só
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl scale count 1 --yes
+
+      # Não há `/healthz` a consultar: o processo só fala UDP, e um `curl` não
+      # alcança. O que dá para afirmar daqui é que a máquina está de pé — quem
+      # prova que ela **simula** é o teste ponta a ponta da esteira de CI, que
+      # sobe o servidor e joga contra ele.
+      - name: Conferir que está de pé
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl status

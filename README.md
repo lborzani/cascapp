@@ -1772,6 +1772,30 @@ A versão do Godot está escrita uma vez, em `env.GODOT_VERSION`, e tem de
 acompanhar o `config/features` do `project.godot`. O download e os modelos de
 exportação ficam em cache por versão, em `.github/actions/godot`.
 
+### Deploy dos servidores
+
+`.github/workflows/deploy.yml` publica os **dois** servidores no Fly: o relay
+(Node, `relay/`) e o de Bomberman (o mesmo projeto Godot, sem tela). São dois
+apps porque são dois bichos — um repassa bytes de jogos por turno, o outro roda
+uma simulação a 30 Hz por sala e fala UDP.
+
+Ela dispara em `main`, e só quando muda algo que de fato afeta um deles. O filtro
+não é economia: o servidor de Bomberman é o projeto Godot inteiro rodando sem
+tela, então quase toda mudança de **regra** o afeta — mas uma mudança de tela,
+não. Sem o filtro, cada ajuste de cor num cartão de menu reconstruiria uma imagem
+de Godot e reiniciaria as partidas em curso. É a separação entre `core/` e `ui/`
+virando regra de esteira.
+
+Um segredo, `FLY_API_TOKEN`, com acesso aos dois apps. Sem ele a tarefa falha
+**dizendo isso**, em vez de morrer dentro do `flyctl` com uma mensagem de
+autenticação que não explica o que fazer.
+
+Os dois terminam com `fly scale count 1`, e ele não é economia de custo: as salas
+— e, no Bomberman, a partida inteira — moram na memória do processo. É a
+armadilha das limitações conhecidas, transformada num passo que roda sozinho.
+Depois disso o relay é conferido pelo `/healthz`: o que decide se a publicação
+deu certo é o processo **respondendo**, e não o código de saída do `deploy`.
+
 ### Release por tag
 
 `.github/workflows/release.yml` publica um APK **assinado** a partir de uma tag:
@@ -3148,14 +3172,15 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
   manda o valor junto com o lance; um cliente modificado poderia mentir sobre
   quanto tempo gastou. Sem servidor autoritativo não há como impedir — e o
   relay, de propósito, não conhece as regras.
-- **O relay não escala horizontalmente, e isso é uma armadilha de deploy.** As
-  salas moram na memória de um processo; duas instâncias atrás do mesmo endereço
-  põem anfitrião e convidado em processos diferentes e eles nunca se acham. O
-  `fly launch` cria duas máquinas por padrão, então o problema aparece sozinho —
-  **`fly scale count 1` depois de cada deploy**, e confira com
-  `curl .../healthz` que o campo `machine` não muda entre chamadas. Uma
-  instância aguenta na casa dos milhares de partidas; o limite é número de
-  conexões, não CPU. Detalhes em [`relay/README.md`](relay/README.md).
+- **O relay não escala horizontalmente.** As salas moram na memória de um
+  processo; duas instâncias atrás do mesmo endereço põem anfitrião e convidado em
+  processos diferentes e eles nunca se acham, e o sintoma do lado do jogador é
+  "nenhuma partida com esse código" — que parece erro de digitação. O `fly
+  launch` cria duas máquinas por padrão, então o problema aparecia sozinho; hoje
+  **a esteira de deploy desfaz isso a cada publicação** (`fly scale count 1`) em
+  vez de depender de alguém lembrar. Uma instância aguenta na casa dos milhares
+  de partidas; o limite é número de conexões, não CPU. Detalhes em
+  [`relay/README.md`](relay/README.md).
 - **A janela de reconexão é de 90 segundos.** Um túnel longo ou o celular
   descarregando encerram a partida.
 - **A reconexão do cliente não tem teste automatizado ponta a ponta.** O lado do
