@@ -38,11 +38,17 @@ const ROW := Vector2i(392, 76)
 ## que o desfoque não pediu.
 const SCALE := 3
 const SIZE := Vector2i(ROW.x * SCALE, ROW.y * SCALE)
-## Lado do **nó** do tabuleiro, e não das casas: `GridView` reserva `FRAME` de
-## casa para a moldura de cada lado e centraliza o que sobra. Descontar isso é o
-## que faz as oito casas atravessarem a faixa inteira — com o nó do tamanho da
-## imagem, sobrava a moldura como uma tira escura vazia em cada ponta.
-const BOARD := SIZE.x * (Board.SIZE + GridView.FRAME * 2.0) / Board.SIZE
+## Tamanho do cartão da **grade** da tela inicial, em pixels de UI: a coluna que
+## sobra de `main_menu.COLUMNS` pela altura de `TILE_HEIGHT`.
+##
+## Ele existe porque a faixa não serve: a arte é um recorte largo e baixo, e
+## esticada num cartão quase quadrado ela sai deformada — um tabuleiro de casas
+## retangulares atrás do nome do jogo chama mais atenção do que o nome. Por isso
+## a grade ficou **sem** arte desde que a tela inicial virou grade, e por isso
+## esta ferramenta passou a assar os dois recortes.
+const TILE := Vector2i(124, 118)
+const TILE_SIZE := Vector2i(TILE.x * SCALE, TILE.y * SCALE)
+
 ## Onde a janela cai sobre o tabuleiro, em fração da altura do nó. No xadrez e
 ## nas damas, encostada na borda de baixo do tabuleiro: é onde estão as peças que
 ## dizem o jogo — os peões são iguais em todo lugar —, e descer um fio a mais
@@ -72,6 +78,10 @@ const CROP := {
 	# O Uno nao tem tabuleiro: a arte e um leque de cartas, e ele ja e uma faixa
 	# larga e baixa do tamanho da linha. A janela cai no meio dele.
 	Game.UNO: 0.50,
+	# A sinuca é uma mesa deitada, e o que a identifica desfocada é o pano verde
+	# com as bolas coloridas encostadas nas tabelas. A janela cai no meio: nos
+	# cantos só há caçapa preta, que é um buraco em qualquer jogo.
+	Game.POOL: 0.50,
 }
 ## Quanto a imagem encolhe antes de voltar ao tamanho cheio. É o desfoque: o que
 ## se perde no caminho de ida não volta na volta.
@@ -88,30 +98,42 @@ const RADIUS := float(AppTheme.RADIUS_LARGE * SCALE)
 ## ilegível.
 const FADE_FROM := 0.30
 const FADE_TO := 0.95
+## O mesmo, no cartão da grade — e na **vertical**.
+##
+## Ali o nome mora embaixo e o ícone no meio, então o que precisa ficar limpo é a
+## metade de baixo. A arte entra forte no topo e some antes de chegar ao texto,
+## que é a mesma decisão da faixa girada noventa graus.
+const TILE_FADE_FROM := 0.30
+const TILE_FADE_TO := 0.80
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
+	# Dois recortes por jogo: a faixa da lista e o ladrilho da grade. Um só não
+	# serve para os dois — ver [constant TILE].
 	for entry in Game.GAMES:
-		await _render(StringName(entry["id"]))
+		var id := StringName(entry["id"])
+		await _render(id, SIZE, "%s/%s.png" % [OUT_DIR, id], true)
+		await _render(id, TILE_SIZE, "%s/%s_tile.png" % [OUT_DIR, id], false)
 	print("PRONTO ", ProjectSettings.globalize_path(OUT_DIR))
 	get_tree().quit()
 
 
-func _render(id: StringName) -> void:
+func _render(id: StringName, size: Vector2i, path: String, wide: bool) -> void:
 	var viewport := SubViewport.new()
-	viewport.size = SIZE
+	viewport.size = size
 	viewport.transparent_bg = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
 
 	var board := _board_for(id)
-	board.size = _board_size(id)
+	board.size = _cover(id, size)
 	# A janela é a faixa da linha sobre o tabuleiro inteiro; puxar o nó é o mesmo
 	# que rolar a imagem por baixo dela. Em x o deslocamento joga a moldura para
 	# fora dos dois lados; em y ele escolhe a fileira.
 	board.position = Vector2(
-		-(board.size.x - SIZE.x) * 0.5, -(board.size.y * float(CROP[id]) - SIZE.y * 0.5)
+		-(board.size.x - float(size.x)) * 0.5,
+		-(board.size.y * float(CROP[id]) - float(size.y) * 0.5)
 	)
 	viewport.add_child(board)
 
@@ -121,31 +143,54 @@ func _render(id: StringName) -> void:
 	var image := viewport.get_texture().get_image()
 	viewport.queue_free()
 
-	_blur(image)
-	_mask(image)
-	image.save_png("%s/%s.png" % [OUT_DIR, id])
+	_blur(image, size)
+	_mask(image, size, wide)
+	image.save_png(path)
 
 
-## Tamanho do nó do tabuleiro.
+## Tamanho do nó do tabuleiro: a proporção natural dele, ampliada até **cobrir** a
+## janela nos dois eixos.
 ##
-## Quadrado em quase todos, porque quase todos são quadrados. `GridView` reserva
-## moldura e precisa de folga para as casas atravessarem a faixa; o Ludo e
-## Metrópole desenham até a borda e usam a largura crua.
+## O cover não é zelo. A faixa é larga e baixa, então nela a largura sempre mandou
+## e a altura sobrava de graça; o ladrilho é quase quadrado, e ali um nó dimensionado
+## só pela largura deixa faixas transparentes em cima e embaixo. Foi o que
+## aconteceu com a sinuca, cuja mesa é duas por uma: o ladrilho dela saiu quase
+## vazio, com um fio de pano no meio de um retângulo transparente.
 ##
-## Bomberman é a exceção e precisa da proporção do mapa: ele mede 13 por 11, e
-## [BomberView] escolhe a casa pelo lado mais apertado e centraliza o resto. Num
-## nó quadrado a casa sairia de `largura / 13` e sobrariam duas casas de vazio em
-## cima e embaixo — vazio que a janela recorta, porque ela olha justamente o meio.
-func _board_size(id: StringName) -> Vector2:
+## O acréscimo da moldura vale só para quem desenha por `GridView`: ele reserva
+## `FRAME` de casa de cada lado e centraliza o resto, então o nó precisa ser maior
+## que a janela para as oito casas atravessarem — com ele do tamanho da imagem,
+## sobrava a moldura como uma tira escura vazia em cada ponta.
+func _cover(id: StringName, size: Vector2i) -> Vector2:
+	var ratio := _board_ratio(id)
+	var scale := maxf(float(size.x) / ratio.x, float(size.y) / ratio.y)
+	if _framed(id):
+		scale *= (Board.SIZE + GridView.FRAME * 2.0) / Board.SIZE
+	return ratio * scale
+
+
+## A proporção de cada tabuleiro, em unidades quaisquer.
+func _board_ratio(id: StringName) -> Vector2:
 	if id == Game.BOMBERMAN:
-		return Vector2(SIZE.x, SIZE.x * float(BomberState.ROWS) / float(BomberState.COLS))
+		# Treze por onze: [BomberView] escolhe a casa pelo lado mais apertado, e num
+		# nó quadrado sobrariam duas casas de vazio que a janela recorta.
+		return Vector2(float(BomberState.COLS), float(BomberState.ROWS))
+	if id == Game.POOL:
+		return Vector2(2.0, 1.0)
 	if id == Game.UNO:
-		# Uma faixa, e nao um quadrado: o "tabuleiro" do Uno e um leque de cartas,
-		# que e largo e baixo por natureza. Num no quadrado as cartas sairiam do
-		# tamanho de meio cartao e a janela pegaria o meio de uma delas.
-		return Vector2(SIZE.x, SIZE.x * 0.26)
-	var side := float(SIZE.x) if id == Game.LUDO or id == Game.MONOPOLY else BOARD
-	return Vector2(side, side)
+		# O "tabuleiro" do Uno é um leque de cartas, largo e baixo por natureza. Num
+		# nó quadrado as cartas sairiam do tamanho de meio cartão.
+		return Vector2(1.0, 0.26)
+	return Vector2.ONE
+
+
+## Desenha por `GridView`, e portanto reserva moldura. Xadrez, damas e o mar são
+## grades de oito casas; o resto desenha até a borda do nó.
+const FRAMED := [Game.CHESS, Game.CHECKERS, Game.BATTLESHIP]
+
+
+func _framed(id: StringName) -> bool:
+	return FRAMED.has(id)
 
 
 func _board_for(id: StringName) -> Control:
@@ -179,6 +224,8 @@ func _board_for(id: StringName) -> Control:
 		return _bomber_map()
 	if id == Game.UNO:
 		return _uno_fan()
+	if id == Game.POOL:
+		return _pool_table()
 	if id == Game.BATTLESHIP:
 		var waters := WatersView.new()
 		waters.own = true
@@ -274,10 +321,10 @@ func _shots() -> PackedInt32Array:
 ## Desfoque por ida e volta: encolher joga fora o detalhe, e voltar ao tamanho
 ## cheio interpola o que sobrou. Um gaussiano de verdade custaria um shader e um
 ## segundo viewport para um resultado que, a 8% de opacidade, ninguém distingue.
-func _blur(image: Image) -> void:
-	var small := Vector2i(SIZE.x / BLUR_DIVISOR, SIZE.y / BLUR_DIVISOR)
+func _blur(image: Image, size: Vector2i) -> void:
+	var small := Vector2i(maxi(1, size.x / BLUR_DIVISOR), maxi(1, size.y / BLUR_DIVISOR))
 	image.resize(small.x, small.y, Image.INTERPOLATE_LANCZOS)
-	image.resize(SIZE.x, SIZE.y, Image.INTERPOLATE_CUBIC)
+	image.resize(size.x, size.y, Image.INTERPOLATE_CUBIC)
 
 
 ## Cantos arredondados e degradê, assados no alfa.
@@ -285,11 +332,11 @@ func _blur(image: Image) -> void:
 ## Os cantos são obrigatórios, não enfeite: o cartão é arredondado, e uma imagem
 ## retangular por baixo dele acende quatro triângulos claros fora da borda — que
 ## a 8% de opacidade ainda aparecem no fundo escuro.
-func _mask(image: Image) -> void:
-	var half := Vector2(SIZE) * 0.5
+func _mask(image: Image, size: Vector2i, wide: bool) -> void:
+	var half := Vector2(size) * 0.5
 	var inner := half - Vector2(RADIUS, RADIUS)
-	for y in SIZE.y:
-		for x in SIZE.x:
+	for y in size.y:
+		for x in size.x:
 			var color := image.get_pixel(x, y)
 			if color.a <= 0.0:
 				continue
@@ -300,9 +347,45 @@ func _mask(image: Image) -> void:
 				- RADIUS
 			)
 			var corner := 1.0 - smoothstep(-1.5, 1.5, distance)
-			var fade := smoothstep(FADE_FROM, FADE_TO, float(x) / float(SIZE.x))
+			# Na faixa o degradê é horizontal — o ícone e o nome ficam à esquerda. No
+			# ladrilho ele é vertical e invertido: ali o nome mora embaixo, e a arte
+			# entra pelo topo e some antes de chegar nele.
+			var fade := (
+				smoothstep(FADE_FROM, FADE_TO, float(x) / float(size.x)) if wide
+				else 1.0 - smoothstep(TILE_FADE_FROM, TILE_FADE_TO, float(y) / float(size.y))
+			)
 			color.a *= corner * fade
 			image.set_pixel(x, y, color)
+
+
+## A mesa de sinuca, com as dez bolas no arranjo de saída.
+##
+## A mesma `PoolView` que a partida desenha, e o arranjo que a regra monta: se as
+## cores dos grupos ou o pano mudarem, esta ferramenta roda de novo e a arte
+## acompanha.
+##
+## Desligada para mira: a mesa em repouso é o que identifica o jogo. Um taco e
+## uma linha de mira congelados na arte de fundo seriam um gesto parado no meio,
+## que lê como captura de tela e não como textura.
+##
+## A mesa **não** é a do arranjo inicial, e é o mesmo problema do mar, do Ludo e
+## do Bomberman: ali as dez bolas nascem encostadas nas tabelas, e a janela olha o
+## meio. A arte saía um retângulo de pano vazio — tecnicamente uma mesa de
+## sinuca, e visualmente nada.
+##
+## Uma tacada de abertura resolve e não inventa: ela é a mesma simulação que a
+## partida roda, com uma direção escrita à mão. Determinística, então a arte sai
+## igual toda vez que a ferramenta rodar.
+func _pool_table() -> Control:
+	var table := PoolView.new()
+	var rules := PoolRules.new()
+	rules.format = PoolRules.Format.KNOCKOUT
+	var state := rules.initial_state()
+	for entry: Array in [[0, Vector2(0.94, 0.34)], [6, Vector2(-0.86, 0.5)]]:
+		rules.apply_move(state, PoolRules.shot(int(entry[0]), entry[1], 1.0))
+	table.state = state
+	table.enabled = false
+	return table
 
 
 ## O leque do Uno: a mão do jogador, aberta, com as cores todas.

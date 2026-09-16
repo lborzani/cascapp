@@ -55,7 +55,11 @@ const ARROW_BAND := 30.0
 ## cartão passa a parecer uma imagem com um texto por cima em vez de uma linha
 ## de lista.
 const ART_DIR := "res://assets/cards"
+## Baixo de propósito, e mais alto no ladrilho: ali o degradê some antes de
+## chegar ao nome, então a arte pode aparecer mais sem disputar com o texto — e
+## precisa, porque num cartão pequeno ela some.
 const ART_ALPHA := 0.13
+const TILE_ALPHA := 0.20
 
 var title := "":
 	set(value):
@@ -93,8 +97,8 @@ var stretch := false:
 var art_id := &"":
 	set(value):
 		art_id = value
-		var path := "%s/%s.png" % [ART_DIR, art_id]
-		_art = load(path) as Texture2D if ResourceLoader.exists(path) else null
+		_art = _load_art("%s/%s.png" % [ART_DIR, art_id])
+		_tile = _load_art("%s/%s_tile.png" % [ART_DIR, art_id])
 		queue_redraw()
 
 ## Aceso. Na tela de escolha é o retorno visual do toque, no instante entre tocar
@@ -132,6 +136,8 @@ var favorite := false:
 
 var _hovered := false
 var _art: Texture2D = null
+## O recorte da grade. Ver o desenho em [method _draw].
+var _tile: Texture2D = null
 
 
 func _ready() -> void:
@@ -142,6 +148,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_entered.connect(func(): _hovered = true; queue_redraw())
 	mouse_exited.connect(func(): _hovered = false; queue_redraw())
+
+
+## A arte é enfeite, e um enfeite que falta não pode levar a tela junto: um jogo
+## novo entra no catálogo antes de a ferramenta rodar, e o cartão dele desenha o
+## fundo liso.
+static func _load_art(path: String) -> Texture2D:
+	return load(path) as Texture2D if ResourceLoader.exists(path) else null
 
 
 ## Em linha o cartão encolhe até o conteúdo, em vez de atravessar a tela: ele é
@@ -195,13 +208,17 @@ func _draw() -> void:
 	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
 	# Entre o fundo e o conteúdo: a arte cobre o preenchimento do cartão e é
 	# coberta pela peça e pelo nome, que é a ordem que mantém o texto legível.
-	# Só na linha esticada. A arte é um recorte largo e baixo, assado no tamanho
-	# de uma faixa de lista (`tests/card_art.gd`); esticada num cartão de grade
-	# quase quadrado ela sai deformada, e um tabuleiro de casas retangulares atrás
-	# do nome do jogo chama mais atenção do que o nome.
-	if _art != null and stretch:
+	#
+	# **Dois recortes, e não um esticado.** A faixa da lista é larga e baixa;
+	# esticá-la num cartão de grade quase quadrado deformava o tabuleiro, e um
+	# tabuleiro de casas retangulares atrás do nome do jogo chama mais atenção do
+	# que o nome. Era por isso que a grade ficou sem arte nenhuma quando a tela
+	# inicial deixou de ser uma lista. `tests/card_art.gd` assa os dois.
+	var art := _art if stretch else _tile
+	if art != null and (stretch or not row):
+		var alpha := ART_ALPHA if stretch else TILE_ALPHA
 		draw_texture_rect(
-			_art, Rect2(Vector2.ZERO, size), false, Color(1.0, 1.0, 1.0, ART_ALPHA * _fade())
+			art, Rect2(Vector2.ZERO, size), false, Color(1.0, 1.0, 1.0, alpha * _fade())
 		)
 	if row:
 		_draw_row()
