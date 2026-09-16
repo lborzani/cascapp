@@ -1657,18 +1657,22 @@ Export → Android`, e um debug keystore no caminho configurado ali (crie com
 -validity 9999 -deststoretype pkcs12`).
 
 ```bash
-godot --headless --path . --export-debug "Android" build/android/jogos-de-role.apk
+godot --headless --path . --export-debug "Android" build/android/cascapp.apk
 ```
 
 A pasta de destino precisa existir — a Godot não a cria. O preset em
-`export_presets.cfg` já traz o rótulo "Jogos de Rolê", package
-`org.chessandcheckers.game`, arm64, as permissões de rede e NFC, e `tests/*`
-fora do pacote.
+`export_presets.cfg` já traz o rótulo "Cascapp", package `org.cascapp.game`,
+arm64, as permissões de rede e NFC, e `tests/*` fora do pacote.
 
-O identificador do pacote continua sendo o antigo de propósito: para o Android
-ele **é** a identidade do app, e trocá-lo faz o aparelho tratar o build novo
-como outro aplicativo — instalação paralela, e a partida salva do anterior fora
-de alcance. O rótulo é o que o usuário lê; o package é o que o sistema usa.
+**O package é definitivo.** Para o Android ele **é** a identidade do app: trocá-lo
+faz o aparelho tratar o build novo como outro aplicativo — instalação paralela,
+preferências e favoritos do anterior fora de alcance — e, na Play Store, uma
+ficha nova, sem as avaliações nem a base de instalações da antiga. Ele passou de
+`org.jogosderole.game` para `org.cascapp.game` junto com o nome, na 1.17
+(código 18) — quem tinha um build anterior instalado fica com os dois lado a
+lado, e precisa desinstalar o velho. Daqui em diante o rótulo pode mudar à
+vontade; o package, não. O rótulo é o que o
+usuário lê; o package é o que o sistema usa.
 
 **Ao subir a versão, mexa só no preset.** `version/name` e `version/code` em
 `export_presets.cfg` são o que a loja e o Android leem, e `version/name` é também
