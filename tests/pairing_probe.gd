@@ -26,6 +26,7 @@ func _ready() -> void:
 	await _probe_game_picker()
 	await _probe_favorite()
 	await _probe_setup_panel()
+	await _probe_formats()
 	await _probe_room_list()
 	await _probe_host()
 	await _probe_guest()
@@ -209,6 +210,38 @@ func _tiles(list: Control) -> Array[GameChoice]:
 ## O painel de ajustes fica entre "quero jogar" e o tabuleiro, e só para quem
 ## abre a partida: quem entra recebe o ritmo do anfitrião no handshake, então
 ## oferecer a escolha ali seria oferecer uma decisão que não é dele.
+## A seção de formato serve **três** jogos, e a tela não sabe qual é qual.
+##
+## Metrópole escolhe rodadas, a sinuca escolhe entre duas regras e o Uno escolhe
+## a regra da casa. Antes cada um teria a sua seção com o mesmo código e um `if`
+## diferente — e a do Uno simplesmente não existia: a regra do 0 e do 7 nascia do
+## disco e ficava lá, sem nenhuma tela que a oferecesse.
+func _probe_formats() -> void:
+	print("formato por jogo")
+	_check(Game.formats_of(Game.CHESS).is_empty(), "xadrez não pergunta formato")
+	_equals(Game.formats_of(Game.MONOPOLY).size(), Game.ROUND_LIMITS.size(), "Metrópole pergunta")
+	_equals(Game.formats_of(Game.POOL).size(), 2, "a sinuca pergunta")
+	_equals(Game.formats_of(Game.UNO).size(), 2, "e o Uno também")
+
+	# Ida e volta pelo valor, que é o que as regras leem e o que viaja pela rede.
+	for wanted: int in [1, 0]:
+		Game.set_format(wanted, Game.UNO)
+		_equals(Game.format_value(Game.UNO), wanted, "o Uno guarda o formato escolhido")
+		_equals(Game.uno_sevens, wanted != 0, "e ele é a regra da casa")
+		# E ele viaja: a regra vai no bit alto do `option`, junto da semente.
+		_equals(
+			Game.uno_sevens_of(Game.host_option(Game.UNO)), wanted != 0,
+			"que chega inteira do outro lado"
+		)
+	# Fica como estava para o resto da suíte: é uma preferência de disco.
+	Game.set_format(1, Game.UNO)
+
+	Game.set_format(PoolRules.Format.BRAZILIAN, Game.POOL)
+	_equals(Game.pool_format, PoolRules.Format.BRAZILIAN, "a sinuca guarda o dela")
+	_equals(Game.host_option(Game.POOL), PoolRules.Format.BRAZILIAN, "e ele viaja cru")
+	Game.set_format(PoolRules.Format.KNOCKOUT, Game.POOL)
+
+
 func _probe_setup_panel() -> void:
 	print("ajustes da partida")
 	Game.reset_to_menu()

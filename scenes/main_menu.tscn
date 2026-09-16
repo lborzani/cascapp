@@ -60,7 +60,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 16
 
-[node name="Categories" type="ScrollContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Categories" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("4_chips")

@@ -267,6 +267,21 @@ const POOL_FORMATS := [
 	{"label": "Brasileira", "value": PoolRules.Format.BRAZILIAN},
 ]
 
+## Os dois jeitos de jogar Uno.
+##
+## A regra da casa existia e não tinha onde ser escolhida: ela nascia do disco
+## (`Prefs`) e ficava lá, sem nenhuma tela que a oferecesse. Uma regra que muda a
+## partida inteira — um 7 troca a mão com alguém, um 0 roda as mãos da mesa —
+## decidida uma vez e nunca mais é uma regra que o jogador não escolheu.
+##
+## Ela entra pela mesma porta do formato de Metrópole e do da sinuca, e não por
+## um interruptor próprio: as três perguntam "como esta partida vai ser" e quem
+## responde é quem abre a mesa.
+const UNO_FORMATS := [
+	{"label": "Uno normal", "value": 0},
+	{"label": "Regra do 0 e 7", "value": 1},
+]
+
 ## Formatos de Metrópole. O primeiro é jogar até sobrar um, e é o padrão: é o
 ## jogo como ele é. Os outros existem porque "até sobrar um" pode levar horas, e
 ## um jogo de tabuleiro num celular precisa de uma versão que cabe num intervalo.
@@ -351,6 +366,8 @@ func formats_of(id: StringName = game_id) -> Array:
 		return limits
 	if id == POOL:
 		return POOL_FORMATS
+	if id == UNO:
+		return UNO_FORMATS
 	return []
 
 
@@ -358,7 +375,9 @@ func formats_of(id: StringName = game_id) -> Array:
 func format_value(id: StringName = game_id) -> int:
 	if supports_rounds(id):
 		return round_limit
-	return pool_format if id == POOL else 0
+	if id == POOL:
+		return pool_format
+	return (1 if uno_sevens else 0) if id == UNO else 0
 
 
 func set_format(value: int, id: StringName = game_id) -> void:
@@ -366,6 +385,12 @@ func set_format(value: int, id: StringName = game_id) -> void:
 		round_limit = value
 	elif id == POOL:
 		pool_format = value
+	elif id == UNO:
+		# Gravado no disco além de guardado aqui: regra de casa é de quem joga, não
+		# da sessão, e é a única escolha de partida do app que sobrevive ao
+		# fechamento. Ver [member uno_sevens].
+		uno_sevens = value != 0
+		Prefs.set_sevens(uno_sevens)
 
 ## O número que quem abre a sala decide e que viaja no `welcome` (`Net.option`).
 ##

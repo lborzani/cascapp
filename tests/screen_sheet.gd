@@ -32,6 +32,7 @@ const SHOTS := [
 	["res://scenes/ludo_match.tscn", "17d_ludo_pilha"],
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/game_menu.tscn", "19_metropole_ajustes"],
+	["res://scenes/game_menu.tscn", "19b_uno_ajustes"],
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
@@ -162,6 +163,12 @@ func _next() -> void:
 			# que não decide nada.
 			Game.start_hotseat(Game.MONOPOLY)
 			Game.round_limit = 20
+		"19b_uno_ajustes":
+			# O mesmo painel, terceiro jogo a usar a seção de formato: aqui ela é a
+			# regra da casa do 0 e do 7, que antes existia sem nenhuma tela que a
+			# oferecesse. O print prova que a seção é genérica e não de Metrópole.
+			Game.start_hotseat(Game.UNO)
+			Game.set_format(1, Game.UNO)
 		"14_bot":
 			Game.bot_level = 1
 			Game.bot_side = Board.Side.BLACK
@@ -227,7 +234,7 @@ func _next() -> void:
 		_play_opening(_scene)
 		if shot == "07_material":
 			_stuff_captures(_scene)
-	elif shot == "08_ajustes" or shot == "19_metropole_ajustes":
+	elif shot == "08_ajustes" or shot == "19_metropole_ajustes" or shot == "19b_uno_ajustes":
 		_scene._open_setup(Game.Mode.ONLINE)
 	elif shot == "09_revanche":
 		# Painel de fim de partida no estado mais cheio: convite de revanche
