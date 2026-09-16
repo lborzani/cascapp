@@ -264,10 +264,10 @@ func _drives_bots() -> bool:
 	return Game.mode != Game.Mode.ONLINE or Game.local_seat == 0
 
 
-func _on_shot_aimed(direction: Vector2, power: float) -> void:
+func _on_shot_aimed(ball: int, direction: Vector2, power: float) -> void:
 	if not _can_act():
 		return
-	_submit(PoolRules.shot(direction, power))
+	_submit(PoolRules.shot(ball, direction, power))
 
 
 func _on_ball_placed(spot: Vector2) -> void:
@@ -448,29 +448,27 @@ func _refresh_cards() -> void:
 		detail.text = _seat_detail(seat)
 
 
-## A cor do assento: no mata-mata é a do grupo dele — e essa **é** a informação
-## principal da tela, porque ela diz em que bola se pode bater. Enquanto a mesa
-## está aberta, ninguém tem cor, e a faixa usa o latão de "é a sua vez".
+## A cor do assento: no mata-mata é a das bolas dele — e essa **é** a informação
+## principal da tela, porque ela diz com quais bolas ele taca e quais ele tem de
+## matar. Na brasileira os dois tacam com a mesma branca, então a cor volta a ser
+## só o latão de "é a sua vez".
 func _seat_color(seat: int) -> Color:
-	if PoolRules.format_of(_state) == PoolRules.Format.BRAZILIAN:
+	if PoolRules.has_cue_ball(_state):
 		return AppTheme.ACCENT
-	var group := PoolRules.group_of(_state, seat)
-	if group < 0:
-		return AppTheme.ACCENT
-	return PoolRules.GROUP_COLORS[group]
+	return PoolRules.GROUP_COLORS[PoolRules.group_of(seat) % PoolRules.GROUP_COLORS.size()]
 
 
+## O que falta **ao adversário**, e não a ele.
+##
+## No mata-mata a conta que decide a partida é quantas bolas do outro ainda estão
+## na mesa: é isso que precisa chegar a zero. Mostrar as próprias seria mostrar
+## quantos projéteis sobraram, que é outra pergunta — e a resposta errada para a
+## que se está fazendo ao olhar o placar.
 func _seat_detail(seat: int) -> String:
-	if PoolRules.format_of(_state) == PoolRules.Format.BRAZILIAN:
+	if PoolRules.has_cue_ball(_state):
 		return "%d pontos" % PoolRules.score_of(_state, seat)
-	var group := PoolRules.group_of(_state, seat)
-	if group < 0:
-		return "mesa aberta"
-	var left := 0
-	for ball in range(1, PoolRules.ball_count(_state)):
-		if PoolRules.is_live(_state, ball) and PoolRules.kind_of_ball(_state, ball) == group:
-			left += 1
-	return "%d na mesa" % left
+	var hunting := PoolRules.group_of(1 - seat)
+	return "faltam %d" % PoolRules.balls_left(_state, hunting)
 
 
 func _seat_name(seat: int) -> String:

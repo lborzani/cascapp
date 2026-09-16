@@ -958,22 +958,57 @@ comprar, e sumir com as injogáveis esconde metade da conta.
 Dois jogadores, uma mesa de bar, dois formatos. É o jogo mais diferente do
 catálogo, e a diferença tem um nome: aqui o lance não **é** o resultado, ele é a
 **causa** dele. No xadrez "e2-e4" já descreve a posição seguinte; aqui uma tacada
-é uma direção e uma força, e o que acontece com as nove bolas depois disso sai de
-uma simulação.
+é uma bola, uma direção e uma força, e o que acontece com as outras depois disso
+sai de uma simulação.
 
-#### Os dois formatos
+#### Os dois formatos, e eles discordam no que é uma tacadeira
 
-- **Mata-mata** — o jogo que se joga em bar no Brasil: quatro amarelas, quatro
-  azuis e a branca. O grupo de cada um é decidido pela **primeira bola
-  encaçapada**, e ganha quem limpar o seu primeiro. É o padrão, e é o mais curto;
-- **Brasileira** — a regra nacional: a branca e sete coloridas de 1 a 7. A **bola
-  da vez** é a de menor número ainda na mesa, e é nela que a branca tem de bater
-  primeiro. Cada bola vale o número dela, a falta entrega sete ao adversário, e a
-  mesa limpa decide pelo maior placar.
+- **Mata-mata** — o jogo de bar de São Paulo: cinco bolas de cada cor e **nenhuma
+  branca**. Quem joga escolhe uma das **próprias** bolas e taca com ela; ganha
+  quem primeiro deixar o adversário sem bola na mesa. É o padrão, e é o mais
+  curto;
+- **Brasileira** — a regra nacional: a branca e sete coloridas de 1 a 7. Taca-se
+  sempre com a branca, e a **bola da vez** é a de menor número ainda na mesa.
+  Cada bola vale o número dela, a falta entrega sete ao adversário, e a mesa
+  limpa decide pelo maior placar.
+
+A diferença atravessa o arquivo inteiro, e é por isso que ela tem um nome:
+`has_cue_ball()`. Com tacadeira, a bola que taca é sempre a mesma, nunca sai do
+jogo e volta para a marca quando cai; sem ela, a bola que taca é uma **escolha**,
+é do grupo de quem joga, e cair é perdê-la.
 
 O formato é escolhido por quem abre e viaja no `welcome` como `Net.option`, como
 o limite de rodadas de Metrópole. Duas mesas com formatos diferentes não seriam a
 mesma partida.
+
+#### No mata-mata, o objetivo é invertido — e isso resolve as regras sozinho
+
+Ganha quem primeiro deixar o adversário **sem bola na mesa**. Parece um detalhe e
+é o que faz o resto fechar sem caso especial nenhum:
+
+- **encaçapar uma bola sua** não precisa de punição escrita. Ela sai do jogo, e
+  sair do jogo é exatamente o que aproxima o outro de vencer. Um tiro no pé
+  literal;
+- **ficar sem bolas é perder**, e cai da mesma frase: se não sobrou nenhuma sua,
+  não sobrou nada para o adversário ter de matar;
+- **bater primeiro numa bola sua é falta.** Sem isso, empurrar as próprias para
+  perto das caçapas seria uma tacada grátis, e o jogo deixaria de ter uma decisão
+  por vez. A falta só passa a vez — não tira bola de ninguém, porque a mesa já
+  pune sozinha quem erra.
+
+As cores são **fixas desde o começo**, e não decididas pela primeira bola que
+cai: aqui a cor não é um prêmio de saída, ela é de quem joga desde antes da
+primeira tacada, porque é com aquelas bolas que ele taca.
+
+#### O arranjo inicial não é um triângulo
+
+As dez começam encostadas nas tabelas, cada cor de um lado, com duas de cada
+flanqueando as caçapas do meio.
+
+Não é estética. **Sem tacadeira não existe saída**: não há uma bola de fora para
+abrir o agrupamento, e um triângulo fechado seria dez bolas que ninguém consegue
+separar. Coladas nas tabelas, toda bola tem linha para alguma caçapa desde a
+primeira tacada.
 
 #### A física mora em `core/`, junto das regras
 
@@ -1023,8 +1058,13 @@ partida jogada — a bola entrando na tela e não entrando na regra, ou o contr�
 
 #### A mira é um arrasto, e ele é ao contrário
 
-O dedo puxa **para trás** da branca, como se puxa um taco: a direção é do dedo
-para a bola, e a distância é a força. Puxar para frente pareceria empurrar a bola
+No mata-mata, o toque numa bola própria **escolhe** com qual se taca; em qualquer
+outro lugar da mesa, ele começa a mira da que já está escolhida. Um botão
+separado para trocar de bola seria um toque a mais para uma decisão que o dedo já
+sabe apontar.
+
+O dedo puxa **para trás** da bola, como se puxa um taco: a direção é do dedo para
+a bola, e a distância é a força. Puxar para frente pareceria empurrar a bola
 com o dedo, e num celular o dedo estaria justamente em cima do que ele precisa
 ver.
 

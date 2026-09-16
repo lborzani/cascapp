@@ -456,16 +456,41 @@ func _process(_delta: float) -> void:
 ## linha de mira, o ponto de contato e o anel de força.
 func _stage_pool(scene: Node) -> void:
 	scene._rules.trace_every = 0
-	scene._rules.apply_move(scene._state, PoolRules.shot(Vector2.RIGHT, 1.0))
+	var mine := PoolRules.shootable(scene._state)
+	scene._rules.apply_move(scene._state, PoolRules.shot(mine[0], Vector2(0.9, 0.42), 1.0))
 	scene._rules.trace_every = PoolRules.TRACE_EVERY
 	scene._view.state = scene._state
 	scene._refresh()
 
-	# O arrasto, armado à mão: o gesto de verdade precisa de um dedo, e a folha
-	# não tem um. O que vai para a foto é o estado que ele produz.
-	scene._view._aiming = true
-	scene._view._pull = Vector2(150.0, -46.0)
-	scene._view.queue_redraw()
+	# O arrasto, armado à mão: o gesto de verdade precisa de um dedo, e a folha não
+	# tem um. O que vai para a foto é o estado que ele produz.
+	#
+	# A mira é calculada, e não escrita: um `_pull` fixo aponta para onde as bolas
+	# estavam na execução em que ele foi escolhido, e a primeira mudança na física
+	# tira a foto da mesa e põe numa parede. Aqui ela procura o par
+	# (bola minha, bola dele) mais curto — que é o que põe na foto as três coisas
+	# que precisam ser julgadas: o taco, a bola fantasma e a seta de saída.
+	var view: PoolView = scene._view
+	var seat := PoolRules.turn_of(scene._state)
+	var best := -1.0
+	for from in PoolRules.shootable(scene._state):
+		for ball in PoolRules.ball_count(scene._state):
+			if not PoolRules.is_live(scene._state, ball):
+				continue
+			if PoolRules.kind_of_ball(scene._state, ball) == PoolRules.group_of(seat):
+				continue
+			var aim := (
+				PoolRules.position_of(scene._state, ball)
+				- PoolRules.position_of(scene._state, from)
+			)
+			if best >= 0.0 and aim.length() >= best:
+				continue
+			best = aim.length()
+			view._shooter = from
+			# O taco puxa para **trás**, então o dedo está do lado oposto da mira.
+			view._pull = -aim.normalized() * scene.size.x * 0.20
+	view._aiming = best >= 0.0
+	view.queue_redraw()
 
 
 func _stage_ludo(scene: Node) -> void:

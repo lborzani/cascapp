@@ -22,8 +22,8 @@ extends Control
 ## de contato. Sem isso, mirar num celular é chutar: o dedo cobre a bola e não há
 ## taco para alinhar com o olho.
 
-## Uma tacada foi pedida: direção e força de 0 a 1.
-signal shot_aimed(direction: Vector2, power: float)
+## Uma tacada foi pedida: com qual bola, em que direção e com que força (0 a 1).
+signal shot_aimed(ball: int, direction: Vector2, power: float)
 ## A branca foi posta, em coordenadas de mesa.
 signal ball_placed(spot: Vector2)
 
@@ -73,7 +73,7 @@ const CUE_PULL_MAX := 0.22
 ## sai pela linha dos centros no instante do contato, e isso é exato; para onde
 ## ela vai depois de bater numa tabela ou noutra bola já não é, e prometer isso
 ## seria prometer o que a régua não mede.
-const OBJECT_HINT := 0.42
+const OBJECT_HINT := 0.20
 
 var state: MatchState = null:
 	set(value):
@@ -97,6 +97,9 @@ var _playing := false
 
 var _aiming := false
 var _pull := Vector2.ZERO
+## A bola escolhida para tacar, ou -1 para "a primeira que servir". Ver [method
+## _shooter_ball].
+var _shooter := -1
 var _scale := 1.0
 var _origin := Vector2.ZERO
 
@@ -165,11 +168,32 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
+## O toque começa uma de duas coisas: **escolher a bola** ou puxar o taco.
+##
+## Qual das duas sai do lugar em que o dedo encostou. Em cima de uma bola que
+## pode tacar, é escolha; em qualquer outro lugar, é mira da que já está
+## escolhida. Um botão separado para trocar de bola seria um toque a mais para
+## uma decisão que o dedo já sabe apontar.
+##
+## No mata-mata a escolha é o primeiro lance de cada vez, e é ela que o jogo tem
+## de novo: sem tacadeira, com **qual** das próprias bolas se taca é metade da
+## jogada. Na brasileira só a branca é tacável, e a escolha se resolve sozinha.
 func _begin(at: Vector2) -> void:
 	if Rules.ball_in_hand(state):
 		var spot := _to_table(at)
-		if Rules._placeable(state, spot):
+		if Rules._placeable(state, spot, Rules.cue_ball(state)):
 			ball_placed.emit(spot)
+		return
+
+	var picked := _ball_under(at)
+	if picked >= 0:
+		_shooter = picked
+		_aiming = false
+		_pull = Vector2.ZERO
+		queue_redraw()
+		return
+
+	if _shooter_ball() < 0:
 		return
 	_aiming = true
 	_pull = at - _cue_screen()
@@ -180,19 +204,57 @@ func _end(at: Vector2) -> void:
 	if not _aiming:
 		return
 	_aiming = false
+	var ball := _shooter_ball()
 	_pull = at - _cue_screen()
 	var pull := _pull.length()
 	var full := size.x * PULL_FULL
-	if pull < size.x * PULL_DEAD:
+	if pull < size.x * PULL_DEAD or ball < 0:
 		_pull = Vector2.ZERO
 		queue_redraw()
 		return
 	# A direção é **do dedo para a bola**: puxa-se o taco para trás. Ver o
 	# cabeçalho.
 	var direction := -_pull.normalized()
-	shot_aimed.emit(direction, clampf(pull / full, 0.0, 1.0))
+	shot_aimed.emit(ball, direction, clampf(pull / full, 0.0, 1.0))
 	_pull = Vector2.ZERO
 	queue_redraw()
+
+
+## A bola tacável sob o dedo, ou -1.
+##
+## O alvo é maior que a bola — um dedo tem uns oito milímetros e uma bola
+## desenhada tem menos que isso num celular. Sem a folga, escolher com qual bola
+## tacar viraria um teste de pontaria antes do teste de pontaria.
+func _ball_under(at: Vector2) -> int:
+	var spot := _to_table(at)
+	var reach := Rules.BALL_RADIUS * 2.2
+	var best := -1
+	var closest := reach
+	var seat := Rules.turn_of(state)
+	for ball in Rules.ball_count(state):
+		if not Rules.can_shoot_with(state, seat, ball):
+			continue
+		var apart := spot.distance_to(_ball_spot(ball))
+		if apart <= closest:
+			closest = apart
+			best = ball
+	return best
+
+
+## Com qual bola se taca agora.
+##
+## A escolhida, quando ela ainda está na mesa e ainda é de quem joga; senão a
+## primeira tacável. O segundo caso não é conveniência: a bola escolhida pode ter
+## **caído na tacada anterior**, e uma tela que guardasse o índice dela apontaria
+## o taco para um buraco.
+func _shooter_ball() -> int:
+	if state == null:
+		return -1
+	var seat := Rules.turn_of(state)
+	if _shooter >= 0 and Rules.can_shoot_with(state, seat, _shooter):
+		return _shooter
+	var mine := Rules.shootable(state)
+	return mine[0] if not mine.is_empty() else -1
 
 
 # --- geometria ----------------------------------------------------------------
@@ -214,8 +276,10 @@ func _to_table(at: Vector2) -> Vector2:
 	return (at - _origin) / _scale
 
 
+## Onde a bola que taca está na tela. Não é "a bola 0": no mata-mata ela é a
+## escolhida, e muda a cada vez.
 func _cue_screen() -> Vector2:
-	return _to_screen(_ball_spot(0))
+	return _to_screen(_ball_spot(_shooter_ball()))
 
 
 ## Onde a bola está **agora na tela**: o retrato em reprodução quando há um, o
@@ -278,7 +342,7 @@ func _draw_aim() -> void:
 	if not _aiming or _pull.length() < size.x * PULL_DEAD:
 		return
 	var direction := -_pull.normalized()
-	var cue_spot := _ball_spot(0)
+	var cue_spot := _ball_spot(_shooter_ball())
 
 	# Até a tabela, e nunca além dela: uma linha que sai do pano promete uma
 	# trajetória fora da mesa, e o pior tipo de ajuda é a que mente.
@@ -342,8 +406,8 @@ func _draw_object_line(ball: int, contact: Vector2) -> void:
 
 	# A seta é o que separa "esta bola" de "para lá": sem ponta, a linha lida de
 	# relance é o traço da mira continuando por trás da bola.
-	var wing := Vector2(away.y, -away.x) * 0.019
-	var base := tail - away * 0.034
+	var wing := Vector2(away.y, -away.x) * 0.015
+	var base := tail - away * 0.028
 	draw_colored_polygon(
 		PackedVector2Array([
 			_to_screen(tail), _to_screen(base + wing), _to_screen(base - wing)
@@ -365,7 +429,7 @@ func _draw_object_line(ball: int, contact: Vector2) -> void:
 func _draw_cue() -> void:
 	if not _aiming or _pull.length() < size.x * PULL_DEAD:
 		return
-	var cue_spot := _ball_spot(0)
+	var cue_spot := _ball_spot(_shooter_ball())
 	var away := _pull.normalized()
 	var power := clampf(_pull.length() / (size.x * PULL_FULL), 0.0, 1.0)
 	var gap := Rules.BALL_RADIUS + lerpf(CUE_PULL_MIN, CUE_PULL_MAX, power)
@@ -412,7 +476,7 @@ func _draw_taper(
 
 ## Distância da branca até a tabela, na direção mirada. Em unidades de mesa.
 func _cushion_reach(direction: Vector2) -> float:
-	return _cushion_reach_from(_ball_spot(0), direction)
+	return _cushion_reach_from(_ball_spot(_shooter_ball()), direction)
 
 
 ## O mesmo, a partir de um ponto qualquer. A linha da bola atingida também para na
@@ -445,13 +509,14 @@ func _cushion_reach_from(spot: Vector2, direction: Vector2) -> float:
 ## contato, e a linha de saída — que sai da **linha dos centros** — apontava para
 ## o lado errado.
 func _impact(direction: Vector2) -> Dictionary:
-	var cue := _ball_spot(0)
+	var shooter := _shooter_ball()
+	var cue := _ball_spot(shooter)
 	var aim := direction.normalized()
 	var touch := Rules.BALL_RADIUS * 2.0
 	var best := -1.0
 	var hit := -1
-	for ball in range(1, Rules.ball_count(state)):
-		if not _ball_live(ball):
+	for ball in Rules.ball_count(state):
+		if ball == shooter or not _ball_live(ball):
 			continue
 		var to_ball := _ball_spot(ball) - cue
 		var along := to_ball.dot(aim)
@@ -471,10 +536,18 @@ func _impact(direction: Vector2) -> Dictionary:
 
 func _draw_balls() -> void:
 	var radius := Rules.BALL_RADIUS * _scale
+	# A escolhida ganha um anel de latão, e só quando a mesa aceita toque: fora da
+	# vez o anel diria "aja aqui" numa tela em que não há o que fazer.
+	var shooter := _shooter_ball() if enabled and not _playing else -1
 	for ball in Rules.ball_count(state):
 		if not _ball_live(ball):
 			continue
 		var at := _to_screen(_ball_spot(ball))
+		if ball == shooter:
+			draw_arc(
+				at, radius * 1.55, 0.0, TAU, 32, Color(AppTheme.ACCENT, 0.9),
+				maxf(2.0, radius * 0.16), true
+			)
 		var tint := Rules.color_of_ball(state, ball)
 		# Sombra rente, e uma calota clara em cima: são as duas coisas que separam
 		# uma bola de um disco, e as duas custam um `draw_circle`.
