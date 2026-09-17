@@ -18,6 +18,13 @@ const TURN_GAP_RATIO := 0.06
 	set(value):
 		player_name = value
 		queue_redraw()
+## A peça de um jogo, de `Board.piece`, no lugar da inicial. É a bolacha servindo
+## de ícone de jogo no cardápio, na folha e na lista de salas — a mesma moldura
+## redonda para "quem é" e para "qual jogo".
+@export var piece := 0:
+	set(value):
+		piece = value
+		queue_redraw()
 @export var fill := AppTheme.COASTER:
 	set(value):
 		fill = value
@@ -49,6 +56,9 @@ func _draw() -> void:
 		radius -= ring_width + diameter * TURN_GAP_RATIO
 	draw_circle(center, radius, fill)
 	draw_arc(center, radius - ring_width * 0.5, 0.0, TAU, 48, ring, ring_width, true)
+	if piece != 0:
+		PieceRenderer.draw_piece(self, piece, center, radius * 1.25)
+		return
 	var face := AppTheme.display(900)
 	var font_size := maxi(8, int(radius * 1.05))
 	var baseline := center.y + (face.get_ascent(font_size) - face.get_descent(font_size)) * 0.5
