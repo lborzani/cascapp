@@ -28,6 +28,7 @@ func _run() -> void:
 	_probe_theme()
 	_probe_coaster()
 	_probe_paper()
+	_probe_segments()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -162,6 +163,33 @@ func _probe_paper() -> void:
 	_check(paper.pivot_offset.is_equal_approx(Vector2(100, 50)), "gira em torno do próprio centro")
 	_check(is_equal_approx(paper.rotation, deg_to_rad(-1.2)), "no ângulo pedido")
 	host.free()
+
+
+func _probe_segments() -> void:
+	print("segmentos")
+	var control := SegmentedControl.new()
+	root.add_child(control)
+	var heard: Array[int] = []
+	control.selected.connect(func(index: int) -> void: heard.append(index))
+	control.setup(PackedStringArray(["Online", "Neste aparelho", "Contra bot"]), 0)
+	_equals(control.segment_count(), 3, "um segmento por opção")
+	_equals(control.current, 0, "começa no pedido")
+	_equals(control._buttons[0].text, "ONLINE", "rótulo em maiúsculas, voz de letreiro")
+	_equals(control._buttons[0].theme_type_variation, &"SegmentSelected", "o marcado é o preenchido")
+	_equals(control._buttons[1].theme_type_variation, &"Segment", "e os outros não")
+	control._buttons[2].pressed.emit()
+	_equals(control.current, 2, "tocar troca")
+	_equals(heard, [2] as Array[int], "e avisa uma vez")
+	control._buttons[2].pressed.emit()
+	_equals(heard.size(), 1, "tocar no marcado não avisa de novo")
+	control.set_current(1)
+	_equals(control.current, 1, "trocar por código funciona")
+	_equals(heard.size(), 1, "sem avisar — quem trocou já sabe")
+	control.setup(PackedStringArray(["Mata-mata", "Brasileira"]), 1)
+	_equals(control.segment_count(), 2, "refazer troca os segmentos")
+	_equals(control._row.get_child_count(), 2, "sem deixar os velhos na fileira")
+	_equals(control.current, 1, "e marca o pedido")
+	control.free()
 
 
 func _probe_dashed() -> void:
