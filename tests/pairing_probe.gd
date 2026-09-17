@@ -473,6 +473,17 @@ func _probe_host() -> void:
 
 	_equals(Net._expected_code, code, "o código chegou ao link")
 
+	# O QR começa escondido: ele ocupa meia tela e serve a um caminho só — o outro
+	# aparelho apontando a câmera —, enquanto o código serve a todos.
+	_check(not screen.get_node("%QrCard").visible, "o QR começa escondido")
+	screen.get_node("%QrButton").pressed.emit()
+	_check(screen.get_node("%QrCard").visible, "e Mostrar QR mostra")
+	screen.get_node("%CopyButton").pressed.emit()
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		_equals(DisplayServer.clipboard_get(), code, "Copiar leva o código para a área de transferência")
+	_equals(screen.get_node("%Seats").capacity, maxi(Game.players_of(), 2), "a mesa tem a lotação do jogo")
+	_check(screen.get_node("%Seats").present.has(0), "com o anfitrião sentado")
+
 	screen.queue_free()
 	await get_tree().process_frame
 	Game.reset_to_menu()

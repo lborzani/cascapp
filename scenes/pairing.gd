@@ -38,6 +38,8 @@ func _ready() -> void:
 	Pairing.relay.peer_gone.connect(func(_seat: int): _on_relay_state_changed(Pairing.relay.state()))
 	Pairing.nfc.failed.connect(_show_error)
 	%BotsButton.pressed.connect(_start_with_bots)
+	%CopyButton.pressed.connect(_copy_code)
+	%QrButton.pressed.connect(_toggle_qr)
 
 	# O título da barra é o que a tela **é**; a linha abaixo dela é o que esta
 	# partida em particular tem — o jogo e o ritmo. Estavam juntos numa frase só,
@@ -52,7 +54,10 @@ func _ready() -> void:
 		%Title.text = "%s • %s" % [%Title.text, Game.clock_label()]
 	elif Game.supports_rounds():
 		%Title.text = "%s • %s" % [%Title.text, Game.round_limit_label()]
+	%Seats.capacity = Game.players_of()
+	%Seats.local_seat = 0
 	_setup_host()
+	_refresh_seats()
 
 
 ## Tudo o que esta tela acendeu é apagado aqui. Um link já estabelecido
@@ -109,6 +114,7 @@ func _on_relay_unavailable(_reason: String) -> void:
 
 
 func _on_relay_state_changed(state: RelayBridge.State) -> void:
+	_refresh_seats()
 	if Net.connected:
 		return
 	match state:
@@ -120,6 +126,37 @@ func _on_relay_state_changed(state: RelayBridge.State) -> void:
 			%StatusLabel.text = "Conexão instável; tentando de novo…"
 		_:
 			pass
+
+
+## O código na área de transferência: quem abre a sala manda ele por mensagem, e
+## copiar à mão um código de seis letras lidas da tela é onde nasce o "nenhuma
+## partida com esse código" que parece erro de digitação — e é.
+func _copy_code() -> void:
+	DisplayServer.clipboard_set(_code)
+	Sound.play(Sound.Cue.TAP)
+	%Toast.show_message("Código %s copiado." % _code, Banner.Kind.INFO)
+
+
+## O QR começa escondido. Ele ocupa meia tela e serve a um caminho só — o outro
+## aparelho apontando a câmera —, enquanto o código serve a todos.
+func _toggle_qr() -> void:
+	%QrCard.visible = not %QrCard.visible
+	%QrButton.text = "Esconder QR" if %QrCard.visible else "Mostrar QR"
+
+
+## As cadeiras da mesa, como o relay as conhece. O anfitrião é sempre a de baixo.
+func _refresh_seats() -> void:
+	var present := PackedInt32Array([0])
+	for seat in Pairing.relay.present_seats():
+		if not present.has(seat):
+			present.append(seat)
+	%Seats.capacity = maxi(Game.players_of(), 2)
+	%Seats.present = present
+	%Seats.refresh()
+	var players := Game.players_of()
+	%SeatsCount.text = (
+		"%d de %d" % [present.size(), players] if players > 2 else "2 lugares"
+	)
 
 
 ## Quantos já estão na mesa, quando isso é uma pergunta. Numa sala de dois,
@@ -193,6 +230,9 @@ func go_back() -> void:
 	_back_to_menu()
 
 
+## Voltar daqui é desfazer a escolha "quero abrir uma sala", e não largar o jogo:
+## a tela inicial reabre a folha dele, que é a tela de onde se veio.
 func _back_to_menu() -> void:
+	Game.pending_sheet = Game.game_id
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)

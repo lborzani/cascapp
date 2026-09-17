@@ -1,10 +1,12 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/pairing.gd" id="1_pairing"]
 [ext_resource type="Script" path="res://net/qr_code_view.gd" id="2_qr"]
 [ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
 [ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" path="res://ui/app_bar.gd" id="5_bar"]
+[ext_resource type="Script" path="res://ui/paper_card.gd" id="6_paper"]
+[ext_resource type="Script" path="res://ui/seat_table.gd" id="7_seats"]
 
 [node name="Pairing" type="Control"]
 layout_mode = 3
@@ -62,24 +64,20 @@ theme_override_constants/separation = 14
 [node name="Title" type="Label" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Subtitle"
-text = "Criar partida"
-
-autowrap_mode = 3
+theme_type_variation = &"Hint"
 
 [node name="HostPanel" type="VBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 3
 theme_override_constants/separation = 14
 
 [node name="CodeCard" type="PanelContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel"]
 layout_mode = 2
-theme_type_variation = &"Card"
+script = ExtResource("6_paper")
 
 [node name="CodeBox" type="VBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard"]
 layout_mode = 2
-theme_override_constants/separation = 2
+theme_override_constants/separation = 6
 
 [node name="CodeCaption" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard/CodeBox"]
 layout_mode = 2
@@ -91,56 +89,94 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"PairingCode"
-text = "------"
 horizontal_alignment = 1
 
-[node name="QrCard" type="PanelContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel"]
+[node name="CodeActions" type="HBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard/CodeBox"]
 layout_mode = 2
-size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="CopyButton" type="Button" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard/CodeBox/CodeActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Copiar"
+
+[node name="QrButton" type="Button" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard/CodeBox/CodeActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Mostrar QR"
+
+[node name="QrCard" type="PanelContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
 theme_type_variation = &"QuietCard"
 
 [node name="QrCode" type="Control" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/QrCard"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 260)
+custom_minimum_size = Vector2(0, 240)
 layout_mode = 2
-size_flags_vertical = 3
 script = ExtResource("2_qr")
 
-[node name="HostHint" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel"]
+[node name="HostHint" type="Label" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Subtitle"
-horizontal_alignment = 1
+theme_type_variation = &"Hint"
 autowrap_mode = 3
 
-[node name="StatusCard" type="PanelContainer" parent="Safe/Shell/Scroll/Pad/VBox"]
+[node name="SeatsHeader" type="HBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox"]
 layout_mode = 2
-theme_type_variation = &"QuietCard"
+theme_override_constants/separation = 12
 
-[node name="StatusLabel" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/StatusCard"]
+[node name="SeatsTitle" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/SeatsHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Na mesa"
+
+[node name="SeatsCount" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/SeatsHeader"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Subtitle"
+size_flags_horizontal = 8
+size_flags_vertical = 1
+theme_type_variation = &"Hint"
+
+[node name="Seats" type="Control" parent="Safe/Shell/Scroll/Pad/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_seats")
+
+[node name="StatusLabel" type="Label" parent="Safe/Shell/Scroll/Pad/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Hint"
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="BotsButton" type="Button" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(0, 54)
 layout_mode = 2
-theme_type_variation = &"AccentButton"
+theme_type_variation = &"GhostButton"
 text = "Começar com bots"
 
 [node name="ToastLayer" type="Control" parent="Safe"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
-layout_mode = 2
 
 [node name="Toast" type="Control" parent="Safe/ToastLayer"]
 unique_name_in_owner = true
 layout_mode = 1
-anchors_preset = 10
+anchors_preset = 15
 anchor_right = 1.0
-offset_bottom = 120.0
+anchor_bottom = 1.0
 grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 script = ExtResource("4_banner")
