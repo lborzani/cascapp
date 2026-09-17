@@ -163,23 +163,52 @@ static func build() -> Theme:
 	return theme
 
 
-## `SystemFont` em vez de um arquivo embarcado: o Android tem Roboto e o Windows
-## tem Segoe UI, os dois com pesos de verdade. É a única forma de ter hierarquia
-## tipográfica real sem adicionar binários ao repositório.
+enum Role { BODY, DISPLAY, MONO }
+
+const FONT_BODY := "res://assets/fonts/AtkinsonHyperlegible-Regular.ttf"
+const FONT_BODY_BOLD := "res://assets/fonts/AtkinsonHyperlegible-Bold.ttf"
+const FONT_DISPLAY := "res://assets/fonts/BigShouldersDisplay-Variable.ttf"
+const FONT_MONO := "res://assets/fonts/IBMPlexMono-Medium.ttf"
+const FONT_MONO_BOLD := "res://assets/fonts/IBMPlexMono-SemiBold.ttf"
+
+
+## A fonte de um papel num peso.
 ##
-## Cacheado por peso porque `draw_string` recebe a fonte a cada quadro: uma
-## instância nova por chamada nunca chega a carregar os glifos e desenha blocos
-## em vez de texto.
-static func font(weight: int) -> Font:
-	if _fonts.has(weight):
-		return _fonts[weight]
-	var system := SystemFont.new()
-	system.font_names = PackedStringArray(["Roboto", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"])
-	system.font_weight = weight
-	system.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
-	system.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
-	_fonts[weight] = system
-	return system
+## Embarcadas, e não mais `SystemFont`: o tema tem três vozes — o letreiro (Big
+## Shoulders), o texto que precisa ser lido longe do rosto (Atkinson Hyperlegible)
+## e os números que precisam alinhar (IBM Plex Mono) —, e nenhuma delas existe
+## garantida num aparelho. Corpo e mono são um arquivo por peso; o letreiro é um
+## arquivo variável, com o peso escolhido no eixo `wght`.
+##
+## Cacheado por papel e peso porque `draw_string` recebe a fonte a cada quadro:
+## uma instância nova por chamada nunca chega a carregar os glifos e desenha
+## blocos em vez de texto.
+static func font(weight: int, role := Role.BODY) -> Font:
+	var key := int(role) * 1000 + weight
+	if _fonts.has(key):
+		return _fonts[key]
+	var result: Font
+	match role:
+		Role.DISPLAY:
+			var variation := FontVariation.new()
+			variation.base_font = load(FONT_DISPLAY)
+			var tag := TextServerManager.get_primary_interface().name_to_tag("wght")
+			variation.variation_opentype = {tag: clampi(weight, 100, 900)}
+			result = variation
+		Role.MONO:
+			result = load(FONT_MONO_BOLD if weight >= 600 else FONT_MONO)
+		_:
+			result = load(FONT_BODY_BOLD if weight >= 600 else FONT_BODY)
+	_fonts[key] = result
+	return result
+
+
+static func display(weight := 900) -> Font:
+	return font(weight, Role.DISPLAY)
+
+
+static func mono(weight := 600) -> Font:
+	return font(weight, Role.MONO)
 
 
 ## A fonte do sistema que o app usava antes do tema Boteco.
