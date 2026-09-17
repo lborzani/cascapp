@@ -1254,3 +1254,135 @@ git commit -m "chore: fecha a fundação do redesenho"
 - `.tscn`: `scene_probe`, `pairing_probe`, `ludo_probe`, `uno_probe`, `uno_scene_probe`, `pool_scene_probe`, `bomber_match_offline_probe`.
 - Relay: `npm --prefix relay test`; smokes de rede com `CHESS_RELAY_URL`.
 - Imagem: `uno_cards.png`, `pieces.png`, `20h_metropole_tampo.png` (região 520,180,380,390) iguais à referência.
+
+---
+
+## Etapa 2 — Navegação e menus
+
+Detalhada ao iniciar a etapa, depois de ler `main_menu`, `game_menu`, `join`,
+`join_panel`, `pairing`, `settings`, `nav_drawer`, `app_bar`, `game_choice`,
+`welcome_panel`, `waiting_panel`, `tests/pairing_probe.gd` e `tests/scene_probe.gd`.
+
+### Decisões de arquitetura
+
+- **As abas são três cenas**, e não uma cena com páginas: `main_menu.tscn` (Jogos),
+  `join.tscn` (Online) e `settings.tscn` (Você), cada uma com o componente
+  `AppTabs` embaixo. Mantém o contrato do `Nav` (um `go_back()` por cena, varrido
+  por `scene_probe`) e os testes que abrem cada tela. Trocar de aba é trocar de
+  cena, com o mesmo fade de 0,16 s de hoje.
+- **A folha do jogo é um componente** (`ui/game_sheet.gd`), aberto por cima da tela
+  que o chama — o cardápio em Jogos, a fileira de jogos em Online. A cena
+  `game_menu.tscn` sai. A folha não navega: emite `confirmed(mode)` e a tela chama
+  `GameSheet.launch(tree, mode)`, que é o `_confirm_setup` e o `_open_pairing` de hoje.
+- **Voltar de uma partida ou da sala** vai para a tela inicial com a folha daquele
+  jogo reaberta: `Game.pending_sheet` guarda o jogo, e o `_ready` da tela inicial
+  consome. Todo `MENU_SCENE` que apontava para `game_menu.tscn` passa a apontar
+  para `main_menu.tscn`.
+- **A gaveta sai.** `NavDrawer` é apagado quando nenhuma tela o usar mais.
+- **"Como jogar"** não aparece na folha nesta etapa: link que não leva a lugar
+  nenhum é pior que link nenhum. Entra na etapa 5.
+
+### Task 10: Barra, abas e dica
+
+**Files:** Modify `ui/app_theme.gd` (variação `Hint`), `ui/app_bar.gd`; Create `ui/app_tabs.gd`; Modify `tests/ui_kit_probe.gd`.
+
+**Interfaces:**
+- `Hint` (rótulo): corpo 400, `SIZE_BODY_S`, `TEXT_DIM` — as frases de ajuda que hoje usam `Caption` e ficaram em 12.
+- `AppBar`: `leading` aceita `-1` (sem botão, para as abas); `func greet(player_name: String) -> void` monta o cabeçalho da tela inicial (logo, "Olá," pequeno, nome em letreiro, `Coaster` à direita que emite `action_pressed`).
+- `class_name AppTabs extends Control`; `const GAMES := &"games"`, `ONLINE := &"online"`, `YOU := &"you"`; `signal picked(route: StringName)`; `var current: StringName`; `var disabled: Array[StringName]`; `func route_at(point: Vector2) -> StringName`; `func pick(route: StringName) -> void` (emite só se diferente de `current` e não desabilitada).
+
+**Teste (ui_kit_probe):**
+
+```gdscript
+func _probe_tabs() -> void:
+	print("abas")
+	var tabs := AppTabs.new()
+	tabs.size = Vector2(432, 64)
+	tabs.current = AppTabs.GAMES
+	root.add_child(tabs)
+	var heard: Array[StringName] = []
+	tabs.picked.connect(func(route: StringName) -> void: heard.append(route))
+	_equals(tabs.route_at(Vector2(30, 30)), AppTabs.GAMES, "a esquerda é Jogos")
+	_equals(tabs.route_at(Vector2(216, 30)), AppTabs.ONLINE, "o meio é Online")
+	_equals(tabs.route_at(Vector2(400, 30)), AppTabs.YOU, "a direita é Você")
+	tabs.pick(AppTabs.GAMES)
+	_equals(heard.size(), 0, "tocar na aba em que se está não navega")
+	tabs.disabled = [AppTabs.ONLINE] as Array[StringName]
+	tabs.pick(AppTabs.ONLINE)
+	_equals(heard.size(), 0, "nem na desabilitada")
+	tabs.pick(AppTabs.YOU)
+	_equals(heard, [AppTabs.YOU] as Array[StringName], "a outra avisa")
+	tabs.free()
+	var bar := AppBar.new()
+	root.add_child(bar)
+	bar.greet("Casqueta")
+	_check(bar.find_children("*", "Coaster", true, false).size() == 1, "o cabeçalho de casa tem a bolacha do jogador")
+	bar.leading = -1
+	_check(not bar._leading_button.visible, "e as abas não têm botão de voltar")
+	bar.free()
+```
+
+### Task 11: Folha do jogo
+
+**Files:** Create `ui/game_sheet.gd`; Modify `autoload/game_state.gd` (`pending_sheet`); Modify `tests/pairing_probe.gd` (`_probe_setup_panel` vira `_probe_game_sheet`).
+
+**Interfaces:**
+- `class_name GameSheet extends Control`; `signal confirmed(mode: int)`; `signal closed`.
+- `func open(id: StringName, preferred_mode := -1) -> void` (grava `Game.game_id`); `func close() -> void`; `func select_mode(mode: int) -> void`; `var mode: int`; `func is_open() -> bool`.
+- `static func modes_for(id: StringName) -> Array[int]` — na ordem Online, Neste aparelho, Contra bot, só os que `Game.mode_available` aceita.
+- `static func launch(tree: SceneTree, mode: int) -> void`.
+- Nós internos para o teste: `_segments: SegmentedControl`, `_clock: GridContainer`, `_players: HBoxContainer`, `_formats: GridContainer`, `_levels: HBoxContainer`, `_sides: HBoxContainer`, `_visibility: HBoxContainer`, `_start: Button`, e `_section(name) -> Control` (legenda mais grupo).
+- `Game.pending_sheet: StringName` — vazio por padrão.
+
+**Teste (pairing_probe, substitui `_probe_setup_panel`):** abrir xadrez dá os segmentos na ordem dos modos disponíveis; um botão por ritmo; escolher o ritmo 1 grava `time_control` e marca `ChipSelected`; damas esconde a seção de ritmo; em "Contra bot" aparecem nível e cor e some "quem pode entrar"; escolher pretas deixa brancas com o bot; o botão diz "CRIAR SALA" online e "COMEÇAR" fora; `close()` fecha; sem relay o segmento Online não existe.
+
+### Task 12: Início
+
+**Files:** Create `ui/catalog_row.gd`; Modify `ui/game_choice.gd` (cartão de favorito em bolacha), `ui/resume_card.gd` (placa amarela), `scenes/main_menu.gd` e `.tscn`; Delete `scenes/game_menu.gd` e `.tscn`; Modify `MENU_SCENE` em `scenes/{match,battleship_match,bomber_match,ludo_match,monopoly_match,pool_match,uno_match,pairing,bomber_lobby}.gd`; Modify `tests/pairing_probe.gd` (`_probe_game_picker`), `tests/screen_sheet.gd` (prints da folha).
+
+**Interfaces:**
+- `class_name CatalogRow extends Control`; `signal chosen`; `signal favorite_toggled`; `var game_id: StringName`; `var favorite: bool`; `var unavailable: bool`; `func _star_zone() -> Rect2`.
+- Árvore de `main_menu.tscn`: `Background`, `Safe/VBox/{AppBar, Scroll/Pad/Content/{Favorites, CatalogHeader/{CatalogTitle, Categories}, GameList}, Tabs}`. `%GameList` guarda só `CatalogRow`; `%Favorites` guarda os `GameChoice` e some sem favorito.
+- `main_menu.gd`: `_sheet() -> GameSheet`; `go_back()` fecha a folha, depois as boas-vindas, depois sai.
+
+**Teste (pairing_probe, reescreve `_probe_game_picker`):** uma linha por jogo visível; a primeira é Xadrez; a estrela da linha grava favorito sem navegar e sem refazer a lista; o favorito aparece em `%Favorites` ao remontar; filtro Favoritos, categoria e Todos; tocar na linha abre a folha com o jogo; `go_back()` com a folha aberta fecha a folha; `Game.pending_sheet` reabre a folha ao montar e é consumido.
+
+### Task 13: Mesa de espera
+
+**Files:** Create `ui/seat_table.gd`; Modify `tests/ui_kit_probe.gd`.
+
+**Interfaces:** `class_name SeatTable extends Control`; `var capacity: int`; `var local_seat: int`; `var present: PackedInt32Array`; `func refresh() -> void`; `static func seat_angle(seat: int, capacity: int, local_seat: int) -> float` (radianos, local embaixo, sentido horário na tela); `func label_of(seat: int) -> String` ("Você", "Chegou", "Esperando").
+
+**Teste:** o ângulo do local é `PI/2`; com 4 cadeiras e local 2, a 3 fica em `PI`, a 0 em `3PI/2` e a 1 em `0`; os rótulos; uma bolacha por cadeira; `refresh()` com outra capacidade refaz as bolachas.
+
+### Task 14: Online
+
+**Files:** Create `ui/code_input.gd`; Modify `ui/room_card.gd`, `ui/join_panel.gd` e `.tscn`, `ui/waiting_panel.gd`, `scenes/join.gd` e `.tscn`; Modify `tests/ui_kit_probe.gd`, `tests/pairing_probe.gd` (`_probe_guest`), `tests/screen_sheet.gd` (`05_entrar`).
+
+**Interfaces:**
+- `class_name CodeInput extends Control`; `signal completed(code: String)`; `const LENGTH := 6`; `var code: String` (maiúsculo, só letras e números); `func set_code(raw: String) -> void`; `func clear() -> void`. Por dentro, um `LineEdit` transparente cobrindo as casas — é o que abre o teclado do Android e aceita colar.
+- `JoinPanel`: `%CodeInput`, `%JoinButton`, `%ScanButton`, `%NfcHint`, `%CreateRow` (bolachas dos jogos que têm Online), `%GameFilter`, `%RefreshButton`, `%RoomRows`, `%Status`; `signal create_requested(game_id: StringName)`.
+- `WaitingPanel.show_room(game_id, code, present: PackedInt32Array, capacity, local_seat)`.
+- `join.gd` abre a `GameSheet` em Online no `create_requested`.
+
+**Teste (ui_kit_probe):** colar "ab-12cd9" dá "AB12CD" e avisa `completed` uma vez; menos de 6 não avisa; `clear()` esvazia. **(pairing_probe):** código curto no "Entrar" vai para o toast; completar as 6 casas procura a sala sozinho; sala da lista leva o jogo dela; tocar numa bolacha de "Criar sala" abre a folha em Online.
+
+### Task 15: Sala de espera do anfitrião
+
+**Files:** Modify `scenes/pairing.gd` e `.tscn`; Modify `tests/pairing_probe.gd` (`_probe_host`), `tests/screen_sheet.gd` (`04_criar`).
+
+**Árvore:** `Safe/Shell/{AppBar, Scroll/Pad/VBox/{HostPanel/{CodeCard(PaperCard)/CodeBox/{CodeCaption, CodeLabel, CodeActions/{CopyButton, QrButton}}, QrCard/QrCode}, SeatsHeader/{SeatsTitle, SeatsCount}, Seats(SeatTable), HostHint, StatusLabel, BotsButton}}`. O QR começa escondido.
+
+**Teste:** código com 6 caracteres e no link; o QR começa escondido e "Mostrar QR" mostra; payload do QR válido; "Copiar" põe o código na área de transferência; a mesa tem a capacidade do jogo e o anfitrião sentado.
+
+### Task 16: Você e boas-vindas
+
+**Files:** Modify `scenes/settings.gd` e `.tscn`, `ui/welcome_panel.gd`.
+
+**Árvore de `settings.tscn`:** `Safe/VBox/{AppBar, Scroll/Pad/Content/{Profile/{Avatar(Coaster), NameColumn/{NameSection, NameEdit}}, Preview, FeedbackSection, Switches, SaveButton, AboutSection, StatusLabel}, Tabs}`.
+
+**Teste:** `scene_probe._test_welcome` continua verde; a bolacha do perfil acompanha o nome digitado.
+
+### Task 17: Fechamento da etapa 2
+
+Apagar `ui/nav_drawer.gd` se órfão; `NavDrawer` e `game_menu` sem nenhuma referência fora do histórico; verificação completa (lista da etapa 1); folha de prints inteira e comparação com o canvas aprovado; commit.
