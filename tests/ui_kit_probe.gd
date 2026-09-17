@@ -18,6 +18,7 @@ func _initialize() -> void:
 	_probe_dashed()
 	_probe_palette()
 	_probe_theme()
+	_probe_coaster()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -105,6 +106,25 @@ func _probe_theme() -> void:
 	_check(theme.get_font("font", "PairingCode") == AppTheme.mono(600), "código da sala em mono")
 	_equals(theme.get_color("font_color", "SegmentSelected"), AppTheme.ACCENT_INK, "segmento marcado com tinta escura")
 	_equals(theme.default_font_size, AppTheme.SIZE_BODY, "corpo em 16")
+
+
+func _probe_coaster() -> void:
+	print("bolacha")
+	_equals(Coaster.initial_of("Casqueta"), "C", "inicial do nome")
+	_equals(Coaster.initial_of("k'rec@"), "K", "maiúscula, mesmo com símbolo no nome")
+	_equals(Coaster.initial_of("  bia"), "B", "espaço antes não conta")
+	_equals(Coaster.initial_of("érica"), "É", "acento vira maiúsculo")
+	_equals(Coaster.initial_of("@@"), "?", "sem letra, interrogação")
+	_equals(Coaster.initial_of("7 Belo"), "7", "número vale")
+	_equals(Coaster.ink_for(AppTheme.COASTER), AppTheme.TEXT, "tinta clara sobre a bolacha escura")
+	_equals(Coaster.ink_for(AppTheme.PAPER), AppTheme.PAPER_INK, "tinta escura sobre papel")
+	_equals(Coaster.ink_for(AppTheme.ACCENT), AppTheme.PAPER_INK, "e sobre o amarelo")
+	var coaster := Coaster.new()
+	_equals(coaster.fill, AppTheme.COASTER, "bolacha escura por padrão")
+	_equals(coaster.ring, AppTheme.GOLD, "com anel de chopp")
+	_check(coaster.custom_minimum_size.x >= 40.0, "e no mínimo 40 de largura")
+	_equals(coaster.mouse_filter, Control.MOUSE_FILTER_IGNORE, "não rouba o toque de quem a contém")
+	coaster.free()
 
 
 func _probe_dashed() -> void:
