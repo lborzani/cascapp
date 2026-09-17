@@ -19,6 +19,9 @@ extends Control
 ## mostra as cartas escolhidas à mão é uma ferramenta que some justamente com a
 ## carta que ninguém lembrou de acrescentar.
 
+## O fundo de antes do tema Boteco, fixo. Ver `_draw`.
+const REFERENCE_GROUND := Color("13100e")
+
 const COLUMNS := 15
 ## Uma linha por cor, mais a linha dos curingas e do verso.
 const CARD_ROWS := 5
@@ -45,7 +48,10 @@ const VALUES := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), AppTheme.BACKGROUND)
+	# Fundo fixo, e não `AppTheme.BACKGROUND`: esta folha é a referência que prova
+	# que o desenho não mudou quando o tema muda. Com o fundo do tema, toda troca de
+	# paleta sairia como "diferente" — inclusive as que não tocaram desenho nenhum.
+	draw_rect(Rect2(Vector2.ZERO, size), REFERENCE_GROUND)
 
 	# A grade sai do tamanho da tela, como a folha das peças: com posições
 	# cravadas, a carta nova cai fora da viewport e a folha diz que está tudo certo

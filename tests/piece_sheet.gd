@@ -8,6 +8,9 @@ extends Control
 ##
 ## Salva em user://pieces.png.
 
+## O fundo de antes do tema Boteco, fixo. Ver `_draw`.
+const REFERENCE_GROUND := Color("13100e")
+
 const KINDS := [Board.Kind.KING, Board.Kind.QUEEN, Board.Kind.ROOK, Board.Kind.BISHOP,
 	Board.Kind.KNIGHT, Board.Kind.PAWN, Board.Kind.MAN, Board.Kind.DAME,
 	Board.Kind.BATTLESHIP]
@@ -29,7 +32,10 @@ const COLUMNS := 4
 ## desenhada. Uma ferramenta que some com o caso novo é pior que ferramenta
 ## nenhuma.
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), AppTheme.BACKGROUND)
+	# Fundo fixo, e não `AppTheme.BACKGROUND`: esta folha é a referência que prova
+	# que o desenho não mudou quando o tema muda. Com o fundo do tema, toda troca de
+	# paleta sairia como "diferente" — inclusive as que não tocaram desenho nenhum.
+	draw_rect(Rect2(Vector2.ZERO, size), REFERENCE_GROUND)
 	var rows := int(ceil(float(KINDS.size()) / float(COLUMNS)))
 	var cell := Vector2(size.x / COLUMNS, size.y / rows)
 	var big := minf(cell.x * 0.44, cell.y * 0.27)
