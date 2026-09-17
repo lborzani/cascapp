@@ -816,6 +816,12 @@ func _refresh_roster() -> void:
 		var row: HBoxContainer = chip.get_child(0)
 		var name_label: Label = row.get_child(1)
 		var count: Label = row.get_child(2)
+		# Relido a cada redesenho, e não só ao montar a coluna. Os nomes dos outros
+		# convidados chegam no `ready` deles, que costuma cair **depois** de a cena
+		# existir — escrito uma vez só, o cartão ficava em "Jogador 2" ou mostrava o
+		# nome certo conforme quem ganhava a corrida. É o mesmo motivo de a cadeira
+		# que vira máquina precisar passar a dizer "(bot)".
+		name_label.text = _seat_name(seat)
 		count.text = str(held)
 
 		# Uma carta na mão é o aviso mais forte da mesa, e é o que o Uno grita em

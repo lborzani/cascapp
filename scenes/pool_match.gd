@@ -473,7 +473,12 @@ func _seat_detail(seat: int) -> String:
 
 func _seat_name(seat: int) -> String:
 	if Game.mode == Game.Mode.ONLINE:
-		return Net.name_of(seat)
+		# Vazio até o outro se apresentar — e quem volta depois de fechar o app só
+		# reaprende os nomes no `resume`. Um cartão em branco parece defeito; um
+		# numerado, só alguém que ainda não disse o nome.
+		var theirs := Net.name_of(seat)
+		if not theirs.is_empty():
+			return theirs
 	if Game.mode == Game.Mode.SOLO:
 		return Prefs.player_name() if seat == 0 else "Máquina"
 	return "Jogador %d" % (seat + 1)

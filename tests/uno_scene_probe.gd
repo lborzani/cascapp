@@ -38,6 +38,7 @@ func _ready() -> void:
 	await _probe_action_buttons()
 	await _probe_bot_turn()
 	await _probe_finish()
+	await _probe_late_names()
 
 	if _failures == 0:
 		print("OK — cena do Uno consistente.")
@@ -453,6 +454,47 @@ func _probe_finish() -> void:
 		scene._hand.cards.size(), UnoRules.HAND_SIZE, "e reparte sete cartas"
 	)
 	scene.free()
+
+
+## O nome que chega **depois** da tela.
+##
+## Numa mesa de quatro, quem entra aprende o nome do anfitrião no `welcome`, e o
+## dos outros convidados só quando o `ready` deles chega — o que costuma ser
+## depois de a cena já ter montado a coluna de jogadores. A coluna escrevia o
+## nome uma vez, ao nascer, e o aviso `names_changed` só redesenhava a mesa: em
+## algumas partidas os nomes apareciam, em outras ficava "Jogador 2", conforme
+## quem ganhava a corrida.
+func _probe_late_names() -> void:
+	print("nomes que chegam depois da tela")
+	Game.mode = Game.Mode.ONLINE
+	Net.seats = 4
+	Net.local_seat = 2
+	Net.bot_seats = PackedInt32Array()
+	Net.player_names = {0: "Ana"}
+	var scene := await _open()
+
+	var label := func(seat: int) -> String:
+		var row: HBoxContainer = scene._chips[seat].get_child(0)
+		return (row.get_child(1) as Label).text
+
+	_equals(label.call(0), "Ana", "o nome que já tinha chegado aparece")
+	_equals(label.call(1), "Jogador 2", "e quem ainda não se apresentou é numerado")
+	_equals(label.call(2), "Você", "e o local é você")
+
+	Net._remember_name(1, "Bia")
+	Net._remember_name(3, "Duda")
+	await get_tree().process_frame
+	_equals(label.call(1), "Bia", "o nome que chega depois entra na coluna")
+	_equals(label.call(3), "Duda", "o de todos os que chegarem")
+
+	Net.bot_seats = PackedInt32Array([3])
+	Net.bots_changed.emit()
+	await get_tree().process_frame
+	_equals(label.call(3), "Jogador 4 (bot)", "e a cadeira que vira máquina diz isso")
+
+	scene.free()
+	Net.leave()
+	Game.start_solo(Game.UNO)
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:

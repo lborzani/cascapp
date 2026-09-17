@@ -421,8 +421,11 @@ func _drop_seat(seat: int) -> void:
 	# A sessão **não** cai: os outros continuam. E `connected` volta, porque a
 	# ausência tinha congelado a mesa esperando uma volta que não veio.
 	connected = true
-	bots_changed.emit()
+	# `seat_left` **antes** de `bots_changed`. Quem escuta os dois guarda a própria
+	# cópia da lista e a relê no `bots_changed`; na ordem inversa o aviso de saída
+	# já lia a cadeira como máquina e dizia "Jogador 3 (bot) saiu".
 	seat_left.emit(seat)
+	bots_changed.emit()
 
 
 ## Este aparelho é o que joga pelos bots: o **menor assento que ainda é humano**.
