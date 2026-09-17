@@ -14,11 +14,20 @@ var _failures := 0
 
 
 func _initialize() -> void:
+	_run()
+
+
+## Um quadro antes dos testes: os que montam nós precisam da árvore pronta, e
+## dentro de `_initialize` ela ainda não resolve tema — um rótulo devolvia a cor
+## padrão da engine, e uma asserção de "diferente de" passava por acaso.
+func _run() -> void:
+	await process_frame
 	_probe_fonts()
 	_probe_dashed()
 	_probe_palette()
 	_probe_theme()
 	_probe_coaster()
+	_probe_paper()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -125,6 +134,34 @@ func _probe_coaster() -> void:
 	_check(coaster.custom_minimum_size.x >= 40.0, "e no mínimo 40 de largura")
 	_equals(coaster.mouse_filter, Control.MOUSE_FILTER_IGNORE, "não rouba o toque de quem a contém")
 	coaster.free()
+
+
+func _probe_paper() -> void:
+	print("papel")
+	var host := Control.new()
+	host.theme = AppTheme.shared()
+	root.add_child(host)
+	var paper := PaperCard.new()
+	host.add_child(paper)
+	var plain := Label.new()
+	var caption := Label.new()
+	caption.theme_type_variation = &"Caption"
+	var title := Label.new()
+	title.theme_type_variation = &"Title"
+	paper.add_child(plain)
+	paper.add_child(caption)
+	paper.add_child(title)
+	var box := paper.get_theme_stylebox("panel") as StyleBoxFlat
+	_check(box != null and box.bg_color == AppTheme.PAPER, "fundo de papel")
+	_equals(plain.get_theme_color("font_color"), AppTheme.PAPER_INK, "texto sobre papel em tinta escura")
+	_equals(caption.get_theme_color("font_color"), Color(AppTheme.PAPER_INK, 0.72), "a legenda não herda o cinza da lousa")
+	_equals(title.get_theme_color("font_color"), AppTheme.PAPER_INK, "nem o título, o giz")
+	_check(title.get_theme_font("font") == AppTheme.display(900), "mas continua com a voz de letreiro do tema")
+	paper.size = Vector2(200, 100)
+	paper.tilt_degrees = -1.2
+	_check(paper.pivot_offset.is_equal_approx(Vector2(100, 50)), "gira em torno do próprio centro")
+	_check(is_equal_approx(paper.rotation, deg_to_rad(-1.2)), "no ângulo pedido")
+	host.free()
 
 
 func _probe_dashed() -> void:
