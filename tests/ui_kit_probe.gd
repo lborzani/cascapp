@@ -15,6 +15,7 @@ var _failures := 0
 
 func _initialize() -> void:
 	_probe_fonts()
+	_probe_dashed()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -52,6 +53,37 @@ func _probe_fonts() -> void:
 			body.has_char(code) and display.has_char(code) and mono.has_char(code),
 			"as três famílias têm '%s'" % letter
 		)
+
+
+func _probe_dashed() -> void:
+	print("tracejado")
+	var rounded := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 40), 10.0)
+	_equals(rounded.size(), 4 * (StyleBoxDashed.CORNER_STEPS + 1), "um arco de pontos por canto")
+	_check(rounded[0].is_equal_approx(Vector2(90, 0)), "o contorno começa no fim da aresta de cima")
+	var inside := true
+	for point in rounded:
+		inside = inside and Rect2(0, 0, 100, 40).grow(0.001).has_point(point)
+	_check(inside, "e nenhum ponto sai do retângulo")
+	var clamped := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 40), 50.0)
+	_check(clamped[0].is_equal_approx(Vector2(80, 0)), "raio maior que meia altura é limitado a ela")
+	var square := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 100), 0.0)
+	_equals(square.size(), 4, "sem raio, um ponto por canto")
+	var dashes := StyleBoxDashed.dash_segments(square, 10.0, 10.0)
+	_equals(dashes.size() % 2, 0, "os traços vêm em pares")
+	_check(absf(_drawn(dashes) - 200.0) < 0.01, "metade do perímetro desenhada com traço e vão iguais (obtido %.2f)" % _drawn(dashes))
+	var longest := 0.0
+	for i in range(0, dashes.size(), 2):
+		longest = maxf(longest, dashes[i].distance_to(dashes[i + 1]))
+	_check(longest <= 10.0001, "nenhum traço maior que o pedido")
+	var solid := StyleBoxDashed.dash_segments(square, 10.0, 0.0)
+	_check(absf(_drawn(solid) - 400.0) < 0.01, "sem vão, o contorno inteiro")
+
+
+static func _drawn(segments: PackedVector2Array) -> float:
+	var total := 0.0
+	for i in range(0, segments.size(), 2):
+		total += segments[i].distance_to(segments[i + 1])
+	return total
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:
