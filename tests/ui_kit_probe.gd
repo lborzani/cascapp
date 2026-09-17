@@ -31,6 +31,7 @@ func _run() -> void:
 	_probe_segments()
 	_probe_scene_palette()
 	_probe_tabs()
+	_probe_seats()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -248,6 +249,30 @@ func _probe_tabs() -> void:
 	_equals(String(theme.get_type_variation_base("Hint")), "Label", "Hint é variação de rótulo")
 	_equals(theme.get_font_size("font_size", "Hint"), AppTheme.SIZE_BODY_S, "a dica em 14, legível")
 	_equals(theme.get_color("font_color", "Hint"), AppTheme.TEXT_DIM, "e em giz apagado")
+
+
+func _probe_seats() -> void:
+	print("mesa de espera")
+	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 0), PI * 0.5), "o lugar de quem olha é embaixo")
+	_check(is_equal_approx(SeatTable.seat_angle(2, 4, 2), PI * 0.5), "mesmo quando ele é o assento 2")
+	_check(is_equal_approx(SeatTable.seat_angle(3, 4, 2), PI), "o seguinte fica à esquerda")
+	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 2), PI * 1.5), "o de frente fica em cima")
+	_check(is_equal_approx(SeatTable.seat_angle(1, 4, 2), 0.0), "e o último à direita")
+	var table := SeatTable.new()
+	table.size = Vector2(300, 240)
+	root.add_child(table)
+	table.capacity = 4
+	table.local_seat = 0
+	table.present = PackedInt32Array([0, 1])
+	table.refresh()
+	_equals(table.find_children("*", "Coaster", true, false).size(), 4, "uma bolacha por cadeira")
+	_equals(table.label_of(0), "Você", "a sua cadeira diz você")
+	_equals(table.label_of(1), "Chegou", "a de quem já sentou diz que chegou")
+	_equals(table.label_of(3), "Esperando", "e a vazia continua esperando")
+	table.capacity = 6
+	table.refresh()
+	_equals(table.find_children("*", "Coaster", true, false).size(), 6, "trocar a lotação refaz a mesa")
+	table.free()
 
 
 func _probe_dashed() -> void:
