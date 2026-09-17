@@ -169,6 +169,51 @@ describe('RoomRegistry', () => {
     assert.equal(seated.ok && seated.seat, 1);
   });
 
+  // Sem troca de chave, a cadeira que muda de dono continua abrindo com a chave
+  // do dono anterior: ele volta e derruba quem sentou, o derrubado reconecta com
+  // a mesma chave e derruba de volta — dois aparelhos se expulsando a cada meio
+  // segundo, e uma partida que não anda para nenhum dos dois.
+  it('quem senta sem chave ganha chave nova, e a do dono anterior deixa de abrir o assento', () => {
+    const rooms = registry();
+    rooms.openRoom('TROCA1', 'uno', new FakeSocket(), false, 0, 4);
+    const first = rooms.joinRoom('TROCA1', new FakeSocket());
+    assert.ok(first.ok);
+    const room = rooms.get('TROCA1');
+    assert.ok(room);
+    const gone = room.seats[1];
+    assert.ok(gone);
+    gone.kill();
+    rooms.release(room, 1, gone);
+
+    const stranger = new FakeSocket();
+    const took = rooms.joinRoom('TROCA1', stranger);
+    assert.equal(took.ok && took.seat, 1);
+    assert.notEqual(took.ok && took.key, first.key, 'o novo dono não herda a chave');
+
+    const returning = rooms.joinRoom('TROCA1', new FakeSocket(), first.key);
+    assert.equal(returning.ok && returning.seat, 2, 'a chave antiga não abre mais o assento 1');
+    assert.equal(room.seats[1], stranger, 'e quem sentou nele não é derrubado');
+  });
+
+  it('quem volta com a própria chave continua com ela', () => {
+    const rooms = registry();
+    rooms.openRoom('VOLTA1', 'uno', new FakeSocket(), false, 0, 4);
+    const first = rooms.joinRoom('VOLTA1', new FakeSocket());
+    assert.ok(first.ok);
+    const room = rooms.get('VOLTA1');
+    assert.ok(room);
+    const gone = room.seats[1];
+    assert.ok(gone);
+    gone.kill();
+    rooms.release(room, 1, gone);
+
+    const back = rooms.joinRoom('VOLTA1', new FakeSocket(), first.key);
+    assert.equal(back.ok && back.seat, 1);
+    // A chave fica em disco no aparelho. Se ela mudasse a cada volta, a próxima
+    // queda antes de a cópia em disco ser regravada perderia o assento.
+    assert.equal(back.ok && back.key, first.key);
+  });
+
   it('entrega o socket zumbi para o chamador derrubar', () => {
     const rooms = registry();
     const stale = new FakeSocket();

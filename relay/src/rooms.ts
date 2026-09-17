@@ -41,6 +41,10 @@ export interface Room<S extends OpenState> {
    * Segredo por assento, entregue a quem o ocupou. É o que permite voltar para
    * o **mesmo** lugar depois de uma queda — com dois assentos bastava pegar o
    * livre, com quatro isso trocaria dois jogadores de lugar.
+   *
+   * Muda quando o assento muda de dono (ver `joinRoom`), e só nessa hora: quem
+   * volta com a própria chave continua com ela, porque é a cópia em disco no
+   * aparelho que vai trazê-lo de volta na próxima queda.
    */
   readonly keys: string[];
   readonly createdAt: number;
@@ -212,6 +216,15 @@ export class RoomRegistry<S extends OpenState> {
     if (free < 0) {
       return { ok: false, reason: 'room_full' };
     }
+    // Quem senta sem chave é um **novo dono** para o assento, e ganha chave nova.
+    //
+    // O assento livre pode ser o de alguém que caiu e ainda tem a chave em disco.
+    // Sem a troca, os dois abririam a mesma cadeira: o antigo volta e derruba o
+    // novo (`take` expulsa o socket que estiver lá, porque é assim que o zumbi da
+    // própria conexão sai), o novo reconecta com a mesma chave e derruba de volta.
+    // Com a troca, a chave antiga deixa de achar o assento e quem volta com ela
+    // senta no próximo livre — ou ouve que a sala encheu.
+    room.keys[free] = this.newKey();
     return this.take(room, free, socket);
   }
 
