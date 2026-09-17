@@ -46,7 +46,7 @@ extends Control
 ## as quatro partidas divergiriam no primeiro deles — o oposto do que a lista de
 ## lances promete.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Pausa entre o dado parar e o que ele causa — o lance automático, ou a vez
 ## passando.
 ##

@@ -15,7 +15,7 @@ extends Control
 ## doméstico costuma bloquear, e a tela mostrava IPs — que não é o que alguém
 ## quer ler para entrar numa sala.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 var _code := ""
 

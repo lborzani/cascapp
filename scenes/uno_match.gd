@@ -33,7 +33,7 @@ extends Control
 ## Cadeira vazia vira bot, e **um aparelho só** os dirige (`Net.bot_driver`): dois
 ## escolhendo o lance do mesmo bot dariam dois lances para a mesma vez.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Espera antes de o bot jogar. Ele não pensa, mas precisa parecer que decidiu:
 ## sem a pausa a vez dele acontece entre dois quadros, e o jogador vê a mão do

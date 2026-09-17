@@ -57,7 +57,7 @@ extends Control
 ## não aparece em lugar nenhum durante a partida — a coluna da esquerda mostra o
 ## caixa, que é outra coisa.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Largura da coluna da esquerda, na base deitada de 768. Larga o bastante para
 ## "M 1500" e um nome curto; estreita o bastante para o tabuleiro continuar sendo

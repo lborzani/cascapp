@@ -28,7 +28,7 @@ extends Control
 ## O que a rede resolve mora no [BomberPredictor] e no [BomberRoom]; aqui só mora o
 ## relógio — quantos tiques dar neste quadro, e quando mandar o que o dedo pediu.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Segundos de um passo.
 const STEP := 1.0 / float(BomberRules.TICK_HZ)

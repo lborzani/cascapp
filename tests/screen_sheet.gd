@@ -11,7 +11,7 @@ extends Node
 const SHOTS := [
 	["res://scenes/main_menu.tscn", "00_boas_vindas"],
 	["res://scenes/main_menu.tscn", "01_jogos"],
-	["res://scenes/game_menu.tscn", "01b_como_jogar"],
+	["res://scenes/main_menu.tscn", "01b_folha"],
 	["res://scenes/main_menu.tscn", "01c_voltar"],
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
@@ -19,12 +19,12 @@ const SHOTS := [
 	["res://scenes/join.tscn", "05_entrar"],
 	["res://scenes/match.tscn", "06_capturas"],
 	["res://scenes/match.tscn", "07_material"],
-	["res://scenes/game_menu.tscn", "08_ajustes"],
+	["res://scenes/main_menu.tscn", "08_folha_ritmo"],
 	["res://scenes/match.tscn", "09_revanche"],
 	["res://scenes/match.tscn", "10_planejado"],
 	["res://scenes/match.tscn", "11_arrasto"],
 	["res://scenes/match.tscn", "12_salto"],
-	["res://scenes/game_menu.tscn", "13_bot_ajustes"],
+	["res://scenes/main_menu.tscn", "13_folha_bot"],
 	["res://scenes/match.tscn", "14_bot"],
 	["res://scenes/battleship_match.tscn", "15_frota"],
 	["res://scenes/battleship_match.tscn", "16_naval"],
@@ -33,8 +33,8 @@ const SHOTS := [
 	["res://scenes/ludo_match.tscn", "17c_ludo_andando"],
 	["res://scenes/ludo_match.tscn", "17d_ludo_pilha"],
 	["res://scenes/settings.tscn", "18_ajustes"],
-	["res://scenes/game_menu.tscn", "19_metropole_ajustes"],
-	["res://scenes/game_menu.tscn", "19b_uno_ajustes"],
+	["res://scenes/main_menu.tscn", "19_folha_metropole"],
+	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
@@ -131,7 +131,7 @@ func _next() -> void:
 			# hoje. O print sai alguns segundos dentro da partida para o mapa já
 			# ter buracos — um mapa intocado não mostra o que o jogo faz.
 			Game.start_solo(Game.BOMBERMAN)
-		"01b_como_jogar", "02_xadrez":
+		"01b_folha", "02_xadrez":
 			Game.start_hotseat(Game.CHESS)
 		"03_damas":
 			Game.start_hotseat(Game.CHECKERS)
@@ -166,12 +166,12 @@ func _next() -> void:
 			Net.connected = true
 		"12_salto":
 			Game.start_hotseat(Game.CHECKERS)
-		"08_ajustes", "13_bot_ajustes":
+		"08_folha_ritmo", "13_folha_bot":
 			Game.start_hotseat(Game.CHESS)
 			Game.time_control = 2
 			Game.bot_level = 1
 			Game.bot_side = Board.Side.BLACK
-		"19_metropole_ajustes":
+		"19_folha_metropole":
 			# O mesmo painel com as seções trocadas: Metrópole não tem relógio nem
 			# nível de bot, e é o único jogo que pergunta o **formato**. O print
 			# existe para provar que cada seção aparece só onde significa alguma
@@ -179,7 +179,7 @@ func _next() -> void:
 			# que não decide nada.
 			Game.start_hotseat(Game.MONOPOLY)
 			Game.round_limit = 20
-		"19b_uno_ajustes":
+		"19b_folha_uno":
 			# O mesmo painel, terceiro jogo a usar a seção de formato: aqui ela é a
 			# regra da casa do 0 e do 7, que antes existia sem nenhuma tela que a
 			# oferecesse. O print prova que a seção é genérica e não de Metrópole.
@@ -250,8 +250,11 @@ func _next() -> void:
 		_play_opening(_scene)
 		if shot == "07_material":
 			_stuff_captures(_scene)
-	elif shot == "08_ajustes" or shot == "19_metropole_ajustes" or shot == "19b_uno_ajustes":
-		_scene._open_setup(Game.Mode.ONLINE)
+	elif shot == "01b_folha":
+		_scene._open_sheet(Game.game_id)
+	elif shot == "08_folha_ritmo" or shot == "19_folha_metropole" or shot == "19b_folha_uno":
+		_scene._open_sheet(Game.game_id)
+		_scene._sheet.select_mode(Game.Mode.ONLINE)
 	elif shot == "09_revanche":
 		# Painel de fim de partida no estado mais cheio: convite de revanche
 		# recebido, com aceitar e recusar. É o caso que responde se três botões
@@ -331,10 +334,11 @@ func _next() -> void:
 		_scene._on_square_tapped(_sq("f3"))
 	elif shot == "12_salto":
 		_stage_double_jump(_scene)
-	elif shot == "13_bot_ajustes":
-		# O painel no estado mais cheio que ele chega: ritmo, nível e cor de uma
-		# vez. É o print que responde se ainda cabe na tela de um celular.
-		_scene._open_setup(Game.Mode.SOLO)
+	elif shot == "13_folha_bot":
+		# A folha no estado mais cheio que ela chega: ritmo, nível e cor de uma vez.
+		# É o print que responde se ainda cabe na tela de um celular.
+		_scene._open_sheet(Game.CHESS)
+		_scene._sheet.select_mode(Game.Mode.SOLO)
 	elif shot == "14_bot":
 		# Partida contra o bot com dois lances jogados. O que se olha é o cartão
 		# de cima, que aqui diz o nível em vez de "Oponente".

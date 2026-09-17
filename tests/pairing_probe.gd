@@ -17,7 +17,6 @@ extends Node
 const PAIRING_SCENE := preload("res://scenes/pairing.tscn")
 const JOIN_SCENE := preload("res://scenes/join.tscn")
 const MENU_SCENE := preload("res://scenes/main_menu.tscn")
-const GAME_MENU_SCENE := preload("res://scenes/game_menu.tscn")
 
 var _failures := 0
 
@@ -159,113 +158,95 @@ func _click(at: Vector2) -> InputEventMouseButton:
 	return event
 
 
-## A primeira tela responde uma pergunta só: qual jogo. Tocar num cartão grava o
-## jogo e leva à tela seguinte — antes o cartão só marcava, e os botões de ação
-## moravam embaixo, mudando de significado conforme um cartão acima deles.
+## A primeira tela responde uma pergunta só: qual jogo. Tocar numa linha escolhe o
+## jogo e sobe a folha dele — antes a linha levava a uma tela de modos, e a folha
+## juntou as duas.
 func _probe_game_picker() -> void:
 	print("escolha do jogo")
 	Game.reset_to_menu()
 	Game.game_id = Game.CHESS
-	# Sem favoritos a grade é o catálogo na ordem do catálogo. Com um favorito
-	# gravado numa execução anterior — o aparelho de quem roda o teste é o mesmo
-	# que joga —, ela começaria por ele, e a asserção seguinte falharia por um
+	# Sem favoritos o cardápio é o catálogo na ordem do catálogo. Com um favorito
+	# gravado numa execução anterior — o aparelho de quem roda o teste é o mesmo que
+	# joga —, a seção de cima apareceria e as asserções seguintes falhariam por um
 	# motivo que não é defeito nenhum.
 	Prefs.forget_favorites()
+	Prefs.forget_rejoin()
 	var menu := MENU_SCENE.instantiate()
 	add_child(menu)
 	await get_tree().process_frame
 
 	var list: Control = menu.get_node("%GameList")
-	# Um cartão por jogo **visível**, e não por entrada do catálogo. Os dois foram
-	# a mesma conta enquanto todo jogo do catálogo tinha tela; um jogo em
-	# construção entra no catálogo com `visible` falso — ele já responde por
-	# `make_ruleset` e `host_option`, que é o que os testes de regra usam, e ainda
-	# não tem cena para o cartão abrir.
+	# Uma linha por jogo **visível**, e não por entrada do catálogo: um jogo em
+	# construção entra no catálogo com `visible` falso.
 	var shown := 0
 	for entry in Game.GAMES:
 		if entry.get("visible", true):
 			shown += 1
-	var cards := _tiles(list)
-	_equals(cards.size(), shown, "um cartão por jogo visível do catálogo")
+	var rows := _rows(list)
+	_equals(rows.size(), shown, "uma linha por jogo visível do catálogo")
+	_equals(rows[0].game_id, Game.CHESS, "a primeira linha é o xadrez")
+	_check(list.get_child_count() > shown, "com um rótulo de categoria entre elas")
+	_check(not menu.get_node("%Favorites").visible, "sem favorito, a seção de cima não aparece")
 
-	var first: GameChoice = cards[0]
-	_equals(first.title, "Xadrez", "o primeiro cartão é o xadrez")
-	_check(first.piece != 0, "com a peça que representa o jogo")
-	_check(not first.row, "empilhado: peça em cima, nome embaixo")
-	_check(not first.highlighted, "nenhum começa aceso: escolher agora é navegar")
-
-	# A grade vem em seções por categoria, e um rótulo separa cada uma. São irmãos
-	# dos cartões na mesma coluna, e é por isso que contar jogo é contar `GameChoice`
-	# e não filhos.
-	_check(list.get_child_count() > Game.CATEGORIES.size(), "com um rótulo por seção")
-
-	# A estrela é um segundo alvo dentro do cartão: ela guarda o jogo sem abrir a
-	# tela seguinte, e sem reordenar a grade debaixo do dedo que acabou de tocar.
-	first.favorite_toggled.emit()
-	_check(first.favorite, "tocar na estrela acende o favorito")
+	# A estrela é um segundo alvo dentro da linha: guarda o jogo sem abrir a folha e
+	# sem refazer o cardápio debaixo do dedo que acabou de tocar.
+	rows[0].favorite_toggled.emit()
+	_check(rows[0].favorite, "tocar na estrela acende o favorito")
 	_check(Prefs.is_favorite(Game.CHESS), "e grava no disco, não na sessão")
-	_equals(Game.game_id, Game.CHESS, "sem escolher o jogo: a estrela não navega")
-	_equals(_tiles(list).size(), shown, "e sem refazer a grade no mesmo toque")
+	_equals(_rows(list).size(), shown, "sem refazer o cardápio no mesmo toque")
+	_check(not menu._sheet_open(), "e sem abrir a folha")
 
 	var bar: ChipBar = menu.get_node("%Categories")
 	bar.select(ChipBar.FAVORITES)
 	await get_tree().process_frame
-	_equals(_tiles(list).size(), 1, "o filtro de favoritos mostra só o que foi guardado")
+	_equals(_rows(list).size(), 1, "o filtro de favoritos mostra só o que foi guardado")
 	bar.select(Game.CAT_BOARD)
 	await get_tree().process_frame
 	_equals(
-		_tiles(list).size(), Game.games_in(Game.CAT_BOARD).size(),
+		_rows(list).size(), Game.games_in(Game.CAT_BOARD).size(),
 		"e cada categoria mostra os jogos dela"
 	)
 	bar.select(ChipBar.ALL)
 	await get_tree().process_frame
-	cards = _tiles(list)
-	_equals(cards.size(), shown, "de volta em todos, o catálogo inteiro")
-	_equals(cards[0].title, "Xadrez", "com o favorito no topo, acima das categorias")
+	_equals(_rows(list).size(), shown, "de volta em todos, o catálogo inteiro")
+	_check(menu.get_node("%Favorites").visible, "e o favorito ganha o cartão de cima")
+	_equals(
+		menu.get_node("%Favorites").find_children("*", "GameChoice", true, false).size(), 1,
+		"um cartão por favorito"
+	)
 	Prefs.forget_favorites()
 
-	# Entrar numa partida saiu da tela inicial e virou um destino da gaveta: quem
-	# entra joga o que o anfitrião abriu, então escolher o jogo antes é escolher
-	# uma coisa que a resposta dele não decide.
-	menu._open_drawer()
-	var drawer: NavDrawer = menu._drawer()
-	_check(drawer != null, "o botão da esquerda abre a gaveta")
-	menu.go_back()
-	_check(menu._drawer() != null, "e o gesto de voltar fecha a gaveta, não o app")
-
-	# A troca de tela só acontece depois do retorno visual, então o que se verifica
-	# aqui é a parte síncrona: o jogo gravado e o cartão aceso. A cena é liberada
-	# antes de o temporizador vencer, e a navegação desiste sozinha por não estar
-	# mais na árvore.
-	#
-	# De novo da árvore: os cartões foram trocados a cada filtro, e o que sobrou
-	# nas variáveis é um nó já liberado.
-	var second: GameChoice = _tiles(list)[1]
+	# Tocar na linha abre a folha por cima, em vez de trocar de tela — e o gesto de
+	# voltar fecha a folha antes de pensar em sair do app.
+	var second: CatalogRow = _rows(list)[1]
 	second.chosen.emit()
-	_equals(Game.game_id, Game.CHECKERS, "tocar no cartão grava o jogo")
-	_check(second.highlighted, "e acende o cartão tocado, para o toque ter resposta")
+	await get_tree().process_frame
+	_equals(Game.game_id, Game.CHECKERS, "tocar na linha escolhe o jogo")
+	_check(menu._sheet_open(), "e abre a folha dele")
+	menu.go_back()
+	_check(not menu._sheet_open(), "o gesto de voltar fecha a folha, e não o app")
 
-	# `free()` e não `queue_free()`: o segundo só apaga no fim do quadro, e o
-	# primeiro quadro de uma cena com fontes do sistema demora mais que o retorno
-	# visual — a troca de tela vencia a corrida e levava o próprio teste junto.
 	menu.free()
+	await get_tree().process_frame
+
+	# Quem volta de uma partida ou da sala chega com a folha daquele jogo aberta: ele
+	# está escolhendo como jogar de novo, e não navegando do zero.
+	Game.pending_sheet = Game.LUDO
+	var again := MENU_SCENE.instantiate()
+	add_child(again)
+	await get_tree().process_frame
+	_check(again._sheet_open(), "voltar de uma partida reabre a folha")
+	_equals(Game.game_id, Game.LUDO, "do jogo de onde se voltou")
+	_equals(Game.pending_sheet, &"", "e o pedido é consumido, para não reabrir sozinho depois")
+	again.free()
 	await get_tree().process_frame
 	Game.game_id = Game.CHESS
 
 
-## Só os cartões de jogo, onde quer que estejam. A coluna guarda rótulos de seção
-## e uma grade por categoria, então os cartões são netos e não filhos — e contar
-## filhos seria contar rótulos como se fossem jogos.
-func _tiles(list: Control) -> Array[GameChoice]:
-	var cards: Array[GameChoice] = []
-	for child in list.get_children():
-		if child is GameChoice:
-			cards.append(child as GameChoice)
-			continue
-		for grandchild in child.get_children():
-			if grandchild is GameChoice:
-				cards.append(grandchild as GameChoice)
-	return cards
+## Só as linhas do cardápio: a coluna guarda também os rótulos de categoria, e
+## contar filhos seria contar rótulo como se fosse jogo.
+func _rows(list: Control) -> Array:
+	return list.find_children("*", "CatalogRow", true, false)
 
 
 ## O painel de ajustes fica entre "quero jogar" e o tabuleiro, e só para quem

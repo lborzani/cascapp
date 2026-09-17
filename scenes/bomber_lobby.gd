@@ -17,7 +17,7 @@ extends Control
 ## manda — as cadeiras vazias já são máquina, então não é preciso encher a mesa,
 ## mas a mesa de grade precisa esperar os amigos lerem o QR antes de começar.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 const MATCH_SCENE := "res://scenes/bomber_match.tscn"
 
 var _is_host := false

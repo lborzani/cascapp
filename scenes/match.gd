@@ -3,7 +3,7 @@ extends Control
 ## Drives one game. Both devices run the identical ruleset, so a move that
 ## arrives over the network is only accepted if it is also legal locally.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Piso de espera antes de o bot jogar, mesmo que ele já tenha decidido. Sem ele
 ## o nível fácil responde antes de o próprio lance do jogador terminar de andar,
 ## e a partida vira um pingue-pongue em que ninguém vê o que aconteceu.

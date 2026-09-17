@@ -22,7 +22,7 @@ extends Control
 ## própria simulação gravou antes de contar o que aconteceu. Uma bola que entra
 ## sem ser vista entrando é um ponto que aparece do nada no placar.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Respiro depois de a mesa parar, antes de a vez seguinte começar.
 const AFTER_SHOT := 0.35
 ## Quanto o bot "pensa" antes de tacar. Ele não pensa — escolhe entre candidatos

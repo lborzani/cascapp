@@ -15,7 +15,7 @@ extends Control
 ## limpo no papel e é desorientador na mão: a tela muda sozinha entre o toque e a
 ## resposta, e o jogador deixa de saber onde está olhando.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Posicionar → esperar o outro → atirar → acabou.
 enum Phase { PLACING, WAITING, FIRING, OVER }
