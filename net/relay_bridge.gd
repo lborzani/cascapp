@@ -41,6 +41,15 @@ extends Node
 ## cima saber quem ela é sem guardar nada entre quedas.
 signal seated(seat: int, capacity: int)
 signal peer_present(seat: int)
+## Alguém **chegou** agora, com a sala já de pé. Diferente de `peer_present`, que
+## também é emitido para quem já estava sentado quando este aparelho entrou.
+##
+## A diferença importa no meio da partida: receber quem volta é uma resposta a
+## uma chegada. Tratado como `peer_present`, um aparelho que só perdeu o Wi-Fi
+## por um segundo "receberia" os três que nunca saíram, com a lista de máquinas
+## que ele tinha antes de cair — e desfaria os bots que os outros criaram
+## enquanto ele estava fora.
+signal peer_arrived(seat: int)
 signal peer_gone(seat: int)
 signal message_received(message: Dictionary, from_seat: int)
 signal failed(reason: String)
@@ -139,6 +148,10 @@ var _connect_timer := 0.0
 var _ping_timer := 0.0
 var _silence_timer := 0.0
 var _down_timer := 0.0
+## O motivo da última recusa do servidor, como ele mandou (`room_not_found`,
+## `room_full`…), ou vazio. O texto do `failed` é para gente ler; quem precisa
+## **decidir** algo com a recusa — esquecer uma partida que já acabou — lê isto.
+var _refusal := ""
 
 
 func _ready() -> void:
@@ -159,6 +172,16 @@ func is_linked() -> bool:
 ## Nosso lugar na mesa, ou -1 antes de sentar. O assento 0 é quem abriu a sala.
 func seat() -> int:
 	return _seat
+
+
+## A chave do nosso assento, ou vazio antes de sentar. É o que o app guarda para
+## voltar à mesma cadeira depois de o processo morrer.
+func seat_key() -> String:
+	return _key
+
+
+func refusal() -> String:
+	return _refusal
 
 
 ## Código da sala em que este socket está. A tela de espera mostra: quem digitou
@@ -209,8 +232,12 @@ func host_room(
 	_start("host", code, String(game_id))
 
 
-func join_room(code: String) -> void:
+## `key` é a chave de um assento que este aparelho já ocupou nesta sala — guardada
+## em disco quando a partida abriu. Com ela o servidor devolve **aquele** assento;
+## sem ela, o primeiro livre. Vai depois do `_start`, que zera a chave anterior.
+func join_room(code: String, key := "") -> void:
 	_start("join", code, "")
+	_key = key
 
 
 ## Endereço HTTP derivado do de WebSocket: os dois são o mesmo servidor, e ter
@@ -276,6 +303,7 @@ func leave() -> void:
 
 func _start(role: String, code: String, game_id: String) -> void:
 	leave()
+	_refusal = ""
 	if not is_configured():
 		failed.emit("Servidor de partidas on-line não configurado neste build.")
 		return
@@ -353,6 +381,7 @@ func _process(delta: float) -> void:
 func _on_socket_closed() -> void:
 	var reason := _socket.get_close_reason()
 	if _socket.get_close_code() == CLOSE_POLICY:
+		_refusal = reason
 		_want_link = false
 		_close_socket()
 		set_process(false)
@@ -458,6 +487,7 @@ func _handle(message: Dictionary) -> void:
 				_present.append(arriving)
 			_sync_state()
 			peer_present.emit(arriving)
+			peer_arrived.emit(arriving)
 		"peer_left":
 			# Alguém caiu, mas a sala continua de pé e ele pode voltar. Só a
 			# camada de cima sabe se vale esperar ou encerrar a partida.
@@ -475,6 +505,7 @@ func _handle(message: Dictionary) -> void:
 			pass
 		"error":
 			var reason := str(message.get("reason", ""))
+			_refusal = reason
 			# Recusa do servidor não se resolve tentando de novo.
 			_want_link = false
 			set_process(false)

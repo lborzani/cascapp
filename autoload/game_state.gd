@@ -731,10 +731,17 @@ var match_started_at := 0
 ## vem do disco quando o código é o mesmo de antes: é o caminho de quem caiu e
 ## voltou. Sem sala — mesmo aparelho, contra o bot — o começo é agora, porque uma
 ## partida local que o processo perdeu não tem como ser retomada.
+##
+## É também aqui que a **cadeira** vai para o disco: a chave do assento, junto com a
+## sala e o jogo. Um celular que fica sem bateria ou tem o app fechado pelo sistema
+## perde o processo inteiro, e com ele a chave que a ponte tinha em memória — sem a
+## cópia em disco, voltar pelo código o sentaria no primeiro assento livre.
 func begin_match() -> void:
 	var now := int(Time.get_unix_time_from_system())
 	var code := Net.room_code()
 	match_started_at = Prefs.match_start(code, now) if not code.is_empty() else now
+	if not code.is_empty() and not Net.seat_key().is_empty():
+		Prefs.remember_rejoin(code, game_id, Net.seat_key(), now)
 
 
 ## Zera o relógio. É a revanche: a sala é a mesma e a partida é outra, e sem isto
@@ -746,6 +753,15 @@ func restart_match() -> void:
 
 
 func reset_to_menu() -> void:
+	# Sair **avisando** é desistir da cadeira: a volta deixa de ser oferecida. Cair
+	# não passa por aqui — o processo morre, ou a ponte perde a rede — e é
+	# justamente o caso em que a tela inicial oferece voltar.
+	#
+	# `connected` é o que separa os dois: é ele que faz o `leave` mandar o `bye`.
+	# E a partida que acabou porque o outro foi embora também não tem para onde
+	# voltar, mesmo sem `bye` nosso.
+	if Net.connected or Net.session_ended():
+		Prefs.forget_rejoin()
 	Net.leave()
 	Pairing.nfc.stop()
 	Pairing.qr_scanner.stop()

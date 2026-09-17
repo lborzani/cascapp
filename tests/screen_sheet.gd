@@ -5,12 +5,14 @@ extends Node
 ##
 ##   godot --path . --resolution 720x1280 res://tests/screen_sheet.tscn
 ##
-## Salva em user://shots/.
+## Salva em user://shots/. Com `SHOT=01c` na variável de ambiente, só os prints
+## cujo nome começa por isso — para conferir uma tela sem esperar as outras trinta.
 
 const SHOTS := [
 	["res://scenes/main_menu.tscn", "00_boas_vindas"],
 	["res://scenes/main_menu.tscn", "01_jogos"],
 	["res://scenes/game_menu.tscn", "01b_como_jogar"],
+	["res://scenes/main_menu.tscn", "01c_voltar"],
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
 	["res://scenes/pairing.tscn", "04_criar"],
@@ -104,12 +106,26 @@ func _next() -> void:
 	# meio da lista deslocava todos os seguintes e cada `elif` passava a preparar
 	# a tela errada — em silêncio, porque o print continuava saindo.
 	var shot: String = SHOTS[_index][1]
+	var only := OS.get_environment("SHOT")
+	if not only.is_empty() and not shot.begins_with(only):
+		_next()
+		return
+	# A partida guardada é do aparelho de quem roda a folha. Sem apagar, qualquer
+	# queda de uma partida de verdade poria o cartão de voltar em todo print de menu.
+	if shot != "01c_voltar":
+		Prefs.forget_rejoin()
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
 			Prefs.forget_welcome()
 		"01_jogos":
 			Prefs.set_welcomed()
+		"01c_voltar":
+			# O app reaberto depois de cair de uma partida de Uno.
+			Prefs.set_welcomed()
+			Prefs.remember_rejoin(
+				"DK4P2Q", Game.UNO, "chave", int(Time.get_unix_time_from_system())
+			)
 		"21_bomberman":
 			# Solo: um humano e três máquinas, que é o modo em que o jogo existe
 			# hoje. O print sai alguns segundos dentro da partida para o mapa já

@@ -133,6 +133,7 @@ func _ready() -> void:
 		Net.move_received.connect(_on_remote_move)
 		Net.opponent_left.connect(_on_opponent_left)
 		Net.seat_left.connect(_on_seat_left)
+		Net.seat_returned.connect(_on_seat_returned)
 		Net.link_lost.connect(_on_link_lost)
 		Net.link_restored.connect(_on_link_restored)
 		Net.sync_received.connect(_apply_sync)
@@ -502,7 +503,19 @@ func _on_seat_left(seat: int) -> void:
 	var who := LudoRules.color_name(seat)
 	_bot_seats = Net.bot_seats
 	_link_down = false
-	_banner.show_message("%s saiu. Um bot assumiu a cor." % who, Banner.Kind.ALERT)
+	_banner.show_message("%s saiu. Um bot joga até a volta." % who, Banner.Kind.ALERT)
+	_refresh()
+
+
+## A cor deixou de ser máquina: quem tinha caído voltou, ou alguém sentou numa
+## cadeira que a mesa começou sem.
+func _on_seat_returned(seat: int) -> void:
+	if _abandoned:
+		return
+	_bot_seats = Net.bot_seats
+	_banner.show_message(
+		"%s assumiu o lugar do bot." % LudoRules.color_name(seat), Banner.Kind.INFO
+	)
 	_refresh()
 
 

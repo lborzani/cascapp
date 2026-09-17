@@ -49,6 +49,11 @@ var _rooms_timer := 0.0
 ## A última resposta do servidor, como veio. O filtro por jogo redesenha a partir
 ## daqui.
 var _rooms: Array = []
+## Código da sala para onde se está **voltando** com a chave guardada, ou vazio. É o
+## que transforma um "nenhuma partida com esse código" genérico em "essa partida já
+## acabou" — e o que diz que a cadeira guardada pode ser esquecida.
+var _rejoining := ""
+var _resume_card: ResumeCard = null
 
 
 func _ready() -> void:
@@ -94,7 +99,33 @@ func _ready() -> void:
 	if Pairing.nfc.is_available():
 		Pairing.nfc.listen()
 
+	_offer_rejoin()
 	_fetch_rooms()
+
+
+## O mesmo cartão da tela inicial, no topo do painel. Quem caiu e vem direto para
+## "Multiplayer" procurar a partida é exatamente quem precisa dele.
+func _offer_rejoin() -> void:
+	var pending := Prefs.pending_rejoin(int(Time.get_unix_time_from_system()))
+	if pending.is_empty():
+		return
+	_resume_card = ResumeCard.new()
+	_resume_card.game_id = pending["game"]
+	_resume_card.code = pending["code"]
+	_resume_card.saved_at = pending["at"]
+	_resume_card.resume_pressed.connect(func(id: StringName, code: String) -> void:
+		_enter_room(id, code)
+	)
+	_resume_card.dismissed.connect(_drop_rejoin)
+	add_child(_resume_card)
+	move_child(_resume_card, 0)
+
+
+func _drop_rejoin() -> void:
+	Prefs.forget_rejoin()
+	if _resume_card != null:
+		_resume_card.queue_free()
+		_resume_card = null
 
 
 ## Tudo o que este painel acendeu é apagado aqui. Um link já estabelecido
@@ -270,7 +301,12 @@ func _enter_room(id: StringName, code: String) -> void:
 		get_tree().change_scene_to_file(BOMBER_LOBBY_SCENE)
 		return
 	_set_status("Procurando a sala %s…" % code)
-	Net.join_relay(code, id)
+	# Qualquer caminho até a sala leva a chave, se este aparelho tiver uma para ela:
+	# o cartão de voltar, o código digitado, a sala tocada na lista ou o QR. Quem
+	# caiu não precisa saber qual deles devolve a cadeira certa.
+	var key := Prefs.rejoin_key(code)
+	_rejoining = code.to_upper() if not key.is_empty() else ""
+	Net.join_relay(code, id, key)
 
 
 # --- retorno ------------------------------------------------------------------
@@ -328,6 +364,18 @@ func _on_join_failed(reason: String) -> void:
 	_joining = false
 	waiting_ended.emit()
 	_clear_status()
+	if not _rejoining.is_empty():
+		_rejoining = ""
+		# Recusa que não muda tentando de novo: a sala acabou, ou a cadeira foi de
+		# outra pessoa e a mesa encheu. A partida guardada deixa de ser oferecida —
+		# um cartão que sempre leva ao mesmo erro é pior que cartão nenhum.
+		match Pairing.relay.refusal():
+			"room_not_found":
+				_drop_rejoin()
+				reason = "Essa partida já acabou — a sala foi fechada."
+			"room_full":
+				_drop_rejoin()
+				reason = "Sua cadeira foi ocupada e a mesa está cheia."
 	_fail(reason)
 
 

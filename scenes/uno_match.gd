@@ -131,6 +131,7 @@ func _ready() -> void:
 		Net.move_received.connect(_on_remote_move)
 		Net.opponent_left.connect(_on_opponent_left)
 		Net.seat_left.connect(_on_seat_left)
+		Net.seat_returned.connect(_on_seat_returned)
 		Net.link_lost.connect(_on_link_lost)
 		Net.link_restored.connect(_on_link_restored)
 		Net.sync_received.connect(_apply_sync)
@@ -613,7 +614,18 @@ func _on_seat_left(seat: int) -> void:
 	var who := _seat_name(seat)
 	_bot_seats = Net.bot_seats
 	_link_down = false
-	_banner.show_message("%s saiu. Um bot assumiu a mão." % who, Banner.Kind.ALERT)
+	_banner.show_message("%s saiu. Um bot joga até a volta." % who, Banner.Kind.ALERT)
+	_refresh()
+
+
+## O inverso do aviso de saída: a cadeira deixou de ser máquina porque alguém
+## sentou nela — quem tinha caído, ou quem entrou numa mesa que começou com bots.
+## A lista já chegou atualizada, então o nome lido aqui é o de gente.
+func _on_seat_returned(seat: int) -> void:
+	if _abandoned:
+		return
+	_bot_seats = Net.bot_seats
+	_banner.show_message("%s assumiu o lugar do bot." % _seat_name(seat), Banner.Kind.INFO)
 	_refresh()
 
 

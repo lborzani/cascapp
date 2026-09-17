@@ -25,6 +25,7 @@ var _failures := 0
 func _ready() -> void:
 	await _probe_game_picker()
 	await _probe_favorite()
+	await _probe_rejoin_offer()
 	await _probe_setup_panel()
 	await _probe_formats()
 	await _probe_room_list()
@@ -36,6 +37,66 @@ func _ready() -> void:
 	else:
 		printerr("%d teste(s) falharam." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## A partida de onde se caiu é oferecida de volta — e só enquanto faz sentido.
+##
+## Sem o cartão, quem tinha o app fechado no meio de uma partida reabria na grade
+## de jogos, e o gesto à mão era **criar** partida: sala nova, e a antiga seguindo
+## com uma máquina no lugar dele. As três regras que decidem o cartão:
+##
+## - cair mantém a cadeira: sair sem `bye` é o processo morrendo ou a rede caindo;
+## - sair **avisando** a esquece: é desistir, e oferecer a volta seria insistir;
+## - o `X` a esquece, para quem não quer voltar não ter de esperar quatro horas.
+func _probe_rejoin_offer() -> void:
+	print("voltar à partida")
+	var now := int(Time.get_unix_time_from_system())
+	Prefs.forget_rejoin()
+	Game.reset_to_menu()
+
+	var bare := MENU_SCENE.instantiate()
+	add_child(bare)
+	await get_tree().process_frame
+	_equals(_resume_cards(bare).size(), 0, "sem partida guardada não há cartão")
+	bare.free()
+
+	Prefs.remember_rejoin("VOLTA7", Game.UNO, "k-assento", now)
+	_equals(Prefs.rejoin_key("volta7"), "k-assento", "a chave é achada pelo código, digitado de qualquer jeito")
+	_equals(Prefs.rejoin_key("OUTRA1"), "", "e não vai para o código de outra sala")
+
+	var menu := MENU_SCENE.instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	var cards := _resume_cards(menu)
+	_equals(cards.size(), 1, "com a partida guardada, a tela inicial oferece a volta")
+	if cards.size() == 1:
+		var card: ResumeCard = cards[0]
+		_equals(card.code, "VOLTA7", "para a sala certa")
+		_equals(card.game_id, Game.UNO, "e o jogo certo")
+		_equals(card.get_index(), 0, "no topo, acima do filtro")
+		card.dismissed.emit()
+		await get_tree().process_frame
+		_check(Prefs.pending_rejoin(now).is_empty(), "o X esquece a partida")
+	menu.free()
+
+	# Cair: o link não está de pé, e sair não manda `bye`. A cadeira fica.
+	Prefs.remember_rejoin("VOLTA7", Game.UNO, "k-assento", now)
+	Net.connected = false
+	Game.reset_to_menu()
+	_check(not Prefs.pending_rejoin(now).is_empty(), "quem caiu continua podendo voltar")
+
+	# Sair avisando: o link está de pé, e o `leave` manda `bye`. A cadeira vai.
+	Net.connected = true
+	Game.reset_to_menu()
+	_check(Prefs.pending_rejoin(now).is_empty(), "quem saiu pelo botão desistiu da cadeira")
+
+	Prefs.remember_rejoin("VOLTA7", Game.UNO, "k-assento", now - Prefs.REJOIN_WINDOW - 60)
+	_check(Prefs.pending_rejoin(now).is_empty(), "e a sala que o relay já fechou não é oferecida")
+	Prefs.forget_rejoin()
+
+
+func _resume_cards(menu: Node) -> Array:
+	return menu.find_children("*", "ResumeCard", true, false)
 
 
 ## A estrela guarda o jogo, e guarda **uma vez**.

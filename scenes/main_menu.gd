@@ -74,7 +74,46 @@ func _ready() -> void:
 	%Categories.setup(ChipBar.category_items())
 	%Categories.selected.connect(_filter)
 	_fill_games()
+	_offer_rejoin()
 	_greet()
+
+
+## A partida de onde este aparelho caiu, no topo, acima do filtro.
+##
+## Acima de tudo porque é a única coisa na tela com gente esperando: os outros
+## jogadores estão numa mesa com uma máquina no lugar de quem caiu. A grade de jogos
+## continua lá embaixo para quem prefere começar outra.
+func _offer_rejoin() -> void:
+	if not Net.relay_available():
+		return
+	var pending := Prefs.pending_rejoin(int(Time.get_unix_time_from_system()))
+	if pending.is_empty():
+		return
+	var card := ResumeCard.new()
+	card.game_id = pending["game"]
+	card.code = pending["code"]
+	card.saved_at = pending["at"]
+	card.resume_pressed.connect(_rejoin)
+	card.dismissed.connect(func() -> void:
+		Prefs.forget_rejoin()
+		card.queue_free()
+	)
+	# Irmão do filtro, e não da grade: a grade é refeita a cada troca de filtro, e o
+	# cartão sumiria no primeiro toque nela.
+	var content := %Categories.get_parent()
+	content.add_child(card)
+	content.move_child(card, 0)
+
+
+## Pela tela de entrar, e não direto daqui: é ela que sabe esperar a mesa
+## responder, mostrar a espera e dizer por que não deu. O `join_info` é o mesmo
+## caminho de um QR lido antes de o Android recolher o app.
+func _rejoin(game_id: StringName, code: String) -> void:
+	if _leaving:
+		return
+	_leaving = true
+	Game.join_info = {"game": game_id, "code": code}
+	get_tree().change_scene_to_file(JOIN_SCENE)
 
 
 ## A tela de boas-vindas da primeira abertura.

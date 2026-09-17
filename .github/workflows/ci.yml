@@ -151,7 +151,7 @@ jobs:
           exit 1
         working-directory: relay
 
-      # Os seis caminhos pela internet, e não dois.
+      # Os sete caminhos pela internet, e não dois.
       #
       # Quatro destes existiam sem rodar. Eles não são repetição do `relay_smoke`:
       # aquele prova o aperto de mão de **dois** assentos, e o que estes cobrem é
@@ -160,6 +160,10 @@ jobs:
       # casa do Uno, e o formato de Metrópole. Todos são coisas que viajam no
       # `welcome`, e uma divergência ali não dá erro: dá duas partidas diferentes
       # com a mesma cara, cada uma num aparelho.
+      #
+      # O sétimo é o de quem **volta**: queda sem aviso virando bot, a chave
+      # devolvendo o mesmo assento, e o anfitrião que cai sendo recebido pelos
+      # outros em vez de abrir uma partida nova com outra semente.
       - name: Partida ponta a ponta
         env:
           CHESS_RELAY_URL: ws://127.0.0.1:8080/ws
@@ -170,6 +174,7 @@ jobs:
           godot --headless --path . --script res://tests/ludo_bots_smoke.gd
           godot --headless --path . --script res://tests/uno_net_smoke.gd
           godot --headless --path . --script res://tests/monopoly_net_smoke.gd
+          godot --headless --path . --script res://tests/rejoin_smoke.gd
 
       # O Bomberman não passa pelo relay: ele fala UDP com um servidor que é o
       # mesmo projeto Godot, sem tela. Este é o único teste que sobe os dois e

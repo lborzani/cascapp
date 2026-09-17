@@ -222,6 +222,62 @@ static func restart_match(code: String, now: int) -> int:
 	return now
 
 
+## A cadeira da última partida em rede: sala, jogo e a chave do assento.
+##
+## Seção própria, e não os campos do relógio acima. Os dois respondem perguntas
+## diferentes em momentos diferentes — o relógio pergunta "esta sala é a mesma de
+## antes?" ao abrir **qualquer** partida, e escrever o código aqui antes daquela
+## pergunta faria uma partida nova herdar o começo da anterior.
+##
+## A chave é o que devolve **o mesmo** assento. Sem ela o relay senta quem volta no
+## primeiro livre, e numa mesa com duas pessoas fora isso troca as duas de lugar —
+## cada uma jogando com as cartas da outra.
+const REJOIN_SECTION := "rejoin"
+## O teto de vida de uma sala no relay (`roomMaxMs`). Depois disso ela não existe
+## mais, e oferecer a volta seria oferecer um "partida não encontrada".
+const REJOIN_WINDOW := 4 * 60 * 60
+
+
+static func remember_rejoin(code: String, game: StringName, key: String, now: int) -> void:
+	_file().set_value(REJOIN_SECTION, "code", code)
+	_file().set_value(REJOIN_SECTION, "game", String(game))
+	_file().set_value(REJOIN_SECTION, "key", key)
+	_file().set_value(REJOIN_SECTION, "at", now)
+	_file().save(PATH)
+
+
+## A partida para onde dá para voltar, ou vazio. `{code, game, key, at}`.
+static func pending_rejoin(now: int) -> Dictionary:
+	var code := str(_file().get_value(REJOIN_SECTION, "code", ""))
+	var at := int(_file().get_value(REJOIN_SECTION, "at", 0))
+	if code.is_empty() or now - at > REJOIN_WINDOW:
+		return {}
+	return {
+		"code": code,
+		"game": StringName(str(_file().get_value(REJOIN_SECTION, "game", ""))),
+		"key": str(_file().get_value(REJOIN_SECTION, "key", "")),
+		"at": at,
+	}
+
+
+## A chave do assento que este aparelho ocupava na sala `code`, ou vazio.
+##
+## Por código, e não "a última chave": quem digita o código de **outra** sala não
+## pode mandar a chave desta — o servidor não a acharia e o sentaria no primeiro
+## livre de qualquer jeito, mas é um segredo indo para onde não precisa.
+static func rejoin_key(code: String) -> String:
+	if str(_file().get_value(REJOIN_SECTION, "code", "")) != code.to_upper():
+		return ""
+	return str(_file().get_value(REJOIN_SECTION, "key", ""))
+
+
+static func forget_rejoin() -> void:
+	if not _file().has_section(REJOIN_SECTION):
+		return
+	_file().erase_section(REJOIN_SECTION)
+	_file().save(PATH)
+
+
 ## Arquivo carregado uma vez por execução. Ausente é o caso normal na primeira
 ## abertura — um `ConfigFile` vazio responde a tudo com o padrão, então não há
 ## nada a tratar.

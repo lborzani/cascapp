@@ -77,6 +77,14 @@ signal names_changed
 ## pela máquina, e o cartão dele continua escrito "(bot)" com uma pessoa sentada
 ## ali.
 signal bots_changed
+## Uma cadeira de máquina voltou a ser de gente: quem tinha caído voltou, ou
+## alguém sentou numa mesa que começou com bots. Emitido depois de
+## `bots_changed`, com a lista já atualizada — quem escuta lê o nome de gente, e
+## não o do bot.
+##
+## É o par de `seat_left`. Sem ele, a volta era silenciosa: o cartão perdia o
+## "(bot)" e ninguém na mesa ficava sabendo que a pessoa estava de volta.
+signal seat_returned(seat: int)
 signal move_received(data: Dictionary)
 signal join_failed(reason: String)
 ## Revanche é convite, não ordem: quem pede espera, e quem recebe decide. Antes
@@ -108,6 +116,9 @@ const HOST_SIDE := Board.Side.WHITE
 ##
 ## É a rede de segurança do `bye`: quem sai avisa, mas quem tem o app encerrado
 ## pelo sistema, fica sem bateria ou perde a rede de vez não avisa nada.
+##
+## Só numa mesa de **dois**. Numa maior não há espera a limitar: a cadeira de quem
+## some vira máquina na hora (ver [method _on_relay_peer_gone]).
 const ABSENCE_LIMIT := 95.0
 
 ## Teto de lances num `sync` recebido. A partida mais longa que este app produz —
@@ -126,14 +137,14 @@ var local_side := Board.Side.WHITE
 ## convivem em vez de um tentar servir aos dois casos.
 var local_seat := 0
 var seats := 2
-## Assentos que ninguém ocupou e que uma máquina vai jogar. Quem abriu a sala
-## decide isso ao começar sem esperar a mesa encher, e a lista viaja no
-## `welcome` — todo mundo precisa saber quais cores são de máquina, e **quem**
-## as joga tem de ser um aparelho só.
+## Assentos que uma máquina joga: os que ninguém ocupou quando quem abriu começou
+## sem esperar a mesa encher, e os de quem caiu numa mesa de mais de dois, até ele
+## voltar. A lista viaja no `welcome` e no `resume` — todo mundo precisa saber
+## quais cores são de máquina, e **quem** as joga tem de ser um aparelho só.
 ##
-## Esse aparelho é o assento 0, sempre. Dois aparelhos rolando o dado do mesmo
-## bot dariam dois lances diferentes para a mesma vez, e as partidas divergem no
-## primeiro deles.
+## Esse aparelho é o menor assento humano ([method bot_driver]). Dois aparelhos
+## rolando o dado do mesmo bot dariam dois lances diferentes para a mesma vez, e
+## as partidas divergem no primeiro deles.
 var bot_seats := PackedInt32Array()
 var game_id := &"chess"
 ## Índice em `Game.TIME_CONTROLS`. O anfitrião preenche antes de abrir a sala e o
@@ -299,34 +310,42 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			_remember_name(from_seat, message.get("name"))
 			_on_ready(int(message.get("seat", 1)))
 		"resume":
-			if not is_host:
-				# Conferido **antes** do `_mark_connected()`, que é quem liga a
-				# bandeira: depois dele os dois casos ficam indistinguíveis.
-				var joining := not _session_started
+			# A lista inteira vem de volta: quem reabriu o app perdeu os nomes que
+			# aprendeu, e o `resume` é o único aperto de mão que ele vê.
+			_remember_names(message.get("names"))
+			# O relay entrega a mesma mensagem à mesa inteira, e quem responde é só
+			# quem voltou: um `resumed` de quem nunca saiu faria quem recebeu mandar
+			# o histórico inteiro uma vez por aparelho da mesa.
+			if not _session_started:
+				# Nunca esteve nesta partida — ou esteve, e o processo morreu. Para ele
+				# o `resume` **é** o convite, e a tela de entrar só sai do lugar com o
+				# `table_ready`.
 				_mark_connected()
-				# A lista inteira vem de volta: quem reabriu o app perdeu os nomes
-				# que aprendeu, e o `resume` é o único aperto de mão que ele vê.
-				_remember_names(message.get("names"))
 				_send_direct({"t": "resumed", "name": player_name})
-				if joining:
-					# Nunca esteve nesta partida: para ele o `resume` **é** o convite,
-					# e a tela de entrar só sai do lugar com o `table_ready`.
-					_adopt_table(message)
-					if seats == 2:
-						opponent_joined.emit(Board.opponent(local_side))
-					else:
-						table_ready.emit(seats)
+				_adopt_table(message)
+				if seats == 2:
+					opponent_joined.emit(Board.opponent(local_side))
 				else:
-					# Já estava nesta partida: para ele o `resume` é só o aviso de
-					# que o link voltou — **mais** a lista de máquinas, que é o
-					# único campo da mesa que muda no meio do jogo. Quem dirige os
-					# bots precisa dela para parar de jogar por uma cadeira que
-					# acabou de receber gente.
-					_adopt_bots(message)
-					link_restored.emit()
+					table_ready.emit(seats)
+			elif not connected:
+				# Caiu e voltou com a partida em memória: o `resume` é o aviso de que
+				# o link voltou, mais a lista de máquinas, que mudou enquanto ele
+				# estava fora.
+				_mark_connected()
+				_send_direct({"t": "resumed", "name": player_name})
+				_adopt_bots(message)
+				link_restored.emit()
+			else:
+				# Outro assento voltou. Daqui só muda quem é máquina — e quem dirige
+				# os bots precisa saber para parar de jogar por uma cadeira que
+				# acabou de receber gente.
+				_adopt_bots(message)
 		"resumed":
-			if is_host:
-				_remember_name(from_seat, message.get("name"))
+			# O nome é de todos: quem voltou se apresenta à mesa inteira, e não só a
+			# quem o recebeu.
+			_remember_name(from_seat, message.get("name"))
+			# O histórico sai de quem recebeu, e de mais ninguém.
+			if _session_started and _greeter(from_seat) == local_seat:
 				_mark_connected()
 				link_restored.emit()
 		"move":
@@ -409,6 +428,7 @@ func _release_bot_seat(seat: int) -> void:
 		return
 	bot_seats.remove_at(at)
 	bots_changed.emit()
+	seat_returned.emit(seat)
 
 
 func _drop_seat(seat: int) -> void:
@@ -596,8 +616,14 @@ func _adopt_bots(message: Dictionary) -> void:
 	var arriving := PackedInt32Array(message.get("bots", []))
 	if arriving == bot_seats:
 		return
+	var released := PackedInt32Array()
+	for seat in bot_seats:
+		if not arriving.has(seat):
+			released.append(seat)
 	bot_seats = arriving
 	bots_changed.emit()
+	for seat in released:
+		seat_returned.emit(seat)
 
 
 func _adopt_table(message: Dictionary) -> void:
@@ -607,8 +633,15 @@ func _adopt_table(message: Dictionary) -> void:
 	time_control = int(message.get("tc", 0))
 	option = int(message.get("opt", 0))
 	_remember_names(message.get("names"))
+	# A cor sai do **nosso assento**, e não do campo `side` da mensagem.
+	#
+	# `side` descreve o convidado, porque quem mandava a mesa era sempre o
+	# anfitrião. Agora quem recebe um assento de volta é quem ficou, e numa mesa de
+	# dois o anfitrião que caiu é recebido pelo convidado: lido do campo, ele
+	# voltava jogando com as peças do outro. O assento vem do servidor antes de
+	# qualquer mensagem, e para um convidado as duas respostas são a mesma.
 	if seats == 2:
-		local_side = int(message.get("side", Board.opponent(HOST_SIDE)))
+		local_side = HOST_SIDE if local_seat == 0 else Board.opponent(HOST_SIDE)
 
 
 ## O aperto de mão, do lado de quem chegou. O código prova que se entrou *nesta*
@@ -683,6 +716,18 @@ func host_relay(id: StringName, code: String, listed := false, seats := 2) -> vo
 	_relay_bridge().host_room(code, id, listed, time_control, seats, player_name)
 
 
+## A chave do assento que o servidor nos deu, ou vazio fora de sala. `Game` a
+## guarda em disco para a volta depois de o processo morrer.
+func seat_key() -> String:
+	return _relay_bridge().seat_key() if _relay_bridge() != null else ""
+
+
+## A partida acabou para este aparelho porque **o outro** foi embora — numa mesa de
+## dois. Diferente de uma queda nossa, que ainda tem para onde voltar.
+func session_ended() -> bool:
+	return _opponent_gone
+
+
 ## Código da sala desta partida, ou vazio fora de rede.
 ##
 ## `_expected_code` já existia como a conferência de quem entra na sala certa; o
@@ -699,7 +744,7 @@ func rooms_url() -> String:
 	return _relay_bridge().rooms_url() if _relay_bridge() != null else ""
 
 
-func join_relay(code: String, id: StringName) -> void:
+func join_relay(code: String, id: StringName, key := "") -> void:
 	if not _wire_relay():
 		join_failed.emit("Servidor de partidas indisponível neste build.")
 		return
@@ -713,7 +758,7 @@ func join_relay(code: String, id: StringName) -> void:
 	_ready_seats = {}
 	_expected_code = code
 	_default_name()
-	_relay_bridge().join_room(code)
+	_relay_bridge().join_room(code, key)
 
 
 ## Preenche o nome com o dos ajustes quando ninguém o escreveu.
@@ -736,6 +781,7 @@ func _wire_relay() -> bool:
 	_relay_wired = true
 	_relay_bridge().seated.connect(_on_relay_seated)
 	_relay_bridge().peer_present.connect(_on_relay_peer_present)
+	_relay_bridge().peer_arrived.connect(_on_relay_peer_arrived)
 	_relay_bridge().peer_gone.connect(_on_relay_peer_gone)
 	_relay_bridge().message_received.connect(_handle_message)
 	_relay_bridge().failed.connect(_on_relay_failed)
@@ -749,10 +795,15 @@ func _wire_relay() -> bool:
 ## Num jogo de dois o assento **é** a cor, e derivá-la aqui é ter uma fonte só:
 ## antes quem abria escrevia a sua em `host_relay` e quem entrava lia a do
 ## `welcome`, e as duas podiam discordar se o aperto de mão mudasse.
+##
+## `is_host` **não** sai daqui. Ele é o papel no aperto de mão — quem abriu a sala
+## e manda o `welcome` —, e é decidido por quem chamou `host_relay`. Derivado do
+## assento, o anfitrião que caía e voltava pelo código sentava no 0, se achava
+## dono de uma sala por abrir e mandava um `welcome` novo: partida nova, com outra
+## semente, enquanto os outros três seguiam na antiga.
 func _on_relay_seated(seat: int, capacity: int) -> void:
 	local_seat = seat
 	seats = capacity
-	is_host = seat == 0
 	# O próprio nome entra na lista aqui, e não no aperto de mão: é aqui que este
 	# aparelho descobre **qual assento ele é**, e sem isso quem abre mandaria um
 	# `welcome` sem se apresentar.
@@ -767,48 +818,94 @@ func _on_relay_seated(seat: int, capacity: int) -> void:
 ## chegada, e por isso a espera nunca existiu; com quatro, apresentar a partida
 ## ao segundo que chega faria dois jogarem enquanto os outros dois ainda estão
 ## entrando.
-func _on_relay_peer_present(seat: int) -> void:
+func _on_relay_peer_present(_seat: int) -> void:
 	# Voltou dentro da carência: a contagem de ausência em curso perde a validade.
 	_absence_token += 1
-	if not is_host:
-		return
-	# `resume` em vez de `welcome` quando todos já se conhecem: um segundo
-	# welcome reiniciaria a partida que os jogadores estão no meio.
-	if _session_started:
-		# Um humano sentando numa cadeira de máquina a **retoma**.
-		#
-		# A mesa que começou com bots continua com lugares vagos no relay, então
-		# alguém pode entrar depois. Sem esta linha ele entrava e continuava sendo
-		# jogado pela máquina, com "(bot)" escrito no cartão e uma pessoa sentada
-		# ali — e o aparelho que dirige os bots seguiria rolando o dado por ele.
-		#
-		# A lista atualizada sai no `resume` logo abaixo, que o relay entrega a
-		# **todos**: quem dirige as máquinas precisa parar de jogar por esta
-		# cadeira no mesmo instante em que ela deixa de ser de máquina.
-		_release_bot_seat(seat)
-		# O `resume` carrega a **mesa inteira**, e não só os nomes.
-		#
-		# Ele nasceu para o aparelho que perdeu o Wi-Fi e voltou: aquele ainda tem
-		# tudo em memória e só precisa saber que o link voltou. Mas o mesmo `resume`
-		# é o que chega a quem **saiu da sala e entrou de novo**, e esse não sabe
-		# nada — nem qual jogo, nem de quantos é a mesa, nem quais cadeiras são de
-		# máquina. Sem os campos ele sentava e ficava parado na tela de entrar,
-		# porque nada dizia a ele que havia partida para abrir.
-		var returning := _welcome()
-		returning["t"] = "resume"
-		_send_direct(returning)
+	# Depois de a partida começar, quem chega é recebido em
+	# [method _on_relay_peer_arrived] — e por quem ficou, não por quem abriu.
+	if not is_host or _session_started:
 		return
 	if _relay_bridge() != null and _relay_bridge().seats_taken() < seats:
 		return
 	_send_direct(_welcome())
 
 
+## Alguém chegou com a partida em curso: quem voltou de uma queda, ou quem senta
+## numa cadeira de máquina. Um aparelho só responde — ver [method _greeter].
+func _on_relay_peer_arrived(seat: int) -> void:
+	# Numa mesa de dois que já acabou para quem ficou, receber de volta abriria
+	# uma partida do lado de lá contra uma tela de "a partida acabou" do lado de cá.
+	if not _session_started or _opponent_gone or _greeter(seat) != local_seat:
+		return
+	# Um humano sentando numa cadeira de máquina a **retoma**.
+	#
+	# Vale para quem volta e para quem chega pela primeira vez numa mesa que
+	# começou com bots. Sem esta linha ele entrava e continuava sendo jogado pela
+	# máquina, com "(bot)" escrito no cartão e uma pessoa sentada ali — e o
+	# aparelho que dirige os bots seguiria jogando por ele.
+	#
+	# A lista atualizada sai no `resume` logo abaixo, que o relay entrega a
+	# **todos**: quem dirige as máquinas precisa parar de jogar por esta cadeira
+	# no mesmo instante em que ela deixa de ser de máquina.
+	_release_bot_seat(seat)
+	# O `resume` carrega a **mesa inteira**, e não só os nomes.
+	#
+	# Ele nasceu para o aparelho que perdeu o Wi-Fi e voltou: aquele ainda tem
+	# tudo em memória e só precisa saber que o link voltou. Mas o mesmo `resume` é
+	# o que chega a quem **teve o app fechado e entrou de novo**, e esse não sabe
+	# nada — nem qual jogo, nem de quantos é a mesa, nem quais cadeiras são de
+	# máquina. Sem os campos ele sentava e ficava parado na tela de entrar, porque
+	# nada dizia a ele que havia partida para abrir.
+	var returning := _welcome()
+	returning["t"] = "resume"
+	_send_direct(returning)
+
+
+## Quem recebe um assento que chega no meio da partida: o **menor assento humano
+## presente na sala**, sem contar quem está chegando.
+##
+## Era "quem abriu a sala, sempre", e isso deixava sem resposta justamente o caso
+## em que quem abriu é quem caiu: ninguém mais sabia receber, e ele voltava para
+## uma sala muda. Todo aparelho que está na partida tem a mesa inteira em
+## memória — jogo, semente, ritmo, máquinas e nomes —, então qualquer um pode
+## descrevê-la. O que precisa ser único é **quem** descreve, e "o menor presente"
+## é uma conta que todos fazem igual sem combinar nada.
+##
+## Presença vem do relay e não de `bot_seats` sozinha: numa mesa de dois quem cai
+## não vira máquina, e é só a presença que diz que ele não está.
+##
+## -1 quando não sobrou ninguém para receber.
+func _greeter(arriving: int) -> int:
+	var present := PackedInt32Array()
+	if _relay_bridge() != null:
+		present = _relay_bridge().present_seats()
+	for seat in seats:
+		if seat == arriving or bot_seats.has(seat):
+			continue
+		if seat == local_seat or present.has(seat):
+			return seat
+	return -1
+
+
 ## O outro lado sumiu sem avisar. A sala fica de pé no servidor durante a
 ## carência, então isto congela a partida em vez de encerrá-la — mas só até a
 ## carência acabar. Sem esse limite o tabuleiro ficava em "reconectando" para
 ## sempre, que é o que acontecia quando o oponente fechava o app.
+##
+## Numa mesa de **mais de dois** não há espera: a cadeira vira máquina na hora, e
+## volta a ser de quem caiu quando ele voltar ([method _on_relay_peer_arrived]).
+## Congelar três pessoas por até noventa segundos à espera de uma é o 4G de uma
+## acabando o jogo das outras — e trocar de Wi-Fi para dados custa ao bot, no
+## máximo, uma jogada que o histórico entrega de volta para quem voltou.
+##
+## Numa mesa de dois a espera continua: ali não sobra partida para uma máquina
+## preservar, e um bot jogando no lugar de quem caiu decidiria o resultado de um
+## contra um.
 func _on_relay_peer_gone(seat: int) -> void:
 	if _opponent_gone or not _session_started or bot_seats.has(seat):
+		return
+	if seats > 2:
+		_drop_seat(seat)
 		return
 	if connected:
 		connected = false

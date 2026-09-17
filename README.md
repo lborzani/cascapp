@@ -1214,6 +1214,68 @@ Detectar a queda é metade do trabalho. TCP em rede móvel não avisa: o socket
 fica aberto para sempre mandando pacotes para o nada. Quem percebe é o
 `ping`/`pong` da aplicação — 45 segundos de silêncio e o link é dado como morto.
 
+#### Mesa de mais de dois: um bot no lugar, até a volta
+
+Congelar a mesa inteira à espera de quem caiu era o 4G de uma pessoa parando o
+jogo das outras três — por até noventa segundos, e depois disso a cadeira virava
+máquina de qualquer jeito. Agora ela vira máquina **na hora**: o relay avisa o
+`peer_left`, todos os aparelhos põem o assento em `bot_seats`, e o menor assento
+humano passa a jogar por ele. Quando a pessoa volta, a cadeira sai da lista e ela
+reassume a mão com o que o bot jogou já no histórico — que é o que o `sync`
+entrega a qualquer um que volta. Os avisos na tela dizem as duas coisas: "Fulano
+saiu. Um bot joga até a volta." e "Fulano assumiu o lugar do bot."
+
+Numa mesa de **dois** a espera continua. Ali não sobra partida para uma máquina
+preservar, e um bot jogando no lugar de quem caiu decidiria o resultado de um
+contra um.
+
+#### Quem recebe quem volta
+
+Era **o assento 0, sempre** — e isso deixava sem resposta justamente o caso em que
+o ausente era ele. O anfitrião que caía e voltava pelo código sentava no 0, a
+camada de rede derivava `is_host` do número do assento, ele se achava dono de
+uma sala por abrir e mandava um `welcome` novo: partida nova, **com outra
+semente**, enquanto os outros seguiam na antiga — e a sala antiga sem ser apagada,
+porque os outros continuavam nela.
+
+Agora `is_host` é o papel no aperto de mão, decidido por quem chamou
+`host_relay`, e quem recebe uma chegada com a partida em curso é o **menor assento
+humano presente na sala**, sem contar quem chega. Todo aparelho da partida tem a
+mesa inteira em memória, então qualquer um pode descrevê-la; o que precisa ser
+único é quem descreve, e "o menor presente" é uma conta que todos fazem igual
+sem combinar nada. Presença vem do relay, e só de chegadas de verdade
+(`peer_arrived`): quem só perdeu o Wi-Fi e volta não "recebe" os três que nunca
+saíram com a lista de máquinas velha dele.
+
+O `resume` vai para a mesa inteira, e cada um responde conforme o que é: quem
+nunca esteve na partida (ou teve o processo morto) abre a partida; quem caiu com
+ela em memória descongela e troca histórico; quem só assistiu atualiza a lista de
+máquinas e não responde nada.
+
+#### A cadeira em disco, e o cartão de voltar
+
+A chave do assento morava só na memória da ponte. Um celular sem bateria, ou com
+o app fechado pelo sistema, perdia a chave junto com o processo — e o jogador
+reabria o app numa tela cujo único gesto à mão era **criar** partida.
+
+`Game.begin_match()` grava sala, jogo e chave em `Prefs` ao abrir toda partida em
+rede. A tela inicial e a de Multiplayer mostram um cartão "Voltar para Uno"
+enquanto houver partida guardada, e **todo caminho** até aquela sala leva a chave:
+o cartão, o código digitado, a sala tocada na lista, o QR. Três regras decidem o
+cartão:
+
+- **cair mantém a cadeira** — o processo morreu ou a rede caiu, e não houve `bye`;
+- **sair pelo botão a esquece** — é desistir, e `Game.reset_to_menu()` distingue os
+  dois casos por `Net.connected`, que é o mesmo que decide se o `bye` sai;
+- **a recusa definitiva a esquece** — `room_not_found` vira "essa partida já
+  acabou", `room_full` vira "sua cadeira foi ocupada". Um cartão que sempre leva ao
+  mesmo erro é pior que cartão nenhum. O `X` também esquece.
+
+Do lado do relay, **quem senta sem chave ganha chave nova**. Sem isso, a cadeira de
+quem caiu e foi ocupada por outra pessoa continuaria abrindo com a chave antiga:
+o dono antigo voltaria derrubando o novo, o novo reconectaria com a mesma chave e
+derrubaria de volta — dois aparelhos se expulsando a cada meio segundo.
+
 ### Sair não é cair
 
 Do lado de quem fica, um oponente que toca em "Sair" e um oponente que entrou no
@@ -1231,8 +1293,9 @@ Sem ele o quadro morre na fila de saída e a saída volta a ser indistinguível 
 uma queda.
 
 E porque nem toda saída consegue avisar — app encerrado pelo sistema, bateria
-acabando —, há uma **rede de segurança**: 95 segundos sem o oponente voltar
-encerram a partida de qualquer forma. É um pouco além da carência da sala no
+acabando —, há uma **rede de segurança** numa mesa de dois: 95 segundos sem o
+oponente voltar encerram a partida de qualquer forma. (Numa mesa maior não há o
+que encerrar: a cadeira já virou máquina.) É um pouco além da carência da sala no
 servidor, porque depois dela a volta já é impossível e continuar prometendo
 reconexão seria mentir.
 
@@ -1898,6 +1961,10 @@ CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://
 ```
 
 ```bash
+CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://tests/rejoin_smoke.gd
+```
+
+```bash
 CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://tests/bomber_net_smoke.gd
 ```
 
@@ -1919,6 +1986,14 @@ descartava a resposta do servidor e entrava em reconexão por 90s.
 num assento, a mesa só ficando pronta no quarto, um lance saindo para os outros
 três assinado por quem jogou, e quem cai voltando para o **mesmo** assento
 mesmo havendo outro livre antes dele.
+
+`rejoin_smoke.gd` é o aperto de mão de quem **volta**, que é outro que o de quem
+chega: numa mesa de Uno de quatro, dois caem sem avisar e viram bot na hora; o
+assento 3 volta **antes** do 2 com a chave e recebe o 3, com a semente da partida
+em curso; depois o anfitrião cai, o assento 1 passa a jogar pelas máquinas, e o
+anfitrião volta sem abrir partida nova nem mexer na semente dos outros. Por fim
+uma mesa de dois, onde o anfitrião que caiu é recebido pelo convidado e volta com
+as próprias peças e o ritmo da partida.
 
 `ludo_net_smoke.gd` fecha a pilha: quatro `net_link.gd` numa mesa de Ludo. Prova
 que ninguém começa a jogar com três na sala, que cada assento vira uma cor, e
@@ -2642,6 +2717,28 @@ depende de nada da Godot além de tipos básicos.
 
 ### Erros que valem registro
 
+**Os nomes da mesa do Uno apareciam em umas partidas e em outras não.**
+
+Numa mesa de quatro, quem entra aprende o nome do anfitrião no `welcome` e o dos
+outros convidados só quando o `ready` deles chega — que costuma ser **depois** de a
+cena da partida existir. O aviso `names_changed` chegava e redesenhava a mesa;
+a coluna de jogadores à esquerda escrevia o nome uma vez, ao nascer, e nunca
+mais. "Jogador 2" ou o nome certo, conforme quem ganhava a corrida — que é
+exatamente o tipo de defeito que um teste com um aparelho só nunca vê.
+
+A mesma leitura única escondia um segundo: a cadeira que vira máquina no meio da
+partida continuava sem "(bot)" no cartão. E um terceiro, na ordem dos avisos:
+`_drop_seat` emitia `bots_changed` **antes** de `seat_left`, e as três cenas —
+que comentavam ler o nome "antes de a lista mudar" — liam a lista já mudada e
+anunciavam "Jogador 3 (bot) saiu".
+
+**O anfitrião que voltava abria uma partida nova.** Ver
+[Quem recebe quem volta](#quem-recebe-quem-volta). O que faz valer registro é que
+o teste de ponta a ponta de dois assentos **passava**: o anfitrião voltava, recebia
+"oponente chegou" e a asserção ficava satisfeita — pelo caminho errado, um
+`welcome` novo em vez de um `resume`. Só a asserção sobre o que **não** podia
+mudar (a semente, o ritmo, o outro não receber uma mesa nova) pegou.
+
 **O tabuleiro do Ludo exigia altura igual à própria largura, e a folha de prints
 era cega para isso.**
 
@@ -3185,12 +3282,19 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
   vez de depender de alguém lembrar. Uma instância aguenta na casa dos milhares
   de partidas; o limite é número de conexões, não CPU. Detalhes em
   [`relay/README.md`](relay/README.md).
-- **A janela de reconexão é de 90 segundos.** Um túnel longo ou o celular
-  descarregando encerram a partida.
-- **A reconexão do cliente não tem teste automatizado ponta a ponta.** O lado do
-  servidor tem (`relay/src/relay.test.ts` mata o socket e reocupa o assento); o
-  laço de retentativa em `net/relay_bridge.gd` foi verificado à mão, porque
-  derrubar a rede de dentro do processo Godot exigiria uma API só para o teste.
+- **Numa mesa de dois a janela de reconexão é de 90 segundos.** Um túnel longo ou
+  o celular descarregando encerram a partida. Numa mesa maior a cadeira fica com
+  um bot, e a volta vale enquanto houver alguém na sala (até as quatro horas de
+  vida dela).
+- **O laço de retentativa da ponte não tem teste automatizado.** A volta em si tem
+  (`tests/rejoin_smoke.gd`: queda sem aviso, chave, anfitrião voltando), e o
+  servidor também (`relay/src/relay.test.ts`). O que foi verificado só à mão é a
+  ponte reconectando **sozinha** depois de perder a rede, porque derrubar a rede
+  de dentro do processo Godot exigiria uma API só para o teste.
+- **Quem volta disputa um instante com o bot.** Se a máquina já escolheu o lance
+  da cadeira quando a pessoa senta, esse lance entra — ele saiu antes do `resume`,
+  e todos os aparelhos o validam com a lista de máquinas daquele momento. A pessoa
+  reassume a mão a partir do lance seguinte.
 - **Sem internet não há multiplayer.** Toda partida em rede passa pela sala no
   relay. Dois aparelhos lado a lado, ambos offline, só jogam passando o aparelho
   (que o modo mesa torna desnecessário) — o NFC entrega o código, não a partida.
