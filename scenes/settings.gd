@@ -14,6 +14,7 @@ extends Control
 ## esperaria encontrá-lo desligado.
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
+const JOIN_SCENE := "res://scenes/join.tscn"
 
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
@@ -35,9 +36,14 @@ func _ready() -> void:
 	%NameEdit.focus_exited.connect(_save)
 	%SaveButton.pressed.connect(_save_and_leave)
 
-	%AppBar.title = "Configurações"
-	%AppBar.leading = IconButton.Kind.BACK
-	%AppBar.leading_pressed.connect(_leave)
+	%AppBar.title = "Você"
+	# Aba é lugar, e de um lugar não se volta: quem quer outro lugar toca noutra aba.
+	%AppBar.leading = -1
+
+	%Tabs.current = AppTabs.YOU
+	if not Net.relay_available():
+		%Tabs.disabled = [AppTabs.ONLINE] as Array[StringName]
+	%Tabs.picked.connect(_go_tab)
 
 	_sound_switch = SwitchRow.new()
 	_sound_switch.setup("Som", Prefs.sound_on())
@@ -51,6 +57,16 @@ func _ready() -> void:
 
 	%StatusLabel.text = _status_text()
 	_update_preview()
+
+
+func _go_tab(route: StringName) -> void:
+	_save()
+	Sound.play(Sound.Cue.TAP)
+	match route:
+		AppTabs.GAMES:
+			get_tree().change_scene_to_file(MENU_SCENE)
+		AppTabs.ONLINE:
+			get_tree().change_scene_to_file(JOIN_SCENE)
 
 
 ## Os dois interruptores gravam **na hora**, e não no "Salvar".
@@ -105,6 +121,9 @@ func _save_and_leave() -> void:
 ## diz onde o valor aparece; esta linha diz.
 func _update_preview() -> void:
 	%Preview.text = "Nas partidas você aparece como %s." % Prefs.player_name()
+	# A bolacha é a mesma que os outros vão ver na mesa: mostrar o nome e a bolacha
+	# juntos responde "como eu apareço" sem o jogador ter de abrir uma partida.
+	%Avatar.player_name = Prefs.player_name()
 
 
 ## O gesto de voltar é o botão "Voltar", e não o "Salvar": quem sai pelo gesto

@@ -64,11 +64,11 @@ func _ready() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	var panel := PanelContainer.new()
+	# Papel, e não painel: a primeira coisa que o app mostra é a comanda em que ele
+	# pergunta o nome — o mesmo papel do código da sala e da escritura.
+	var panel := PaperCard.new()
 	panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	panel.add_theme_stylebox_override("panel", AppTheme.box(
-		AppTheme.SURFACE, AppTheme.RADIUS_LARGE, AppTheme.BORDER, 1
-	))
+	panel.tilt_degrees = -0.8
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
@@ -110,7 +110,15 @@ func _ready() -> void:
 
 	var start := Button.new()
 	start.text = "Bora jogar"
-	start.theme_type_variation = &"PrimaryButton"
+	# Placa escrita à mão, e não a variação do tema: dentro do papel o tema do
+	# cartão veste **todo** botão de carimbo, e a ação da tela precisa continuar
+	# sendo uma placa.
+	start.add_theme_color_override("font_color", AppTheme.ACCENT_INK)
+	start.add_theme_color_override("font_hover_color", AppTheme.ACCENT_INK)
+	start.add_theme_color_override("font_pressed_color", AppTheme.ACCENT_INK)
+	start.add_theme_stylebox_override("normal", AppTheme.plate(AppTheme.SUCCESS, AppTheme.SUCCESS.darkened(0.35)))
+	start.add_theme_stylebox_override("hover", AppTheme.plate(AppTheme.SUCCESS.lightened(0.08), AppTheme.SUCCESS.darkened(0.35)))
+	start.add_theme_stylebox_override("pressed", AppTheme.plate(AppTheme.SUCCESS.darkened(0.08), AppTheme.SUCCESS.darkened(0.35), true))
 	start.custom_minimum_size.y = 48
 	start.pressed.connect(finish)
 	column.add_child(start)

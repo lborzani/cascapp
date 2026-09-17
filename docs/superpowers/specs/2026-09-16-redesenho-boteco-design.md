@@ -373,4 +373,5 @@ Cada etapa termina com as suítes verdes, a folha de prints refeita e um commit.
 ## 11. Ferramenta de rascunho
 
 `tests/redesign_assets.gd` exporta cartas e tabuleiros sem o fundo para os
-conceitos. Não está versionada e sai no fim do redesenho.
+conceitos e para as comparações de imagem. Ficou versionada: ela é a ferramenta
+que prova, a cada etapa, que o desenho protegido não mudou.

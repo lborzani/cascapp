@@ -21,7 +21,7 @@ const SIZE := 44.0
 ## mínimo que continua sendo um traço depois da escala.
 const STROKE := 2.0
 
-var kind := Kind.MENU:
+var kind := Kind.BACK:
 	set(value):
 		kind = value
 		queue_redraw()
