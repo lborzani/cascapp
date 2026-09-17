@@ -16,6 +16,8 @@ var _failures := 0
 func _initialize() -> void:
 	_probe_fonts()
 	_probe_dashed()
+	_probe_palette()
+	_probe_theme()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -53,6 +55,56 @@ func _probe_fonts() -> void:
 			body.has_char(code) and display.has_char(code) and mono.has_char(code),
 			"as três famílias têm '%s'" % letter
 		)
+
+
+func _probe_palette() -> void:
+	print("paleta")
+	_equals(AppTheme.BACKGROUND, Color("17211c"), "fundo é a lousa")
+	_equals(AppTheme.ACCENT, Color("f2c029"), "destaque é o amarelo de cadeira")
+	_equals(AppTheme.BOARD_LIGHT, Color("e9d8b8"), "casa clara do tabuleiro não mudou")
+	_equals(AppTheme.BOARD_DARK, Color("8a5b3c"), "casa escura não mudou")
+	_equals(AppTheme.BOARD_FRAME, Color("241d18"), "moldura do tabuleiro ainda não mudou")
+	_equals(AppTheme.WATER, Color("223a4d"), "o mar não mudou")
+	_equals(AppTheme.LAST_MOVE, Color("6fbf73"), "o último lance não mudou")
+	_equals(AppTheme.PREMOVE, Color("6f9fd8"), "o lance planejado não mudou")
+	var text_pairs := [
+		["TEXT", AppTheme.TEXT, "BACKGROUND", AppTheme.BACKGROUND],
+		["TEXT_DIM", AppTheme.TEXT_DIM, "BACKGROUND", AppTheme.BACKGROUND],
+		["TEXT_DIM", AppTheme.TEXT_DIM, "SURFACE", AppTheme.SURFACE],
+		["ACCENT_INK", AppTheme.ACCENT_INK, "ACCENT", AppTheme.ACCENT],
+		["ACCENT", AppTheme.ACCENT, "BACKGROUND", AppTheme.BACKGROUND],
+		["DANGER", AppTheme.DANGER, "BACKGROUND", AppTheme.BACKGROUND],
+		["PAPER_INK", AppTheme.PAPER_INK, "PAPER", AppTheme.PAPER],
+	]
+	for pair: Array in text_pairs:
+		var ratio := AppTheme.contrast(pair[1], pair[3])
+		_check(ratio >= 4.5, "%s sobre %s legível como texto (%.1f:1)" % [pair[0], pair[2], ratio])
+	var line := AppTheme.contrast(AppTheme.BACKGROUND.blend(AppTheme.LINE), AppTheme.BACKGROUND)
+	_check(line >= 3.0, "LINE contorna coisa tocável (%.1f:1)" % line)
+
+
+func _probe_theme() -> void:
+	print("tema")
+	var theme := AppTheme.build()
+	for variation: String in ["PrimaryButton", "ChipButton", "ChipSelected", "AccentButton", "SuccessButton",
+			"SuccessSolidButton", "DangerButton", "NavItem", "NavItemSelected", "IconButton",
+			"GhostButton", "Segment", "SegmentSelected"]:
+		_equals(String(theme.get_type_variation_base(variation)), "Button", "%s é variação de botão" % variation)
+	for variation: String in ["Display", "Title", "Subtitle", "Greeting", "SectionHeader", "Caption", "PairingCode", "Mono"]:
+		_equals(String(theme.get_type_variation_base(variation)), "Label", "%s é variação de rótulo" % variation)
+	for variation: String in ["Card", "QuietCard"]:
+		_equals(String(theme.get_type_variation_base(variation)), "PanelContainer", "%s é variação de painel" % variation)
+	_check(theme.get_font("font", "Button") == AppTheme.display(900), "botão fala com a voz do letreiro")
+	_equals(theme.get_color("font_color", "PrimaryButton"), AppTheme.ACCENT_INK, "placa amarela com tinta escura")
+	var plate := theme.get_stylebox("normal", "PrimaryButton") as StyleBoxFlat
+	_check(plate != null and plate.border_width_bottom == AppTheme.PLATE_EDGE, "a placa tem a borda de baixo")
+	var pressed := theme.get_stylebox("pressed", "PrimaryButton") as StyleBoxFlat
+	_check(pressed != null and pressed.border_width_bottom == 0, "e afunda quando pressionada")
+	_check(theme.get_stylebox("normal", "GhostButton") is StyleBoxDashed, "botão secundário é tracejado")
+	_check(theme.get_stylebox("panel", "QuietCard") is StyleBoxDashed, "painel quieto também")
+	_check(theme.get_font("font", "PairingCode") == AppTheme.mono(600), "código da sala em mono")
+	_equals(theme.get_color("font_color", "SegmentSelected"), AppTheme.ACCENT_INK, "segmento marcado com tinta escura")
+	_equals(theme.default_font_size, AppTheme.SIZE_BODY, "corpo em 16")
 
 
 func _probe_dashed() -> void:
