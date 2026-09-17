@@ -30,6 +30,7 @@ func _run() -> void:
 	_probe_paper()
 	_probe_segments()
 	_probe_scene_palette()
+	_probe_tabs()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -215,6 +216,38 @@ func _probe_scene_palette() -> void:
 		var text := FileAccess.get_file_as_string(path)
 		for label: String in retired:
 			_check(not text.contains(retired[label]), "%s sem %s" % [path.get_file(), label])
+
+
+func _probe_tabs() -> void:
+	print("abas")
+	var tabs := AppTabs.new()
+	tabs.size = Vector2(432, 64)
+	tabs.current = AppTabs.GAMES
+	root.add_child(tabs)
+	var heard: Array[StringName] = []
+	tabs.picked.connect(func(route: StringName) -> void: heard.append(route))
+	_equals(tabs.route_at(Vector2(30, 30)), AppTabs.GAMES, "a esquerda é Jogos")
+	_equals(tabs.route_at(Vector2(216, 30)), AppTabs.ONLINE, "o meio é Online")
+	_equals(tabs.route_at(Vector2(400, 30)), AppTabs.YOU, "a direita é Você")
+	tabs.pick(AppTabs.GAMES)
+	_equals(heard.size(), 0, "tocar na aba em que se está não navega")
+	tabs.disabled = [AppTabs.ONLINE] as Array[StringName]
+	tabs.pick(AppTabs.ONLINE)
+	_equals(heard.size(), 0, "nem na desabilitada")
+	tabs.pick(AppTabs.YOU)
+	_equals(heard, [AppTabs.YOU] as Array[StringName], "a outra avisa")
+	tabs.free()
+	var bar := AppBar.new()
+	root.add_child(bar)
+	bar.greet("Casqueta")
+	_check(bar.find_children("*", "Coaster", true, false).size() == 1, "o cabeçalho de casa tem a bolacha do jogador")
+	bar.leading = -1
+	_check(not bar._leading_button.visible, "e as abas não têm botão de voltar")
+	bar.free()
+	var theme := AppTheme.build()
+	_equals(String(theme.get_type_variation_base("Hint")), "Label", "Hint é variação de rótulo")
+	_equals(theme.get_font_size("font_size", "Hint"), AppTheme.SIZE_BODY_S, "a dica em 14, legível")
+	_equals(theme.get_color("font_color", "Hint"), AppTheme.TEXT_DIM, "e em giz apagado")
 
 
 func _probe_dashed() -> void:

@@ -30,12 +30,15 @@ var title := "":
 		if _label != null:
 			_label.text = value
 
-## Ícone do botão da esquerda. `MENU` na tela inicial, `BACK` no resto.
-var leading := IconButton.Kind.MENU:
+## Ícone do botão da esquerda: `BACK` nas telas que voltam, ou `-1` para nenhum —
+## as abas são lugares, e não há de onde voltar num lugar.
+var leading := IconButton.Kind.BACK:
 	set(value):
 		leading = value
 		if _leading_button != null:
-			_leading_button.kind = value
+			_leading_button.visible = value >= 0
+			if value >= 0:
+				_leading_button.kind = value
 
 ## Ícone do botão da direita, ou nada. A tela inicial tem os ajustes ali; as
 ## telas que não têm ação própria deixam o lugar vazio em vez de inventarem uma.
@@ -50,6 +53,13 @@ var action := -1:
 var _label: Label = null
 var _leading_button: IconButton = null
 var _action_button: IconButton = null
+var _greeting: HBoxContainer = null
+var _greeting_name: Label = null
+var _avatar: Coaster = null
+
+const LOGO_PATH := "res://assets/icon/role.png"
+const LOGO := 40.0
+const AVATAR := 42.0
 
 
 func _init() -> void:
@@ -85,6 +95,67 @@ func _init() -> void:
 	_action_button.visible = false
 	_action_button.pressed.connect(func(): action_pressed.emit())
 	row.add_child(_action_button)
+
+
+## O cabeçalho da tela inicial: o logo, "Olá," e o nome do jogador em letreiro, e a
+## bolacha dele à direita — que leva à aba Você, onde o nome se troca.
+##
+## Chamar de novo só troca o nome: é o que a tela faz quando as boas-vindas
+## terminam, para a saudação mostrar o nome recém escolhido sem reabrir o app.
+func greet(player_name: String) -> void:
+	if _greeting == null:
+		_build_greeting()
+	_greeting_name.text = player_name.to_upper()
+	_avatar.player_name = player_name
+
+
+func _build_greeting() -> void:
+	var row: HBoxContainer = _label.get_parent()
+	_leading_button.visible = false
+	_label.visible = false
+	_action_button.visible = false
+
+	_greeting = HBoxContainer.new()
+	_greeting.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_greeting.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	row.add_child(_greeting)
+	row.move_child(_greeting, 0)
+
+	var logo := TextureRect.new()
+	logo.custom_minimum_size = Vector2(LOGO, LOGO)
+	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	if ResourceLoader.exists(LOGO_PATH):
+		logo.texture = load(LOGO_PATH)
+	_greeting.add_child(logo)
+
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	words.add_theme_constant_override("separation", -4)
+	_greeting.add_child(words)
+	var hello := Label.new()
+	hello.text = "Olá,"
+	hello.theme_type_variation = &"Hint"
+	words.add_child(hello)
+	_greeting_name = Label.new()
+	_greeting_name.theme_type_variation = &"Greeting"
+	_greeting_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	words.add_child(_greeting_name)
+
+	# Um botão sem pele segurando a bolacha: a bolacha não recebe toque (ela é o
+	# mesmo desenho dentro da partida, onde o toque é do que está em volta).
+	var holder := Button.new()
+	holder.theme_type_variation = &"IconButton"
+	holder.focus_mode = Control.FOCUS_NONE
+	holder.custom_minimum_size = Vector2(AVATAR, AVATAR)
+	holder.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	holder.pressed.connect(func() -> void: action_pressed.emit())
+	_greeting.add_child(holder)
+	_avatar = Coaster.new()
+	_avatar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	holder.add_child(_avatar)
 
 
 ## O fio que separa a barra do conteúdo. Um pixel a 7% de branco: ele existe para

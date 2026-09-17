@@ -444,6 +444,10 @@ static func _style_labels(theme: Theme) -> void:
 	_label(theme, "SectionHeader", display(900), SIZE_DISPLAY_M, TEXT)
 	_label(theme, "Subtitle", font(400), SIZE_BODY, TEXT_DIM)
 	_label(theme, "Caption", font(700), SIZE_CAPTION, TEXT_DIM)
+	# Frase de ajuda embaixo de um controle ("Nas partidas você aparece como…").
+	# Era `Caption`, e `Caption` é rótulo curto em 12 — uma frase inteira nesse
+	# tamanho é a frase que ninguém lê.
+	_label(theme, "Hint", font(400), SIZE_BODY_S, TEXT_DIM)
 	# Código de pareamento: feito para ser lido de uma tela e digitado noutra, e
 	# em mono para o "0" e o "O" não se confundirem.
 	_label(theme, "PairingCode", mono(600), SIZE_MONO_L, ACCENT)
