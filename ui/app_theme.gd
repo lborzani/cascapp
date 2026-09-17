@@ -138,6 +138,7 @@ const NAV_HEIGHT := 52.0
 
 static var _theme: Theme = null
 static var _fonts := {}
+static var _legacy_fonts := {}
 
 
 ## Instância única. O tema é atribuído na raiz de cada cena e não na janela:
@@ -178,6 +179,23 @@ static func font(weight: int) -> Font:
 	system.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
 	system.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
 	_fonts[weight] = system
+	return system
+
+
+## A fonte do sistema que o app usava antes do tema Boteco.
+##
+## Só para desenho **protegido**: os números das cartas de Uno e os nomes das casas
+## de Metrópole foram desenhados com ela, e trocar a família mudaria o desenho.
+## Interface nova não usa isto.
+static func legacy_font(weight: int) -> Font:
+	if _legacy_fonts.has(weight):
+		return _legacy_fonts[weight]
+	var system := SystemFont.new()
+	system.font_names = PackedStringArray(["Roboto", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"])
+	system.font_weight = weight
+	system.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+	system.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
+	_legacy_fonts[weight] = system
 	return system
 
 

@@ -56,6 +56,9 @@ const WILD_BODY := Color("2b2521")
 ## quente, e um branco frio no meio de uma mão de cartas denuncia que o desenho
 ## veio de outro lugar.
 const PAPER := Color("f2eae0")
+## O véu da carta apagada. Fixo, e não o fundo do tema: a carta é desenho
+## protegido, e o tom do véu faz parte de como ela aparece apagada.
+const VEIL_COLOR := Color("13100e")
 
 ## O verso. Vermelho como o baralho de verdade, escurecido para não competir com
 ## uma carta vermelha jogada ao lado dele.
@@ -137,7 +140,7 @@ static func draw_card(
 	# O véu por último: ele afasta a carta inteira do primeiro plano de uma vez, em
 	# vez de cada forma dela ter de saber que está apagada.
 	if dim:
-		_rounded(canvas, height, 1.0, Color(AppTheme.BACKGROUND, DIM_VEIL * opacity))
+		_rounded(canvas, height, 1.0, Color(VEIL_COLOR, DIM_VEIL * opacity))
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -381,7 +384,7 @@ static func _arrow(canvas: CanvasItem, origin: Vector2, span: float, facing: flo
 static func _text(
 	canvas: CanvasItem, label: String, span: float, ink: Color, at: Vector2
 ) -> void:
-	var font := AppTheme.font(700)
+	var font := AppTheme.legacy_font(700)
 	var size := int(maxf(span, 6.0))
 	var measure := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size)
 	# A altura visual do algarismo, e não a da linha: a linha reserva espaço para
