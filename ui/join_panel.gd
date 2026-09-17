@@ -36,6 +36,10 @@ extends VBoxContainer
 ## o rodapé é onde uma mensagem morre sem ninguém ver.
 signal failed(message: String)
 
+## Tocou numa bolacha de "Criar sala". A tela abre a folha daquele jogo em Online —
+## o painel não navega, como nenhum componente do app.
+signal create_requested(game_id: StringName)
+
 ## Uma sala aberta é uma pessoa esperando; a lista tem de acompanhar isso sem
 ## que ninguém precise puxar para atualizar. Curto o bastante para parecer vivo,
 ## longo o bastante para não virar uma requisição por segundo.
@@ -77,11 +81,11 @@ func _ready() -> void:
 	%RefreshButton.pressed.connect(_fetch_rooms)
 	%RoomsRequest.request_completed.connect(_on_rooms_fetched)
 	%JoinButton.pressed.connect(_join_by_code)
-	%CodeEdit.text_changed.connect(_on_code_typed)
-	# Enter no teclado do celular vale o mesmo que tocar em "Entrar": quem acabou
-	# de digitar seis caracteres não deveria ter de procurar um botão.
-	%CodeEdit.text_submitted.connect(func(_text: String): _join_by_code())
+	# A sexta casa vale o mesmo que tocar em "Entrar": quem acabou de digitar o
+	# código inteiro não deveria ter de procurar um botão.
+	%CodeInput.completed.connect(func(_code: String) -> void: _join_by_code())
 	%ScanButton.pressed.connect(_start_scan)
+	_fill_create_row()
 	%ScanButton.visible = Pairing.qr_scanner.is_available()
 
 	# O filtro é por **jogo**, e não por categoria como na tela inicial: quem
@@ -242,7 +246,7 @@ func _set_rooms_placeholder(message: String) -> void:
 
 
 func _join_by_code() -> void:
-	var code: String = %CodeEdit.text.strip_edges().to_upper()
+	var code: String = %CodeInput.code
 	if code.length() != Pairing.CODE_LENGTH:
 		_fail("O código tem %d caracteres." % Pairing.CODE_LENGTH)
 		return
@@ -251,21 +255,39 @@ func _join_by_code() -> void:
 	_enter_room(Game.game_id, code)
 
 
-## O código é sempre maiúsculo, então o campo também é: um `d3f9k1` digitado por
-## um teclado que insiste em minúsculas era recusado por um servidor que só
-## conhece maiúsculas, e o jogador via "sala não encontrada" com o código certo
-## na tela. Converter só na hora de enviar resolveria o erro e não a confusão —
-## o que ele lê tem de ser o que ele mandou.
+## As bolachas de "Criar sala": um jogo por bolacha, só os que têm Online.
 ##
-## O cursor é reposto onde estava: sem isso, escrever no meio de um código já
-## digitado joga o cursor para o fim a cada tecla.
-func _on_code_typed(text: String) -> void:
-	var upper := text.to_upper()
-	if upper == text:
-		return
-	var caret: int = %CodeEdit.caret_column
-	%CodeEdit.text = upper
-	%CodeEdit.caret_column = caret
+## Criar partida morava na outra aba, atrás de escolher o jogo. Mas quem abre o
+## app para jogar com alguém já está aqui — e mandar essa pessoa para a coleção de
+## jogos só para voltar é um desvio que não decide nada. A fileira é o mesmo
+## catálogo, curto, do que dá para abrir daqui.
+func _fill_create_row() -> void:
+	for child in %CreateRow.get_children():
+		%CreateRow.remove_child(child)
+		child.queue_free()
+	for id in Game.games_in():
+		if not Game.mode_available(Game.Mode.ONLINE, id):
+			continue
+		var column := VBoxContainer.new()
+		column.add_theme_constant_override("separation", 2)
+		column.alignment = BoxContainer.ALIGNMENT_CENTER
+		var button := Button.new()
+		button.theme_type_variation = &"IconButton"
+		button.focus_mode = Control.FOCUS_NONE
+		button.custom_minimum_size = Vector2(56, 56)
+		button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		button.pressed.connect(func() -> void: create_requested.emit(id))
+		var coaster := Coaster.new()
+		coaster.set_anchors_preset(Control.PRESET_FULL_RECT)
+		coaster.piece = Game.piece_of(id)
+		button.add_child(coaster)
+		column.add_child(button)
+		var label := Label.new()
+		label.text = Game.game_title(id)
+		label.theme_type_variation = &"Caption"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		column.add_child(label)
+		%CreateRow.add_child(column)
 
 
 func _start_scan() -> void:
@@ -345,7 +367,7 @@ func _on_relay_state_changed(state: RelayBridge.State) -> void:
 ## Quem desenha é a cena porque o painel cobre a tela inteira, e este nó é uma
 ## faixa dentro dela. O sinal leva o que o relay já sabe assim que dá a cadeira —
 ## jogo, código e lotação —, tudo antes de o anfitrião ter dito qualquer coisa.
-signal waiting(game_id: StringName, code: String, taken: int, capacity: int)
+signal waiting(game_id: StringName, code: String, present: PackedInt32Array, capacity: int, local_seat: int)
 signal waiting_ended
 
 
@@ -353,7 +375,10 @@ func _show_waiting() -> void:
 	if not _joining:
 		return
 	var capacity := Pairing.relay.capacity()
-	waiting.emit(Game.game_id, Pairing.relay.room_code(), Pairing.relay.seats_taken(), capacity)
+	waiting.emit(
+		Game.game_id, Pairing.relay.room_code(), Pairing.relay.present_seats(),
+		capacity, Pairing.relay.seat()
+	)
 	if capacity > 2:
 		_set_status("Na sala: %d de %d jogadores." % [Pairing.relay.seats_taken(), capacity])
 	else:
@@ -384,6 +409,7 @@ func _on_join_failed(reason: String) -> void:
 ## menos até a carência expirar.
 func give_up() -> void:
 	_joining = false
+	%CodeInput.clear()
 	waiting_ended.emit()
 	_clear_status()
 	Net.leave()

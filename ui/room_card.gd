@@ -36,7 +36,12 @@ func _draw() -> void:
 	var pad := 16.0
 	var piece := Game.piece_of(game_id)
 	var piece_size := size.y * 0.62
-	PieceRenderer.draw_piece(self, piece, Vector2(pad + piece_size * 0.5, size.y * 0.5), piece_size)
+	var center := Vector2(pad + piece_size * 0.5, size.y * 0.5)
+	# A peça em bolacha, como no cardápio e na folha: a mesma moldura redonda para
+	# "qual jogo" em toda a lista do app.
+	draw_circle(center, piece_size * 0.5, AppTheme.COASTER)
+	draw_arc(center, piece_size * 0.5, 0.0, TAU, 40, Color(AppTheme.GOLD, 0.7), 2.0, true)
+	PieceRenderer.draw_piece(self, piece, center, piece_size * 0.74)
 
 	var text_x := pad + piece_size + 14.0
 	# Largura escrita, e não `-1`. Com `-1` o texto passa por baixo da seta e sai
@@ -45,8 +50,8 @@ func _draw() -> void:
 	# esta tela não controla.
 	var text_width := maxf(40.0, size.x - text_x - 34.0)
 	draw_string(
-		AppTheme.font(600), Vector2(text_x, size.y * 0.5 - 2.0), _title(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 18, AppTheme.TEXT
+		AppTheme.display(900), Vector2(text_x, size.y * 0.5 - 2.0), _title().to_upper(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 19, AppTheme.TEXT
 	)
 	draw_string(
 		AppTheme.font(400), Vector2(text_x, size.y * 0.5 + 19.0), _detail(),

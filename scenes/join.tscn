@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" path="res://ui/join_panel.tscn" id="3_panel"]
 [ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" path="res://ui/app_bar.gd" id="2_bar"]
+[ext_resource type="Script" path="res://ui/app_tabs.gd" id="7_tabs"]
 
 [node name="Join" type="Control"]
 layout_mode = 3
@@ -72,6 +73,11 @@ autowrap_mode = 3
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="Tabs" type="Control" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_tabs")
 
 [node name="ToastLayer" type="Control" parent="Safe"]
 mouse_filter = 2

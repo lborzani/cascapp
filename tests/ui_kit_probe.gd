@@ -32,6 +32,7 @@ func _run() -> void:
 	_probe_scene_palette()
 	_probe_tabs()
 	_probe_seats()
+	_probe_code_input()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -273,6 +274,27 @@ func _probe_seats() -> void:
 	table.refresh()
 	_equals(table.find_children("*", "Coaster", true, false).size(), 6, "trocar a lotação refaz a mesa")
 	table.free()
+
+
+func _probe_code_input() -> void:
+	print("código em seis casas")
+	_equals(CodeInput.clean("ab-12cd9"), "AB12CD", "colar limpa e corta no tamanho do código")
+	_equals(CodeInput.clean("  d k 4 "), "DK4", "espaço não conta")
+	var field := CodeInput.new()
+	root.add_child(field)
+	var heard: Array[String] = []
+	field.completed.connect(func(code: String) -> void: heard.append(code))
+	field.set_code("dk4")
+	_equals(field.code, "DK4", "o que se digita vira maiúscula")
+	_equals(heard.size(), 0, "e com menos de seis não avisa")
+	field.set_code("dk4p2q")
+	_equals(field.code, "DK4P2Q", "seis casas cheias")
+	_equals(heard, ["DK4P2Q"] as Array[String], "avisa uma vez")
+	field.set_code("dk4p2q")
+	_equals(heard.size(), 1, "e não avisa de novo pelo mesmo código")
+	field.clear()
+	_equals(field.code, "", "limpar esvazia")
+	field.free()
 
 
 func _probe_dashed() -> void:

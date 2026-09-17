@@ -495,12 +495,13 @@ func _probe_guest() -> void:
 		return
 
 	var panel: JoinPanel = screen.get_node("%JoinPanel")
+	var field: CodeInput = panel.get_node("%CodeInput")
 
 	# Código com o tamanho errado nunca chega ao transporte. Os campos vêm do
 	# painel, e não da tela: `%` só enxerga dentro da cena que declarou o nome, e
 	# o painel é uma cena própria — é o que o torna reusável sem que a tela
 	# precise conhecer as peças dele.
-	panel.get_node("%CodeEdit").text = "ABC"
+	field.set_code("ABC")
 	panel.get_node("%JoinButton").pressed.emit()
 	await get_tree().process_frame
 	# A recusa vai para o toast do topo, não para a linha de status: é ali que o
@@ -511,20 +512,14 @@ func _probe_guest() -> void:
 		"código curto é recusado no toast (obtido: '%s')" % toast._message
 	)
 
-	# Código completo: vai direto para a sala, sem tentar endereço nenhum antes.
-	# O estado do relay sobrescreve o texto assim que a ponte responde, então o
-	# que se verifica é o efeito — a tentativa foi entregue ao link.
-	# O campo é sempre maiúsculo, e na tela: converter só no envio deixaria o
-	# jogador lendo um código diferente do que mandou.
-	var field: LineEdit = panel.get_node("%CodeEdit")
-	field.text = "ab12cd"
-	panel._on_code_typed(field.text)
-	_equals(field.text, "AB12CD", "o que é digitado em minúsculas vira maiúscula no campo")
-
-	field.text = "ZZZ999"
-	panel.get_node("%JoinButton").pressed.emit()
+	# Seis casas cheias entram sozinhas: quem acabou de digitar o código inteiro não
+	# deveria ter de procurar um botão. E o que é digitado em minúsculas vira
+	# maiúscula na tela — converter só no envio deixaria o jogador lendo um código
+	# diferente do que mandou.
+	field.set_code("zzz999")
 	await get_tree().process_frame
-	_equals(Net._expected_code, "ZZZ999", "o código digitado vira o nome da sala procurada")
+	_equals(field.code, "ZZZ999", "o que é digitado em minúsculas vira maiúscula no campo")
+	_equals(Net._expected_code, "ZZZ999", "e a sexta casa procura a sala sem passar pelo botão")
 	_equals(Net.is_host, false, "e o papel é de convidado")
 	_equals(Game.role, Game.Role.GUEST, "com o papel gravado antes de sair da tela")
 
@@ -540,6 +535,18 @@ func _probe_guest() -> void:
 	await get_tree().process_frame
 	_equals(Net._expected_code, "AB12CD", "tocar na sala procura o código dela")
 	_equals(Game.game_id, Game.CHECKERS, "e leva o jogo da sala, não o que estava escolhido")
+
+	# "Criar sala" mora aqui também: quem abriu o app para jogar com alguém já está
+	# nesta aba, e mandá-lo à coleção de jogos só para voltar é um desvio que não
+	# decide nada. A fileira abre a mesma folha do cardápio, já em Online.
+	Net.leave()
+	panel._joining = false
+	panel.create_requested.emit(Game.LUDO)
+	await get_tree().process_frame
+	_check(screen._sheet.is_open(), "tocar num jogo de Criar sala abre a folha")
+	_equals(screen._sheet.mode, Game.Mode.ONLINE, "já em Online")
+	screen.go_back()
+	_check(not screen._sheet.is_open(), "e o gesto de voltar fecha a folha")
 
 	screen.free()
 	await get_tree().process_frame

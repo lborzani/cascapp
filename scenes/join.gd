@@ -16,10 +16,14 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 
 var _waiting: WaitingPanel = null
+var _sheet: GameSheet = null
+var _leaving := false
 
 
-func _on_waiting(game_id: StringName, code: String, taken: int, capacity: int) -> void:
-	_waiting.show_room(game_id, code, taken, capacity)
+func _on_waiting(
+	game_id: StringName, code: String, present: PackedInt32Array, capacity: int, local_seat: int
+) -> void:
+	_waiting.show_room(game_id, code, present, capacity, local_seat)
 
 
 ## Desistir fecha o painel e **larga a cadeira**, e continua na tela de entrar: a
@@ -52,12 +56,20 @@ func _ready() -> void:
 	# dentro da coleção de jogos, é um lugar do app ao lado dela. Com uma seta de
 	# voltar ele pareceria um desvio do caminho de escolher jogo, que é
 	# exatamente o que ele não é.
-	%AppBar.title = "Olá, %s!" % Prefs.player_name()
-	%AppBar.leading = IconButton.Kind.MENU
-	%AppBar.action = IconButton.Kind.GEAR
-	%AppBar.leading_pressed.connect(_open_drawer)
-	%AppBar.action_pressed.connect(_open_settings)
+	%AppBar.title = "Online"
+	# Aba é lugar, e de um lugar não se volta: quem quer outro lugar toca noutra aba.
+	%AppBar.leading = -1
 	%Unavailable.visible = not Net.relay_available()
+
+	%Tabs.current = AppTabs.ONLINE
+	%Tabs.picked.connect(_go_tab)
+
+	# A folha do jogo também mora aqui: a fileira de "Criar sala" abre a mesma folha
+	# do cardápio, já em Online.
+	_sheet = GameSheet.new()
+	add_child(_sheet)
+	_sheet.confirmed.connect(_launch)
+	%JoinPanel.create_requested.connect(_create_room)
 
 	# Um QR lido antes de o Android recolher o app: a tela inicial recuperou o
 	# payload e mandou junto, e o pareamento continua como se tivesse acabado de
@@ -102,52 +114,51 @@ func _show_error(message: String) -> void:
 	%Toast.show_message(message, Banner.Kind.DANGER)
 
 
-## A gaveta, montada a cada abertura como na tela inicial. Marcada em
-## `MULTIPLAYER`: é onde o jogador está, e uma gaveta que não diz isso é uma lista
-## de links.
-func _open_drawer() -> void:
-	if _drawer() != null:
+func _create_room(id: StringName) -> void:
+	Sound.play(Sound.Cue.TAP)
+	_sheet.open(id, Game.Mode.ONLINE)
+
+
+func _launch(mode: int) -> void:
+	if _leaving:
 		return
-	var drawer := NavDrawer.new()
-	drawer.current = NavDrawer.MULTIPLAYER
-	drawer.picked.connect(_go)
-	add_child(drawer)
-	drawer.open()
+	_leaving = true
+	GameSheet.launch(get_tree(), mode)
 
 
-func _go(route: StringName) -> void:
+func _go_tab(route: StringName) -> void:
+	Sound.play(Sound.Cue.TAP)
 	match route:
-		NavDrawer.HOME:
+		AppTabs.GAMES:
 			_back_to_menu()
-		# Já se está aqui.
-		NavDrawer.MULTIPLAYER:
-			return
-		NavDrawer.SETTINGS:
+		AppTabs.YOU:
 			_open_settings()
 
 
-func _drawer() -> NavDrawer:
-	for child in get_children():
-		if child is NavDrawer:
-			return child as NavDrawer
-	return null
-
-
 func _open_settings() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(SETTINGS_SCENE)
 
 
-## Com a gaveta aberta o gesto fecha **ela**; sem ela, volta para a coleção de
-## jogos, que é de onde se chegou aqui em todos os caminhos.
+## As camadas primeiro: a folha do jogo, depois a espera de uma sala — desistir da
+## espera larga a cadeira que o servidor já reservou. Sem camada nenhuma, volta
+## para a coleção de jogos.
 func go_back() -> void:
-	var drawer := _drawer()
-	if drawer != null:
-		drawer.close()
+	if _sheet != null and _sheet.is_open():
+		_sheet.close()
+		return
+	if _waiting != null and _waiting.visible:
+		_on_give_up()
 		return
 	_back_to_menu()
 
 
 func _back_to_menu() -> void:
+	if _leaving:
+		return
+	_leaving = true
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
