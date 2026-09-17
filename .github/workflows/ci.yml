@@ -87,6 +87,13 @@ jobs:
       - name: Regras (perft, damas, QR, prefs)
         run: godot --headless --path . --script res://tests/test_runner.gd
 
+      # Tema e componentes base: fontes embarcadas com os acentos do português,
+      # contraste dos pares de texto, as variações que as telas pedem, e a
+      # geometria e o comportamento de cada componente. O que só a imagem prova —
+      # peças e cartas intactas — fica com `tests/image_diff.gd`, que precisa de GPU.
+      - name: Kit de interface
+        run: godot --headless --path . --script res://tests/ui_kit_probe.gd
+
       - name: Camada de cena
         run: godot --headless --path . res://tests/scene_probe.tscn
 

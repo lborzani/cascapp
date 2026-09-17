@@ -29,6 +29,7 @@ func _run() -> void:
 	_probe_coaster()
 	_probe_paper()
 	_probe_segments()
+	_probe_scene_palette()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -190,6 +191,30 @@ func _probe_segments() -> void:
 	_equals(control._row.get_child_count(), 2, "sem deixar os velhos na fileira")
 	_equals(control.current, 1, "e marca o pedido")
 	control.free()
+
+
+## Cor de tema escrita à mão numa cena não acompanha a paleta.
+##
+## Os fundos das telas eram um `ColorRect` com o marrom antigo gravado no `.tscn`,
+## e a troca de tokens deixou metade do app no fundo velho sem nada falhar. Este
+## teste procura, nas cenas e na configuração do projeto, as cores da paleta que
+## saiu.
+func _probe_scene_palette() -> void:
+	print("cores antigas gravadas em cena")
+	var retired := {
+		"fundo antigo": "0.0745098, 0.0627451, 0.054902",
+		"fundo antigo (projeto)": "0.07450981, 0.0627451, 0.05490196",
+		"latão antigo": "0.85098, 0.643137, 0.254902",
+	}
+	var files: Array[String] = ["res://project.godot"]
+	for folder: String in ["res://scenes", "res://ui"]:
+		for file in DirAccess.get_files_at(folder):
+			if file.ends_with(".tscn"):
+				files.append("%s/%s" % [folder, file])
+	for path in files:
+		var text := FileAccess.get_file_as_string(path)
+		for label: String in retired:
+			_check(not text.contains(retired[label]), "%s sem %s" % [path.get_file(), label])
 
 
 func _probe_dashed() -> void:

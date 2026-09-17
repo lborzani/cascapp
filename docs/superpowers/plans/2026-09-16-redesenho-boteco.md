@@ -1088,7 +1088,13 @@ static func paper_theme() -> Theme:
 	return _paper_theme
 ```
 
-- [ ] **Step 3: Rodar** — Esperado: OK. (Se `Caption` sair igual a `TEXT_DIM`, a hipótese da busca por tipo está errada no sentido contrário e o teste mostra; ajustar só a lista.)
+- [ ] **Step 3: Rodar** — Esperado: OK.
+
+> **Na execução:** a lista `LABEL_TYPES` se mostrou desnecessária. A busca de tema
+> vai ao dono mais perto primeiro e sobe da variação para `Label` dentro dele;
+> reduzir a lista à `Label` manteve a legenda escura. O código final define só
+> `Label` e a tinta leve de `Caption`/`Subtitle`. O teste também passou a esperar um
+> quadro antes de montar nós: em `_initialize` a árvore ainda não resolve tema.
 - [ ] **Step 4: Commit** — `git add ui/paper_card.gd tests/ui_kit_probe.gd` · `feat(tema): cartão de papel`
 
 ### Task 8: `SegmentedControl`

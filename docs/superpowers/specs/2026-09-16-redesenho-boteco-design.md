@@ -28,8 +28,17 @@ Três decisões tomadas na aprovação:
 | Logo | `assets/icon/*` | Nenhum pixel. |
 | Peças de xadrez, damas e Ludo | `assets/pieces/*.svg`, `scenes/piece_renderer.gd` | Nenhuma forma, cor ou contorno. |
 | Barcos da naval | `assets/pieces/ship_*.svg` e o desenho deles | Idem. |
-| Tabuleiro de Metrópole | `ui/monopoly_board_3d.gd`, `ui/monopoly_face.gd`, `ui/monopoly_token.gd`, `ui/monopoly_card.gd` | Idem — inclui peões, casas e as pilhas de Sorte/Cofre, que são parte da mesa 3D. |
-| Cartas de Uno | `ui/uno_card.gd` | Idem — frente, verso e o leque. |
+| Tabuleiro de Metrópole | `ui/monopoly_board_3d.gd`, `ui/monopoly_face.gd`, `ui/monopoly_token.gd` | Idem — inclui peões, casas, hotéis, a marca da cadeia e o destaque de casa, que ganharam cor fixa. O fundo da sala em volta da mesa segue o tema: é ambiente, não mesa. |
+| Cartas de Uno | `ui/uno_card.gd` | Idem — frente, verso, o leque e o véu da carta apagada. |
+
+`ui/monopoly_card.gd` **não** está na lista: ele é o painel que mostra a carta de
+Sorte ou Cofre sorteada, interface por cima da mesa, e é redesenhado na etapa 4.
+
+Os desenhos protegidos não leem nada do tema que muda: usam `AppTheme.legacy_font()`
+(a fonte do sistema de antes) e constantes de cor próprias. A garantia é por
+imagem — `tests/image_diff.gd` compara as folhas de cartas e peças e o miolo do
+tabuleiro contra uma referência renderizada antes do redesenho, e a resposta
+aceitável é zero pixels diferentes.
 
 ### Ficam como estão, só a moldura muda (decisão 3)
 
@@ -90,9 +99,10 @@ arquivo):
 Atkinson Hyperlegible foi desenhada para leitura difícil — tela na mesa, longe do
 rosto —, e é o motivo de o corpo não ser uma grotesca qualquer.
 
-`AppTheme.font(weight)` passa a receber o papel: `AppTheme.font(Role.DISPLAY, 900)`.
-O cache por peso continua (o motivo dele, desenhar blocos no lugar de glifos, não
-mudou).
+A assinatura continua `AppTheme.font(weight)` para quem já a chama, com o papel
+como segundo argumento — `AppTheme.font(900, AppTheme.Role.DISPLAY)` — e os atalhos
+`display()` e `mono()`. O cache por papel e peso continua (o motivo dele, desenhar
+blocos no lugar de glifos, não mudou).
 
 Escala, em pixels lógicos da base de 432 de largura:
 
