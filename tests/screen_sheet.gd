@@ -328,7 +328,7 @@ func _next() -> void:
 		# responde se dá para saber quem é quem antes da primeira vez chegar.
 		_stage_ludo(_scene)
 		_scene._status("Vez do Verde (bot).")
-		_scene._update_scoreboard()
+		_scene._update_tags()
 	elif shot == "11_arrasto":
 		_play_opening(_scene)
 		_scene._on_square_tapped(_sq("f3"))
@@ -541,7 +541,7 @@ func _stage_ludo(scene: Node) -> void:
 	scene._board.movable = scene._movable_tokens()
 	scene._dice.value = 3
 	scene._dice.enabled = false
-	scene._update_scoreboard()
+	scene._update_tags()
 	scene._status("Vermelho tirou 3. Escolha o peão.")
 
 

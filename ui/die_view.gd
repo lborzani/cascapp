@@ -272,11 +272,14 @@ func _draw() -> void:
 	var rect := Rect2((size - Vector2.ONE * side) * 0.5 + _offset, Vector2.ONE * side)
 	rect = rect.grow(-side * 0.06)
 
+	# Dado de papel: face creme e pontos de tinta, o mesmo papel da comanda e da
+	# escritura. Parado, ele recua para o tom do balcão — um dado claro que não se
+	# pode rolar chamaria o dedo para um alvo morto.
 	var box := StyleBoxFlat.new()
 	box.set_corner_radius_all(int(side * 0.22))
-	box.bg_color = AppTheme.SURFACE_HIGH if enabled else AppTheme.SURFACE
+	box.bg_color = AppTheme.PAPER if enabled else AppTheme.SURFACE_HIGH
 	box.border_color = Color(tint, 1.0 if enabled else 0.35)
-	box.set_border_width_all(2)
+	box.set_border_width_all(3)
 	if enabled and value == 0 and _morph >= 1.0:
 		box.shadow_color = Color(tint, 0.22)
 		box.shadow_size = int(side * 0.12)
@@ -294,7 +297,7 @@ func _draw() -> void:
 	var leaving: Array = FACES.get(_previous, [])
 	var arriving: Array = FACES.get(value, [])
 	var pip := side * 0.075
-	var color := Color(AppTheme.TEXT, 1.0 if enabled else 0.35)
+	var color := AppTheme.PAPER_INK if enabled else Color(AppTheme.TEXT, 0.35)
 
 	for slot in SLOTS.size():
 		var was := 1.0 if leaving.has(slot) else 0.0

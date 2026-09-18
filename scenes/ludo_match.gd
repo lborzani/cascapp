@@ -47,6 +47,9 @@ extends Control
 ## lances promete.
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
+## Tamanho de uma etiqueta de cor. Fixo, e não medido: ela é posicionada à mão ao
+## lado do tabuleiro, e um tamanho que muda com o texto faria o canto dançar.
+const TAG_SIZE := Vector2(176, PlayerTag.HEIGHT_TAG)
 ## Pausa entre o dado parar e o que ele causa — o lance automático, ou a vez
 ## passando.
 ##
@@ -82,8 +85,8 @@ var _bot_seats := PackedInt32Array()
 var _bot_pending := false
 
 var _match_status: MatchStatus = null
-## Uma faixa de cor por jogador, na ordem das cores.
-var _chips: Array[PanelContainer] = []
+## Uma etiqueta por cor, na ordem das cores, pendurada no canto dela do tabuleiro.
+var _tags: Array[PlayerTag] = []
 
 @onready var _board: LudoView = %Board
 @onready var _dice: DieView = %Die
@@ -103,22 +106,17 @@ func _ready() -> void:
 	_board.state = _state
 	_board.token_tapped.connect(_on_token_tapped)
 	_dice.rolled.connect(_on_die_rolled)
-	%BackButton.confirmed.connect(_leave)
+	%Bar.leave_confirmed.connect(_leave)
+	# As etiquetas seguem o canto de cada cor, e o canto segue o tamanho do
+	# tabuleiro: girar o aparelho move os dois.
+	_board.resized.connect(_place_tags)
 	%AgainButton.pressed.connect(_restart)
 	%OverlayLeaveButton.pressed.connect(_leave)
 	%Overlay.visible = false
 
-	# No topo do placar, e não na coluna do dado: a coluna do dado é onde se **age**
-	# nesta tela, e a faixa não é para agir. O placar já é a coluna do "como está a
-	# partida", e a faixa é mais uma linha dessa resposta.
-	#
-	# A coluna tem 150 px, então a faixa quebra em duas ou três linhas — é para isso
-	# que ela é um `HFlowContainer`, e é a mesma faixa das telas de retrato onde
-	# sobra largura.
 	Game.begin_match()
-	_match_status = MatchStatus.create()
-	%Scoreboard.add_child(_match_status)
-	%Scoreboard.move_child(_match_status, 0)
+	%Bar.bind()
+	_match_status = %Bar.status
 
 	if Game.mode == Game.Mode.SOLO:
 		# Solo é a mesa cheia com um humano só: você é o vermelho, as outras três
@@ -150,14 +148,7 @@ func _ready() -> void:
 		# outra sala. O botão sai em vez de mentir.
 		%AgainButton.visible = false
 
-	_build_scoreboard()
-	# Para o fim da coluna, depois das faixas de cor.
-	#
-	# Na cena ele é o primeiro filho — é lá que um nó escrito à mão cabe —, mas as
-	# faixas nascem em laço e entram depois dele, e a de contexto é movida para o
-	# topo. Sem esta linha o botão de sair fica encravado entre o placar e a
-	# primeira cor, que é o meio da coluna.
-	%Scoreboard.move_child(%BackButton, -1)
+	_build_tags()
 	_refresh()
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
 	# histórico antes desta cena existir, e ele ficou guardado esperando.
@@ -542,7 +533,7 @@ func _refresh() -> void:
 			_status("Vez do %s. Toque no dado." % _color_name())
 		else:
 			_status("Vez do %s." % _color_name())
-	_update_scoreboard()
+	_update_tags()
 
 	# A vez da máquina começa sozinha, e só depois de a tela já estar mostrando
 	# de quem ela é.
@@ -601,86 +592,74 @@ func _captured_names(origin: Dictionary) -> PackedStringArray:
 ## devolver o nó errado — um `PanelContainer` esperado, um `HFlowContainer`
 ## recebido. Com a lista, quem mora na coluna deixa de ser problema de quem
 ## desenha as cores.
-func _build_scoreboard() -> void:
-	for chip in _chips:
-		chip.queue_free()
-	_chips.clear()
+## Onde cada cor aparece: uma etiqueta encostada no canto que é a casa dela.
+##
+## Era uma coluna de quatro faixas à esquerda, e ela custava 150 px de uma tela
+## deitada — a largura que faltava ao tabuleiro. Pior: obrigava a amarrar com o
+## olho a faixa "Vermelho" ao canto vermelho do tabuleiro, que é uma tradução que
+## a posição faz de graça.
+##
+## A cor continua sendo o nome do jogador, e o nome de quem está sentado entra
+## como detalhe: trocar "Vermelho" pelo apelido quebraria a única ligação entre a
+## etiqueta e os peões no tabuleiro.
+func _build_tags() -> void:
+	for tag in _tags:
+		var parent := tag.get_parent()
+		if parent != null:
+			parent.remove_child(tag)
+		tag.queue_free()
+	_tags.clear()
+
 	for player in LudoRules.PLAYERS:
-		var chip := PanelContainer.new()
-		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		# Deitado a coluna tem a altura do tabuleiro, e as quatro faixas a dividem
-		# entre si. Em retrato elas eram uma fileira baixa embaixo do tampo, e o
-		# nome disputava a linha com o placar.
-		chip.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		chip.add_theme_stylebox_override("panel", _chip_style(player, false))
-
-		var column := VBoxContainer.new()
-		column.alignment = BoxContainer.ALIGNMENT_CENTER
-		column.add_theme_constant_override("separation", 2)
-		chip.add_child(column)
-
-		# Duas linhas, e não uma. "Vermelho 2/4" numa linha só obriga a separar o
-		# nome do placar com o olho; separados, o placar vira número grande e o
-		# nome vira rótulo — que é a hierarquia certa, porque o que muda durante a
-		# partida é o número.
-		var name_label := Label.new()
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.add_theme_font_size_override("font_size", 13)
-		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		column.add_child(name_label)
-
-		var score := Label.new()
-		score.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		score.add_theme_font_size_override("font_size", 20)
-		column.add_child(score)
-
-		%Scoreboard.add_child(chip)
-		_chips.append(chip)
+		var tag := PlayerTag.new()
+		tag.shape = PlayerTag.Shape.TAG
+		tag.seat_color = LudoView.COLORS[player]
+		tag.size = TAG_SIZE
+		tag.pips = LudoRules.TOKENS
+		_board.add_child(tag)
+		_tags.append(tag)
+	_place_tags()
 
 
-func _update_scoreboard() -> void:
+## Cada etiqueta fica do lado de fora do curral da cor dela: os cantos da esquerda
+## empurram para a esquerda, os da direita para a direita. Se não couber fora do
+## tabuleiro — tela estreita —, ela encosta na borda em vez de sumir.
+func _place_tags() -> void:
+	for player in _tags.size():
+		var tag: PlayerTag = _tags[player]
+		var yard := _board.yard_rect(player)
+		var on_left: bool = LudoView.YARD[player].x == 0
+		var x := yard.position.x - TAG_SIZE.x - 10.0 if on_left else yard.end.x + 10.0
+		tag.size = TAG_SIZE
+		tag.position = Vector2(
+			clampf(x, 0.0, maxf(0.0, _board.size.x - TAG_SIZE.x)),
+			clampf(
+				yard.position.y + (yard.size.y - TAG_SIZE.y) * 0.5,
+				0.0, maxf(0.0, _board.size.y - TAG_SIZE.y)
+			)
+		)
+
+
+func _update_tags() -> void:
 	var turn := LudoRules.turn_of(_state)
-	for player in LudoRules.PLAYERS:
-		var chip: PanelContainer = _chips[player]
-		chip.add_theme_stylebox_override("panel", _chip_style(player, player == turn))
-		var column: VBoxContainer = chip.get_child(0)
-		var name_label: Label = column.get_child(0)
-		var score: Label = column.get_child(1)
-		# Nome inteiro, e não a abreviação: em coluna sobra largura, e "Vermelho"
-		# não precisa ser decifrado como "VM".
-		# A cor é a identidade do jogador aqui, então ela é sempre o rótulo — o
-		# nome entra como quem está **sentado** naquela cor, e não no lugar dela.
-		# Trocar "Vermelho" pelo nome quebraria a única ligação entre a faixa e o
-		# peão no tabuleiro.
-		var who := LudoRules.color_name(player)
-		if Game.mode != Game.Mode.HOTSEAT and player == Game.local_seat:
-			who = "%s (você)" % who
-		elif _is_bot(player):
-			who = "%s (bot)" % who
-		elif Game.mode == Game.Mode.ONLINE:
-			var theirs := Net.name_of(player)
-			if not theirs.is_empty():
-				who = "%s (%s)" % [who, theirs]
-		name_label.text = who
-		score.text = "%d/%d" % [LudoRules.finished(_state, player), LudoRules.TOKENS]
-		var tint := AppTheme.TEXT if player == turn else AppTheme.TEXT_DIM
-		name_label.add_theme_color_override("font_color", tint)
-		score.add_theme_color_override("font_color", tint)
+	for player in _tags.size():
+		var tag: PlayerTag = _tags[player]
+		tag.title = LudoRules.color_name(player)
+		tag.subtitle = _seat_detail(player)
+		tag.active = player == turn
+		tag.pips_filled = LudoRules.finished(_state, player)
+	_place_tags()
 
 
-## A cor preenche a faixa de quem joga e só contorna as outras. Quatro faixas
-## cheias competiriam entre si, e a pergunta que a barra responde é "de quem é a
-## vez", não "quais são as cores".
-func _chip_style(player: int, is_turn: bool) -> StyleBoxFlat:
-	var color: Color = LudoView.COLORS[player]
-	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(AppTheme.RADIUS)
-	style.bg_color = Color(color, 0.85 if is_turn else 0.12)
-	style.border_color = Color(color, 1.0 if is_turn else 0.45)
-	style.set_border_width_all(1)
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	return style
+## Quem está sentado naquela cor, quando isso não é o próprio jogador olhando.
+func _seat_detail(player: int) -> String:
+	if Game.mode != Game.Mode.HOTSEAT and player == Game.local_seat:
+		return "você"
+	if _is_bot(player):
+		return "bot"
+	if Game.mode == Game.Mode.ONLINE:
+		return Net.name_of(player)
+	return ""
 
 
 func _finish(champion: int) -> void:
@@ -706,7 +685,7 @@ func _restart() -> void:
 
 func go_back() -> void:
 	# Pelo botão ou pelo gesto, sair é a mesma decisão.
-	%BackButton.ask()
+	%Bar.leave.ask()
 
 
 func _leave() -> void:
