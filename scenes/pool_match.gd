@@ -29,7 +29,7 @@ const AFTER_SHOT := 0.35
 ## simulados —, mas sem a pausa a vez dele acontece entre dois quadros.
 const BOT_THINK := 0.7
 ## Largura da coluna dos jogadores, na base deitada de 768.
-const COLUMN := 150.0
+const COLUMN := 168.0
 
 var _rules := PoolRules.new()
 var _state: MatchState = null
@@ -43,7 +43,9 @@ var _bot_seats := PackedInt32Array()
 var _view: PoolView = null
 var _banner: Banner = null
 var _hint: Label = null
-var _cards: Array[PanelContainer] = []
+## As duas etiquetas da coluna, uma por assento, com a cor das bolas de cada um.
+var _tags: Array[PlayerTag] = []
+var _bar: MatchBar = null
 var _overlay: Control = null
 var _overlay_title: Label = null
 var _again: Button = null
@@ -63,6 +65,7 @@ func _ready() -> void:
 	_build()
 
 	Game.begin_match()
+	_bar.bind()
 	if Game.mode == Game.Mode.SOLO:
 		Game.local_seat = 0
 		_bot_seats = PackedInt32Array([1])
@@ -109,35 +112,48 @@ func _build() -> void:
 
 	var safe := SafeAreaMargin.new()
 	safe.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "top", "bottom"]:
-		safe.add_theme_constant_override("margin_" + side, 12)
 	add_child(safe)
+
+	var shell := VBoxContainer.new()
+	shell.add_theme_constant_override("separation", 0)
+	safe.add_child(shell)
+
+	# A barra é montada aqui e ligada à partida depois de `begin_match()`: é ele
+	# que decide se o relógio conta de agora ou da partida retomada.
+	_bar = MatchBar.new()
+	_bar.compact = true
+	_bar.leave_confirmed.connect(_leave)
+	shell.add_child(_bar)
+
+	var pad := MarginContainer.new()
+	pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 12)
+	pad.add_theme_constant_override("margin_top", 8)
+	shell.add_child(pad)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	safe.add_child(row)
+	pad.add_child(row)
 
 	var column := VBoxContainer.new()
 	column.custom_minimum_size.x = COLUMN
 	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	row.add_child(column)
 
-	var status := MatchStatus.create()
-	column.add_child(status)
 	for seat in 2:
-		var card := _build_card(seat)
-		_cards.append(card)
-		column.add_child(card)
+		var tag := PlayerTag.new()
+		tag.shape = PlayerTag.Shape.TAG
+		_tags.append(tag)
+		column.add_child(tag)
 
+	# A instrução embaixo das etiquetas, e não num canto: ela responde "o que eu
+	# faço agora", e é logo depois de saber de quem é a vez que se pergunta isso.
 	_hint = Label.new()
-	_hint.theme_type_variation = &"Caption"
+	_hint.theme_type_variation = &"Hint"
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_hint)
-
-	var leave := LeaveButton.new()
-	leave.confirmed.connect(_leave)
-	column.add_child(leave)
 
 	var stage := Control.new()
 	stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -159,31 +175,6 @@ func _build() -> void:
 	_build_overlay()
 
 
-func _build_card(seat: int) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.custom_minimum_size.y = 62
-	var margin := MarginContainer.new()
-	for side in ["left", "right"]:
-		margin.add_theme_constant_override("margin_" + side, 12)
-	for side in ["top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 8)
-	card.add_child(margin)
-	var lines := VBoxContainer.new()
-	lines.add_theme_constant_override("separation", 2)
-	margin.add_child(lines)
-
-	var name_label := Label.new()
-	name_label.name = "Name"
-	name_label.add_theme_font_size_override("font_size", 14)
-	lines.add_child(name_label)
-
-	var detail := Label.new()
-	detail.name = "Detail"
-	detail.theme_type_variation = &"Caption"
-	lines.add_child(detail)
-	return card
-
-
 func _build_overlay() -> void:
 	_overlay = Control.new()
 	_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -195,7 +186,8 @@ func _build_overlay() -> void:
 	dim.color = Color(AppTheme.BACKGROUND, 0.82)
 	_overlay.add_child(dim)
 
-	var panel := PanelContainer.new()
+	# Fim de partida em papel, como nos outros jogos.
+	var panel := PaperCard.new()
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -204,7 +196,7 @@ func _build_overlay() -> void:
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 24)
+		margin.add_theme_constant_override("margin_" + side, 12)
 	panel.add_child(margin)
 
 	var column := VBoxContainer.new()
@@ -212,7 +204,7 @@ func _build_overlay() -> void:
 	margin.add_child(column)
 
 	_overlay_title = Label.new()
-	_overlay_title.theme_type_variation = &"Title"
+	_overlay_title.theme_type_variation = &"Display"
 	_overlay_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_overlay_title)
 
@@ -223,6 +215,7 @@ func _build_overlay() -> void:
 
 	var out := Button.new()
 	out.text = "Sair"
+	out.theme_type_variation = &"GhostButton"
 	out.pressed.connect(_leave)
 	buttons.add_child(out)
 
@@ -433,19 +426,14 @@ func _refresh() -> void:
 
 func _refresh_cards() -> void:
 	var turn := PoolRules.turn_of(_state)
-	for seat in _cards.size():
-		var card := _cards[seat]
-		var tint := _seat_color(seat)
-		card.add_theme_stylebox_override("panel", AppTheme.box(
-			Color(tint, 0.20) if seat == turn else AppTheme.SURFACE,
-			AppTheme.RADIUS,
-			tint if seat == turn else AppTheme.BORDER,
-			2 if seat == turn else 1
-		))
-		var name_label: Label = card.find_child("Name", true, false)
-		var detail: Label = card.find_child("Detail", true, false)
-		name_label.text = _seat_name(seat)
-		detail.text = _seat_detail(seat)
+	for seat in _tags.size():
+		var tag := _tags[seat]
+		# A bolacha na cor das bolas do assento: é a informação principal da tela no
+		# mata-mata, e a etiqueta a carrega no avatar em vez de numa tarja.
+		tag.seat_color = _seat_color(seat)
+		tag.active = seat == turn
+		tag.title = _seat_name(seat)
+		tag.subtitle = _seat_detail(seat)
 
 
 ## A cor do assento: no mata-mata é a das bolas dele — e essa **é** a informação
@@ -504,8 +492,13 @@ func _restart() -> void:
 	_refresh()
 
 
+## O gesto de voltar pergunta, como o botão da barra. Com o fim de partida na
+## tela, sai direto: não há partida a proteger atrás do painel.
 func go_back() -> void:
-	_leave()
+	if _overlay.visible:
+		_leave()
+		return
+	_bar.leave.ask()
 
 
 func _leave() -> void:
