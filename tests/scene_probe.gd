@@ -99,7 +99,7 @@ func _test_check_position(match_scene: Node) -> void:
 	var bottom: PlayerTag = _node(match_scene, "%BottomTag")
 	_check(top.active, "a vez passou para o cartão das pretas")
 	_check(not bottom.active, "cartão das brancas apagou")
-	_check(top.in_check, "cartão das pretas anuncia o xeque")
+	_check(top.alert, "cartão das pretas anuncia o xeque")
 	_equals(Board.square_name(match_scene._board.check_square), "e8", "rei em xeque destacado")
 	_equals(match_scene._legal.size(), 4, "quatro respostas ao xeque")
 	_equals(match_scene._outcome, Ruleset.Outcome.ONGOING, "partida em andamento")

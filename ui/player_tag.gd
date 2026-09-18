@@ -35,6 +35,9 @@ const MATERIAL := {
 	Board.Kind.DAME: 3,
 }
 
+## Passo entre duas bolinhas de peão em casa.
+const PIP_STEP := 14.0
+
 ## Grande o suficiente para a peça ser reconhecida pela silhueta. Abaixo disso um
 ## bispo e um peão viram a mesma mancha.
 const CAPTURED_SIZE := 24.0
@@ -82,9 +85,17 @@ const CAPTURED_Y := 13.0
 			_coaster.turn = value
 		queue_redraw()
 
-@export var in_check := false:
+## O estado vermelho da etiqueta: xeque no xadrez, uma carta na mão no Uno. O
+## texto é de quem usa, porque o que é urgente muda de jogo para jogo — e é ele
+## que aparece no lugar do detalhe enquanto o alarme durar.
+@export var alert := false:
 	set(value):
-		in_check = value
+		alert = value
+		queue_redraw()
+
+@export var alert_text := "":
+	set(value):
+		alert_text = value
 		queue_redraw()
 
 ## Peças que este lado capturou, como inteiros de `Board.piece`. Só na faixa.
@@ -99,6 +110,19 @@ var captured: Array = []:
 var advantage := 0:
 	set(value):
 		advantage = value
+		queue_redraw()
+
+## Bolinhas à direita: quantos peões deste jogador já chegaram em casa, de quantos.
+## Cheias as que chegaram, vazias as que faltam — a mesma leitura de "3 de 4" sem
+## o jogador ter de ler dois números e subtrair.
+@export var pips := 0:
+	set(value):
+		pips = value
+		queue_redraw()
+
+@export var pips_filled := 0:
+	set(value):
+		pips_filled = value
 		queue_redraw()
 
 ## Tempo restante formatado. Vazio quando a partida não tem relógio — aí a
@@ -170,6 +194,10 @@ func _pad() -> float:
 	return 12.0 if shape == Shape.STRIP else 8.0
 
 
+func _alerting() -> bool:
+	return alert and not alert_text.is_empty()
+
+
 static func material(pieces: Array) -> int:
 	var total := 0
 	for value in pieces:
@@ -180,22 +208,26 @@ static func material(pieces: Array) -> int:
 func _draw() -> void:
 	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
 
-	var awake := active or in_check
+	var awake := active or alert
 	var text_x := _pad() + _coaster.size.x + 12.0
 	var name_size := 18 if shape == Shape.STRIP else 15
-	var has_detail := not subtitle.is_empty() or in_check
-	# Nome sozinho fica no meio da etiqueta; com detalhe embaixo, sobe.
-	var name_y := size.y * 0.5 + (6.0 if not has_detail else -2.0)
+	var has_detail := not subtitle.is_empty() or _alerting()
+	# Nome sozinho fica no meio da etiqueta; com detalhe ou bolinhas embaixo, sobe.
+	var two_lines := has_detail or pips > 0
+	var name_y := size.y * 0.5 + (6.0 if not two_lines else -2.0)
+	# Com largura, e não `-1`: um apelido longo numa etiqueta ancorada passava por
+	# cima do leque do vizinho. Cortar é feio; escrever por cima da mesa é pior.
+	var room := maxf(0.0, size.x - text_x - _right_room())
 	draw_string(
 		AppTheme.font(700), Vector2(text_x, name_y), title,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, name_size,
+		HORIZONTAL_ALIGNMENT_LEFT, room, name_size,
 		AppTheme.TEXT if awake else Color(AppTheme.TEXT, 0.55)
 	)
 
 	var detail := subtitle
 	var detail_color := AppTheme.TEXT_DIM if awake else Color(AppTheme.TEXT_DIM, 0.6)
-	if in_check:
-		detail = "Em xeque"
+	if _alerting():
+		detail = alert_text
 		detail_color = AppTheme.DANGER
 	var detail_width := 0.0
 	if has_detail:
@@ -203,7 +235,7 @@ func _draw() -> void:
 		var detail_size := AppTheme.SIZE_BODY_S if shape == Shape.STRIP else AppTheme.SIZE_CAPTION
 		draw_string(
 			body, Vector2(text_x, size.y * 0.5 + 17.0), detail,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, detail_size, detail_color
+			HORIZONTAL_ALIGNMENT_LEFT, _detail_room(room), detail_size, detail_color
 		)
 		detail_width = body.get_string_size(
 			detail, HORIZONTAL_ALIGNMENT_LEFT, -1, detail_size
@@ -214,6 +246,8 @@ func _draw() -> void:
 
 	# O placar toma o lugar de "SUA VEZ" quando existe: os dois diriam a mesma
 	# coisa (o anel da bolacha já indica a vez), e o número diz mais.
+	if pips > 0:
+		_draw_pips()
 	if not clock_text.is_empty():
 		_draw_clock()
 	elif active and shape == Shape.STRIP:
@@ -307,6 +341,44 @@ func _draw_captured(start_x: float) -> void:
 		)
 
 
+## Quanto do lado direito está ocupado por placar ou etiqueta de vez. É o que o
+## texto **não** pode invadir.
+func _right_room() -> float:
+	if not clock_text.is_empty():
+		return _chip_width()
+	if active and shape == Shape.STRIP:
+		return _chip_width()
+	return 10.0
+
+
+## A linha de baixo divide a largura com as bolinhas; a de cima fica inteira para
+## o nome, que é o que precisa ser lido.
+func _detail_room(room: float) -> float:
+	if pips <= 0:
+		return room
+	return maxf(0.0, room - _pips_width() - 8.0)
+
+
+func _pips_width() -> float:
+	return float(pips) * PIP_STEP
+
+
+## As bolinhas ficam na linha de baixo, encostadas à direita: são o placar deste
+## jogo, e na linha de cima tirariam do nome a largura que ele não tem de sobra
+## numa etiqueta ancorada. A cheia usa a cor do assento quando ele tem uma; sem cor de assento, o
+## amarelo do tema, que é como o app marca o que já é seu.
+func _draw_pips() -> void:
+	var ink := seat_color if seat_color != AppTheme.COASTER else AppTheme.ACCENT
+	var radius := PIP_STEP * 0.30
+	var left := size.x - _pips_width() - 10.0
+	for index in pips:
+		var at := Vector2(left + PIP_STEP * (index + 0.5), size.y * 0.5 + 12.0)
+		if index < pips_filled:
+			draw_circle(at, radius, ink)
+		else:
+			draw_arc(at, radius, 0.0, TAU, 20, Color(AppTheme.TEXT, 0.35), 1.5, true)
+
+
 ## Espaço reservado para o canto direito, seja o placar ou a etiqueta de vez.
 ## Mede o texto mais largo que o relógio pode assumir ("10:00") e não o que ele
 ## mostra agora: um espaço que encolhe faria a fileira de peças capturadas dançar
@@ -323,7 +395,7 @@ func _chip_width() -> float:
 ## preenchimento — afastar os dois extremos dobra a diferença pelo mesmo custo
 ## visual.
 func _background() -> StyleBox:
-	if in_check:
+	if alert:
 		return AppTheme.box(AppTheme.DANGER_SOFT, AppTheme.RADIUS, AppTheme.DANGER, 2)
 	if active:
 		var style := AppTheme.box(

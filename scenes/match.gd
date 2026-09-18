@@ -1131,7 +1131,8 @@ func _refresh_cards() -> void:
 		# do tempo em que só o xadrez tinha desenho.
 		view.piece = Board.piece(card_side, Board.kind_of(Game.piece_of(Game.game_id)))
 		view.active = not over and _state.side_to_move == card_side
-		view.in_check = not over and in_check and _state.side_to_move == card_side
+		view.alert = not over and in_check and _state.side_to_move == card_side
+		view.alert_text = "Em xeque"
 		view.clock_text = _clock_text(card_side)
 		view.clock_urgent = view.active and float(_clock.get(card_side, 0.0)) < 20.0
 		_refresh_captured(view, card_side)

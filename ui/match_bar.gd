@@ -73,18 +73,13 @@ func _init() -> void:
 	_title.text = title
 	row.add_child(_title)
 
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(spacer)
-
 	status = MatchStatus.new()
+	# Ela toma a sobra da linha em vez de um espaçador tomar: um `HFlowContainer`
+	# com a largura mínima dele quebra em duas linhas para caber, e a barra cresce
+	# para acomodar a quebra — numa tela deitada isso é mesa perdida.
+	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(status)
-	# À direita depois de entrar na árvore: o `_ready` dele centraliza, que é o
-	# certo quando a faixa é a linha inteira de uma coluna, e errado quando ela
-	# divide a linha com um título.
-	status.alignment = FlowContainer.ALIGNMENT_END
 
 	actions = HBoxContainer.new()
 	actions.add_theme_constant_override("separation", AppTheme.SPACE_S)
@@ -93,6 +88,15 @@ func _init() -> void:
 
 	_apply_size()
 	_apply_skin()
+
+
+## A faixa de contexto encosta à direita, e não no meio.
+##
+## Aqui e não no `_init`: o `_ready` do `MatchStatus` centraliza — o certo quando a
+## faixa é a linha inteira de uma coluna, o errado quando ela divide a linha com um
+## título — e ele roda depois, quando a barra entra na árvore.
+func _ready() -> void:
+	status.alignment = FlowContainer.ALIGNMENT_END
 
 
 ## O `LeaveButton` já fez a pergunta; a barra só repassa a resposta, para a tela
