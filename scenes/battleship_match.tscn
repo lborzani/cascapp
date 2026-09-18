@@ -1,9 +1,10 @@
 [gd_scene format=3 uid="uid://bq4nxv1twaship"]
 
 [ext_resource type="Script" path="res://scenes/battleship_match.gd" id="1_match"]
-[ext_resource type="Script" path="res://ui/leave_button.gd" id="9_leave"]
+[ext_resource type="Script" path="res://ui/match_bar.gd" id="9_bar"]
+[ext_resource type="Script" path="res://ui/paper_card.gd" id="10_paper"]
 [ext_resource type="Script" path="res://ui/waters_view.gd" id="2_waters"]
-[ext_resource type="Script" uid="uid://btp10g4hofovo" path="res://ui/player_card.gd" id="3_card"]
+[ext_resource type="Script" path="res://ui/player_tag.gd" id="3_card"]
 [ext_resource type="Script" uid="uid://6ooh7oflwmd2" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
 
@@ -25,28 +26,41 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.0901961, 0.129412, 0.109804, 1)
 
-[node name="Margin" type="MarginContainer" parent="." unique_id=311000003]
+[node name="Safe" type="MarginContainer" parent="." unique_id=311000003]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 18
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 18
 script = ExtResource("9_safe")
 
-[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=311000004]
+[node name="Shell" type="VBoxContainer" parent="Safe"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="PanelContainer" parent="Safe/Shell"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("9_bar")
+
+[node name="Pad" type="MarginContainer" parent="Safe/Shell"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Safe/Shell/Pad" unique_id=311000004]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="TopCardSlot" type="Control" parent="Margin/VBox" unique_id=311000005]
+[node name="TopTagSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=311000005]
 custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
 
-[node name="TopCard" type="Control" parent="Margin/VBox/TopCardSlot" unique_id=311000006]
+[node name="TopTag" type="Control" parent="Safe/Shell/Pad/VBox/TopTagSlot" unique_id=311000006]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -56,11 +70,11 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_card")
 
-[node name="WatersArea" type="Control" parent="Margin/VBox" unique_id=311000007]
+[node name="WatersArea" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=311000007]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="EnemyWaters" type="Control" parent="Margin/VBox/WatersArea" unique_id=311000008]
+[node name="EnemyWaters" type="Control" parent="Safe/Shell/Pad/VBox/WatersArea" unique_id=311000008]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -70,7 +84,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_waters")
 
-[node name="Banner" type="Control" parent="Margin/VBox/WatersArea" unique_id=311000014]
+[node name="Banner" type="Control" parent="Safe/Shell/Pad/VBox/WatersArea" unique_id=311000014]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 10
@@ -79,23 +93,33 @@ offset_bottom = 46.0
 grow_horizontal = 2
 script = ExtResource("4_banner")
 
-[node name="OwnCaption" type="Label" parent="Margin/VBox" unique_id=311000009]
+[node name="BottomRow" type="HBoxContainer" parent="Safe/Shell/Pad/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="OwnWaters" type="Control" parent="Safe/Shell/Pad/VBox/BottomRow" unique_id=311000010]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 150)
+layout_mode = 2
+script = ExtResource("2_waters")
+
+[node name="OwnColumn" type="VBoxContainer" parent="Safe/Shell/Pad/VBox/BottomRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 8
+
+[node name="OwnCaption" type="Label" parent="Safe/Shell/Pad/VBox/BottomRow/OwnColumn" unique_id=311000009]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "SEU MAR"
 
-[node name="OwnWaters" type="Control" parent="Margin/VBox" unique_id=311000010]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 132)
-layout_mode = 2
-script = ExtResource("2_waters")
-
-[node name="BottomCardSlot" type="Control" parent="Margin/VBox" unique_id=311000011]
-custom_minimum_size = Vector2(0, 68)
+[node name="BottomTagSlot" type="Control" parent="Safe/Shell/Pad/VBox/BottomRow/OwnColumn" unique_id=311000011]
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 
-[node name="BottomCard" type="Control" parent="Margin/VBox/BottomCardSlot" unique_id=311000012]
+[node name="BottomTag" type="Control" parent="Safe/Shell/Pad/VBox/BottomRow/OwnColumn/BottomTagSlot" unique_id=311000012]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -104,11 +128,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_card")
-
-[node name="ExitButton" type="Button" parent="Margin/VBox" unique_id=311000013]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("9_leave")
 
 [node name="PlaceLayer" type="Control" parent="." unique_id=311000020]
 unique_name_in_owner = true
@@ -163,10 +182,15 @@ layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("2_waters")
 
-[node name="FleetLabel" type="Label" parent="PlaceLayer/Margin/VBox" unique_id=311000027]
+[node name="FleetStrip" type="PanelContainer" parent="PlaceLayer/Margin/VBox"]
+layout_mode = 2
+theme_type_variation = &"QuietCard"
+
+[node name="FleetLabel" type="Label" parent="PlaceLayer/Margin/VBox/FleetStrip" unique_id=311000027]
 unique_name_in_owner = true
 layout_mode = 2
 horizontal_alignment = 1
+theme_type_variation = &"SectionHeader"
 text = "Encouraçado"
 
 [node name="ButtonRow" type="HBoxContainer" parent="PlaceLayer/Margin/VBox" unique_id=311000028]
@@ -236,7 +260,9 @@ theme_override_constants/margin_right = 24
 layout_mode = 2
 
 [node name="Panel" type="PanelContainer" parent="OverlayLayer/Margin/Center" unique_id=311000044]
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
+script = ExtResource("10_paper")
 
 [node name="Margin" type="MarginContainer" parent="OverlayLayer/Margin/Center/Panel" unique_id=311000045]
 layout_mode = 2
@@ -253,7 +279,7 @@ theme_override_constants/separation = 12
 unique_name_in_owner = true
 layout_mode = 2
 horizontal_alignment = 1
-theme_type_variation = &"Title"
+theme_type_variation = &"Display"
 text = "Fim"
 
 [node name="ResultDetail" type="Label" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000048]
@@ -261,7 +287,7 @@ unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 3
 horizontal_alignment = 1
-theme_type_variation = &"Caption"
+theme_type_variation = &"Subtitle"
 text = ""
 
 [node name="RematchButton" type="Button" parent="OverlayLayer/Margin/Center/Panel/Margin/VBox" unique_id=311000049]

@@ -1,9 +1,10 @@
 [gd_scene format=3 uid="uid://q7abve7epp4u"]
 
 [ext_resource type="Script" uid="uid://c3j6uv2jbuslc" path="res://scenes/match.gd" id="1_match"]
-[ext_resource type="Script" path="res://ui/leave_button.gd" id="9_leave"]
+[ext_resource type="Script" path="res://ui/match_bar.gd" id="9_bar"]
+[ext_resource type="Script" path="res://ui/paper_card.gd" id="10_paper"]
 [ext_resource type="Script" uid="uid://c5ufyl0o0t7os" path="res://scenes/board_view.gd" id="2_board"]
-[ext_resource type="Script" uid="uid://btp10g4hofovo" path="res://ui/player_card.gd" id="3_card"]
+[ext_resource type="Script" path="res://ui/player_tag.gd" id="3_card"]
 [ext_resource type="Script" uid="uid://6ooh7oflwmd2" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" uid="uid://bul13hsycc7ib" path="res://ui/last_move.gd" id="6_last"]
 [ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
@@ -26,28 +27,41 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.0901961, 0.129412, 0.109804, 1)
 
-[node name="Margin" type="MarginContainer" parent="." unique_id=478921014]
+[node name="Safe" type="MarginContainer" parent="." unique_id=478921014]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 18
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 18
 script = ExtResource("9_safe")
 
-[node name="VBox" type="VBoxContainer" parent="Margin" unique_id=1179290069]
+[node name="Shell" type="VBoxContainer" parent="Safe"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="PanelContainer" parent="Safe/Shell"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("9_bar")
+
+[node name="Pad" type="MarginContainer" parent="Safe/Shell"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Safe/Shell/Pad" unique_id=1179290069]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="TopCardSlot" type="Control" parent="Margin/VBox" unique_id=513716548]
+[node name="TopTagSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=513716548]
 custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
 
-[node name="TopCard" type="Control" parent="Margin/VBox/TopCardSlot" unique_id=461007153]
+[node name="TopTag" type="Control" parent="Safe/Shell/Pad/VBox/TopTagSlot" unique_id=461007153]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -57,13 +71,13 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_card")
 
-[node name="TopLastMoveSlot" type="Control" parent="Margin/VBox" unique_id=1922933009]
+[node name="TopLastMoveSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=1922933009]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 
-[node name="TopLastMove" type="Control" parent="Margin/VBox/TopLastMoveSlot" unique_id=959114296]
+[node name="TopLastMove" type="Control" parent="Safe/Shell/Pad/VBox/TopLastMoveSlot" unique_id=959114296]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -73,12 +87,12 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_last")
 
-[node name="BoardArea" type="Control" parent="Margin/VBox" unique_id=118403670]
+[node name="BoardArea" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=118403670]
 custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Board" type="Control" parent="Margin/VBox/BoardArea" unique_id=127514372]
+[node name="Board" type="Control" parent="Safe/Shell/Pad/VBox/BoardArea" unique_id=127514372]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -88,7 +102,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_board")
 
-[node name="Banner" type="Control" parent="Margin/VBox/BoardArea" unique_id=465729966]
+[node name="Banner" type="Control" parent="Safe/Shell/Pad/VBox/BoardArea" unique_id=465729966]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 10
@@ -97,13 +111,13 @@ offset_bottom = 46.0
 grow_horizontal = 2
 script = ExtResource("4_banner")
 
-[node name="BottomLastMoveSlot" type="Control" parent="Margin/VBox" unique_id=602407345]
+[node name="BottomLastMoveSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=602407345]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 
-[node name="BottomLastMove" type="Control" parent="Margin/VBox/BottomLastMoveSlot" unique_id=1670282287]
+[node name="BottomLastMove" type="Control" parent="Safe/Shell/Pad/VBox/BottomLastMoveSlot" unique_id=1670282287]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -113,11 +127,11 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_last")
 
-[node name="BottomCardSlot" type="Control" parent="Margin/VBox" unique_id=1032445483]
+[node name="BottomTagSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=1032445483]
 custom_minimum_size = Vector2(0, 68)
 layout_mode = 2
 
-[node name="BottomCard" type="Control" parent="Margin/VBox/BottomCardSlot" unique_id=724208209]
+[node name="BottomTag" type="Control" parent="Safe/Shell/Pad/VBox/BottomTagSlot" unique_id=724208209]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -126,22 +140,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_card")
-
-[node name="StatusLabel" type="Label" parent="Margin/VBox" unique_id=536855256]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Caption"
-horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="ButtonRow" type="HBoxContainer" parent="Margin/VBox" unique_id=751477147]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="ExitButton" type="Button" parent="Margin/VBox/ButtonRow" unique_id=988794576]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("9_leave")
 
 [node name="PromotionLayer" type="Control" parent="." unique_id=1213063222]
 unique_name_in_owner = true
@@ -225,6 +223,7 @@ grow_vertical = 2
 [node name="Panel" type="PanelContainer" parent="ResultLayer/Center" unique_id=468738548]
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
+script = ExtResource("10_paper")
 
 [node name="Margin" type="MarginContainer" parent="ResultLayer/Center/Panel" unique_id=394080821]
 layout_mode = 2
@@ -240,7 +239,7 @@ theme_override_constants/separation = 8
 [node name="ResultTitle" type="Label" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=878223379]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Title"
+theme_type_variation = &"Display"
 text = "Fim de jogo"
 horizontal_alignment = 1
 autowrap_mode = 3
@@ -258,7 +257,7 @@ layout_mode = 2
 
 [node name="RematchButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=853705282]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
+custom_minimum_size = Vector2(0, 54)
 layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Jogar de novo"
