@@ -69,12 +69,51 @@ static func paper_theme() -> Theme:
 	_paper_theme.set_stylebox("pressed", "Button", _stamp(PAPER_SOFT.darkened(0.12)))
 	_paper_theme.set_stylebox("focus", "Button", _stamp(PAPER_SOFT))
 
+	_paper_buttons(_paper_theme)
+
 	_paper_theme.set_color("font_color", "LineEdit", AppTheme.PAPER_INK)
 	_paper_theme.set_color("font_placeholder_color", "LineEdit", Color(AppTheme.PAPER_INK, 0.45))
 	_paper_theme.set_color("caret_color", "LineEdit", AppTheme.PAPER_INK)
 	_paper_theme.set_stylebox("normal", "LineEdit", _stamp(Color(1, 1, 1, 0.55)))
 	_paper_theme.set_stylebox("focus", "LineEdit", _stamp(Color(1, 1, 1, 0.75)))
 	return _paper_theme
+
+
+## Os botões com peso próprio continuam com ele dentro do papel.
+##
+## Sem isto, um botão `PrimaryButton` numa folha vira carimbo: a busca de tema vai
+## ao dono mais perto, não acha a variação nele e desce para o tipo base — que
+## aqui é o carimbo. O resultado é a ação principal da tela com a mesma cara do
+## botão secundário ao lado, que é a única coisa que a placa existe para não ser.
+##
+## O vermelho é o de perigo escurecido: `DANGER` sobre creme dá contraste de 2,6,
+## e um aviso que não se lê não avisa.
+static func _paper_buttons(theme: Theme) -> void:
+	for name: String in ["PrimaryButton", "SuccessSolidButton", "GhostButton", "DangerButton"]:
+		theme.set_type_variation(name, "Button")
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		theme.set_color(state, "PrimaryButton", AppTheme.ACCENT_INK)
+		theme.set_color(state, "SuccessSolidButton", AppTheme.ACCENT_INK)
+		theme.set_color(state, "GhostButton", AppTheme.PAPER_INK)
+		theme.set_color(state, "DangerButton", AppTheme.DANGER.darkened(0.35))
+	theme.set_stylebox("normal", "PrimaryButton", AppTheme.plate(AppTheme.ACCENT, AppTheme.ACCENT_EDGE))
+	theme.set_stylebox("hover", "PrimaryButton", AppTheme.plate(AppTheme.ACCENT.lightened(0.08), AppTheme.ACCENT_EDGE))
+	theme.set_stylebox("pressed", "PrimaryButton", AppTheme.plate(AppTheme.ACCENT.darkened(0.08), AppTheme.ACCENT_EDGE, true))
+
+	var success_edge := AppTheme.SUCCESS.darkened(0.35)
+	theme.set_stylebox("normal", "SuccessSolidButton", AppTheme.plate(AppTheme.SUCCESS, success_edge))
+	theme.set_stylebox("hover", "SuccessSolidButton", AppTheme.plate(AppTheme.SUCCESS.lightened(0.08), success_edge))
+	theme.set_stylebox("pressed", "SuccessSolidButton", AppTheme.plate(AppTheme.SUCCESS.darkened(0.08), success_edge, true))
+
+	var ghost_line := Color(AppTheme.PAPER_INK, 0.55)
+	theme.set_stylebox("normal", "GhostButton", AppTheme.dashed(Color(0, 0, 0, 0), ghost_line))
+	theme.set_stylebox("hover", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.06), ghost_line))
+	theme.set_stylebox("pressed", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.12), AppTheme.PAPER_INK))
+
+	var danger := AppTheme.DANGER.darkened(0.35)
+	theme.set_stylebox("normal", "DangerButton", AppTheme.box(Color(0, 0, 0, 0), AppTheme.RADIUS, danger, 2))
+	theme.set_stylebox("hover", "DangerButton", AppTheme.box(Color(danger, 0.10), AppTheme.RADIUS, danger, 2))
+	theme.set_stylebox("pressed", "DangerButton", AppTheme.box(Color(danger, 0.16), AppTheme.RADIUS, danger, 3))
 
 
 ## Carimbo: o retângulo levemente mais escuro que marca um campo ou um botão dentro

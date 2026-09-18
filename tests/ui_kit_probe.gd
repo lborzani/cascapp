@@ -33,6 +33,7 @@ func _run() -> void:
 	_probe_tabs()
 	_probe_seats()
 	_probe_code_input()
+	_probe_player_tag()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -295,6 +296,40 @@ func _probe_code_input() -> void:
 	field.clear()
 	_equals(field.code, "", "limpar esvazia")
 	field.free()
+
+
+func _probe_player_tag() -> void:
+	print("etiqueta de jogador")
+	_equals(PlayerTag.material([Board.piece(Board.Side.WHITE, Board.Kind.QUEEN)]), 9, "a dama vale nove")
+	_equals(
+		PlayerTag.material([
+			Board.piece(Board.Side.BLACK, Board.Kind.PAWN),
+			Board.piece(Board.Side.BLACK, Board.Kind.ROOK),
+		]), 6, "peão e torre somam seis"
+	)
+
+	var tag := PlayerTag.new()
+	root.add_child(tag)
+	tag.size = Vector2(320, PlayerTag.HEIGHT)
+	tag.title = "Lucas"
+	var coasters := tag.find_children("*", "Coaster", true, false)
+	_equals(coasters.size(), 1, "a etiqueta tem uma bolacha")
+	var coaster: Coaster = coasters[0]
+	_equals(coaster.player_name, "Lucas", "que leva o nome de quem é")
+	_check(not coaster.turn, "e começa sem o anel de vez")
+	tag.active = true
+	_check(coaster.turn, "a vez acende o anel")
+	tag.piece = Board.piece(Board.Side.WHITE, Board.Kind.KING)
+	_equals(coaster.piece, Board.piece(Board.Side.WHITE, Board.Kind.KING), "a peça entra na bolacha")
+
+	_equals(tag.custom_minimum_size.y, PlayerTag.HEIGHT, "a faixa é a alta")
+	tag.shape = PlayerTag.Shape.TAG
+	_equals(tag.custom_minimum_size.y, PlayerTag.HEIGHT_TAG, "a etiqueta ancorada é a baixa")
+
+	# Modo mesa: quem joga do outro lado do aparelho lê a própria faixa de lá.
+	tag.upside_down = true
+	_check(is_equal_approx(tag.rotation, PI), "o lado de cima vira de ponta-cabeça")
+	tag.free()
 
 
 func _probe_dashed() -> void:

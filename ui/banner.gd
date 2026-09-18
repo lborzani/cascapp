@@ -144,13 +144,8 @@ func _foreground() -> Color:
 			return AppTheme.TEXT
 
 
-func _style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = AppTheme.SURFACE_HIGH
-	style.set_corner_radius_all(20)
-	style.set_border_width_all(1)
-	style.border_color = Color(_foreground(), 0.45)
-	style.shadow_color = Color(0, 0, 0, 0.4)
-	style.shadow_size = 10
-	style.shadow_offset = Vector2(0, 3)
-	return style
+## Bolacha escura com o contorno de giz na cor do aviso: o mesmo vocabulário do
+## resto do tema, e escuro porque o aviso aparece **sobre** o tabuleiro — um fundo
+## claro ali seria um buraco na mesa.
+func _style() -> StyleBox:
+	return AppTheme.dashed(AppTheme.COASTER, Color(_foreground(), 0.85), 20, 1.5)
