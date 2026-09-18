@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | 1 | Fundação: referência dos protegidos, fontes, paleta, componentes base | **detalhada abaixo** |
 | 2 | Navegação e menus (TabBar, Início, GameSheet, Online, sala de espera, Você, boas-vindas) | tarefas detalhadas ao iniciar a etapa |
-| 3 | Partidas em pé (MatchBar, PlayerTag, xadrez/damas com modo mesa, naval, fim de partida) | idem |
+| 3 | Partidas em pé (MatchBar, PlayerTag, xadrez/damas com modo mesa, naval, fim de partida) | **detalhada abaixo** |
 | 4 | Partidas deitadas (Uno, Ludo, Sinuca, Metrópole, Bomberman) | idem |
 | 5 | Como jogar (GameRulesDoc, 8 `.tres`, RulesPage, TableRulesDrawer) | idem |
 | 6 | Limpeza, README, prints finais | idem |
@@ -1386,3 +1386,53 @@ func _probe_tabs() -> void:
 ### Task 17: Fechamento da etapa 2
 
 Apagar `ui/nav_drawer.gd` se órfão; `NavDrawer` e `game_menu` sem nenhuma referência fora do histórico; verificação completa (lista da etapa 1); folha de prints inteira e comparação com o canvas aprovado; commit.
+
+---
+
+## Etapa 3 — Partidas em pé
+
+Entregue. Xadrez, damas e batalha naval sobre a barra de partida e as etiquetas
+de jogador; fim de partida em papel; o gesto de voltar passa a perguntar.
+
+### Task 18: `MatchBar` e `PlayerTag`
+
+**Files:** Create `ui/match_bar.gd`, `ui/player_tag.gd`; Delete `ui/player_card.gd`; Modify `ui/paper_card.gd` (placas e tracejados dentro do papel), `ui/banner.gd` (bolacha escura com contorno de giz).
+
+- [x] `MatchBar`: `leave` (a pergunta do `LeaveButton`), `title`, `status` (`MatchStatus`), `actions`; `compact` para tela deitada, `translucent` para a Metrópole; só `bind()` fala com autoload.
+- [x] `PlayerTag`: `Shape.STRIP` e `Shape.TAG`, bolacha como avatar (peça ou inicial), capturas e saldo, relógio em placar `COASTER` com dígitos mono amarelos, `upside_down` para o modo mesa.
+- [x] `PaperCard.paper_theme()` passa a declarar `PrimaryButton`, `SuccessSolidButton`, `GhostButton` e `DangerButton`: sem isso a busca de tema desce da variação para o tipo base do dono mais perto, e a placa dentro da comanda virava carimbo.
+
+**Teste:** `ui_kit_probe._probe_player_tag` (bolacha, formatos, meia volta, tabela de material); `scene_probe._test_match_bar` — a barra só é provada na cena, porque ela fala com `Game` e `Net`, e o kit roda sem autoload.
+
+### Task 19: Xadrez e damas
+
+**Files:** Modify `scenes/match.tscn` e `.gd`; Modify `tests/scene_probe.gd`.
+
+**Árvore:** `Safe/Shell/{Bar(MatchBar), Pad/VBox/{TopTagSlot/TopTag, TopLastMoveSlot, BoardArea/{Board, Banner}, BottomLastMoveSlot, BottomTagSlot/BottomTag}}`. O rodapé com "Sair" e o `%StatusLabel` sem dono saem.
+
+- [x] `go_back()` abre a pergunta de sair em vez de sair — com o painel de fim aberto, continua saindo direto.
+- [x] Fim de partida em `PaperCard`, resultado em `Display`.
+
+### Task 20: Batalha naval
+
+**Files:** Modify `scenes/battleship_match.tscn` e `.gd`.
+
+- [x] Mesma casca da partida em pé; o mar do adversário fica com a altura que sobra.
+- [x] Rodapé em fileira: o seu mar (150×150) ao lado de "SEU MAR" e da sua etiqueta.
+- [x] Navio da vez em faixa tracejada; fim de partida em papel.
+
+### Task 21: Verificação da etapa
+
+Lista completa da etapa 1, e mais:
+
+```bash
+$GODOT --path . --resolution 1280x720 res://tests/monopoly_sheet.tscn
+$GODOT --headless --path . --script res://tests/image_diff.gd -- \
+  user://baseline/20h_metropole_tampo.png user://shots/20h_metropole_tampo.png 500 160 400 400
+```
+
+O tabuleiro de Metrópole é conferido **por região**, e não pela tela inteira: o
+fundo da sala em volta dele segue o tema e mudou de propósito na etapa 1. As
+regiões que contêm só tabuleiro são `500 160 400 400` (tampo), `520 155 360 30`
+(fileira de cima), `470 505 440 75` (fileira de baixo) e `455 300 25 180`
+(coluna da esquerda) — todas iguais à referência.
