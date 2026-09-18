@@ -189,6 +189,41 @@ func _seat_center(seat: int) -> Vector2:
 	return _table_center() + ray * reach
 
 
+## Onde a etiqueta de um assento cabe: encostada no leque dele, do lado de fora da
+## mesa, e sempre dentro da vista.
+##
+## A conta mora aqui, e não na cena, porque é a mesma geometria que põe o leque no
+## lugar — quem sabe onde está a mão de um assento sabe onde o nome dele cabe. E
+## `_layout()` de novo porque a medida das cartas nasce no primeiro desenho: a
+## cena pode perguntar antes disso.
+func seat_tag_spot(seat: int, tag: Vector2) -> Vector2:
+	# Sem partida ainda não há assentos: a cena monta as etiquetas antes do primeiro
+	# desenho, e perguntar a geometria de uma mesa vazia é perguntar por nada.
+	if state == null:
+		return Vector2.ZERO
+	_layout()
+	var center := _seat_center(seat)
+	var away := (center - _table_center()).normalized()
+	var back_height := minf(size.y * 0.19, _card_height * 0.52)
+
+	# Quanto o leque ocupa **na direção em que a etiqueta vai**: um leque deitado
+	# ocupa pouco para cima e muito para o lado, e é a mesma conta que decide onde
+	# o nome cabe. Um empurrão de valor fixo acertava os assentos de cima e punha o
+	# nome em cima das cartas nos das pontas.
+	var shown := mini(UnoRules.hand_size(state, seat), MAX_BACKS)
+	var step := UnoCardArt.width_for(back_height) * BACK_STEP
+	var half := Vector2(UnoCardArt.width_for(back_height), back_height) * 0.5
+	var pad := Vector2.ONE * back_height * 0.16
+	var facing := _angle_of(seat) - PI * 0.5
+	var mat := _extent(away, step * maxf(shown - 1, 0) * 0.5, half + pad, facing)
+	var reach := absf(away.x) * tag.x * 0.5 + absf(away.y) * tag.y * 0.5
+	var spot := center + away * (mat + reach + 8.0) - tag * 0.5
+	return Vector2(
+		clampf(spot.x, 0.0, maxf(0.0, size.x - tag.x)),
+		clampf(spot.y, 0.0, maxf(0.0, size.y - tag.y))
+	)
+
+
 func _draw_seats() -> void:
 	var count := UnoRules.seats_of(state)
 	var turn := UnoRules.turn_of(state)

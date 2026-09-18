@@ -474,8 +474,7 @@ func _probe_late_names() -> void:
 	var scene := await _open()
 
 	var label := func(seat: int) -> String:
-		var row: HBoxContainer = scene._chips[seat].get_child(0)
-		return (row.get_child(1) as Label).text
+		return (scene._tags[seat] as PlayerTag).title
 
 	_equals(label.call(0), "Ana", "o nome que já tinha chegado aparece")
 	_equals(label.call(1), "Jogador 2", "e quem ainda não se apresentou é numerado")
