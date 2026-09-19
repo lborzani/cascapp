@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_gmxs2"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_cmcam"]
+
+[resource]
+script = ExtResource("2_cmcam")
+title = "Bomberman"
+objective = "Ser o último de pé."
+steps = PackedStringArray("Ande com o direcional, no canto de baixo à esquerda.", "O botão amarelo, no canto de baixo à direita, põe uma bomba onde você está.", "A bomba explode em 3 segundos, em cruz, e o fogo para nas paredes.", "O fogo quebra as caixas, e algumas guardam prêmios.")
+notes = PackedStringArray("Prêmios: uma bomba a mais de cada vez, fogo mais comprido e mais velocidade — até 6 bombas e 6 casas de fogo.", "Uma explosão acende as bombas que o fogo alcança.", "O fogo atinge todo mundo, inclusive quem pôs a bomba.", "Depois que você sai de cima dela, a bomba vira parede.", "Se os últimos caem juntos, é empate.")

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_lq3nw"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_00h88"]
+
+[sub_resource type="Resource" id="Resource_a6pws"]
+script = ExtResource("1_lq3nw")
+title = "Mata-mata"
+objective = "Deixar o adversário sem nenhuma bola na mesa."
+steps = PackedStringArray("Cada um tem cinco bolas de uma cor, encostadas nas tabelas. Não há bola branca.", "Na sua vez, toque numa das suas bolas e arraste o dedo para trás dela, como quem puxa o taco: a direção vai do dedo para a bola, e a distância é a força.", "A bola que você taca tem de bater primeiro numa bola do adversário.", "Encaçapou uma do adversário sem falta, taca de novo.")
+notes = PackedStringArray("Encaçapar uma bola sua é perdê-la: ela sai do jogo e deixa o adversário mais perto de vencer.", "Falta — bater primeiro numa bola sua, ou em nenhuma — passa a vez.", "Se as duas cores acabarem na mesma tacada, é empate.")
+
+[sub_resource type="Resource" id="Resource_nonxq"]
+script = ExtResource("1_lq3nw")
+title = "Brasileira"
+objective = "Fazer mais pontos até a mesa ficar limpa."
+steps = PackedStringArray("Na mesa estão a branca e sete bolas coloridas, de 1 a 7. Taca-se sempre com a branca.", "Arraste o dedo para trás da branca, como quem puxa o taco: a direção vai do dedo para a bola, e a distância é a força.", "A bola da vez é a de menor número na mesa, e a branca tem de bater nela primeiro.", "Cada bola encaçapada vale o número dela.", "Encaçapou a bola da vez sem falta, taca de novo.")
+notes = PackedStringArray("Falta — a branca na caçapa, ou o primeiro toque em outra bola — dá 7 pontos ao adversário, e ele recebe a branca na mão para pôr na mesa.", "Uma colorida que cai por tabela conta ponto, mas não dá outra tacada.", "Com a mesa limpa, vence quem tem mais pontos. Pode empatar.")
+
+[resource]
+script = ExtResource("2_00h88")
+title = "Sinuca"
+objective = "Sinuca de mesa de bar, em dois formatos. Escolha o formato para ver as regras dele."
+steps = PackedStringArray()
+notes = PackedStringArray()
+formats = Array[ExtResource("1_lq3nw")]([SubResource("Resource_a6pws"), SubResource("Resource_nonxq")])

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_8amyb"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_d1ydx"]
+
+[resource]
+script = ExtResource("2_d1ydx")
+title = "Batalha Naval"
+objective = "Afundar os quatro navios do adversário antes que ele afunde os seus."
+steps = PackedStringArray("Cada um monta a frota num mar de 8 × 8, sem o outro ver: encouraçado (4 casas), cruzador (3), submarino (3) e destróier (2).", "Toque numa casa para pousar o navio. «Deitado» e «Em pé» giram, «Sortear» monta a frota inteira e «Limpar» recomeça.", "Com as duas frotas confirmadas, os tiros se alternam, um por vez.", "No mar de cima, que é o do adversário, toque numa casa para mirar e toque de novo para atirar.", "O mar de baixo é o seu: ele mostra onde o outro já atirou.")
+notes = PackedStringArray("Acertar não dá outro tiro: a vez passa sempre.", "Os navios podem encostar uns nos outros.", "Quando todas as casas de um navio são atingidas, ele afunda, e o nome dele é anunciado.", "Não há empate.", "Só em rede: num aparelho só, cada um veria o mar do outro.")

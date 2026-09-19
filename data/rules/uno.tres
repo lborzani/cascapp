@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_acxvm"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_j3xcg"]
+
+[resource]
+script = ExtResource("2_j3xcg")
+title = "Uno"
+objective = "Ficar sem cartas primeiro."
+steps = PackedStringArray("Cada um recebe 7 cartas. Na sua vez, jogue uma carta da mesma cor ou do mesmo número ou símbolo da que está no descarte.", "O curinga serve sempre, e quem joga escolhe a cor. O +4 ainda faz o próximo comprar quatro.", "Sem carta que sirva, toque no monte para comprar uma. Se ela servir, dá para jogá-la; se não, passe.", "Pular faz o próximo perder a vez, Inverter troca o sentido do jogo e +2 faz o próximo comprar duas.", "Com duas cartas na mão, toque em UNO! antes de jogar a penúltima.")
+notes = PackedStringArray("O +2 e o +4 empilham: quem recebe pode responder com uma carta da mesma espécie e passar a conta adiante, somada. Quem não responde compra tudo e perde a vez.", "O +4 só pode ser jogado por quem não tem carta da cor da mesa. Quem recebe pode duvidar: se acertou, quem jogou compra a pilha; se errou, compra a pilha e mais duas, e perde a vez.", "Esqueceu o UNO? Quem joga em seguida pode pegar você, e você compra duas cartas.", "Numa mesa de dois, Inverter funciona como Pular.", "Regra do 0 e do 7, quando ligada: o 7 troca a sua mão com a de quem você escolher, e o 0 passa todas as mãos adiante, no sentido do jogo.")

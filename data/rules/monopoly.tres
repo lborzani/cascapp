@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_0hgmr"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_dggx0"]
+
+[resource]
+script = ExtResource("2_dggx0")
+title = "Metrópole"
+objective = "Ser o último a não quebrar — ou, numa partida com limite de rodadas, terminar com o maior patrimônio."
+steps = PackedStringArray("Cada um começa com M 1.500. Na sua vez, role os dois dados e ande.", "Caiu numa propriedade sem dono: compre pelo preço, ou deixe. Não há leilão — a casa recusada continua do banco.", "Caiu numa propriedade com dono: pague o aluguel.", "Com todas as ruas de uma cor, o terreno vazio cobra o dobro, e dá para construir casas e, depois de quatro, um hotel.", "Tirou dupla, rola de novo. A terceira dupla seguida manda para a cadeia.", "Passar pela Partida, ou parar nela, paga M 200.")
+notes = PackedStringArray("A construção é uniforme: uma rua não recebe a segunda casa antes de todas as ruas da cor terem a primeira.", "Aeroportos cobram 25, 50, 100 ou 200, conforme quantos o dono tem. Companhias cobram os pontos dos dados vezes 4 — ou vezes 10, com as duas.", "Hipoteca: uma propriedade sem construções vira dinheiro na hora e para de cobrar aluguel até ser resgatada.", "Cadeia: pague M 50 de fiança, use uma carta de saída livre ou tente tirar dupla. Na terceira tentativa sem dupla, a fiança é cobrada.", "Trocas: na sua vez, proponha propriedades e dinheiro a outro jogador. Ele aceita ou recusa.", "Quem não consegue pagar quebra e sai da partida: o patrimônio vai para quem cobrou, ou volta ao banco.", "O Descanso não faz nada. As cartas de Sorte e de Cofre saem do baralho inteiro — a mesma pode sair duas vezes.")
