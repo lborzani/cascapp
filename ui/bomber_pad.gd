@@ -141,9 +141,14 @@ func _draw() -> void:
 	# tema (opaco, que é o que o separa do fundo), uma calota mais clara em cima
 	# que dá a curvatura de borracha, e um aro. É o mesmo vocabulário dos cartões
 	# do app — superfície, borda, latão quando vivo — aplicado a um círculo.
-	draw_circle(center, radius, Color(AppTheme.SURFACE, 0.92))
-	draw_circle(center - Vector2(0.0, radius * 0.10), radius * 0.86, Color(AppTheme.SURFACE_HIGH, 0.85))
-	draw_arc(center, radius, 0.0, TAU, 64, Color(RING_LIVE if _direction != 0 else RING, 0.95), 3.0, true)
+	# Uma bolacha grande: o disco escuro da bolacha do tema e o anel de latão —
+	# aceso quando o polegar está empurrando.
+	draw_circle(center, radius, Color(AppTheme.COASTER, 0.92))
+	draw_circle(center - Vector2(0.0, radius * 0.10), radius * 0.86, Color(AppTheme.SURFACE, 0.85))
+	draw_arc(
+		center, radius - 2.0, 0.0, TAU, 64,
+		Color(RING_LIVE, 0.95 if _direction != 0 else 0.55), 4.0, true
+	)
 
 	for bit: int in [BomberRules.IN_UP, BomberRules.IN_DOWN, BomberRules.IN_LEFT, BomberRules.IN_RIGHT]:
 		var step := _step_of(bit)

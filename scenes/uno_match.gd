@@ -130,6 +130,7 @@ func _ready() -> void:
 
 	Game.begin_match()
 	%Bar.bind()
+	%Bar.status.counts_rounds = false
 	if Game.mode == Game.Mode.SOLO:
 		# Solo é a mesa cheia com um humano só: você é o assento 0, o resto é
 		# máquina. É o mesmo caminho de uma sala que não encheu, sem a sala.

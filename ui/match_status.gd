@@ -61,6 +61,13 @@ var rounds := 0:
 		rounds = value
 		_refresh_rounds()
 
+## O jogo conta rodadas. Uno, sinuca e Bomberman não contam — a regra deles não
+## tem volta completa —, e um "0 rodadas" parado a partida inteira parece defeito.
+var counts_rounds := true:
+	set(value):
+		counts_rounds = value
+		_refresh_rounds()
+
 ## Código da sala, ou vazio fora de uma partida em rede.
 var code := "":
 	set(value):
@@ -162,6 +169,7 @@ static func clock_text(seconds: int) -> String:
 func _refresh_rounds() -> void:
 	if _rounds == null:
 		return
+	_rounds.visible = counts_rounds
 	_rounds.text = "1 rodada" if rounds == 1 else "%d rodadas" % rounds
 
 

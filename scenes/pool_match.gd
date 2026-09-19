@@ -66,6 +66,7 @@ func _ready() -> void:
 
 	Game.begin_match()
 	_bar.bind()
+	_bar.status.counts_rounds = false
 	if Game.mode == Game.Mode.SOLO:
 		Game.local_seat = 0
 		_bot_seats = PackedInt32Array([1])
