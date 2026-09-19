@@ -32,6 +32,10 @@ func _ready() -> void:
 	%AppBar.leading = IconButton.Kind.BACK
 	%AppBar.leading_pressed.connect(_back_to_menu)
 	%StartButton.pressed.connect(_on_start_pressed)
+	%CopyButton.pressed.connect(_copy_code)
+	%QrButton.pressed.connect(_toggle_qr)
+	%Seats.capacity = Game.players_of(Game.BOMBERMAN)
+	_refresh_seats(PackedStringArray())
 	BomberNet.joined.connect(_on_joined)
 	BomberNet.denied.connect(_on_denied)
 	BomberNet.seats_changed.connect(_on_seats)
@@ -102,7 +106,38 @@ func _host_hint() -> String:
 
 ## Quem está na sala, pelos nomes que o servidor anunciou. Assento de máquina tem
 ## nome vazio e não entra na conta — o servidor os preenche com bots ao começar.
+## As cadeiras da mesa, como o servidor as anuncia: nome vazio é cadeira vazia.
+## Para os dois lados — quem entrou também quer saber quem já está sentado.
+func _refresh_seats(names: PackedStringArray) -> void:
+	var present := PackedInt32Array()
+	for seat in names.size():
+		if names[seat] != "":
+			present.append(seat)
+	var local := maxi(BomberNet.seat, 0)
+	if not present.has(local):
+		present.append(local)
+	%Seats.local_seat = local
+	%Seats.present = present
+	%Seats.refresh()
+	%SeatsCount.text = "%d de %d" % [present.size(), Game.players_of(Game.BOMBERMAN)]
+
+
+## O código na área de transferência, como na sala de espera dos outros jogos:
+## quem abre a sala manda o código por mensagem.
+func _copy_code() -> void:
+	DisplayServer.clipboard_set(BomberNet.code)
+	Sound.play(Sound.Cue.TAP)
+	%Toast.show_message("Código %s copiado." % BomberNet.code, Banner.Kind.INFO)
+
+
+## O QR começa escondido: ocupa meia tela e serve a um caminho só.
+func _toggle_qr() -> void:
+	%QrCard.visible = not %QrCard.visible
+	%QrButton.text = "Esconder QR" if %QrCard.visible else "Mostrar QR"
+
+
 func _on_seats(names: PackedStringArray) -> void:
+	_refresh_seats(names)
 	if not _is_host:
 		return
 	var here := PackedStringArray()
