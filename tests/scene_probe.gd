@@ -873,6 +873,16 @@ func _test_match_bar() -> void:
 	_check(is_instance_valid(scene), "e a partida continua de pé")
 	bar.leave._dismiss()
 
+	# O `?` abre as regras desta mesa, e o gesto de voltar fecha a gaveta antes de
+	# chegar à partida: voltar é sair do que está na frente.
+	var drawer := bar.open_rules()
+	await get_tree().process_frame
+	_check(drawer._list.get_child_count() > 0, "o ? abre as regras desta mesa")
+	Nav.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(drawer), "o gesto de voltar fecha a gaveta")
+	_check(bar.leave._layer == null, "e não chega a perguntar se quer sair")
+
 	# A saída é provada numa barra solta, e não nesta: a da cena está ligada ao
 	# `_exit()` da partida, e confirmar aqui trocaria a cena debaixo do teste.
 	var loose := MatchBar.create("Xadrez")

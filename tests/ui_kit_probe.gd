@@ -34,6 +34,9 @@ func _run() -> void:
 	_probe_seats()
 	_probe_code_input()
 	_probe_player_tag()
+	_probe_rules_docs()
+	_probe_table_rules()
+	await _probe_rules_page()
 	if _failures == 0:
 		print("OK — kit de interface consistente.")
 	else:
@@ -330,6 +333,109 @@ func _probe_player_tag() -> void:
 	tag.upside_down = true
 	_check(is_equal_approx(tag.rotation, PI), "o lado de cima vira de ponta-cabeça")
 	tag.free()
+
+
+## Os oito jogos do catálogo, na ordem dele. Escritos à mão, e não lidos do
+## `Game`: o kit roda sem autoload — e uma lista à mão também é o que pega o jogo
+## novo que entrar no catálogo sem regras.
+const RULED_GAMES: Array[StringName] = [
+	&"chess", &"checkers", &"battleship", &"ludo",
+	&"monopoly", &"uno", &"pool", &"bomberman",
+]
+
+
+func _probe_rules_docs() -> void:
+	print("como jogar")
+	for id in RULED_GAMES:
+		var doc := GameRulesDoc.load_for(id)
+		_check(doc != null, "%s tem regras" % id)
+		if doc == null:
+			continue
+		_check(not doc.title.is_empty() and not doc.objective.is_empty(), "%s tem título e objetivo" % id)
+		if doc.formats.is_empty():
+			_check(doc.steps.size() >= 3, "%s tem passos" % id)
+			continue
+		for block in doc.formats:
+			_check(
+				not block.objective.is_empty() and block.steps.size() >= 3,
+				"%s, %s, tem objetivo e passos" % [id, block.title]
+			)
+	var pool := GameRulesDoc.load_for(&"pool")
+	_equals(pool.formats.size(), 2, "a sinuca tem os dois formatos")
+	_check(GameRulesDoc.load_for(&"nao-existe") == null, "jogo sem regras devolve nada, e não erro")
+
+
+func _probe_table_rules() -> void:
+	print("regras desta mesa")
+	var state_of := func(rows: Array[Dictionary], label: String) -> String:
+		for row in rows:
+			if row["label"] == label:
+				return str(row["state"])
+		return ""
+
+	var uno_on := TableRules.for_game(&"uno", {"sevens": true})
+	var uno_off := TableRules.for_game(&"uno", {"sevens": false})
+	_equals(state_of.call(uno_on, "0 e 7"), "ligada", "o 0 e o 7 da mesa ligado")
+	_equals(state_of.call(uno_off, "0 e 7"), "desligada", "e desligado")
+	# O número sai da constante da regra: mudar a multa em `core/` muda o texto.
+	_equals(
+		state_of.call(uno_on, "Esquecer o UNO"), "+%d cartas" % UnoRules.CATCH_PENALTY,
+		"a multa do grito vem da regra"
+	)
+	var brazilian := TableRules.for_game(&"pool", {"format": PoolRules.Format.BRAZILIAN})
+	_equals(state_of.call(brazilian, "Formato"), "brasileira", "a sinuca reflete o formato")
+	_check(
+		state_of.call(brazilian, "Falta").begins_with(str(PoolRules.FOUL_POINTS)),
+		"a falta da brasileira vale os pontos da regra"
+	)
+	var knockout := TableRules.for_game(&"pool", {"format": PoolRules.Format.KNOCKOUT})
+	_equals(state_of.call(knockout, "Falta"), "passa a vez", "no mata-mata a falta passa a vez")
+	_equals(
+		state_of.call(TableRules.for_game(&"monopoly", {"round_limit": 20}), "Fim"),
+		"20 rodadas, maior patrimônio", "Metrópole mostra o limite de rodadas"
+	)
+	for id in RULED_GAMES:
+		_check(not TableRules.for_game(id, {}).is_empty(), "%s tem regras da mesa" % id)
+
+
+func _probe_rules_page() -> void:
+	print("página de regras")
+	var stage := Control.new()
+	stage.size = Vector2(432, 768)
+	root.add_child(stage)
+
+	var page := RulesPage.open(stage, &"pool", 1)
+	await process_frame
+	_check(page.is_in_group(&"back_layer"), "a página entra na fila do gesto de voltar")
+	_check(page._segments.visible, "a sinuca abre com as abas de formato")
+	_equals(page.format, 1, "no formato pedido")
+	var brazilian_goal: String = (page._content.get_child(0) as Label).text
+	page._on_format(0)
+	await process_frame
+	var knockout_goal: String = (page._content.get_child(0) as Label).text
+	_equals(knockout_goal, page.doc.formats[0].objective, "trocar de formato mostra o objetivo do outro")
+	_check(knockout_goal != brazilian_goal, "e os dois formatos não dizem a mesma coisa")
+	page.dismiss()
+	await process_frame
+	_check(not is_instance_valid(page), "fechar tira a página da árvore")
+
+	var chess := RulesPage.open(stage, &"chess")
+	await process_frame
+	_check(not chess._segments.visible, "jogo de um formato só não tem abas")
+	chess.dismiss()
+
+	var drawer := TableRulesDrawer.open(
+		stage, &"uno", TableRules.for_game(&"uno", {"sevens": true})
+	)
+	await process_frame
+	_equals(drawer._list.get_child_count(), 4, "a gaveta tem uma linha por regra da mesa")
+	var full := drawer.open_full()
+	await process_frame
+	_check(not is_instance_valid(drawer), "a página completa substitui a gaveta")
+	_equals(full.doc.title, "Uno", "e abre as regras do mesmo jogo")
+	full.dismiss()
+	await process_frame
+	stage.free()
 
 
 func _probe_dashed() -> void:

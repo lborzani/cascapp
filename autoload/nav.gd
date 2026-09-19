@@ -78,6 +78,13 @@ func go_back() -> void:
 		return
 	_served_frame = frame
 
+	# Uma camada aberta por cima da tela — a página de regras, a gaveta da mesa —
+	# fecha antes de a tela ouvir o gesto: voltar é sair do que está na frente, e
+	# quem está na frente é ela.
+	var layers := tree.get_nodes_in_group(&"back_layer")
+	if not layers.is_empty():
+		layers[layers.size() - 1].call(&"dismiss")
+		return
 	var screen := tree.current_scene
 	if screen != null and screen.has_method(&"go_back"):
 		screen.call(&"go_back")

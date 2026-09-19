@@ -13,8 +13,9 @@ extends PanelContainer
 ## de jogo para jogo é o que entra em `actions` — e a altura, porque uma tela
 ## deitada não pode gastar 52 px de mesa com a moldura.
 ##
-## O que fala com `Game` e `Net` é só o `bind()`, e o resto da barra não conhece
-## autoload nenhum: é o que deixa a tela montá-la no `.tscn` como qualquer nó.
+## O que fala com `Game` e `Net` é o `bind()` e o `open_rules()`; o resto da barra
+## não conhece autoload nenhum, e é o que deixa a tela montá-la no `.tscn` como
+## qualquer nó.
 
 ## O jogador confirmou que quer sair. Vem do `LeaveButton`, que faz a pergunta —
 ## ligar em `pressed` sairia sem perguntar.
@@ -49,6 +50,8 @@ var actions: HBoxContainer = null
 ## Tempo, rodadas e código da sala.
 var status: MatchStatus = null
 var leave: LeaveButton = null
+## O `?`: as regras desta mesa, sem sair da partida.
+var help: Button = null
 
 var _title: Label = null
 
@@ -80,6 +83,33 @@ func _init() -> void:
 	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(status)
+
+	# O `?` antes das ações do jogo, e sempre no mesmo lugar: é a porta das regras
+	# em todas as partidas, e quem aprendeu onde ela fica num jogo acha no outro.
+	help = Button.new()
+	help.text = "?"
+	help.tooltip_text = "Regras desta mesa"
+	help.focus_mode = Control.FOCUS_NONE
+	help.custom_minimum_size = Vector2(38, 38)
+	help.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	help.add_theme_font_override("font", AppTheme.display(900))
+	help.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M)
+	help.add_theme_color_override("font_color", AppTheme.ACCENT)
+	help.add_theme_color_override("font_hover_color", AppTheme.ACCENT)
+	help.add_theme_color_override("font_pressed_color", AppTheme.TEXT)
+	for state_name: String in ["normal", "hover", "pressed", "focus"]:
+		# Uma bolacha: o objeto redondo do tema, com o anel de latão.
+		var disc := AppTheme.box(
+			AppTheme.ACCENT_SOFT if state_name == "pressed" else AppTheme.COASTER,
+			19, AppTheme.GOLD, 2
+		)
+		disc.content_margin_left = 0
+		disc.content_margin_right = 0
+		disc.content_margin_top = 0
+		disc.content_margin_bottom = 0
+		help.add_theme_stylebox_override(state_name, disc)
+	help.pressed.connect(func() -> void: open_rules())
+	row.add_child(help)
 
 	actions = HBoxContainer.new()
 	actions.add_theme_constant_override("separation", AppTheme.SPACE_S)
@@ -115,6 +145,18 @@ func bind(bar_title := "") -> void:
 	title = bar_title if not bar_title.is_empty() else Game.game_title()
 	status.started_at = Game.match_started_at
 	status.code = Net.room_code() if Game.mode == Game.Mode.ONLINE else ""
+
+
+## Abre a gaveta com as regras **desta** mesa: as opções da partida em curso, lidas
+## agora, e não no `bind()` — o formato e a regra da casa chegam em rede depois de
+## a barra existir.
+func open_rules() -> TableRulesDrawer:
+	var options := MatchOptions.current()
+	var chosen := int(options.get("format", 0)) if Game.game_id == Game.POOL else 0
+	return TableRulesDrawer.open(
+		RulesPage.host_of(self), Game.game_id,
+		TableRules.for_game(Game.game_id, options), chosen
+	)
 
 
 ## A mesma barra, montada por código, para a tela que não a declara no `.tscn`.

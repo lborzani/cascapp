@@ -367,6 +367,17 @@ func _probe_game_sheet() -> void:
 	sheet._start.pressed.emit()
 	_equals(heard[0], 1, "o botão avisa quem abriu a folha, em vez de navegar sozinho")
 
+	# "Como jogar" abre por cima da folha, e o gesto de voltar fecha só a página:
+	# a folha continua aberta, com o que já estava escolhido.
+	_check(sheet._rules_link.visible, "a folha tem o link Como jogar")
+	var page := sheet.open_rules()
+	await get_tree().process_frame
+	_equals(page.doc.title, Game.game_title(Game.CHESS), "que abre as regras do jogo da folha")
+	Nav.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(page), "o gesto de voltar fecha a página")
+	_check(sheet.is_open(), "e deixa a folha aberta")
+
 	sheet.close()
 	await get_tree().process_frame
 	_check(not sheet.is_open(), "fechar fecha")

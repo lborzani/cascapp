@@ -43,6 +43,7 @@ var _sides: HBoxContainer = null
 var _visibility: HBoxContainer = null
 var _start: Button = null
 var _unavailable: Label = null
+var _rules_link: Button = null
 
 
 ## Os modos que este jogo oferece **neste build**, na ordem da folha. Duas
@@ -140,6 +141,20 @@ func _build_body() -> VBoxContainer:
 	_meta.theme_type_variation = &"Hint"
 	words.add_child(_meta)
 
+	# "Como jogar" no cabeçalho, ao lado do nome: é a pergunta de quem abriu a
+	# folha de um jogo que não conhece, e ela vem antes de escolher o modo.
+	_rules_link = Button.new()
+	_rules_link.text = "Como jogar"
+	_rules_link.flat = true
+	_rules_link.focus_mode = Control.FOCUS_NONE
+	_rules_link.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_rules_link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	for state_name: String in ["font_color", "font_hover_color"]:
+		_rules_link.add_theme_color_override(state_name, AppTheme.ACCENT)
+	_rules_link.add_theme_color_override("font_pressed_color", AppTheme.TEXT)
+	_rules_link.pressed.connect(open_rules)
+	header.add_child(_rules_link)
+
 	_segments = SegmentedControl.new()
 	_segments.selected.connect(_on_segment)
 	body.add_child(_segments)
@@ -205,6 +220,13 @@ func _section(key: String) -> Control:
 	return _sections.get(key) as Control
 
 
+## Abre "Como jogar" por cima da folha — na tela que a mostra, e não dentro dela:
+## a página fecha sozinha e a folha continua lá, com o que já estava escolhido.
+func open_rules() -> RulesPage:
+	var host: Node = get_parent() if get_parent() != null else self
+	return RulesPage.open(host, game_id)
+
+
 func is_open() -> bool:
 	return visible
 
@@ -215,6 +237,7 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_title.text = Game.game_title(id).to_upper()
 	_meta.text = _meta_text(id)
 	_icon.piece = Game.piece_of(id)
+	_rules_link.visible = GameRulesDoc.load_for(id) != null
 	_modes = modes_for(id)
 
 	var labels := PackedStringArray()

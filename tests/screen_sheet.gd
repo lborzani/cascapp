@@ -13,6 +13,8 @@ const SHOTS := [
 	["res://scenes/main_menu.tscn", "01_jogos"],
 	["res://scenes/main_menu.tscn", "01b_folha"],
 	["res://scenes/main_menu.tscn", "01c_voltar"],
+	["res://scenes/main_menu.tscn", "01d_como_jogar"],
+	["res://scenes/match.tscn", "02b_regras_mesa"],
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
 	["res://scenes/pairing.tscn", "04_criar"],
@@ -131,8 +133,11 @@ func _next() -> void:
 			# hoje. O print sai alguns segundos dentro da partida para o mapa já
 			# ter buracos — um mapa intocado não mostra o que o jogo faz.
 			Game.start_solo(Game.BOMBERMAN)
-		"01b_folha", "02_xadrez":
+		"01b_folha", "02_xadrez", "02b_regras_mesa":
 			Game.start_hotseat(Game.CHESS)
+		"01d_como_jogar":
+			Game.start_hotseat(Game.POOL)
+			Game.pool_format = PoolRules.Format.BRAZILIAN
 		"03_damas":
 			Game.start_hotseat(Game.CHECKERS)
 		"04_criar":
@@ -252,6 +257,13 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "01b_folha":
 		_scene._open_sheet(Game.game_id)
+	elif shot == "01d_como_jogar":
+		# A página por cima da folha, no formato de duas abas: é o caso que mostra
+		# as abas e o texto mais longo.
+		_scene._open_sheet(Game.game_id)
+		RulesPage.open(_scene, Game.POOL, 1)
+	elif shot == "02b_regras_mesa":
+		_scene.get_node("%Bar").open_rules()
 	elif shot == "08_folha_ritmo" or shot == "19_folha_metropole" or shot == "19b_folha_uno":
 		_scene._open_sheet(Game.game_id)
 		_scene._sheet.select_mode(Game.Mode.ONLINE)
