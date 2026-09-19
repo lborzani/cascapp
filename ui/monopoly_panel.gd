@@ -28,6 +28,14 @@ signal tile_chosen(tile: int)
 signal action_requested(action: int, tile: int)
 
 const ROW_HEIGHT := 14
+
+## Tinta da escritura. O painel é papel, e o giz do tema some sobre o creme: o
+## que era texto claro vira tinta escura, e o apagado vira tinta mais leve.
+const INK := AppTheme.PAPER_INK
+const INK_DIM := Color(AppTheme.PAPER_INK, 0.62)
+## "Sem dono" em verde de tinta. O verde do tema é pastel para fundo escuro, e
+## sobre creme ele dá contraste de 1,6.
+const INK_FREE := Color("2f6b3a")
 ## Largura reservada à barra de rolagem do corpo. Ver a canaleta em [method
 ## _ready].
 const SCROLL_GUTTER := 10
@@ -121,13 +129,22 @@ var _toggle: Button = null
 
 func _ready() -> void:
 	custom_minimum_size.x = WIDTH
-	add_theme_stylebox_override("panel", AppTheme.box(
-		Color(AppTheme.SURFACE, 0.96), AppTheme.RADIUS_LARGE, AppTheme.BORDER, 1
-	))
+	# A escritura: o papel do tema, com a tinta dele. É o terceiro objeto de papel
+	# do app — a comanda, o fim de partida e ela —, e o único em que o papel já
+	# existia no jogo de verdade.
+	var paper := PaperCard.paper_box()
+	# Folga menor que a da comanda: aqui a altura é da tabela de aluguel, que é o
+	# conteúdo, e cada linha de ar em volta é uma linha da tabela a menos.
+	paper.content_margin_left = 12
+	paper.content_margin_right = 12
+	paper.content_margin_top = 10
+	paper.content_margin_bottom = 10
+	add_theme_stylebox_override("panel", paper)
+	theme = PaperCard.paper_theme()
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 10)
+		margin.add_theme_constant_override("margin_" + side, 0)
 	add_child(margin)
 
 	var column := VBoxContainer.new()
@@ -145,18 +162,22 @@ func _ready() -> void:
 	# decide o que **desenhar** quando falta espaço, e não faz o rótulo parar de
 	# pedir a largura da frase inteira. Quem tira o pedido é a quebra.
 	_title = Label.new()
-	_title.add_theme_font_size_override("font_size", 14)
+	# Em letreiro: é o nome escrito no alto da escritura.
+	_title.add_theme_font_override("font", AppTheme.display(900))
+	_title.add_theme_font_size_override("font_size", 18)
 	_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_title)
 
 	_city = Label.new()
 	_city.add_theme_font_size_override("font_size", 11)
-	_city.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
+	_city.add_theme_color_override("font_color", INK_DIM)
 	_city.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_city)
 
 	_band = ColorRect.new()
-	_band.custom_minimum_size.y = 4
+	# A faixa da cor do grupo, grossa como a da escritura impressa: é o que diz de
+	# que cidade a casa é antes de o nome ser lido.
+	_band.custom_minimum_size.y = 8
 	column.add_child(_band)
 
 	# O corpo rola; o cabeçalho e os botões não.
@@ -201,7 +222,7 @@ func _ready() -> void:
 	column.add_child(_actions)
 
 	_toggle = Button.new()
-	compact(_toggle)
+	stamp(_toggle)
 	_toggle.pressed.connect(_on_toggle)
 	column.add_child(_toggle)
 
@@ -266,16 +287,16 @@ func _show_deed() -> void:
 	)
 
 	if not MonopolyBoard.is_deed(tile):
-		_line(_event_text(tile), AppTheme.TEXT_DIM)
+		_line(_event_text(tile), INK_DIM)
 		return
 
-	_line("Preço", AppTheme.TEXT_DIM, str(MonopolyBoard.price_of(tile)))
+	_line("Preço", INK_DIM, str(MonopolyBoard.price_of(tile)))
 	_owner_line()
 	_rent_rows()
 
 	if MonopolyBoard.can_build_on(tile):
-		_line("Casa / hotel", AppTheme.TEXT_DIM, str(MonopolyBoard.house_cost(tile)))
-	_line("Hipoteca", AppTheme.TEXT_DIM, str(MonopolyBoard.mortgage_value(tile)))
+		_line("Casa / hotel", INK_DIM, str(MonopolyBoard.house_cost(tile)))
+	_line("Hipoteca", INK_DIM, str(MonopolyBoard.mortgage_value(tile)))
 	_build_actions()
 
 
@@ -295,27 +316,28 @@ func _rent_rows() -> void:
 					label = "Hotel"
 				elif step > 0:
 					label = "%d casa%s" % [step, "" if step == 1 else "s"]
-				# O degrau em que a casa está agora fica aceso; os outros são
-				# projeção. Sem isso a tabela é uma lista de números sem presente.
-				_line(label, AppTheme.TEXT if step == built else AppTheme.TEXT_DIM, str(table[step]))
+				# O degrau em que a casa está agora fica marcado a marca-texto; os
+				# outros são projeção. Sem isso a tabela é uma lista de números sem
+				# presente.
+				_line(label, INK if step == built else INK_DIM, str(table[step]), step == built)
 		MonopolyBoard.Tile.AIRPORT:
 			for count in MonopolyBoard.AIRPORT_RENT.size():
 				_line(
 					"%d aeroporto%s" % [count + 1, "" if count == 0 else "s"],
-					AppTheme.TEXT_DIM, str(MonopolyBoard.AIRPORT_RENT[count])
+					INK_DIM, str(MonopolyBoard.AIRPORT_RENT[count])
 				)
 		MonopolyBoard.Tile.UTILITY:
 			for count in MonopolyBoard.UTILITY_MULTIPLIER.size():
 				_line(
 					"%d companhia%s" % [count + 1, "" if count == 0 else "s"],
-					AppTheme.TEXT_DIM, "%dx o dado" % MonopolyBoard.UTILITY_MULTIPLIER[count]
+					INK_DIM, "%dx o dado" % MonopolyBoard.UTILITY_MULTIPLIER[count]
 				)
 
 
 func _owner_line() -> void:
 	var landlord := MonopolyRules.owner_of(state, tile)
 	if landlord == MonopolyRules.NO_OWNER:
-		_line("Sem dono", AppTheme.SUCCESS)
+		_line("Sem dono", INK_FREE)
 		return
 	var color: Color = MonopolyFace.PLAYER_COLORS[landlord % MonopolyFace.PLAYER_COLORS.size()]
 	var text: String = _labeler.call(landlord)
@@ -346,7 +368,7 @@ func _action(label: String, act: int) -> void:
 	var button := Button.new()
 	button.text = label
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	compact(button)
+	stamp(button)
 	var chosen := tile
 	button.pressed.connect(func() -> void: action_requested.emit(act, chosen))
 	_actions.add_child(button)
@@ -376,7 +398,7 @@ func _show_holdings() -> void:
 	if owned.is_empty():
 		_line(
 			"Você ainda não comprou nada." if mine else "Ainda não comprou nada.",
-			AppTheme.TEXT_DIM
+			INK_DIM
 		)
 		return
 	for owned_tile in owned:
@@ -385,7 +407,7 @@ func _show_holdings() -> void:
 
 func _holding_row(owned_tile: int) -> void:
 	var row := Button.new()
-	compact(row)
+	stamp(row)
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	row.text = MonopolyBoard.short_name(owned_tile)
 	# O estado da propriedade cabe num sufixo curto: construções ou hipoteca.
@@ -432,6 +454,26 @@ static func compact(button: Button) -> void:
 		style.content_margin_left = 8
 		style.content_margin_right = 8
 		button.add_theme_stylebox_override(state_name, style)
+
+
+## O passo compacto de `compact()`, mas com a pele de carimbo do papel: um botão
+## escuro dentro da escritura é um buraco no papel. Só o tamanho é sobrescrito; a
+## cor vem do tema do papel, que o painel carrega.
+static func stamp(button: Button) -> void:
+	button.add_theme_font_size_override("font_size", 12)
+	button.clip_text = true
+	button.custom_minimum_size.y = 26
+	for state_name in ["normal", "hover", "pressed", "disabled"]:
+		var fill := PaperCard.PAPER_SOFT
+		if state_name == "hover" or state_name == "pressed":
+			fill = PaperCard.PAPER_SOFT.darkened(0.08)
+		var style := AppTheme.box(fill, AppTheme.RADIUS_PAPER, Color(AppTheme.PAPER_INK, 0.35), 1)
+		style.content_margin_top = 3
+		style.content_margin_bottom = 3
+		style.content_margin_left = 8
+		style.content_margin_right = 8
+		button.add_theme_stylebox_override(state_name, style)
+	button.add_theme_color_override("font_disabled_color", Color(AppTheme.PAPER_INK, 0.4))
 
 
 ## Marca o botão que **é** a ação da fase: latão cheio, e pulsando.
@@ -516,7 +558,7 @@ static func highlight(button: Button) -> void:
 ##
 ## Sem uma das duas, o rótulo pede a largura do texto inteiro, o `ScrollContainer`
 ## repassa esse mínimo, e o painel estica — que foi exatamente o que aconteceu.
-func _line(label: String, color: Color, value := "") -> void:
+func _line(label: String, color: Color, value := "", marked := false) -> void:
 	var row := HBoxContainer.new()
 	row.custom_minimum_size.y = ROW_HEIGHT
 	var left := Label.new()
@@ -536,7 +578,21 @@ func _line(label: String, color: Color, value := "") -> void:
 		right.add_theme_font_size_override("font_size", 12)
 		right.add_theme_color_override("font_color", color)
 		row.add_child(right)
-	_body.add_child(row)
+	if not marked:
+		_body.add_child(row)
+		return
+	# A linha marcada leva um fundo amarelo, como marca-texto numa escritura de
+	# papel — e não só a tinta mais forte, que num corpo de 12 px não se distingue
+	# da vizinha de relance.
+	var highlight := PanelContainer.new()
+	var style := AppTheme.box(Color(AppTheme.ACCENT, 0.55), AppTheme.RADIUS_PAPER)
+	style.content_margin_left = 3
+	style.content_margin_right = 3
+	style.content_margin_top = 0
+	style.content_margin_bottom = 0
+	highlight.add_theme_stylebox_override("panel", style)
+	highlight.add_child(row)
+	_body.add_child(highlight)
 
 
 func _kind_label(index: int) -> String:

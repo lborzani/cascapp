@@ -20,7 +20,7 @@ signal leave_pressed
 ## Fundo escuro sobre o tabuleiro.
 const SHADE := 0.72
 
-var _panel: PanelContainer = null
+var _panel: PaperCard = null
 var _title: Label = null
 var _subtitle: Label = null
 var _table: VBoxContainer = null
@@ -47,16 +47,15 @@ func _ready() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	_panel = PanelContainer.new()
+	# O resultado em papel, como o fim de partida dos outros jogos — e aqui ele é
+	# o extrato final do banco, que é papel no jogo de verdade.
+	_panel = PaperCard.new()
 	_panel.custom_minimum_size = Vector2(340, 0)
-	_panel.add_theme_stylebox_override("panel", AppTheme.box(
-		AppTheme.SURFACE, AppTheme.RADIUS_LARGE, AppTheme.BORDER, 1
-	))
 	center.add_child(_panel)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 16)
+		margin.add_theme_constant_override("margin_" + side, 4)
 	_panel.add_child(margin)
 
 	var column := VBoxContainer.new()
@@ -64,13 +63,13 @@ func _ready() -> void:
 	margin.add_child(column)
 
 	_title = Label.new()
-	_title.add_theme_font_size_override("font_size", 20)
+	_title.theme_type_variation = &"Title"
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_title)
 
 	_subtitle = Label.new()
 	_subtitle.add_theme_font_size_override("font_size", 11)
-	_subtitle.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
+	_subtitle.add_theme_color_override("font_color", Color(AppTheme.PAPER_INK, 0.62))
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_subtitle)
@@ -85,6 +84,7 @@ func _ready() -> void:
 
 	var leave := Button.new()
 	leave.text = "Sair"
+	leave.theme_type_variation = &"GhostButton"
 	leave.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	leave.custom_minimum_size.y = 38
 	leave.add_theme_font_size_override("font_size", 13)
@@ -165,7 +165,8 @@ func _fill_table(state: MatchState, labeler: Callable, champion: int) -> void:
 		)
 		row.add_child(stripe)
 
-		var tint := AppTheme.TEXT_DIM if out or player != champion else AppTheme.TEXT
+		# Tinta, e não giz: a tabela está no papel.
+		var tint := Color(AppTheme.PAPER_INK, 0.6) if out or player != champion else AppTheme.PAPER_INK
 		var name_label := Label.new()
 		name_label.text = labeler.call(player)
 		name_label.add_theme_font_size_override("font_size", 12)
