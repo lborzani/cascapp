@@ -28,6 +28,8 @@ var mode := Game.Mode.HOTSEAT
 var game_id: StringName = &""
 
 var _panel: PanelContainer = null
+## O suporte que desliza. Ver [method _init].
+var _slider: Control = null
 var _scrim: ColorRect = null
 var _title: Label = null
 var _meta: Label = null
@@ -92,6 +94,17 @@ func _init() -> void:
 	_scrim.gui_input.connect(_on_scrim_input)
 	add_child(_scrim)
 
+	# A folha sobe animada, e quem se move é este suporte de tela cheia, não o
+	# painel. O painel é ancorado embaixo e cresce para cima; escrever `position`
+	# num `Control` ancorado reescreve os offsets dele, e a animação terminava
+	# em `position.y = 0` — a folha ficava presa no topo da tela, com a lista
+	# aparecendo embaixo dela. O suporte descansa em zero, que é o lugar certo
+	# dele, e o painel nunca tem a posição escrita.
+	_slider = Control.new()
+	_slider.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_slider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_slider)
+
 	_panel = PanelContainer.new()
 	_panel.anchor_left = 0.0
 	_panel.anchor_right = 1.0
@@ -108,7 +121,7 @@ func _init() -> void:
 	style.content_margin_top = AppTheme.SPACE_M
 	style.content_margin_bottom = AppTheme.SPACE_XL
 	_panel.add_theme_stylebox_override("panel", style)
-	add_child(_panel)
+	_slider.add_child(_panel)
 	_panel.add_child(_build_body())
 
 
@@ -264,10 +277,10 @@ func open(id: StringName, preferred_mode := -1) -> void:
 		return
 	visible = true
 	modulate.a = 0.0
-	_panel.position.y = 40.0
+	_slider.position.y = 40.0
 	var rise := create_tween().set_parallel()
 	rise.tween_property(self, "modulate:a", 1.0, SLIDE * 0.6)
-	rise.tween_property(_panel, "position:y", 0.0, SLIDE).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	rise.tween_property(_slider, "position:y", 0.0, SLIDE).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func close() -> void:

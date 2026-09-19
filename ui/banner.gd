@@ -42,6 +42,15 @@ const FONT_SIZE := 17
 var _message := ""
 var _kind := Kind.INFO
 var _timer: SceneTreeTimer = null
+## Deslocamento do desenho na entrada, e não da posição do nó.
+##
+## A cena posiciona o aviso por âncora e offset — a Metrópole o desce para baixo
+## da barra translúcida —, e animar `position` reescreve os offsets: depois do
+## primeiro aviso ele morava em `y = 0`, embaixo da barra. O quique é só desenho.
+var _lift := 0.0:
+	set(value):
+		_lift = value
+		queue_redraw()
 
 
 func _ready() -> void:
@@ -61,8 +70,8 @@ func show_message(text: String, kind: Kind = Kind.INFO, persistent: bool = false
 
 	var tween := create_tween()
 	tween.tween_property(self, "modulate:a", 1.0, 0.18)
-	position.y = -8.0
-	tween.parallel().tween_property(self, "position:y", 0.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_lift = -8.0
+	tween.parallel().tween_property(self, "_lift", 0.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 	if _timer != null and _timer.time_left > 0.0:
 		_timer.timeout.disconnect(_fade_out)
@@ -89,6 +98,7 @@ func _fade_out() -> void:
 func _draw() -> void:
 	if _message.is_empty():
 		return
+	draw_set_transform(Vector2(0.0, _lift))
 	var font := AppTheme.font(600)
 	# A caixa não pode passar da largura do nó: uma mensagem de pareamento tem
 	# frase inteira, e sem quebra ela saía pelos dois lados da tela.

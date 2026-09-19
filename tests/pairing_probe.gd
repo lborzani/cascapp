@@ -303,6 +303,17 @@ func _probe_game_sheet() -> void:
 	sheet.open(Game.CHESS)
 	await get_tree().process_frame
 
+	# Depois da animação de entrada a folha está encostada embaixo. A animação
+	# escrevia `position` no painel ancorado, e ele terminava preso no topo da tela
+	# com a lista aparecendo por baixo — nenhum erro, só uma folha no lugar errado.
+	await get_tree().create_timer(GameSheet.SLIDE + 0.15).timeout
+	var panel_bottom := sheet._panel.get_global_rect().end.y
+	_check(
+		absf(panel_bottom - sheet.get_global_rect().end.y) < 1.0,
+		"a folha termina encostada na base da tela (%.0f de %.0f)" % [panel_bottom, sheet.get_global_rect().end.y]
+	)
+	_check(sheet._panel.get_global_rect().position.y > 1.0, "e não no topo")
+
 	var modes := GameSheet.modes_for(Game.CHESS)
 	_check(not modes.is_empty(), "o xadrez tem modo para oferecer")
 	_equals(

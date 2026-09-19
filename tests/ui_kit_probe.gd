@@ -34,6 +34,7 @@ func _run() -> void:
 	_probe_seats()
 	_probe_code_input()
 	_probe_player_tag()
+	await _probe_banner()
 	_probe_rules_docs()
 	_probe_table_rules()
 	await _probe_rules_page()
@@ -333,6 +334,25 @@ func _probe_player_tag() -> void:
 	tag.upside_down = true
 	_check(is_equal_approx(tag.rotation, PI), "o lado de cima vira de ponta-cabeça")
 	tag.free()
+
+
+## O aviso é posicionado pela cena, por âncora e offset — a Metrópole o desce
+## para baixo da barra translúcida. A animação de entrada reescrevia `position`, e
+## depois do primeiro aviso ele morava em y = 0, embaixo da barra.
+func _probe_banner() -> void:
+	print("aviso")
+	var stage := Control.new()
+	stage.size = Vector2(432, 400)
+	root.add_child(stage)
+	var banner := Banner.new()
+	banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	banner.offset_top = 50.0
+	banner.offset_bottom = 110.0
+	stage.add_child(banner)
+	banner.show_message("Fulano pagou M 20 a Beltrano.")
+	await create_timer(0.4).timeout
+	_equals(banner.offset_top, 50.0, "o aviso continua onde a cena o pôs")
+	stage.free()
 
 
 ## Os oito jogos do catálogo, na ordem dele. Escritos à mão, e não lidos do
