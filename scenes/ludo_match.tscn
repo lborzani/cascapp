@@ -136,7 +136,6 @@ grow_vertical = 2
 custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
 script = ExtResource("10_paper")
-theme_type_variation = &"Card"
 
 [node name="Box" type="VBoxContainer" parent="Overlay/Center/Panel"]
 layout_mode = 2

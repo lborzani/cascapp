@@ -10,22 +10,17 @@ extends HFlowContainer
 ## são a mesma conversa, e o código é a resposta de quem perguntou primeiro
 ## "e se o celular cair?".
 ##
-## ## Por que um nó só para os cinco jogos
+## ## Mora na barra da partida
 ##
-## Xadrez, Damas, Batalha Naval, Ludo e Metrópole têm telas que não se parecem em
-## nada — duas retrato, duas deitadas, uma com o tabuleiro em 3D. Cinco cópias
-## desta faixa seriam cinco formatos de relógio e cinco jeitos de escrever
-## "rodada", e a terceira a ser editada já discordaria das outras. O que muda de
-## jogo para jogo é só de onde saem os números, e isso é pergunta para o
-## `Ruleset`.
+## Os oito jogos têm telas que não se parecem em nada, e a faixa entra em todas
+## pelo mesmo lugar: a [MatchBar], que a liga à partida em `bind()`. Oito cópias
+## seriam oito formatos de relógio e oito jeitos de escrever "rodada". O que muda
+## de jogo para jogo é só de onde saem os números — e se há rodada para contar:
+## ver [member counts_rounds].
 ##
-## ## `HFlowContainer`, e não uma linha
-##
-## Nas telas de retrato a faixa tem a largura toda e cabe numa linha. Nas duas
-## deitadas ela mora numa coluna de 136 a 150 px, onde "12:34" e "Sala ABC123"
-## não cabem lado a lado. Um contêiner que quebra sozinho resolve os dois casos
-## sem a faixa precisar saber em que tela está — que é justamente o que ela não
-## pode saber, sendo a mesma nas cinco.
+## É um `HFlowContainer` para caber numa barra estreita em pé sem cortar o código
+## da sala: quando tempo, rodadas e sala não cabem lado a lado, ela quebra em vez
+## de empurrar o título para fora.
 ##
 ## ## O código é um botão
 ##
@@ -131,21 +126,6 @@ func _process(delta: float) -> void:
 		return
 	_shown_seconds = seconds
 	_clock.text = clock_text(seconds)
-
-
-## A faixa já ligada à partida em curso, pronta para entrar na tela.
-##
-## Existe para as cinco cenas não repetirem três linhas — e sobretudo para não
-## repetirem a **decisão**: o código só aparece em rede, e a tela que esquecesse a
-## condição escreveria "Sala " vazio numa partida contra o bot.
-##
-## Quem chama já passou pelo `Game.begin_match()`: é ele que decide se esta
-## partida começa agora ou se é a de antes, retomada.
-static func create() -> MatchStatus:
-	var strip := MatchStatus.new()
-	strip.started_at = Game.match_started_at
-	strip.code = Net.room_code() if Game.mode == Game.Mode.ONLINE else ""
-	return strip
 
 
 ## Segundos de partida. Do relógio do sistema e não de um acumulador de `delta`:

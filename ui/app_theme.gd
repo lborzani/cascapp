@@ -348,7 +348,6 @@ static func _style_buttons(theme: Theme) -> void:
 		theme.set_stylebox(state, "ChipSelected", box(ACCENT_SOFT, RADIUS, ACCENT, 2))
 
 	_outlined(theme, "AccentButton", ACCENT, ACCENT_SOFT)
-	_outlined(theme, "SuccessButton", SUCCESS, SUCCESS_SOFT)
 	# O que custa caro: desistir, sair no meio, apagar. Em contorno e não cheio —
 	# vermelho preenchido num menu grita antes de o jogador ter feito nada errado.
 	_outlined(theme, "DangerButton", DANGER, DANGER_SOFT)
@@ -362,18 +361,14 @@ static func _style_buttons(theme: Theme) -> void:
 	theme.set_stylebox("hover", "SuccessSolidButton", plate(SUCCESS.lightened(0.08), success_edge))
 	theme.set_stylebox("pressed", "SuccessSolidButton", plate(SUCCESS.darkened(0.08), success_edge, true))
 
-	# Linha da gaveta de navegação: pílula da largura toda, texto à esquerda.
+	# Linha de ajuste (os interruptores da aba Você): pílula da largura toda, texto à
+	# esquerda.
 	theme.set_type_variation("NavItem", "Button")
 	theme.set_color("font_color", "NavItem", TEXT_DIM)
 	theme.set_color("font_hover_color", "NavItem", TEXT)
 	theme.set_stylebox("normal", "NavItem", box(Color(0, 0, 0, 0), RADIUS_PILL))
 	theme.set_stylebox("hover", "NavItem", box(SURFACE_HIGH, RADIUS_PILL))
 	theme.set_stylebox("pressed", "NavItem", box(ACCENT_SOFT, RADIUS_PILL))
-	theme.set_type_variation("NavItemSelected", "Button")
-	for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
-		theme.set_color(state, "NavItemSelected", ACCENT)
-	for state: String in ["normal", "hover", "pressed"]:
-		theme.set_stylebox(state, "NavItemSelected", box(ACCENT_SOFT, RADIUS_PILL))
 
 	# Sem fundo nenhum: `IconButton` desenha o próprio círculo, porque um
 	# retângulo arredondado de raio igual à metade da largura deixa uma costura no

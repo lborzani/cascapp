@@ -2221,82 +2221,91 @@ tests/                test_runner.gd, relay_smoke.gd, table_smoke.gd, probes
 
 ### Interface
 
-Um tema só, construído em código ([ui/app_theme.gd](ui/app_theme.gd)): fundo
-quase preto e quente, madeira no tabuleiro e **latão como única cor de
-destaque** — uma cor de destaque só significa que ela sempre quer dizer a mesma
-coisa ("é aqui que você age, é sua vez"). Tipografia com pesos reais via
-`SystemFont`, sem binário no repositório.
+A interface é o tema **Boteco**: uma mesa de bar vista de cima. Lousa verde-escura
+no fundo, giz nos textos e contornos, uma placa amarela para a ação da tela e
+papel para as três coisas que são papel de verdade — a comanda com o código da
+sala, a escritura de Metrópole e o fim de partida. O desenho e as decisões estão
+em [docs/superpowers/specs/2026-09-16-redesenho-boteco-design.md](docs/superpowers/specs/2026-09-16-redesenho-boteco-design.md);
+o plano, etapa a etapa, em [docs/superpowers/plans/2026-09-16-redesenho-boteco.md](docs/superpowers/plans/2026-09-16-redesenho-boteco.md).
 
-#### Destaque de botão: peso e cor são eixos separados
+O tema continua construído em código ([ui/app_theme.gd](ui/app_theme.gd)) e
+aplicado na raiz de cada cena. As fontes são embarcadas, todas OFL, em
+`assets/fonts/`: **Big Shoulders** no letreiro (títulos e botões),
+**Atkinson Hyperlegible** no texto que precisa ser lido longe do rosto, e **IBM
+Plex Mono** nos números que precisam alinhar — relógio, dinheiro, código da sala.
+`SystemFont` saiu porque nenhuma dessas três vozes existe garantida num aparelho.
 
-Ter mais formas de destacar um botão não é ter mais cores — uma paleta com seis
-destaques não destaca nada. São dois eixos, e cada um responde outra pergunta.
+#### Os objetos do tema
 
-**Peso** (quanta atenção o botão pede): cheio → contorno → neutro → fantasma.
-Cheio existe um por tela, no máximo.
+| Objeto | Componente | Onde aparece |
+|--------|------------|--------------|
+| Bolacha de chopp | `Coaster` | avatar do jogador, ícone do jogo, `?` da barra, direcional do Bomberman |
+| Papel | `PaperCard` | comanda do código, escritura, fim de partida, boas-vindas |
+| Giz tracejado | `StyleBoxDashed` | botão secundário, etiqueta de quem espera, aviso |
+| Placa | `AppTheme.plate()` | a ação da tela — uma por tela, no máximo |
+| Abas de escolha | `SegmentedControl` | modo na folha do jogo, formato nas regras |
 
-**Cor** (o que o botão faz), e só três, nenhuma decorativa:
+Os botões seguem dois eixos, e cada um responde uma pergunta. **Peso** (quanta
+atenção o botão pede): placa → contorno → tracejado. **Cor** (o que ele faz):
+amarelo é a ação da tela, verde é confirmar e começar, vermelho é desistir e
+sair. Um destaque novo é uma combinação dos dois, nunca uma cor nova.
 
-| Cor | Quer dizer | Onde já aparece |
-|-----|-----------|-----------------|
-| Latão | a ação da tela | "Criar partida", cartão da vez |
-| Verde | confirmar, aceitar, começar | casas do último lance |
-| Vermelho | desistir, sair, apagar | xeque, avisos de perigo |
+#### Navegação
 
-As variações do tema são as combinações: `PrimaryButton` é latão cheio,
-`AccentButton` é latão em contorno, `DangerButton` é vermelho em contorno. Um
-destaque novo é uma combinação, não uma cor nova.
+Três abas na base — **Jogos · Online · Você** —, no lugar da gaveta e da
+engrenagem. Jogos é o cardápio: os favoritos em cima e o catálogo como lista de
+lousa, com a peça numa bolacha, o nome, o pontilhado e a lotação. Tocar num jogo
+abre a **folha do jogo** (`GameSheet`), que junta numa camada só o que eram duas
+telas: o modo em abas, os ajustes daquele modo, um botão para começar e o link
+"Como jogar". Online é a aba de entrar numa sala — o código em seis casas de
+papel, o QR, o NFC e a lista de salas abertas — e de criar uma. Você é o nome e a
+bolacha com que o jogador aparece na mesa.
 
-Na tela de como jogar isso aparece de cima a baixo: "Criar partida" em latão
-cheio, os dois modos locais em neutro e "Escolher outro jogo" em fantasma. Antes
-os do meio eram idênticos e a hierarquia parava no primeiro botão. Na tela
-inicial, "Entrar em uma partida" é latão **contornado**: a lista de jogos é a
-ação principal, e um botão cheio embaixo dela roubaria o olho de três alvos que
-já são grandes.
+A sala de espera de quem abre (`scenes/pairing.tscn`, e a do Bomberman) mostra o
+código numa comanda com "Copiar" e "Mostrar QR" — o QR começa escondido, porque
+ocupa meia tela para servir a um caminho só — e as cadeiras em volta da mesa, com
+quem já sentou.
 
-#### Duas telas de menu
+#### A partida
 
-A primeira responde **qual jogo**; a segunda, **como jogar**. Antes era uma só,
-com dois cartões que marcavam um jogo e quatro botões que agiam sobre ele.
+Toda partida tem a mesma moldura: a **barra da partida** (`MatchBar`) no topo, com
+sair, o nome do jogo, tempo, rodadas e código da sala, o `?` das regras desta
+mesa e as ações do jogo. Na Metrópole ela é translúcida, por cima do tabuleiro 3D.
+Cada jogador é uma **etiqueta** (`PlayerTag`): a faixa larga nas telas em pé, com
+capturas e relógio num placar, e a etiqueta curta nas deitadas, presa ao lugar do
+dono — ao leque de cada assento no Uno, ao canto de cada cor no Ludo.
 
-Funcionava com dois jogos e quatro modos, e escondia uma pergunta dentro da
-outra: "Criar partida" mudava de significado conforme um cartão acima dele, sem
-dizer isso em lugar nenhum. Com seis jogos na lista de planos, não funcionaria de
-jeito nenhum.
+Sair pergunta antes, pelo botão ou pelo gesto de voltar do Android. Com o fim de
+partida na tela, o gesto sai direto: não há mais partida a proteger.
 
-O cartão tocado na primeira tela **reaparece como cabeçalho** na segunda. É o
-mesmo nó (`GameChoice`), aceso de menos e sem receber toque: a resposta da
-primeira pergunta continua na tela enquanto a segunda é feita, e a continuidade
-não custou desenho novo.
+#### Como jogar
 
-O catálogo mora em `Game.GAMES` e não na tela, porque três lugares leem — a
-grade, o cabeçalho e a lista de salas — e cópias da mesma lista são listas que
-podem discordar sobre o que é cada jogo. Cada entrada é `id`, título e a
-**espécie** de uma peça; `Game.piece_of()` monta a peça. A espécie e não a peça
-pronta porque `Board.piece()` é função, e função não cabe num `const` — e porque
-de que lado ela é desenhada é decisão de quem desenha.
+As regras dos oito jogos moram em `data/rules/<id>.tres`, um `GameRulesDoc` por
+jogo — objetivo, passos numerados e avisos, e um bloco por formato na sinuca. Elas
+foram escritas a partir do código de regras, e quem mudar uma regra em `core/`
+muda a frase ali junto. Duas portas levam a elas: o link da folha do jogo abre a
+página inteira (`RulesPage`); o `?` da barra abre a gaveta **Regras desta mesa**
+(`TableRulesDrawer`), com o que vale nesta partida e o estado de cada regra — o
+0 e o 7 do Uno, o formato da sinuca, o limite de Metrópole. A gaveta é uma função
+pura das opções ([ui/rules/table_rules.gd](ui/rules/table_rules.gd)), com os números
+lidos das constantes das regras.
 
-Cada jogo é **uma peça**, não um tabuleiro. A primeira versão era um pedaço de
-tabuleiro 4x4 com quatro peças posicionadas à mão: dizia a mesma coisa e custava
-uma lista de quatro triplas por entrada do catálogo, mais 16 casas e uma moldura
-desenhadas por cartão. Um cavalo já é xadrez.
+#### O que o redesenho não tocou
 
-O mesmo `GameChoice` desenha nos dois arranjos: **empilhado** na grade, onde ele
-é o alvo do toque e a peça é o que se enxerga de longe, e **em linha** no
-cabeçalho, onde ele é só um rótulo e encolhe até o conteúdo.
-
-Os modos vêm agrupados por **onde está o outro jogador**, que é a única
-diferença que muda a decisão: uma sala precisa de internet e de espera, o mesmo
-aparelho e o bot começam na hora. Sem relay configurado, a seção de sala inteira
-some e jogar no mesmo aparelho vira a ação principal — oferecer o que não pode
-funcionar é pior que oferecer menos.
+O logo, as peças de xadrez, damas e Ludo, os barcos da batalha naval, o tabuleiro
+de Metrópole e as cartas de Uno são desenho protegido: não mudaram um pixel. Tudo
+o que eles liam do tema — fonte, fundo, cores de estado — foi congelado em
+constantes antes da troca de paleta, e a prova é por imagem:
+[tests/image_diff.gd](tests/image_diff.gd) compara as folhas de referência de
+antes do redesenho com as de agora, e a resposta aceitável é "iguais". O
+tabuleiro de Metrópole é comparado por região, porque o fundo da sala em volta
+dele segue o tema de propósito.
 
 #### Ajustes, e o nome do jogador
 
-A engrenagem no canto do cabeçalho leva a `scenes/settings.tscn`. Hoje ela tem um
-campo só — o nome —, e a tela existe antes de ter muito o que ajustar de
-propósito: o nome precisa de um lugar óbvio, e óbvio é uma engrenagem no canto,
-não um campo escondido dentro de outra coisa.
+A aba Você (`scenes/settings.tscn`) é o nome, a bolacha com que o jogador aparece
+na mesa, e os interruptores de som e vibração. O nome precisa de um lugar óbvio,
+e óbvio é uma aba na base, não um campo escondido dentro de outra coisa.
 
 `Prefs` guarda em `user://prefs.cfg` (o `res://` é o pacote do app, somente
 leitura no Android) e é **estático, não autoload**: um autoload é um nó vivo na
@@ -2312,7 +2321,7 @@ o que quem limpou o campo quis dizer.
 #### Entrar não passa pela escolha do jogo
 
 Escolher o jogo é o caminho de **abrir** partida, e só. Entrar numa que já existe
-tem tela própria (`scenes/join.tscn`), alcançada por um botão da tela inicial.
+tem tela própria (`scenes/join.tscn`), que é a aba Online.
 
 A assimetria é o ponto: quem abre decide o jogo e o ritmo; quem entra recebe os
 dois no aperto de mão. Antes as duas ações moravam juntas na tela de como jogar,

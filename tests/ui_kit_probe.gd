@@ -105,8 +105,8 @@ func _probe_palette() -> void:
 func _probe_theme() -> void:
 	print("tema")
 	var theme := AppTheme.build()
-	for variation: String in ["PrimaryButton", "ChipButton", "ChipSelected", "AccentButton", "SuccessButton",
-			"SuccessSolidButton", "DangerButton", "NavItem", "NavItemSelected", "IconButton",
+	for variation: String in ["PrimaryButton", "ChipButton", "ChipSelected", "AccentButton",
+			"SuccessSolidButton", "DangerButton", "NavItem", "IconButton",
 			"GhostButton", "Segment", "SegmentSelected"]:
 		_equals(String(theme.get_type_variation_base(variation)), "Button", "%s é variação de botão" % variation)
 	for variation: String in ["Display", "Title", "Subtitle", "Greeting", "SectionHeader", "Caption", "PairingCode", "Mono"]:

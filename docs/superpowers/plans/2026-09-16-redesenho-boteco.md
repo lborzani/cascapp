@@ -24,12 +24,12 @@
 
 | Etapa | Entrega | Estado deste plano |
 | --- | --- | --- |
-| 1 | Fundação: referência dos protegidos, fontes, paleta, componentes base | **detalhada abaixo** |
-| 2 | Navegação e menus (TabBar, Início, GameSheet, Online, sala de espera, Você, boas-vindas) | tarefas detalhadas ao iniciar a etapa |
-| 3 | Partidas em pé (MatchBar, PlayerTag, xadrez/damas com modo mesa, naval, fim de partida) | **detalhada abaixo** |
-| 4 | Partidas deitadas (Uno, Ludo, Sinuca, Metrópole, Bomberman) | idem |
-| 5 | Como jogar (GameRulesDoc, 8 `.tres`, RulesPage, TableRulesDrawer) | idem |
-| 6 | Limpeza, README, prints finais | idem |
+| 1 | Fundação: referência dos protegidos, fontes, paleta, componentes base | **entregue** |
+| 2 | Navegação e menus (TabBar, Início, GameSheet, Online, sala de espera, Você, boas-vindas) | **entregue** |
+| 3 | Partidas em pé (MatchBar, PlayerTag, xadrez/damas com modo mesa, naval, fim de partida) | **entregue** |
+| 4 | Partidas deitadas (Uno, Ludo, Sinuca, Metrópole, Bomberman) | **entregue** |
+| 5 | Como jogar (GameRulesDoc, 8 `.tres`, RulesPage, TableRulesDrawer) | **entregue** |
+| 6 | Limpeza, README, prints finais | **entregue** |
 
 As etapas 2–6 são detalhadas no começo de cada uma porque dependem da API
 entregue pela anterior e de ler as cenas que vão reconstruir; detalhar agora
@@ -1436,3 +1436,43 @@ fundo da sala em volta dele segue o tema e mudou de propósito na etapa 1. As
 regiões que contêm só tabuleiro são `500 160 400 400` (tampo), `520 155 360 30`
 (fileira de cima), `470 505 440 75` (fileira de baixo) e `455 300 25 180`
 (coluna da esquerda) — todas iguais à referência.
+
+---
+
+## Etapa 4 — Partidas deitadas
+
+Entregue. Todas as partidas deitadas sobre a `MatchBar` compacta, e cada jogador
+numa `PlayerTag` presa ao lugar dele.
+
+- [x] **`PlayerTag`**: alarme genérico (`alert` + `alert_text`) no lugar do xeque; bolinhas de progresso (`pips`) na linha de baixo; nome e detalhe cortados na largura.
+- [x] **Uno**: a coluna da esquerda sai; uma etiqueta por assento presa ao leque (`UnoView.seat_tag_spot()`, com a mesma conta de extensão que põe o leque no lugar); a do local no rodapé; status colado aos botões; escolhas e fim de partida em papel.
+- [x] **Ludo**: etiqueta do lado de fora do curral de cada cor (`LudoView.yard_rect()`), peões em casa em bolinhas; dado de papel.
+- [x] **Sinuca**: etiquetas na cor das bolas; instrução embaixo delas; fim em papel.
+- [x] **Metrópole**: escritura de papel (faixa do grupo, aluguel atual a marca-texto, botões de carimbo); barra translúcida por cima do tabuleiro; dinheiro em mono amarelo; resultado em papel. A mesa de troca fica escura — é mesa, não papel.
+- [x] **Bomberman**: barra com "N de pé"; lista de quem está vivo no canto de cima; direcional em bolacha; bomba em placa amarela. O lobby segue a sala de espera.
+- [x] `MatchStatus.counts_rounds`: Uno, sinuca e Bomberman não mostram "0 rodadas".
+
+**Verificação:** a lista da etapa 1, `bomber_net_smoke` contra servidor local, e o
+tabuleiro de Metrópole por região. A sombra da escritura encosta três pixels na
+borda direita da região antiga do tampo; as regiões passam a ser
+`500 160 395 400` (tampo), `520 155 360 30`, `470 505 425 75` e `455 300 25 180`
+— todas iguais à referência.
+
+## Etapa 5 — Como jogar
+
+Entregue.
+
+- [x] `ui/rules/game_rules_doc.gd` e `game_rules_format.gd`; `data/rules/<id>.tres` para os oito jogos, escritos a partir do código de regras.
+- [x] `ui/rules/table_rules.gd` — função pura das opções, números lidos das constantes; `ui/rules/match_options.gd` — as opções da partida em curso.
+- [x] `RulesPage` (link "Como jogar" na folha do jogo) e `TableRulesDrawer` (`?` da `MatchBar`, com "Ver regras completas").
+- [x] O gesto de voltar fecha a camada da frente: `back_layer` em `nav.gd`.
+
+**Teste:** `ui_kit_probe` (todo jogo tem regras; regras da mesa refletem 0 e 7,
+formato e limite; página e gaveta); `scene_probe` (o `?` abre, voltar fecha sem
+perguntar de sair); `pairing_probe` (o link abre a página, voltar deixa a folha).
+
+## Etapa 6 — Limpeza e fechamento
+
+- [x] Saem `MatchStatus.create()`, os ícones de gaveta e engrenagem do `IconButton`, as variações `SuccessButton` e `NavItemSelected`, e a variação solta no painel de fim do Ludo.
+- [x] README: a seção de interface descreve o tema Boteco, a navegação por abas, a moldura das partidas e o "Como jogar".
+- [x] Folha de prints inteira renderizada; prints novos `01d_como_jogar` e `02b_regras_mesa`.
