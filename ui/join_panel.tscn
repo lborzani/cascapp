@@ -1,76 +1,92 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://b6yqjv2k1w0xk"]
 
-[ext_resource type="Script" path="res://ui/join_panel.gd" id="1_join"]
-[ext_resource type="Script" path="res://ui/chip_bar.gd" id="2_chips"]
+[ext_resource type="Script" path="res://ui/join_panel.gd" id="1_panel"]
+[ext_resource type="Script" path="res://ui/code_input.gd" id="2_code"]
+[ext_resource type="Script" path="res://ui/chip_bar.gd" id="3_chips"]
 
 [node name="JoinPanel" type="VBoxContainer"]
-theme_override_constants/separation = 16
-script = ExtResource("1_join")
+theme_override_constants/separation = 12
+script = ExtResource("1_panel")
+
+[node name="CodeCaption" type="Label" parent="."]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "ENTRAR COM CÓDIGO"
+
+[node name="CodeInput" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("2_code")
 
 [node name="CodeRow" type="HBoxContainer" parent="."]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CodeEdit" type="LineEdit" parent="CodeRow"]
+[node name="ScanButton" type="Button" parent="CodeRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 20
-placeholder_text = "Código da partida"
-alignment = 1
-max_length = 6
+theme_type_variation = &"GhostButton"
+text = "Ler QR"
 
 [node name="JoinButton" type="Button" parent="CodeRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(104, 52)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_type_variation = &"PrimaryButton"
 text = "Entrar"
-
-[node name="ScanButton" type="Button" parent="."]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-size_flags_horizontal = 0
-theme_type_variation = &"AccentButton"
-text = "Câmera"
 
 [node name="NfcHint" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Caption"
+theme_type_variation = &"Hint"
 text = "Encoste os aparelhos para entrar por NFC — ele já está ligado."
 autowrap_mode = 3
 
 [node name="Hint" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Caption"
-theme_override_colors/font_color = Color(0.85098, 0.643137, 0.254902, 1)
+theme_type_variation = &"Hint"
 autowrap_mode = 3
+
+[node name="CreateCaption" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "CRIAR SALA"
+
+[node name="CreateScroll" type="ScrollContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="CreateRow" type="HBoxContainer" parent="CreateScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
 
 [node name="RoomsHeader" type="HBoxContainer" parent="."]
 layout_mode = 2
+theme_override_constants/separation = 12
 
 [node name="RoomsCaption" type="Label" parent="RoomsHeader"]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
+size_flags_vertical = 1
 theme_type_variation = &"SectionHeader"
-text = "Partidas encontradas"
+text = "Salas abertas"
 
 [node name="RefreshButton" type="Button" parent="RoomsHeader"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
-theme_type_variation = &"ChipButton"
+size_flags_horizontal = 8
+theme_type_variation = &"GhostButton"
 text = "Atualizar"
 
 [node name="GameFilter" type="Button" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-script = ExtResource("2_chips")
+script = ExtResource("3_chips")
 
 [node name="RoomRows" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
@@ -79,12 +95,8 @@ theme_override_constants/separation = 8
 
 [node name="RoomsEmpty" type="Label" parent="RoomRows"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
-theme_type_variation = &"Subtitle"
-text = "Procurando salas abertas…"
-horizontal_alignment = 1
-vertical_alignment = 1
+theme_type_variation = &"Hint"
 autowrap_mode = 3
 
 [node name="RoomsRequest" type="HTTPRequest" parent="."]
@@ -92,8 +104,6 @@ unique_name_in_owner = true
 
 [node name="Status" type="Label" parent="."]
 unique_name_in_owner = true
-visible = false
 layout_mode = 2
-theme_type_variation = &"Subtitle"
-horizontal_alignment = 1
+theme_type_variation = &"Hint"
 autowrap_mode = 3

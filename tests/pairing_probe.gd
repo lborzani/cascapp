@@ -17,7 +17,6 @@ extends Node
 const PAIRING_SCENE := preload("res://scenes/pairing.tscn")
 const JOIN_SCENE := preload("res://scenes/join.tscn")
 const MENU_SCENE := preload("res://scenes/main_menu.tscn")
-const GAME_MENU_SCENE := preload("res://scenes/game_menu.tscn")
 
 var _failures := 0
 
@@ -26,7 +25,7 @@ func _ready() -> void:
 	await _probe_game_picker()
 	await _probe_favorite()
 	await _probe_rejoin_offer()
-	await _probe_setup_panel()
+	await _probe_game_sheet()
 	await _probe_formats()
 	await _probe_room_list()
 	await _probe_host()
@@ -159,113 +158,95 @@ func _click(at: Vector2) -> InputEventMouseButton:
 	return event
 
 
-## A primeira tela responde uma pergunta só: qual jogo. Tocar num cartão grava o
-## jogo e leva à tela seguinte — antes o cartão só marcava, e os botões de ação
-## moravam embaixo, mudando de significado conforme um cartão acima deles.
+## A primeira tela responde uma pergunta só: qual jogo. Tocar numa linha escolhe o
+## jogo e sobe a folha dele — antes a linha levava a uma tela de modos, e a folha
+## juntou as duas.
 func _probe_game_picker() -> void:
 	print("escolha do jogo")
 	Game.reset_to_menu()
 	Game.game_id = Game.CHESS
-	# Sem favoritos a grade é o catálogo na ordem do catálogo. Com um favorito
-	# gravado numa execução anterior — o aparelho de quem roda o teste é o mesmo
-	# que joga —, ela começaria por ele, e a asserção seguinte falharia por um
+	# Sem favoritos o cardápio é o catálogo na ordem do catálogo. Com um favorito
+	# gravado numa execução anterior — o aparelho de quem roda o teste é o mesmo que
+	# joga —, a seção de cima apareceria e as asserções seguintes falhariam por um
 	# motivo que não é defeito nenhum.
 	Prefs.forget_favorites()
+	Prefs.forget_rejoin()
 	var menu := MENU_SCENE.instantiate()
 	add_child(menu)
 	await get_tree().process_frame
 
 	var list: Control = menu.get_node("%GameList")
-	# Um cartão por jogo **visível**, e não por entrada do catálogo. Os dois foram
-	# a mesma conta enquanto todo jogo do catálogo tinha tela; um jogo em
-	# construção entra no catálogo com `visible` falso — ele já responde por
-	# `make_ruleset` e `host_option`, que é o que os testes de regra usam, e ainda
-	# não tem cena para o cartão abrir.
+	# Uma linha por jogo **visível**, e não por entrada do catálogo: um jogo em
+	# construção entra no catálogo com `visible` falso.
 	var shown := 0
 	for entry in Game.GAMES:
 		if entry.get("visible", true):
 			shown += 1
-	var cards := _tiles(list)
-	_equals(cards.size(), shown, "um cartão por jogo visível do catálogo")
+	var rows := _rows(list)
+	_equals(rows.size(), shown, "uma linha por jogo visível do catálogo")
+	_equals(rows[0].game_id, Game.CHESS, "a primeira linha é o xadrez")
+	_check(list.get_child_count() > shown, "com um rótulo de categoria entre elas")
+	_check(not menu.get_node("%Favorites").visible, "sem favorito, a seção de cima não aparece")
 
-	var first: GameChoice = cards[0]
-	_equals(first.title, "Xadrez", "o primeiro cartão é o xadrez")
-	_check(first.piece != 0, "com a peça que representa o jogo")
-	_check(not first.row, "empilhado: peça em cima, nome embaixo")
-	_check(not first.highlighted, "nenhum começa aceso: escolher agora é navegar")
-
-	# A grade vem em seções por categoria, e um rótulo separa cada uma. São irmãos
-	# dos cartões na mesma coluna, e é por isso que contar jogo é contar `GameChoice`
-	# e não filhos.
-	_check(list.get_child_count() > Game.CATEGORIES.size(), "com um rótulo por seção")
-
-	# A estrela é um segundo alvo dentro do cartão: ela guarda o jogo sem abrir a
-	# tela seguinte, e sem reordenar a grade debaixo do dedo que acabou de tocar.
-	first.favorite_toggled.emit()
-	_check(first.favorite, "tocar na estrela acende o favorito")
+	# A estrela é um segundo alvo dentro da linha: guarda o jogo sem abrir a folha e
+	# sem refazer o cardápio debaixo do dedo que acabou de tocar.
+	rows[0].favorite_toggled.emit()
+	_check(rows[0].favorite, "tocar na estrela acende o favorito")
 	_check(Prefs.is_favorite(Game.CHESS), "e grava no disco, não na sessão")
-	_equals(Game.game_id, Game.CHESS, "sem escolher o jogo: a estrela não navega")
-	_equals(_tiles(list).size(), shown, "e sem refazer a grade no mesmo toque")
+	_equals(_rows(list).size(), shown, "sem refazer o cardápio no mesmo toque")
+	_check(not menu._sheet_open(), "e sem abrir a folha")
 
 	var bar: ChipBar = menu.get_node("%Categories")
 	bar.select(ChipBar.FAVORITES)
 	await get_tree().process_frame
-	_equals(_tiles(list).size(), 1, "o filtro de favoritos mostra só o que foi guardado")
+	_equals(_rows(list).size(), 1, "o filtro de favoritos mostra só o que foi guardado")
 	bar.select(Game.CAT_BOARD)
 	await get_tree().process_frame
 	_equals(
-		_tiles(list).size(), Game.games_in(Game.CAT_BOARD).size(),
+		_rows(list).size(), Game.games_in(Game.CAT_BOARD).size(),
 		"e cada categoria mostra os jogos dela"
 	)
 	bar.select(ChipBar.ALL)
 	await get_tree().process_frame
-	cards = _tiles(list)
-	_equals(cards.size(), shown, "de volta em todos, o catálogo inteiro")
-	_equals(cards[0].title, "Xadrez", "com o favorito no topo, acima das categorias")
+	_equals(_rows(list).size(), shown, "de volta em todos, o catálogo inteiro")
+	_check(menu.get_node("%Favorites").visible, "e o favorito ganha o cartão de cima")
+	_equals(
+		menu.get_node("%Favorites").find_children("*", "GameChoice", true, false).size(), 1,
+		"um cartão por favorito"
+	)
 	Prefs.forget_favorites()
 
-	# Entrar numa partida saiu da tela inicial e virou um destino da gaveta: quem
-	# entra joga o que o anfitrião abriu, então escolher o jogo antes é escolher
-	# uma coisa que a resposta dele não decide.
-	menu._open_drawer()
-	var drawer: NavDrawer = menu._drawer()
-	_check(drawer != null, "o botão da esquerda abre a gaveta")
-	menu.go_back()
-	_check(menu._drawer() != null, "e o gesto de voltar fecha a gaveta, não o app")
-
-	# A troca de tela só acontece depois do retorno visual, então o que se verifica
-	# aqui é a parte síncrona: o jogo gravado e o cartão aceso. A cena é liberada
-	# antes de o temporizador vencer, e a navegação desiste sozinha por não estar
-	# mais na árvore.
-	#
-	# De novo da árvore: os cartões foram trocados a cada filtro, e o que sobrou
-	# nas variáveis é um nó já liberado.
-	var second: GameChoice = _tiles(list)[1]
+	# Tocar na linha abre a folha por cima, em vez de trocar de tela — e o gesto de
+	# voltar fecha a folha antes de pensar em sair do app.
+	var second: CatalogRow = _rows(list)[1]
 	second.chosen.emit()
-	_equals(Game.game_id, Game.CHECKERS, "tocar no cartão grava o jogo")
-	_check(second.highlighted, "e acende o cartão tocado, para o toque ter resposta")
+	await get_tree().process_frame
+	_equals(Game.game_id, Game.CHECKERS, "tocar na linha escolhe o jogo")
+	_check(menu._sheet_open(), "e abre a folha dele")
+	menu.go_back()
+	_check(not menu._sheet_open(), "o gesto de voltar fecha a folha, e não o app")
 
-	# `free()` e não `queue_free()`: o segundo só apaga no fim do quadro, e o
-	# primeiro quadro de uma cena com fontes do sistema demora mais que o retorno
-	# visual — a troca de tela vencia a corrida e levava o próprio teste junto.
 	menu.free()
+	await get_tree().process_frame
+
+	# Quem volta de uma partida ou da sala chega com a folha daquele jogo aberta: ele
+	# está escolhendo como jogar de novo, e não navegando do zero.
+	Game.pending_sheet = Game.LUDO
+	var again := MENU_SCENE.instantiate()
+	add_child(again)
+	await get_tree().process_frame
+	_check(again._sheet_open(), "voltar de uma partida reabre a folha")
+	_equals(Game.game_id, Game.LUDO, "do jogo de onde se voltou")
+	_equals(Game.pending_sheet, &"", "e o pedido é consumido, para não reabrir sozinho depois")
+	again.free()
 	await get_tree().process_frame
 	Game.game_id = Game.CHESS
 
 
-## Só os cartões de jogo, onde quer que estejam. A coluna guarda rótulos de seção
-## e uma grade por categoria, então os cartões são netos e não filhos — e contar
-## filhos seria contar rótulos como se fossem jogos.
-func _tiles(list: Control) -> Array[GameChoice]:
-	var cards: Array[GameChoice] = []
-	for child in list.get_children():
-		if child is GameChoice:
-			cards.append(child as GameChoice)
-			continue
-		for grandchild in child.get_children():
-			if grandchild is GameChoice:
-				cards.append(grandchild as GameChoice)
-	return cards
+## Só as linhas do cardápio: a coluna guarda também os rótulos de categoria, e
+## contar filhos seria contar rótulo como se fosse jogo.
+func _rows(list: Control) -> Array:
+	return list.find_children("*", "CatalogRow", true, false)
 
 
 ## O painel de ajustes fica entre "quero jogar" e o tabuleiro, e só para quem
@@ -303,105 +284,115 @@ func _probe_formats() -> void:
 	Game.set_format(PoolRules.Format.KNOCKOUT, Game.POOL)
 
 
-func _probe_setup_panel() -> void:
-	print("ajustes da partida")
+## A folha do jogo: modo, ajustes do modo e um botão, tudo numa camada só.
+##
+## Eram duas telas — a dos modos e o diálogo de ajustes por cima dela — e três
+## toques até começar. A folha responde as duas perguntas juntas, e cada seção
+## aparece só onde significa alguma coisa: uma escolha oferecida onde não vale é
+## pior que escolha nenhuma, porque o jogador mexe nela, nada acontece, e ele
+## passa a desconfiar do resto.
+##
+## Ela também não navega: avisa quem a abriu, e a tela decide. É o que deixa a
+## mesma folha servir ao cardápio de Jogos e à fileira de Online.
+func _probe_game_sheet() -> void:
+	print("folha do jogo")
 	Game.reset_to_menu()
 	Game.time_control = 0
-	Game.game_id = Game.CHESS
-	var menu := GAME_MENU_SCENE.instantiate()
-	add_child(menu)
+	var sheet := GameSheet.new()
+	add_child(sheet)
+	sheet.open(Game.CHESS)
 	await get_tree().process_frame
 
-	# O jogo escolhido é o título da tela, e não um cartão repetido dentro dela.
-	var bar: AppBar = menu.get_node("%AppBar")
-	_equals(bar.title, "Xadrez", "a barra diz o jogo escolhido")
-	_equals(bar.leading, IconButton.Kind.BACK, "e a volta é a seta da barra")
+	# Depois da animação de entrada a folha está encostada embaixo. A animação
+	# escrevia `position` no painel ancorado, e ele terminava preso no topo da tela
+	# com a lista aparecendo por baixo — nenhum erro, só uma folha no lugar errado.
+	await get_tree().create_timer(GameSheet.SLIDE + 0.15).timeout
+	var panel_bottom := sheet._panel.get_global_rect().end.y
+	_check(
+		absf(panel_bottom - sheet.get_global_rect().end.y) < 1.0,
+		"a folha termina encostada na base da tela (%.0f de %.0f)" % [panel_bottom, sheet.get_global_rect().end.y]
+	)
+	_check(sheet._panel.get_global_rect().position.y > 1.0, "e não no topo")
 
-	var layer: Control = menu.get_node("%SetupLayer")
-	var grid: Control = menu.get_node("%ClockGrid")
-	_equals(layer.visible, false, "painel começa fechado")
-	_equals(grid.get_child_count(), Game.TIME_CONTROLS.size(), "um botão por ritmo")
+	var modes := GameSheet.modes_for(Game.CHESS)
+	_check(not modes.is_empty(), "o xadrez tem modo para oferecer")
+	_equals(
+		modes[0], Game.Mode.ONLINE if Net.relay_available() else Game.Mode.HOTSEAT,
+		"a sala vem primeiro quando existe"
+	)
+	_equals(sheet._segments.segment_count(), modes.size(), "um segmento por modo disponível")
+	_equals(sheet.mode, modes[0], "e a folha abre no primeiro")
+	_equals(sheet._clock.get_child_count(), Game.TIME_CONTROLS.size(), "um botão por ritmo")
 
-	menu.get_node("%HostButton").pressed.emit()
-	await get_tree().process_frame
-	_equals(layer.visible, true, "criar partida abre o painel")
-	_check(menu.get_node("%SetupTitle").text.contains("Criar"), "título diz o que vai acontecer")
-
-	# 1:30 é o índice 1 da lista; escolher tem de mudar o estado de verdade, não
-	# só a aparência do botão.
-	grid.get_child(1).pressed.emit()
+	sheet._clock.get_child(1).pressed.emit()
 	_equals(Game.time_control, 1, "escolher o ritmo grava a escolha")
 	_equals(Game.clock_initial(), 90.0, "1:30 são 90 segundos")
-	_equals(grid.get_child(1).theme_type_variation, &"ChipSelected", "o escolhido fica marcado")
-	_equals(grid.get_child(0).theme_type_variation, &"ChipButton", "e os outros não")
+	_equals(sheet._clock.get_child(1).theme_type_variation, &"ChipSelected", "o escolhido fica marcado")
+	_equals(sheet._clock.get_child(0).theme_type_variation, &"ChipButton", "e os outros não")
 
-	# Damas não tem relógio: a seção some do painel, e a regra vale mesmo com um
-	# ritmo escolhido antes — ela mora em `Game`, não na tela.
-	Game.game_id = Game.CHECKERS
-	menu._open_setup(Game.Mode.ONLINE)
+	# Damas não tem relógio: a seção inteira sai, e a escolha continua gravada em
+	# `Game` — ela mora lá, não na tela.
+	sheet.open(Game.CHECKERS)
 	await get_tree().process_frame
-	_equals(grid.visible, false, "damas esconde a escolha de ritmo")
-	_equals(menu.get_node("%ClockCaption").visible, false, "e a legenda dela")
+	_check(not sheet._section("clock").visible, "damas esconde a escolha de ritmo")
 	_equals(Game.has_clock(), false, "e damas nunca tem relógio")
-	Game.game_id = Game.CHESS
-	_equals(Game.has_clock(), true, "xadrez mantém o ritmo escolhido")
-	menu._open_setup(Game.Mode.ONLINE)
+	sheet.open(Game.CHESS)
 	await get_tree().process_frame
-	_equals(grid.visible, true, "e a escolha volta no xadrez")
+	_check(sheet._section("clock").visible, "e a escolha volta no xadrez")
+
+	# O formato serve três jogos com a mesma seção: rodadas, regra da sinuca e a
+	# regra da casa do Uno.
+	sheet.open(Game.UNO)
+	await get_tree().process_frame
+	_check(sheet._section("format").visible, "o Uno pergunta o formato")
+	_check(sheet._section("players").visible, "e o tamanho da mesa")
+	_equals(sheet._players.get_child_count(), 5, "de 2 a 6 jogadores")
 
 	# Contra o bot o painel troca de seções: nível e cor entram, "quem pode
-	# entrar" sai. Uma escolha oferecida onde não vale é pior que escolha
-	# nenhuma — o jogador mexe nela, nada acontece, e passa a desconfiar do resto.
-	var levels: Control = menu.get_node("%LevelRow")
-	_equals(levels.get_child_count(), Bot.LEVELS.size(), "um botão por nível do bot")
-	menu.get_node("%SoloButton").pressed.emit()
+	# entrar" sai.
+	sheet.open(Game.CHESS, Game.Mode.SOLO)
 	await get_tree().process_frame
-	_equals(levels.visible, true, "contra o bot o nível aparece")
-	_equals(menu.get_node("%SideRow").visible, true, "e a escolha de cor")
-	_equals(menu.get_node("%VisibilityRow").visible, false, "sem sala, sem quem pode entrar")
-
-	levels.get_child(2).pressed.emit()
+	_equals(sheet.mode, Game.Mode.SOLO, "a folha abre no modo pedido")
+	_check(sheet._section("level").visible, "contra o bot o nível aparece")
+	_check(sheet._section("side").visible, "e a escolha de cor")
+	_check(not sheet._section("visibility").visible, "sem sala, sem quem pode entrar")
+	_equals(sheet._levels.get_child_count(), Bot.LEVELS.size(), "um botão por nível do bot")
+	sheet._levels.get_child(2).pressed.emit()
 	_equals(Game.bot_level, 2, "escolher o nível grava a escolha")
-	_equals(levels.get_child(2).theme_type_variation, &"ChipSelected", "o escolhido fica marcado")
-
 	# A cor escolhida é a do jogador; o que fica guardado é a do bot.
-	menu.get_node("%BlackButton").pressed.emit()
+	sheet._sides.get_child(1).pressed.emit()
 	_equals(Game.bot_side, Board.Side.WHITE, "escolher pretas deixa as brancas com o bot")
-	menu.get_node("%WhiteButton").pressed.emit()
+	sheet._sides.get_child(0).pressed.emit()
 	_equals(Game.bot_side, Board.Side.BLACK, "e vice-versa")
+	_check(sheet._start.text.to_upper().contains("COMEÇAR"), "fora de rede o botão diz começar")
 
-	menu.get_node("%HostButton").pressed.emit()
+	if Net.relay_available():
+		sheet.select_mode(Game.Mode.ONLINE)
+		await get_tree().process_frame
+		_check(sheet._section("visibility").visible, "numa sala quem pode entrar volta")
+		_check(not sheet._section("level").visible, "e o nível some")
+		_check(sheet._start.text.to_upper().contains("CRIAR"), "e o botão diz criar sala")
+
+	var heard := [0]
+	sheet.confirmed.connect(func(_mode: int) -> void: heard[0] += 1)
+	sheet._start.pressed.emit()
+	_equals(heard[0], 1, "o botão avisa quem abriu a folha, em vez de navegar sozinho")
+
+	# "Como jogar" abre por cima da folha, e o gesto de voltar fecha só a página:
+	# a folha continua aberta, com o que já estava escolhido.
+	_check(sheet._rules_link.visible, "a folha tem o link Como jogar")
+	var page := sheet.open_rules()
 	await get_tree().process_frame
-	_equals(levels.visible, false, "numa sala o nível some")
-	_equals(menu.get_node("%VisibilityRow").visible, true, "e quem pode entrar volta")
-
-	menu.get_node("%SetupCancelButton").pressed.emit()
+	_equals(page.doc.title, Game.game_title(Game.CHESS), "que abre as regras do jogo da folha")
+	Nav.go_back()
 	await get_tree().process_frame
-	_equals(layer.visible, false, "cancelar fecha o painel")
+	_check(not is_instance_valid(page), "o gesto de voltar fecha a página")
+	_check(sheet.is_open(), "e deixa a folha aberta")
 
-	menu.get_node("%HotseatButton").pressed.emit()
+	sheet.close()
 	await get_tree().process_frame
-	_equals(layer.visible, true, "jogar no mesmo aparelho também abre")
-	_check(
-		not menu.get_node("%SetupTitle").text.contains("Criar"),
-		"com um título diferente do de rede"
-	)
-	menu.get_node("%SetupCancelButton").pressed.emit()
-
-	# Sem servidor a seção de sala inteira sai, e a ação principal passa a ser
-	# jogar no mesmo aparelho. Oferecer o que não pode funcionar é pior que
-	# oferecer menos.
-	_equals(
-		menu.get_node("%OnlineCaption").visible, Net.relay_available(),
-		"a seção de sala acompanha o relay estar configurado"
-	)
-	_equals(
-		menu.get_node("%HotseatButton").theme_type_variation,
-		&"PrimaryButton" if not Net.relay_available() else &"",
-		"e a ação principal muda junto"
-	)
-
-	menu.queue_free()
+	_check(not sheet.is_open(), "fechar fecha")
+	sheet.free()
 	await get_tree().process_frame
 	Game.time_control = 0
 
@@ -504,6 +495,17 @@ func _probe_host() -> void:
 
 	_equals(Net._expected_code, code, "o código chegou ao link")
 
+	# O QR começa escondido: ele ocupa meia tela e serve a um caminho só — o outro
+	# aparelho apontando a câmera —, enquanto o código serve a todos.
+	_check(not screen.get_node("%QrCard").visible, "o QR começa escondido")
+	screen.get_node("%QrButton").pressed.emit()
+	_check(screen.get_node("%QrCard").visible, "e Mostrar QR mostra")
+	screen.get_node("%CopyButton").pressed.emit()
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		_equals(DisplayServer.clipboard_get(), code, "Copiar leva o código para a área de transferência")
+	_equals(screen.get_node("%Seats").capacity, maxi(Game.players_of(), 2), "a mesa tem a lotação do jogo")
+	_check(screen.get_node("%Seats").present.has(0), "com o anfitrião sentado")
+
 	screen.queue_free()
 	await get_tree().process_frame
 	Game.reset_to_menu()
@@ -526,12 +528,13 @@ func _probe_guest() -> void:
 		return
 
 	var panel: JoinPanel = screen.get_node("%JoinPanel")
+	var field: CodeInput = panel.get_node("%CodeInput")
 
 	# Código com o tamanho errado nunca chega ao transporte. Os campos vêm do
 	# painel, e não da tela: `%` só enxerga dentro da cena que declarou o nome, e
 	# o painel é uma cena própria — é o que o torna reusável sem que a tela
 	# precise conhecer as peças dele.
-	panel.get_node("%CodeEdit").text = "ABC"
+	field.set_code("ABC")
 	panel.get_node("%JoinButton").pressed.emit()
 	await get_tree().process_frame
 	# A recusa vai para o toast do topo, não para a linha de status: é ali que o
@@ -542,20 +545,14 @@ func _probe_guest() -> void:
 		"código curto é recusado no toast (obtido: '%s')" % toast._message
 	)
 
-	# Código completo: vai direto para a sala, sem tentar endereço nenhum antes.
-	# O estado do relay sobrescreve o texto assim que a ponte responde, então o
-	# que se verifica é o efeito — a tentativa foi entregue ao link.
-	# O campo é sempre maiúsculo, e na tela: converter só no envio deixaria o
-	# jogador lendo um código diferente do que mandou.
-	var field: LineEdit = panel.get_node("%CodeEdit")
-	field.text = "ab12cd"
-	panel._on_code_typed(field.text)
-	_equals(field.text, "AB12CD", "o que é digitado em minúsculas vira maiúscula no campo")
-
-	field.text = "ZZZ999"
-	panel.get_node("%JoinButton").pressed.emit()
+	# Seis casas cheias entram sozinhas: quem acabou de digitar o código inteiro não
+	# deveria ter de procurar um botão. E o que é digitado em minúsculas vira
+	# maiúscula na tela — converter só no envio deixaria o jogador lendo um código
+	# diferente do que mandou.
+	field.set_code("zzz999")
 	await get_tree().process_frame
-	_equals(Net._expected_code, "ZZZ999", "o código digitado vira o nome da sala procurada")
+	_equals(field.code, "ZZZ999", "o que é digitado em minúsculas vira maiúscula no campo")
+	_equals(Net._expected_code, "ZZZ999", "e a sexta casa procura a sala sem passar pelo botão")
 	_equals(Net.is_host, false, "e o papel é de convidado")
 	_equals(Game.role, Game.Role.GUEST, "com o papel gravado antes de sair da tela")
 
@@ -571,6 +568,18 @@ func _probe_guest() -> void:
 	await get_tree().process_frame
 	_equals(Net._expected_code, "AB12CD", "tocar na sala procura o código dela")
 	_equals(Game.game_id, Game.CHECKERS, "e leva o jogo da sala, não o que estava escolhido")
+
+	# "Criar sala" mora aqui também: quem abriu o app para jogar com alguém já está
+	# nesta aba, e mandá-lo à coleção de jogos só para voltar é um desvio que não
+	# decide nada. A fileira abre a mesma folha do cardápio, já em Online.
+	Net.leave()
+	panel._joining = false
+	panel.create_requested.emit(Game.LUDO)
+	await get_tree().process_frame
+	_check(screen._sheet.is_open(), "tocar num jogo de Criar sala abre a folha")
+	_equals(screen._sheet.mode, Game.Mode.ONLINE, "já em Online")
+	screen.go_back()
+	_check(not screen._sheet.is_open(), "e o gesto de voltar fecha a folha")
 
 	screen.free()
 	await get_tree().process_frame

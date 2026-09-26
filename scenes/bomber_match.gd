@@ -28,7 +28,7 @@ extends Control
 ## O que a rede resolve mora no [BomberPredictor] e no [BomberRoom]; aqui só mora o
 ## relógio — quantos tiques dar neste quadro, e quando mandar o que o dedo pediu.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Segundos de um passo.
 const STEP := 1.0 / float(BomberRules.TICK_HZ)
@@ -83,6 +83,14 @@ var _view: BomberView = null
 var _pad: BomberPad = null
 var _bomb: BombButton = null
 var _status: Label = null
+var _bar: MatchBar = null
+## Quem ainda está de pé, no canto de cima à esquerda: uma bolacha na cor de cada
+## boneco vivo e o nome ao lado.
+var _roster: VBoxContainer = null
+## Assentos vivos na última vez que a lista foi montada, em bits. A lista só é
+## refeita quando isto muda — montá-la a cada quadro seria criar e jogar fora
+## oito nós sessenta vezes por segundo para mostrar a mesma coisa.
+var _alive_mask := -1
 var _result: Control = null
 var _result_title: Label = null
 var _again: Button = null
@@ -97,6 +105,11 @@ func _ready() -> void:
 	_online = Game.mode == Game.Mode.ONLINE
 	Game.begin_match()
 	_build()
+	_bar.bind()
+	_bar.status.counts_rounds = false
+	# A sala do Bomberman é do servidor próprio dele, e não do relay: o código que
+	# vale é o do `BomberNet`.
+	_bar.status.code = BomberNet.code if _online else ""
 	_new_match()
 	set_process(true)
 
@@ -142,6 +155,7 @@ func _match_seed() -> int:
 func _process(delta: float) -> void:
 	if _online:
 		_online_frame(delta)
+		_watch_alive()
 		return
 
 	if _state == null:
@@ -163,6 +177,7 @@ func _process(delta: float) -> void:
 	_view.previous = _previous
 	_view.blend = clampf(_accumulator / STEP, 0.0, 1.0)
 	_view.refresh()
+	_watch_alive()
 
 
 # --- online ------------------------------------------------------------------
@@ -352,11 +367,60 @@ func _refresh_status() -> void:
 	if _over:
 		_status.text = ""
 		return
-	var shown := _predictor.state if (_online and _predictor != null) else _state
+	var shown := _shown_state()
 	if shown == null:
 		_status.text = "Conectando…"
 		return
 	_status.text = "%d de pé" % shown.alive_count()
+
+
+func _shown_state() -> BomberState:
+	return _predictor.state if (_online and _predictor != null) else _state
+
+
+## A contagem e a lista mudam quando alguém cai, e alguém cai no meio de um tique,
+## não num evento da tela. Olhar a cada quadro é barato — quatro booleanos — e só
+## o que mudou refaz a lista.
+func _watch_alive() -> void:
+	var shown := _shown_state()
+	if shown == null:
+		return
+	var mask := 0
+	for seat in shown.players.size():
+		if shown.players[seat].alive:
+			mask |= 1 << seat
+	if mask == _alive_mask:
+		return
+	_alive_mask = mask
+	_refresh_status()
+	_refresh_roster(shown)
+
+
+func _refresh_roster(shown: BomberState) -> void:
+	for child in _roster.get_children():
+		_roster.remove_child(child)
+		child.queue_free()
+	for seat in shown.players.size():
+		if not shown.players[seat].alive:
+			continue
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var coaster := Coaster.new()
+		coaster.custom_minimum_size = Vector2(22, 22)
+		coaster.fill = BomberView.COLORS[seat % BomberView.COLORS.size()]
+		coaster.player_name = _seat_label(seat)
+		row.add_child(coaster)
+		var label := Label.new()
+		label.text = _seat_label(seat)
+		label.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+		# Contorno, e não uma faixa atrás: a lista cai em cima do mapa, e uma faixa
+		# escura tiraria casas dele. O contorno resolve o contraste sobre concreto e
+		# sobre fogo sem ocupar pixel nenhum.
+		label.add_theme_constant_override("outline_size", 6)
+		label.add_theme_color_override("font_outline_color", Color(AppTheme.BACKGROUND, 0.85))
+		row.add_child(label)
+		_roster.add_child(row)
 
 
 # --- construção da tela ------------------------------------------------------
@@ -370,13 +434,33 @@ func _build() -> void:
 
 	var safe := SafeAreaMargin.new()
 	safe.set_anchors_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "top", "bottom"]:
-		safe.add_theme_constant_override("margin_" + side, 8)
 	add_child(safe)
 
+	var shell := VBoxContainer.new()
+	shell.add_theme_constant_override("separation", 0)
+	safe.add_child(shell)
+
+	_bar = MatchBar.new()
+	_bar.compact = true
+	_bar.leave_confirmed.connect(_leave)
+	shell.add_child(_bar)
+
+	# "N de pé" à direita da barra: é o placar desta partida, e é a única coisa
+	# dela que se procura sem estar jogando.
+	_status = Label.new()
+	_status.theme_type_variation = &"SectionHeader"
+	_status.add_theme_color_override("font_color", AppTheme.ACCENT)
+	_bar.actions.add_child(_status)
+
+	var pad_margin := MarginContainer.new()
+	pad_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top", "bottom"]:
+		pad_margin.add_theme_constant_override("margin_" + side, 8)
+	shell.add_child(pad_margin)
+
 	var stage := Control.new()
-	stage.set_anchors_preset(Control.PRESET_FULL_RECT)
-	safe.add_child(stage)
+	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pad_margin.add_child(stage)
 
 	_view = BomberView.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -406,29 +490,13 @@ func _build() -> void:
 	_bomb.pressed_down.connect(_pad.press_bomb)
 	stage.add_child(_bomb)
 
-	_status = Label.new()
-	_status.theme_type_variation = &"Caption"
-	_status.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status.offset_top = 2
-	# Contorno, e não uma faixa atrás.
-	#
-	# O mapa ocupa a tela inteira e este rótulo cai **em cima** dele: sobre a
-	# parede de concreto, que é um cinza médio, o texto apagado do tema ficava
-	# cinza sobre cinza. Uma faixa escura atrás resolveria o contraste e tiraria
-	# duas casas do mapa; o contorno resolve o mesmo sem ocupar pixel nenhum, e
-	# continua funcionando quando o fogo passa por baixo dele.
-	_status.add_theme_color_override("font_color", AppTheme.TEXT)
-	_status.add_theme_constant_override("outline_size", 6)
-	_status.add_theme_color_override("font_outline_color", Color(AppTheme.BACKGROUND, 0.85))
-	stage.add_child(_status)
-
-	var leave := LeaveButton.new()
-	leave.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	leave.offset_left = 6
-	leave.offset_top = 6
-	leave.confirmed.connect(_leave)
-	stage.add_child(leave)
+	_roster = VBoxContainer.new()
+	_roster.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_roster.offset_left = 6
+	_roster.offset_top = 6
+	_roster.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_roster.add_theme_constant_override("separation", 4)
+	stage.add_child(_roster)
 
 	_build_result()
 
@@ -448,16 +516,14 @@ func _build_result() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_result.add_child(center)
 
-	var panel := PanelContainer.new()
+	# Fim de partida em papel, como nos outros jogos.
+	var panel := PaperCard.new()
 	panel.custom_minimum_size = Vector2(300, 0)
-	panel.add_theme_stylebox_override("panel", AppTheme.box(
-		AppTheme.SURFACE, AppTheme.RADIUS_LARGE, AppTheme.BORDER, 1
-	))
 	center.add_child(panel)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 18)
+		margin.add_theme_constant_override("margin_" + side, 8)
 	panel.add_child(margin)
 
 	var column := VBoxContainer.new()
@@ -465,7 +531,7 @@ func _build_result() -> void:
 	margin.add_child(column)
 
 	_result_title = Label.new()
-	_result_title.theme_type_variation = &"Title"
+	_result_title.theme_type_variation = &"Display"
 	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_result_title)
 
@@ -478,6 +544,7 @@ func _build_result() -> void:
 	# outra sala.
 	_again = Button.new()
 	_again.text = "Jogar de novo"
+	_again.theme_type_variation = &"PrimaryButton"
 	_again.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_again.visible = not _online
 	_again.pressed.connect(_restart)
@@ -496,8 +563,14 @@ func _restart() -> void:
 	_new_match()
 
 
+## O gesto de voltar pergunta, como o botão da barra — num jogo de reflexo, um
+## deslize de dedo na borda é o acidente mais provável da tela. Com o resultado na
+## tela, sai direto.
 func go_back() -> void:
-	_leave()
+	if _result.visible:
+		_leave()
+		return
+	_bar.leave.ask()
 
 
 func _leave() -> void:

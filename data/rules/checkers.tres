@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_ojwsp"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_i80xf"]
+
+[resource]
+script = ExtResource("2_i80xf")
+title = "Damas"
+objective = "Capturar todas as pedras do adversário, ou deixá-lo sem lance possível."
+steps = PackedStringArray("Joga-se só nas casas escuras. As brancas começam.", "A pedra anda uma casa na diagonal, para a frente.", "Captura-se saltando uma peça do adversário que esteja colada, para a casa vazia logo depois dela — para a frente ou para trás.", "Se depois do salto couber outro, a sequência continua: o lance é o caminho inteiro.", "A pedra que termina o lance na última fileira vira dama.", "A dama voa: anda e captura pela diagonal inteira, de longe.")
+notes = PackedStringArray("Capturar é opcional nesta mesa: não há obrigação de capturar, nem de escolher o caminho que captura mais. Mas a sequência começada vai até o fim.", "As peças capturadas só saem no fim do lance, e a mesma peça não pode ser saltada duas vezes.", "A pedra que só passa pela última fileira no meio de uma sequência não vira dama.", "Empate: quarenta lances seguidos só de damas, sem nenhuma captura.")

@@ -610,6 +610,14 @@ var listed_room := false
 ## para a de entrar. Só isso: quem lê um QR com o app aberto recebe o sinal do
 ## `Pairing` na hora e não precisa de estado guardado em lugar nenhum.
 var join_info := {}
+
+## O jogo cuja folha a tela inicial reabre ao montar, ou vazio.
+##
+## Quem sai de uma partida ou da sala de espera volta escolhendo **como** jogar de
+## novo, e não navegando do zero: a tela de modos era a tela anterior de todas
+## elas, e com ela virando folha esse "para onde eu volto" precisava de um lugar.
+## Consumido pela tela inicial no `_ready`.
+var pending_sheet: StringName = &""
 ## Índice em `Bot.LEVELS`. Começa no médio: o fácil erra de propósito e o difícil
 ## pensa alguns segundos por lance, e nenhum dos dois é a primeira impressão que
 ## se quer dar de um adversário.

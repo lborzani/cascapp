@@ -3,7 +3,7 @@ extends Control
 ## Drives one game. Both devices run the identical ruleset, so a move that
 ## arrives over the network is only accepted if it is also legal locally.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Piso de espera antes de o bot jogar, mesmo que ele já tenha decidido. Sem ele
 ## o nível fácil responde antes de o próprio lance do jogador terminar de andar,
 ## e a partida vira um pingue-pongue em que ninguém vê o que aconteceu.
@@ -118,31 +118,24 @@ func _ready() -> void:
 	# própria tela e nada disso faz sentido.
 	_table_mode = Game.mode == Game.Mode.HOTSEAT
 	_board.table_mode = _table_mode
-	%TopCard.upside_down = _table_mode
+	%TopTag.upside_down = _table_mode
 	_top_last_move.upside_down = _table_mode
 
 	_board.ruleset = _ruleset
 	_board.square_tapped.connect(_on_square_tapped)
-	%ExitButton.confirmed.connect(_exit)
+	%Bar.leave_confirmed.connect(_exit)
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
 	%ResultExitButton.pressed.connect(_exit)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
 
-	# A faixa entra por código, e não pelo `.tscn`, pelo mesmo motivo nas cinco
-	# telas: é o mesmo nó em cinco cenas que não se parecem, e cinco cópias no
-	# editor são cinco lugares para editar no dia em que ela mudar.
-	#
-	# No lugar do `%StatusLabel`, que ficou sem quem o preenchesse. Ele responde a
-	# mesma pergunta — o que está acontecendo fora do tabuleiro — e a faixa
-	# responde melhor.
+	# A barra sabe o nome do jogo, o relógio da partida e o código da sala, mas só
+	# depois de `begin_match()`: é ele que decide se esta partida começa agora ou
+	# se é a de antes, retomada.
 	Game.begin_match()
-	_match_status = MatchStatus.create()
-	var column := %StatusLabel.get_parent()
-	column.add_child(_match_status)
-	column.move_child(_match_status, %StatusLabel.get_index())
-	%StatusLabel.visible = false
+	%Bar.bind()
+	_match_status = %Bar.status
 
 	_new_game()
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
@@ -1002,11 +995,19 @@ func _refresh_rematch() -> void:
 			%RematchButton.disabled = false
 
 
-## O gesto de voltar é o botão "Sair", inclusive com o painel de fim aberto — lá
-## ele já é a única saída, e o painel não é uma camada para desfazer: a partida
-## acabou atrás dele.
+## O gesto de voltar é o botão "Sair" da barra — e, sendo o mesmo botão, faz a
+## mesma pergunta. Sair de uma partida em andamento é o toque mais caro da tela, e
+## um gesto de borda é o mais fácil de disparar sem querer: era a única porta do
+## app em que a decisão passava direto.
+##
+## Com o painel de fim aberto, sai sem perguntar: ali "Voltar ao menu" já é a
+## única saída, e o painel não é uma camada para desfazer — a partida acabou atrás
+## dele.
 func go_back() -> void:
-	_exit()
+	if %ResultLayer.visible:
+		_exit()
+		return
+	%Bar.leave.ask()
 
 
 func _exit() -> void:
@@ -1122,12 +1123,16 @@ func _refresh_cards() -> void:
 	var over := _outcome != Ruleset.Outcome.ONGOING or _flagged >= 0 or _abandoned
 
 	var side_names := ["Brancas", "Pretas"]
-	for card in [[%TopCard, top_side], [%BottomCard, bottom_side]]:
-		var view: PlayerCard = card[0]
+	for card in [[%TopTag, top_side], [%BottomTag, bottom_side]]:
+		var view: PlayerTag = card[0]
 		var card_side: int = card[1]
-		view.side = card_side
+		# A peça do lado dentro da bolacha: o mesmo desenho do tabuleiro, e a peça
+		# do jogo em curso — um rei de xadrez numa etiqueta de damas era um resto
+		# do tempo em que só o xadrez tinha desenho.
+		view.piece = Board.piece(card_side, Board.kind_of(Game.piece_of(Game.game_id)))
 		view.active = not over and _state.side_to_move == card_side
-		view.in_check = not over and in_check and _state.side_to_move == card_side
+		view.alert = not over and in_check and _state.side_to_move == card_side
+		view.alert_text = "Em xeque"
 		view.clock_text = _clock_text(card_side)
 		view.clock_urgent = view.active and float(_clock.get(card_side, 0.0)) < 20.0
 		_refresh_captured(view, card_side)
@@ -1157,11 +1162,11 @@ func _opponent_name() -> String:
 ## Cada cartão mostra o que **aquele** lado comeu, e o saldo aparece só do lado
 ## que está na frente: dois números obrigariam a comparar para descobrir quem
 ## está ganhando, que é a pergunta inteira.
-func _refresh_captured(card: PlayerCard, side: int) -> void:
+func _refresh_captured(card: PlayerTag, side: int) -> void:
 	var mine: Array = _captured[side]
 	var theirs: Array = _captured[Board.opponent(side)]
 	card.captured = mine
-	card.advantage = PlayerCard.material(mine) - PlayerCard.material(theirs)
+	card.advantage = PlayerTag.material(mine) - PlayerTag.material(theirs)
 
 
 ## O xeque é anunciado uma vez, quando começa. Um banner permanente cobriria a
@@ -1207,15 +1212,3 @@ func _check_square() -> int:
 	if not chess.is_in_check(_state, _state.side_to_move):
 		return Board.NO_SQUARE
 	return _state.find_piece(_state.side_to_move, Board.Kind.KING)
-
-## Sem chamador hoje: o `%StatusLabel` deixou de ser preenchido. Mantida porque
-## o texto continua correto e é o que voltaria a ser usado se o indicador de
-## transporte voltar para a tela.
-func _connection_text() -> String:
-	if Game.mode != Game.Mode.ONLINE:
-		return ""
-	if not Net.connected:
-		return " • reconectando"
-	if Net.transport == Net.Transport.RELAY:
-		return " • pela internet"
-	return " • pela rede local"

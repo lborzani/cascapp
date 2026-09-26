@@ -81,6 +81,15 @@ const Face := preload("res://ui/monopoly_face.gd")
 const BOARD_SPAN := Face.SPAN
 const BOARD_THICKNESS := 0.34
 
+## Cores das peças do tabuleiro, fixas. Vinham do tema (`SUCCESS`, `DANGER`,
+## `ACCENT`), e o tabuleiro é desenho protegido: a troca de paleta do app não pode
+## pintar as casas de outro verde. O fundo da sala continua seguindo o tema — ele
+## é o ambiente em volta da mesa, não a mesa.
+const HOUSE_COLOR := Color("7ec27f")
+const HOTEL_COLOR := Color("e05a4d")
+const MARK_COLOR := Color("e05a4d")
+const HIGHLIGHT_COLOR := Color("d9a441")
+
 ## Lado da textura do tampo, em pixels. 1536 dá ~127 pixels por casa de borda.
 ##
 ## Chegou a ser 2048 quando a nitidez foi atacada pelo lado errado. O que faltava
@@ -586,7 +595,7 @@ func _build_highlight() -> void:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	material.albedo_color = Color(AppTheme.ACCENT, 0.30)
+	material.albedo_color = Color(HIGHLIGHT_COLOR, 0.30)
 	_highlight.set_surface_override_material(0, material)
 	_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_highlight.visible = false
@@ -921,13 +930,13 @@ func _spawn_buildings(tile: int) -> void:
 	if built <= 0:
 		return
 	if built >= MonopolyBoard.HOTEL:
-		var hotel := _make_building(HOTEL_WIDTH, AppTheme.DANGER)
+		var hotel := _make_building(HOTEL_WIDTH, HOTEL_COLOR)
 		hotel.position = tile_spot(tile, Face.BAND_AT, 0.0)
 		hotel.rotation.y = -Face.text_angle(tile)
 		_pieces.add_child(hotel)
 		return
 	for index in built:
-		var house := _make_building(HOUSE_WIDTH, AppTheme.SUCCESS)
+		var house := _make_building(HOUSE_WIDTH, HOUSE_COLOR)
 		# Quatro vagas ao longo da casa, ocupadas da esquerda para a direita: é
 		# como elas aparecem no tabuleiro de papelão, e é o que faz "três casas"
 		# ser contável de relance em vez de medido.
@@ -988,7 +997,7 @@ func _spawn_pawn(player: int) -> Node3D:
 			torus.outer_radius = 0.31
 			return torus
 		)
-		var mark := MonopolyToken.plastic(AppTheme.DANGER, 0.4)
+		var mark := MonopolyToken.plastic(MARK_COLOR, 0.4)
 		mark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		ring.set_surface_override_material(0, mark)
 		ring.position.y = 0.01

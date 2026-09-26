@@ -34,6 +34,7 @@ func _ready() -> void:
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
+	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
 
@@ -51,8 +52,8 @@ func _ready() -> void:
 ## sem ter testado nada. Daí o `_node()` abaixo.
 func _test_initial_labels(match_scene: Node) -> void:
 	print("cena inicial")
-	var top: PlayerCard = _node(match_scene, "%TopCard")
-	var bottom: PlayerCard = _node(match_scene, "%BottomCard")
+	var top: PlayerTag = _node(match_scene, "%TopTag")
+	var bottom: PlayerTag = _node(match_scene, "%BottomTag")
 	_equals(bottom.title, "Brancas", "cartão de baixo é o das brancas")
 	_equals(top.title, "Pretas", "cartão de cima é o das pretas")
 	_check(bottom.active, "brancas começam com a vez")
@@ -94,11 +95,11 @@ func _test_check_position(match_scene: Node) -> void:
 	state.side_to_move = Board.Side.BLACK
 	match_scene._recompute()
 
-	var top: PlayerCard = _node(match_scene, "%TopCard")
-	var bottom: PlayerCard = _node(match_scene, "%BottomCard")
+	var top: PlayerTag = _node(match_scene, "%TopTag")
+	var bottom: PlayerTag = _node(match_scene, "%BottomTag")
 	_check(top.active, "a vez passou para o cartão das pretas")
 	_check(not bottom.active, "cartão das brancas apagou")
-	_check(top.in_check, "cartão das pretas anuncia o xeque")
+	_check(top.alert, "cartão das pretas anuncia o xeque")
 	_equals(Board.square_name(match_scene._board.check_square), "e8", "rei em xeque destacado")
 	_equals(match_scene._legal.size(), 4, "quatro respostas ao xeque")
 	_equals(match_scene._outcome, Ruleset.Outcome.ONGOING, "partida em andamento")
@@ -204,8 +205,8 @@ func _test_history_and_captures(match_scene: Node) -> void:
 		"abertura anotada em português"
 	)
 
-	var top: PlayerCard = _node(match_scene, "%TopCard")
-	var bottom: PlayerCard = _node(match_scene, "%BottomCard")
+	var top: PlayerTag = _node(match_scene, "%TopTag")
+	var bottom: PlayerTag = _node(match_scene, "%BottomTag")
 	_check(top.captured.is_empty(), "nenhuma peça capturada no cartão de cima")
 	_check(bottom.captured.is_empty(), "nem no de baixo")
 
@@ -298,11 +299,11 @@ func _test_table_mode(match_scene: Node) -> void:
 	print("modo mesa")
 	var board: BoardView = match_scene._board
 	_check(board.table_mode, "ligado no jogo no mesmo aparelho")
-	var top_card: PlayerCard = _node(match_scene, "%TopCard")
+	var top_card: PlayerTag = _node(match_scene, "%TopTag")
 	_check(top_card.upside_down, "o cartão de cima vira")
 	_check(is_equal_approx(top_card.rotation, PI), "e a rotação chega ao nó (%f)" % top_card.rotation)
 	_check(top_card.pivot_offset.x > 0.0, "com o pivô no centro (%s)" % top_card.pivot_offset)
-	_check(not _node(match_scene, "%BottomCard").upside_down, "o de baixo não")
+	_check(not _node(match_scene, "%BottomTag").upside_down, "o de baixo não")
 
 	_check(
 		board._turned(Board.piece(Board.Side.BLACK, Board.Kind.PAWN)),
@@ -747,10 +748,10 @@ func _test_bot() -> void:
 	# que sobreviveu à troca do padrão e deixou esta suíte vermelha sem que nada
 	# estivesse quebrado.
 	_equals(
-		_node(scene, "%BottomCard").title, Prefs.DEFAULT_NAME,
+		_node(scene, "%BottomTag").title, Prefs.DEFAULT_NAME,
 		"cartão de baixo é o meu"
 	)
-	_check(_node(scene, "%TopCard").title.begins_with("Bot"), "o de cima é o do bot")
+	_check(_node(scene, "%TopTag").title.begins_with("Bot"), "o de cima é o do bot")
 
 	# Meu lance passa a vez, e a busca começa junto — sem esperar a animação
 	# terminar, que é tempo de graça.
@@ -840,6 +841,65 @@ func _test_back_navigation() -> void:
 	_check(stub.went_back, "Nav entrega o gesto ao go_back() da tela aberta")
 	get_tree().current_scene = previous
 	stub.queue_free()
+
+
+## A barra da partida, na cena de verdade.
+##
+## Ela é a moldura que as cinco telas passam a dividir, e o que se verifica aqui é
+## o que uma troca de cena quebra sem dar erro: que a barra entrou na árvore, que
+## `bind()` a ligou à partida em curso, e sobretudo que **sair continua
+## perguntando** — ligar a saída no toque em vez da confirmação compila, roda, e
+## só aparece quando alguém perde uma partida por encostar no canto da tela.
+func _test_match_bar() -> void:
+	print("barra de partida")
+
+	Game.mode = Game.Mode.HOTSEAT
+	Game.start_hotseat(Game.CHECKERS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	var bar: MatchBar = scene.get_node("%Bar")
+	_check(bar.is_visible_in_tree(), "a barra está na tela da partida")
+	_equals(bar.title, Game.game_title(), "com o nome do jogo em curso")
+	_check(bar.status == _find_status(scene), "e a faixa de contexto mora dentro dela")
+
+	# O gesto de voltar do Android é o mesmo botão, e por isso faz a mesma
+	# pergunta. Se um dia ele voltar a chamar `_exit()` direto, a partida acaba com
+	# um deslize de dedo na borda da tela — e isso não dá erro nenhum.
+	scene.go_back()
+	await get_tree().process_frame
+	_check(bar.leave._layer != null, "o gesto de voltar abre a pergunta em vez de sair")
+	_check(is_instance_valid(scene), "e a partida continua de pé")
+	bar.leave._dismiss()
+
+	# O `?` abre as regras desta mesa, e o gesto de voltar fecha a gaveta antes de
+	# chegar à partida: voltar é sair do que está na frente.
+	var drawer := bar.open_rules()
+	await get_tree().process_frame
+	_check(drawer._list.get_child_count() > 0, "o ? abre as regras desta mesa")
+	Nav.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(drawer), "o gesto de voltar fecha a gaveta")
+	_check(bar.leave._layer == null, "e não chega a perguntar se quer sair")
+
+	# A saída é provada numa barra solta, e não nesta: a da cena está ligada ao
+	# `_exit()` da partida, e confirmar aqui trocaria a cena debaixo do teste.
+	var loose := MatchBar.create("Xadrez")
+	add_child(loose)
+	# Lista, e não contador: o lambda do GDScript captura a variável local **por
+	# valor**, e um `int` incrementado lá dentro some ao voltar. O array é
+	# referência, então o que acontece dentro é visto aqui fora.
+	var heard: Array[int] = []
+	loose.leave_confirmed.connect(func() -> void: heard.append(1))
+	loose.leave.pressed.emit()
+	_equals(heard.size(), 0, "tocar em sair não sai da partida")
+	loose.leave.confirmed.emit()
+	_equals(heard.size(), 1, "quem sai é a confirmação")
+	loose.queue_free()
+
+	scene.queue_free()
+	await get_tree().process_frame
 
 
 ## A faixa de contexto dentro de uma partida de verdade.
@@ -1068,8 +1128,8 @@ func _test_clock(match_scene: Node) -> void:
 	var black := Board.Side.BLACK
 	var initial := Game.clock_initial()
 	var increment := Game.clock_increment()
-	var top: PlayerCard = _node(match_scene, "%TopCard")
-	var bottom: PlayerCard = _node(match_scene, "%BottomCard")
+	var top: PlayerTag = _node(match_scene, "%TopTag")
+	var bottom: PlayerTag = _node(match_scene, "%BottomTag")
 	_equals(float(match_scene._clock[white]), initial, "os dois começam com o tempo do ritmo")
 	_equals(
 		bottom.clock_text,
@@ -1211,7 +1271,7 @@ func _test_battleship() -> void:
 		"o encouraçado inimigo não está afundado ainda"
 	)
 	_check(
-		_bs_node(scene, "%TopCard").subtitle == "4 navios",
+		_bs_node(scene, "%TopTag").subtitle == "4 navios",
 		"o cartão do oponente conta a frota dele"
 	)
 

@@ -33,7 +33,11 @@ extends Control
 ## Cadeira vazia vira bot, e **um aparelho só** os dirige (`Net.bot_driver`): dois
 ## escolhendo o lance do mesmo bot dariam dois lances para a mesma vez.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
+## Tamanho de uma etiqueta de assento. Fixo, e não medido: elas são posicionadas à
+## mão sobre a mesa, e um tamanho que muda com o texto faria a mesa dançar a cada
+## carta comprada.
+const TAG_SIZE := Vector2(156, PlayerTag.HEIGHT_TAG)
 
 ## Espera antes de o bot jogar. Ele não pensa, mas precisa parecer que decidiu:
 ## sem a pausa a vez dele acontece entre dois quadros, e o jogador vê a mão do
@@ -85,7 +89,10 @@ var _bot_seats := PackedInt32Array()
 ## marcaria outra jogada, e o bot jogaria várias vezes de uma vez.
 var _bot_pending := false
 ## A faixa de cada jogador na coluna da esquerda, na ordem dos assentos.
-var _chips: Array[PanelContainer] = []
+## Uma etiqueta por assento, na ordem dos assentos. As dos outros moram dentro da
+## mesa, presas ao leque de cada um; a do jogador local mora no rodapé, ao lado da
+## mão dele.
+var _tags: Array[PlayerTag] = []
 ## Os botões de lance que não é carta, por espécie. Ver [method _build_actions].
 var _actions := {}
 
@@ -112,13 +119,18 @@ func _ready() -> void:
 	_hand.card_tapped.connect(_on_card_tapped)
 	%PassButton.pressed.connect(_on_pass)
 	_build_actions()
-	%BackButton.confirmed.connect(_leave)
+	%Bar.leave_confirmed.connect(_leave)
+	# As etiquetas seguem o leque de cada assento, e o leque segue o tamanho da
+	# mesa: girar o aparelho move os dois.
+	_table.resized.connect(_place_tags)
 	%AgainButton.pressed.connect(_restart)
 	%OverlayLeaveButton.pressed.connect(_leave)
 	%Overlay.visible = false
 	%ChoiceLayer.visible = false
 
 	Game.begin_match()
+	%Bar.bind()
+	%Bar.status.counts_rounds = false
 	if Game.mode == Game.Mode.SOLO:
 		# Solo é a mesa cheia com um humano só: você é o assento 0, o resto é
 		# máquina. É o mesmo caminho de uma sala que não encheu, sem a sala.
@@ -150,7 +162,7 @@ func _ready() -> void:
 
 	_table.local_seat = Game.local_seat
 	_table.names = _seat_names()
-	_build_roster()
+	_build_tags()
 	_refresh()
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
 	# histórico antes desta cena existir, e ele ficou guardado esperando.
@@ -648,7 +660,7 @@ func _on_names_changed() -> void:
 func _refresh() -> void:
 	_refresh_table()
 	_refresh_hand()
-	_refresh_roster()
+	_refresh_tags()
 	_refresh_status()
 
 	# Lances de rede que chegaram durante uma animação ou uma vez de bot esperam na
@@ -770,97 +782,69 @@ func _refresh_status() -> void:
 	%StatusLabel.text = "Sua vez. Jogue uma carta ou compre."
 
 
-## A lista de jogadores na coluna da esquerda: uma faixa por assento, com a cor
-## dele, o nome e quantas cartas tem.
+## Onde cada jogador aparece na mesa: uma etiqueta presa ao leque dele.
 ##
-## Mora aqui e não na mesa porque nome é texto, e texto não cabe em volta de um
-## anel de seis lugares — três tentativas de encaixá-lo lá provaram isso. A mesa
-## fica com o que é gráfico (a moldura colorida e a contagem), e a coluna com o
-## que é escrito. É o mesmo arranjo do Ludo e de Metrópole: painel de texto ao
-## lado, tabuleiro no meio.
+## Era uma coluna à esquerda com seis faixas, e a coluna custava um quinto da
+## largura de uma tela deitada — justamente a largura que faltava à mesa. Pior que
+## o custo: ela obrigava a procurar duas vezes. A mão de costas estava num lugar e
+## o nome de quem a segura, noutro, e amarrar os dois era trabalho de quem joga.
 ##
-## Construída em laço porque seis cópias no `.tscn` é onde a terceira fica com o
-## nome da segunda — e porque a mesa vai de dois a seis, e o `.tscn` teria de
-## conter o caso maior e esconder o resto.
-func _build_roster() -> void:
-	for child in %Roster.get_children():
-		child.queue_free()
-	_chips.clear()
+## Agora o nome mora ao lado da mão. A do jogador local fica no rodapé, junto do
+## leque dele — que é onde ele já está olhando.
+##
+## Construída em laço porque a mesa vai de dois a seis, e seis cópias no `.tscn`
+## é onde a terceira fica com o nome da segunda.
+func _build_tags() -> void:
+	for tag in _tags:
+		var parent := tag.get_parent()
+		if parent != null:
+			parent.remove_child(tag)
+		tag.queue_free()
+	_tags.clear()
 
 	for seat in _rules.players():
-		var chip := PanelContainer.new()
-		chip.size_flags_vertical = Control.SIZE_FILL
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		chip.add_child(row)
-
-		# A tarja da cor à esquerda, e não o cartão inteiro pintado: seis cartões
-		# cheios lado a lado competem entre si, e o que a coluna responde é "de quem
-		# é a vez", não "quais são as cores".
-		var stripe := ColorRect.new()
-		stripe.custom_minimum_size = Vector2(5, 0)
-		stripe.color = UnoView.color_of_seat(seat)
-		row.add_child(stripe)
-
-		var name_label := Label.new()
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		name_label.add_theme_font_size_override("font_size", 12)
-		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		name_label.text = _seat_name(seat)
-		row.add_child(name_label)
-
-		var count := Label.new()
-		count.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		count.add_theme_font_size_override("font_size", 15)
-		row.add_child(count)
-
-		%Roster.add_child(chip)
-		_chips.append(chip)
+		var tag := PlayerTag.new()
+		tag.shape = PlayerTag.Shape.TAG
+		tag.seat_color = UnoView.color_of_seat(seat)
+		if seat == Game.local_seat:
+			%LocalSlot.add_child(tag)
+		else:
+			tag.size = TAG_SIZE
+			_table.add_child(tag)
+		_tags.append(tag)
+	_place_tags()
 
 
-func _refresh_roster() -> void:
+## As etiquetas dos outros acompanham o leque de cada um. A do local não: ela é
+## filha do rodapé e quem a posiciona é o contêiner.
+func _place_tags() -> void:
+	for seat in _tags.size():
+		if seat == Game.local_seat or _table.state == null:
+			continue
+		var tag: PlayerTag = _tags[seat]
+		tag.size = TAG_SIZE
+		tag.position = _table.seat_tag_spot(seat, TAG_SIZE)
+
+
+func _refresh_tags() -> void:
 	var turn := UnoRules.turn_of(_state)
-	for seat in _chips.size():
-		var chip: PanelContainer = _chips[seat]
+	for seat in _tags.size():
+		var tag: PlayerTag = _tags[seat]
 		var held := UnoRules.hand_size(_state, seat)
-		var row: HBoxContainer = chip.get_child(0)
-		var name_label: Label = row.get_child(1)
-		var count: Label = row.get_child(2)
-		# Relido a cada redesenho, e não só ao montar a coluna. Os nomes dos outros
+		# Relido a cada redesenho, e não só ao montar a mesa. Os nomes dos outros
 		# convidados chegam no `ready` deles, que costuma cair **depois** de a cena
-		# existir — escrito uma vez só, o cartão ficava em "Jogador 2" ou mostrava o
-		# nome certo conforme quem ganhava a corrida. É o mesmo motivo de a cadeira
-		# que vira máquina precisar passar a dizer "(bot)".
-		name_label.text = _seat_name(seat)
-		count.text = str(held)
-
+		# existir — escrito uma vez só, a etiqueta ficava em "Jogador 2" ou mostrava
+		# o nome certo conforme quem ganhava a corrida. É o mesmo motivo de a
+		# cadeira que vira máquina precisar passar a dizer "(bot)".
+		tag.title = _seat_name(seat)
+		tag.active = seat == turn
+		tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held
 		# Uma carta na mão é o aviso mais forte da mesa, e é o que o Uno grita em
 		# voz alta na vida real. Ele ganha o vermelho do app — o mesmo do que custa
 		# caro — e vence o destaque da vez, que é informação mais barata.
-		var alarm := held == 1
-		var edge := AppTheme.DANGER if alarm else (
-			UnoView.color_of_seat(seat) if seat == turn else AppTheme.BORDER
-		)
-		var style := AppTheme.box(
-			AppTheme.DANGER_SOFT if alarm else (
-				Color(UnoView.color_of_seat(seat), 0.16) if seat == turn else AppTheme.SURFACE
-			),
-			AppTheme.RADIUS, edge, 1
-		)
-		# As margens do tema são de cartão de tela cheia, e aqui são seis faixas
-		# empilhadas numa coluna que também carrega o status. Com elas, a lista de
-		# uma mesa de seis passava da altura da linha e empurrava a mão para fora
-		# da tela — que é o único lugar em que se toca.
-		style.content_margin_top = 5
-		style.content_margin_bottom = 5
-		style.content_margin_left = 0
-		style.content_margin_right = 9
-		chip.add_theme_stylebox_override("panel", style)
-		var ink := AppTheme.TEXT if seat == turn or alarm else AppTheme.TEXT_DIM
-		name_label.add_theme_color_override("font_color", ink)
-		count.add_theme_color_override("font_color", AppTheme.DANGER if alarm else ink)
+		tag.alert = held == 1
+		tag.alert_text = "1 carta!"
+	_place_tags()
 
 
 ## Os nomes na ordem dos assentos, para a mesa desenhar.
@@ -954,7 +938,7 @@ func go_back() -> void:
 		return
 	# Pelo botão ou pelo gesto, sair é a mesma decisão — e uma delas passar sem
 	# pergunta é a pergunta não existir.
-	%BackButton.ask()
+	%Bar.leave.ask()
 
 
 func _leave() -> void:

@@ -233,7 +233,7 @@ func _fade() -> float:
 
 
 func _draw_row() -> void:
-	var font := AppTheme.font(600)
+	var font := AppTheme.display(900)
 	PieceRenderer.draw_piece(
 		self, piece, Vector2(PAD + ROW_ICON * 0.5, size.y * 0.5), ROW_ICON, _fade()
 	)
@@ -292,19 +292,22 @@ func _draw_star(center: Vector2) -> void:
 ## colunas. Com número fixo, o nome de 20 px cabia no primeiro e transbordava no
 ## segundo — e transbordar era o caso que a tela inicial nova produz.
 func _draw_stacked() -> void:
-	var font := AppTheme.font(600)
-	var text_size := int(clampf(size.x / 7.5, 12.0, float(TITLE_SIZE)))
+	var font := AppTheme.display(900)
+	var text_size := int(clampf(size.x / 6.0, 14.0, float(TITLE_SIZE) + 2.0))
 	# Duas linhas de nome cabem: "Batalha Naval" numa coluna de 120 px não cabe em
 	# uma, e abreviar o nome do jogo na tela que serve para escolher o jogo seria
 	# economizar no lugar errado.
 	var band := float(text_size) * 2.6 + PAD
 	var icon := minf(size.x - PAD * 2.0, size.y - band)
-	PieceRenderer.draw_piece(
-		self, piece, Vector2(size.x * 0.5, (size.y - band) * 0.5 + PAD * 0.4), icon, _fade()
-	)
+	var center := Vector2(size.x * 0.5, (size.y - band) * 0.5 + PAD * 0.4)
+	# A bolacha atrás da peça: é a mesma moldura redonda da sala de espera e da
+	# coluna de jogadores, e é ela que separa a peça da arte de fundo.
+	draw_circle(center, icon * 0.46, Color(AppTheme.COASTER, _fade() * 0.92))
+	draw_arc(center, icon * 0.46, 0.0, TAU, 40, Color(AppTheme.GOLD, _fade() * 0.7), 2.0, true)
+	PieceRenderer.draw_piece(self, piece, center, icon * 0.72, _fade())
 
 	draw_multiline_string(
-		font, Vector2(PAD * 0.5, size.y - band + float(text_size)), title,
+		font, Vector2(PAD * 0.5, size.y - band + float(text_size)), title.to_upper(),
 		HORIZONTAL_ALIGNMENT_CENTER, size.x - PAD, text_size, 2,
 		Color(AppTheme.TEXT, _fade()), TextServer.BREAK_WORD_BOUND | TextServer.BREAK_GRAPHEME_BOUND
 	)
@@ -312,16 +315,10 @@ func _draw_stacked() -> void:
 		_draw_star(_star_zone().get_center())
 
 
-func _background() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.set_corner_radius_all(AppTheme.RADIUS_LARGE)
-	style.set_border_width_all(1)
+## Tracejado de giz quando em repouso, contorno amarelo quando aceso: o cartão
+## segue o mesmo vocabulário dos painéis secundários do tema.
+func _background() -> StyleBox:
 	if highlighted:
-		style.bg_color = AppTheme.SURFACE_HIGH
-		style.border_color = AppTheme.ACCENT
-		style.shadow_color = Color(AppTheme.ACCENT, 0.18)
-		style.shadow_size = 12
-	else:
-		style.bg_color = Color(AppTheme.SURFACE, 0.7) if not _hovered else AppTheme.SURFACE
-		style.border_color = AppTheme.BORDER
-	return style
+		return AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS_LARGE, AppTheme.ACCENT, 2)
+	var fill := AppTheme.SURFACE if _hovered else Color(AppTheme.SURFACE, 0.55)
+	return AppTheme.dashed(fill, AppTheme.LINE_SOFT, AppTheme.RADIUS_LARGE)

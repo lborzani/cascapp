@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
 [ext_resource type="Script" path="res://ui/app_bar.gd" id="2_bar"]
 [ext_resource type="Script" path="res://ui/chip_bar.gd" id="4_chips"]
+[ext_resource type="Script" path="res://ui/app_tabs.gd" id="5_tabs"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -21,7 +22,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0745098, 0.0627451, 0.054902, 1)
+color = Color(0.0901961, 0.129412, 0.109804, 1)
 
 [node name="Safe" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -51,22 +52,48 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 24
 
 [node name="Content" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 16
-
-[node name="Categories" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="Favorites" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="CatalogHeader" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CatalogTitle" type="Label" parent="Safe/VBox/Scroll/Pad/Content/CatalogHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 1
+theme_type_variation = &"SectionHeader"
+text = "Catálogo"
+
+[node name="Categories" type="Button" parent="Safe/VBox/Scroll/Pad/Content/CatalogHeader"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(176, 0)
+layout_mode = 2
+size_flags_horizontal = 8
 script = ExtResource("4_chips")
 
 [node name="GameList" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+theme_override_constants/separation = 2
+
+[node name="Tabs" type="Control" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("5_tabs")

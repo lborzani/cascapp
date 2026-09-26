@@ -200,7 +200,7 @@ func _draw_middle(unit: float, origin: Vector2) -> void:
 	for which in [MonopolyBoard.CHANCE, MonopolyBoard.CHEST]:
 		_draw_deck_slot(which, center, unit)
 
-	var font := AppTheme.font(700)
+	var font := AppTheme.legacy_font(700)
 	var title := "METRÓPOLE"
 	var room := unit * (SPAN - CORNER * 2.0)
 	var size_pt := _fitting_size(font, title, room * 0.86, int(unit * 0.52))
@@ -241,7 +241,7 @@ func _draw_deck_slot(which: int, center: Vector2, unit: float) -> void:
 	draw_rect(frame, Color(MIDDLE_INK, 0.16))
 	draw_rect(frame, Color(MIDDLE_INK, 0.75), false, maxf(1.0, unit * 0.035))
 	var label := "SORTE" if which == MonopolyBoard.CHANCE else "COFRE"
-	var font := AppTheme.font(700)
+	var font := AppTheme.legacy_font(700)
 	var size_pt := _fitting_size(font, label, half.x * 1.7, int(unit * 0.22))
 	if size_pt > 0:
 		draw_string(
@@ -304,7 +304,7 @@ func _draw_ownership(tile: int, rect: Rect2, unit: float) -> void:
 ## para o jogador da vez, isso deixa de ser convenção e vira função: o lado de
 ## quem joga fica sempre de pé.
 func _draw_label(tile: int, rect: Rect2, unit: float) -> void:
-	var font := AppTheme.font(600)
+	var font := AppTheme.legacy_font(600)
 	var angle := text_angle(tile)
 	# `along` é o comprimento útil do texto e `across` a profundidade da casa. Nos
 	# lados esquerdo e direito o retângulo está deitado mas de pé para quem lê,
@@ -471,7 +471,7 @@ func _glyph_chest(spot: Vector2, radius: float) -> void:
 func _glyph_letter(spot: Vector2, radius: float, text: String, tint: Color, ring := false) -> void:
 	if ring:
 		draw_arc(spot, radius * 0.95, 0.0, TAU, 22, tint, maxf(1.0, radius * 0.14), true)
-	var font := AppTheme.font(700)
+	var font := AppTheme.legacy_font(700)
 	var size_pt := maxi(8, int(radius * (1.5 if ring else 2.1)))
 	var wide := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_pt).x
 	draw_string(

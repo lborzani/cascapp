@@ -87,6 +87,9 @@ func _ready() -> void:
 	column.add_child(_name)
 
 	_cash = Label.new()
+	# Em mono, e amarelo: é o placar desta partida, e os algarismos precisam
+	# alinhar entre as seis faixas para "quem tem mais" ser respondido de relance.
+	_cash.add_theme_font_override("font", AppTheme.mono(600))
 	column.add_child(_cash)
 
 	_detail = Label.new()
@@ -131,12 +134,10 @@ func show_player(
 	_stripe.color = Color(color, 0.35 if out else 1.0)
 	# Fundo preenchido só na vez. Seis cartões acesos competiriam entre si, e a
 	# pergunta que a coluna responde primeiro é "de quem é a vez".
-	var style := AppTheme.box(
-		Color(color, 0.20) if is_turn else Color(AppTheme.SURFACE, 0.85),
-		AppTheme.RADIUS,
-		Color(color, 0.9) if is_turn else Color(AppTheme.BORDER, 0.8),
-		1
-	)
+	var style: StyleBox = AppTheme.box(Color(color, 0.20), AppTheme.RADIUS, Color(color, 0.9), 2)
+	if not is_turn:
+		# Quem espera fica em contorno de giz, como as etiquetas dos outros jogos.
+		style = AppTheme.dashed(Color(AppTheme.SURFACE, 0.72), AppTheme.LINE_SOFT)
 	# As folgas do tema saem.
 	#
 	# `AppTheme.box` embute 18 de lado e 14 em cima e embaixo, e está certo: ela
@@ -167,7 +168,7 @@ func show_player(
 
 	_cash.text = "M %d" % MonopolyRules.cash_of(state, player)
 	_cash.add_theme_color_override(
-		"font_color", AppTheme.TEXT if is_turn else AppTheme.TEXT_DIM
+		"font_color", AppTheme.ACCENT if is_turn else Color(AppTheme.ACCENT, 0.7)
 	)
 
 	var deeds := MonopolyRules.deeds_of(state, player).size()

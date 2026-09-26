@@ -3,6 +3,8 @@
 [ext_resource type="Script" path="res://scenes/settings.gd" id="1_settings"]
 [ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
 [ext_resource type="Script" path="res://ui/app_bar.gd" id="2_bar"]
+[ext_resource type="Script" path="res://ui/app_tabs.gd" id="7_tabs"]
+[ext_resource type="Script" path="res://ui/coaster.gd" id="8_coaster"]
 
 [node name="Settings" type="Control"]
 layout_mode = 3
@@ -20,7 +22,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0745098, 0.0627451, 0.054902, 1)
+color = Color(0.0901961, 0.129412, 0.109804, 1)
 
 [node name="Safe" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -58,12 +60,29 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 16
 
-[node name="NameSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Profile" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Avatar" type="Control" parent="Safe/VBox/Scroll/Pad/Content/Profile"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("8_coaster")
+
+[node name="NameColumn" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content/Profile"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 4
+
+[node name="NameSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content/Profile/NameColumn"]
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
 text = "Seu nome"
 
-[node name="NameEdit" type="LineEdit" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="NameEdit" type="LineEdit" parent="Safe/VBox/Scroll/Pad/Content/Profile/NameColumn"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
@@ -109,3 +128,8 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 autowrap_mode = 3
+
+[node name="Tabs" type="Control" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("7_tabs")

@@ -25,7 +25,7 @@ const PANEL_WIDTH := 320
 
 var _title: Label = null
 var _detail: Label = null
-var _count: Label = null
+var _seats: SeatTable = null
 var _hint: Label = null
 
 
@@ -70,13 +70,11 @@ func _ready() -> void:
 	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_detail)
 
-	# A lotação é o número grande: é o que muda enquanto se espera, e é a única
-	# coisa da tela que responde "falta muito?".
-	_count = Label.new()
-	_count.theme_type_variation = &"Display"
-	_count.add_theme_font_size_override("font_size", 34)
-	_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_count)
+	# As cadeiras no lugar do número. "2 de 4" responde "falta muito?" e não
+	# responde "quem já está aqui?" — e é a segunda pergunta que faz esperar valer.
+	_seats = SeatTable.new()
+	_seats.custom_minimum_size.y = 200.0
+	column.add_child(_seats)
 
 	_hint = Label.new()
 	_hint.theme_type_variation = &"Caption"
@@ -97,18 +95,22 @@ func _ready() -> void:
 ##
 ## `capacity` zero é a sala de dois, onde o relay não conta: ali a pergunta não é
 ## "quantos faltam" e sim "o anfitrião ainda está aí".
-func show_room(game_id: StringName, code: String, taken: int, capacity: int) -> void:
+func show_room(
+	game_id: StringName, code: String, present: PackedInt32Array, capacity: int, local_seat: int
+) -> void:
 	var title := Game.game_title(game_id)
 	_title.text = title if not title.is_empty() else "Partida"
 	_detail.text = "Sala %s" % code
+	_seats.capacity = maxi(capacity, 2)
+	_seats.local_seat = maxi(local_seat, 0)
+	_seats.present = present
+	_seats.refresh()
 	if capacity > 2:
-		_count.text = "%d de %d" % [taken, capacity]
 		_hint.text = (
-			"Esperando a mesa encher." if taken < capacity
+			"Esperando a mesa encher." if present.size() < capacity
 			else "Mesa cheia. Entrando na partida…"
 		)
 	else:
-		_count.text = ""
 		_hint.text = "Esperando o anfitrião abrir a partida."
 	visible = true
 

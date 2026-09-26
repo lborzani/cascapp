@@ -5,7 +5,8 @@
 [ext_resource type="Script" path="res://ui/ludo_view.gd" id="2_board"]
 [ext_resource type="Script" path="res://ui/die_view.gd" id="3_die"]
 [ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
-[ext_resource type="Script" path="res://ui/leave_button.gd" id="5_leave"]
+[ext_resource type="Script" path="res://ui/match_bar.gd" id="5_bar"]
+[ext_resource type="Script" path="res://ui/paper_card.gd" id="10_paper"]
 
 [node name="LudoMatch" type="Control"]
 layout_mode = 3
@@ -23,7 +24,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0745098, 0.0627451, 0.054902, 1)
+color = Color(0.0901961, 0.129412, 0.109804, 1)
 
 [node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -32,50 +33,53 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_bottom = 14
 script = ExtResource("9_safe")
 
-[node name="Row" type="HBoxContainer" parent="Margin"]
+[node name="Shell" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="PanelContainer" parent="Margin/Shell"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("5_bar")
+compact = true
+
+[node name="Pad" type="MarginContainer" parent="Margin/Shell"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="Row" type="HBoxContainer" parent="Margin/Shell/Pad"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Scoreboard" type="VBoxContainer" parent="Margin/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 0)
-layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="BackButton" type="Button" parent="Margin/Row/Scoreboard"]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("5_leave")
-
-[node name="Board" type="Control" parent="Margin/Row"]
+[node name="Board" type="Control" parent="Margin/Shell/Pad/Row"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("2_board")
 
-[node name="DieColumn" type="VBoxContainer" parent="Margin/Row"]
+[node name="DieColumn" type="VBoxContainer" parent="Margin/Shell/Pad/Row"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="DieSpacer" type="Control" parent="Margin/Row/DieColumn"]
+[node name="DieSpacer" type="Control" parent="Margin/Shell/Pad/Row/DieColumn"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Die" type="Control" parent="Margin/Row/DieColumn"]
+[node name="Die" type="Control" parent="Margin/Shell/Pad/Row/DieColumn"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(96, 96)
 layout_mode = 2
 size_flags_horizontal = 4
 script = ExtResource("3_die")
 
-[node name="StatusLabel" type="Label" parent="Margin/Row/DieColumn"]
+[node name="StatusLabel" type="Label" parent="Margin/Shell/Pad/Row/DieColumn"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -83,7 +87,7 @@ theme_type_variation = &"Subtitle"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="BottomSpacer" type="Control" parent="Margin/Row/DieColumn"]
+[node name="BottomSpacer" type="Control" parent="Margin/Shell/Pad/Row/DieColumn"]
 layout_mode = 2
 size_flags_vertical = 3
 
@@ -129,8 +133,9 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="Overlay/Center"]
+custom_minimum_size = Vector2(320, 0)
 layout_mode = 2
-theme_type_variation = &"Card"
+script = ExtResource("10_paper")
 
 [node name="Box" type="VBoxContainer" parent="Overlay/Center/Panel"]
 layout_mode = 2
@@ -139,7 +144,7 @@ theme_override_constants/separation = 10
 [node name="OverlayTitle" type="Label" parent="Overlay/Center/Panel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Title"
+theme_type_variation = &"Display"
 text = "Fim de partida"
 horizontal_alignment = 1
 

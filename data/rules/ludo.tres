@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_70rpk"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_562wp"]
+
+[resource]
+script = ExtResource("2_562wp")
+title = "Ludo"
+objective = "Levar os quatro peões da sua cor da base até a chegada, no centro do tabuleiro, antes dos outros."
+steps = PackedStringArray("Na sua vez, role o dado.", "Um peão só sai da base com 6.", "Escolha qual peão anda o número tirado. A volta tem 52 casas, e cada cor entra na própria reta final, de 5 casas, antes da chegada.", "Tirou 6, joga de novo.", "Pousar numa casa onde há peão de outra cor manda esse peão de volta para a base.")
+notes = PackedStringArray("As saídas e as casas com estrela são seguras: ali ninguém é capturado.", "A reta final é só sua, e ninguém captura lá.", "Para chegar é preciso tirar o número exato.", "Quando nenhum peão pode andar, a vez passa.", "Cadeiras vazias são ocupadas por bots.")

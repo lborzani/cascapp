@@ -30,7 +30,7 @@ var _close: IconButton = null
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(0, HEIGHT)
-	theme_type_variation = &"AccentButton"
+	theme_type_variation = &"PrimaryButton"
 	text = ""
 	focus_mode = Control.FOCUS_NONE
 	pressed.connect(func() -> void: resume_pressed.emit(game_id, code))
@@ -40,6 +40,8 @@ func _ready() -> void:
 	# para o toque não o repassa ao pai.
 	_close = IconButton.new()
 	_close.kind = IconButton.Kind.CLOSE
+	# Tinta escura: o X mora na placa amarela, e o cinza do tema sumiria nela.
+	_close.tint = Color(AppTheme.ACCENT_INK, 0.75)
 	_close.mouse_filter = Control.MOUSE_FILTER_STOP
 	_close.pressed.connect(func() -> void: dismissed.emit())
 	add_child(_close)
@@ -65,12 +67,12 @@ func _draw() -> void:
 	var text_x := pad + piece_size + 14.0
 	var text_width := maxf(40.0, size.x - text_x - IconButton.SIZE - 20.0)
 	draw_string(
-		AppTheme.font(600), Vector2(text_x, size.y * 0.5 - 3.0), _title(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 17, AppTheme.TEXT
+		AppTheme.display(900), Vector2(text_x, size.y * 0.5 - 2.0), _title().to_upper(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 20, AppTheme.ACCENT_INK
 	)
 	draw_string(
 		AppTheme.font(400), Vector2(text_x, size.y * 0.5 + 18.0), _detail(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 14, AppTheme.ACCENT
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 13, Color(AppTheme.ACCENT_INK, 0.75)
 	)
 
 

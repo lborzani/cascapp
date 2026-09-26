@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_format.gd" id="1_0bkmu"]
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="2_fxbm2"]
+
+[resource]
+script = ExtResource("2_fxbm2")
+title = "Xadrez"
+objective = "Dar xeque-mate: atacar o rei do adversário de um jeito que ele não tenha como escapar."
+steps = PackedStringArray("As brancas começam, e cada um move uma peça por vez.", "O peão anda uma casa para a frente — duas, na primeira vez que se move — e captura na diagonal.", "O cavalo pula em L, o bispo anda na diagonal, a torre em linha reta, a dama nas duas direções e o rei uma casa para qualquer lado.", "Captura-se pousando na casa de uma peça do adversário.", "Não vale deixar o próprio rei em xeque: com ele atacado, o lance tem de tirá-lo do ataque.", "Toque na peça e depois na casa de destino, ou arraste a peça até lá.")
+notes = PackedStringArray("Roque: o rei anda duas casas na direção de uma torre que nunca se moveu, e a torre pula para o outro lado dele. Só com o caminho livre, sem o rei estar em xeque e sem ele passar por casa atacada.", "En passant: o peão que avança duas casas e para ao lado de um peão adversário pode ser capturado como se tivesse andado uma — só no lance seguinte.", "Promoção: o peão que chega à última fileira vira dama, torre, bispo ou cavalo, à sua escolha.", "Empate: sem lance legal e sem estar em xeque (afogamento), cinquenta lances de cada lado sem captura nem movimento de peão, ou peças que não dão mate — só os reis, ou os reis e um único bispo ou cavalo.", "Com relógio, quem zera o tempo perde. No 3 + 2, cada lance devolve dois segundos a quem jogou.", "Em rede, dá para planejar até quatro lances enquanto o outro pensa. Cada um é jogado quando chegar a sua vez, se ainda for legal.")

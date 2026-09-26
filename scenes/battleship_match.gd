@@ -15,7 +15,7 @@ extends Control
 ## limpo no papel e é desorientador na mão: a tela muda sozinha entre o toque e a
 ## resposta, e o jogador deixa de saber onde está olhando.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Posicionar → esperar o outro → atirar → acabou.
 enum Phase { PLACING, WAITING, FIRING, OVER }
@@ -69,7 +69,7 @@ func _ready() -> void:
 	%ShuffleButton.pressed.connect(_shuffle)
 	%ClearButton.pressed.connect(_clear)
 	%ConfirmButton.pressed.connect(_confirm_fleet)
-	%ExitButton.confirmed.connect(_exit)
+	%Bar.leave_confirmed.connect(_exit)
 	%LeaveButton.pressed.connect(_exit)
 	%RematchButton.pressed.connect(_on_rematch_button)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
@@ -93,10 +93,8 @@ func _ready() -> void:
 	# Acima de "Sair", que é o rodapé desta tela. A faixa é contexto e o botão é
 	# saída: ficam juntos porque nenhum dos dois é sobre o mar.
 	Game.begin_match()
-	_match_status = MatchStatus.create()
-	var column := %ExitButton.get_parent()
-	column.add_child(_match_status)
-	column.move_child(_match_status, %ExitButton.get_index())
+	%Bar.bind()
+	_match_status = %Bar.status
 
 	_refresh()
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
@@ -480,10 +478,9 @@ func _refresh_cards() -> void:
 	var them := Board.opponent(me)
 	var over := _phase == Phase.OVER
 	var playing := _phase == Phase.FIRING and not _disconnected
-	for card in [[%TopCard, them], [%BottomCard, me]]:
-		var view: PlayerCard = card[0]
+	for card in [[%TopTag, them], [%BottomTag, me]]:
+		var view: PlayerTag = card[0]
 		var side: int = card[1]
-		view.side = side
 		# O nome dos ajustes de cada lado: o local sai do `Prefs`, o do outro veio
 		# no aperto de mão. "Oponente" continua sendo a resposta enquanto ele não
 		# se apresentou — é melhor dizer que não se sabe do que inventar um nome.
@@ -513,8 +510,14 @@ func _show_result(title: String, detail: String, allow_rematch: bool) -> void:
 	%OverlayLayer.visible = true
 
 
+## Mesmo acordo do xadrez: o gesto de voltar é o botão de sair da barra, e faz a
+## pergunta dele. Com o fim de partida na tela, sai direto — não há partida a
+## proteger atrás do painel.
 func go_back() -> void:
-	_exit()
+	if %OverlayLayer.visible:
+		_exit()
+		return
+	%Bar.leave.ask()
 
 
 func _exit() -> void:

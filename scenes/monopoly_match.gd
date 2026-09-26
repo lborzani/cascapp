@@ -57,7 +57,7 @@ extends Control
 ## não aparece em lugar nenhum durante a partida — a coluna da esquerda mostra o
 ## caixa, que é outra coisa.
 
-const MENU_SCENE := "res://scenes/game_menu.tscn"
+const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 ## Largura da coluna da esquerda, na base deitada de 768. Larga o bastante para
 ## "M 1500" e um nome curto; estreita o bastante para o tabuleiro continuar sendo
@@ -130,6 +130,10 @@ var _trade: MonopolyTrade = null
 ## centrado, e escurecer a tela é da camada, não do painel.
 var _trade_layer: Control = null
 var _match_status: MatchStatus = null
+var _match_bar: MatchBar = null
+## O espaço no topo da coluna que fica embaixo da barra. A barra flutua por cima
+## da tela inteira; a coluna desce a altura dela, o tabuleiro não.
+var _rail_top: Control = null
 var _trade_button: Button = null
 var _recenter: Button = null
 var _result: MonopolyResult = null
@@ -234,16 +238,25 @@ func _build_layout() -> void:
 	_rail.add_theme_constant_override("separation", 6)
 	row.add_child(_rail)
 
-	# No topo da coluna, acima dos cartões. Ela é a coluna do estado da partida, e
-	# tempo, rodadas e sala são estado da partida — a barra embaixo é sobre a
-	# **vez**, e some e volta a cada rolagem.
-	#
-	# Os cartões absorvem a altura que ela custa: são `SIZE_EXPAND_FILL` e o pé é
-	# fixo, então a mesa de seis aperta uns pixels em cada faixa em vez de empurrar
-	# o botão de sair para fora da tela — que foi o que já aconteceu uma vez aqui.
+	_rail_top = Control.new()
+	_rail_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rail.add_child(_rail_top)
+
+	# A barra da partida **por cima** do tabuleiro, translúcida, e não acima dele.
+	# O tabuleiro 3D é o jogo inteiro nesta tela e uma tela deitada tem 432 de
+	# altura: uma barra opaca tirava dez por cento da mesa para mostrar o tempo e
+	# o botão de sair. A borda de cima do tabuleiro tem campo livre — a câmera o
+	# enquadra com folga —, e é ali que a barra pousa.
+	_match_bar = MatchBar.new()
+	_match_bar.compact = true
+	_match_bar.translucent = true
+	_match_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_match_bar.leave_confirmed.connect(_leave)
+	_match_bar.resized.connect(_fit_under_bar)
+
 	Game.begin_match()
-	_match_status = MatchStatus.create()
-	_rail.add_child(_match_status)
+	_match_bar.bind()
+	_match_status = _match_bar.status
 
 	# O tabuleiro fica numa moldura própria: é ela que recorta a janela 3D e é
 	# nela que o painel flutuante se ancora, para o painel acompanhar o tabuleiro
@@ -364,9 +377,10 @@ func _build_layout() -> void:
 	# O mesmo componente dos outros jogos: ícone quadrado, vermelho de aviso, com
 	# a pergunta de confirmação dentro dele. Aqui ele divide o rodapé com o botão
 	# de troca, e por isso não se estica — quem ocupa a linha é a ação de jogar.
-	var leave := LeaveButton.new()
-	leave.confirmed.connect(_leave)
-	foot.add_child(leave)
+	# Por último, acima de tudo o que é do jogo e abaixo da mesa de troca, da carta
+	# e do resultado, que cobrem a tela inteira de propósito.
+	add_child(_match_bar)
+	_fit_under_bar()
 
 	_build_trade_layer()
 
@@ -1501,12 +1515,30 @@ func _restart() -> void:
 ## `actor_of` não é `turn_of` —, e fechar a tela por gesto tiraria da frente os
 ## dois únicos botões que destravam os outros jogadores. O gesto não faz nada, e
 ## é a resposta certa: a saída daqui é "Aceitar" ou "Recusar".
+## A coluna, o painel e o aviso descem a altura da barra. O tabuleiro não: é por
+## ele passar por baixo dela que a barra é translúcida.
+func _fit_under_bar() -> void:
+	if _match_bar == null:
+		return
+	var room := _match_bar.size.y
+	_rail_top.custom_minimum_size.y = maxf(0.0, room - 8.0)
+	if _panel != null:
+		_panel.offset_top = room + PANEL_MARGIN - 8.0
+	if _banner != null:
+		_banner.offset_top = room + PANEL_MARGIN - 8.0
+
+
+## O gesto de voltar fecha a mesa de troca quando ela está aberta; fora dela,
+## pergunta antes de sair, como o botão da barra.
 func go_back() -> void:
 	if _trade_layer != null and _trade_layer.visible:
 		if not _trade.is_reviewing():
 			_close_trade()
 		return
-	_leave()
+	if _result != null and _result.visible:
+		_leave()
+		return
+	_match_bar.leave.ask()
 
 
 func _leave() -> void:

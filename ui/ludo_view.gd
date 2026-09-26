@@ -334,6 +334,20 @@ func _layout() -> void:
 	_origin = ((size - Vector2.ONE * _cell * CELLS) * 0.5).floor()
 
 
+## O bloco do curral de um jogador, em pixels.
+##
+## Público porque a cena pendura a etiqueta de cada cor ao lado do canto dela, e
+## quem sabe onde o canto está é quem desenha o tabuleiro. `_layout()` de novo
+## porque a medida da casa nasce no primeiro desenho, e a cena pode perguntar
+## antes disso.
+func yard_rect(player: int) -> Rect2:
+	_layout()
+	var middle := _center(Vector2(YARD[player]) + Vector2(2.5, 2.5))
+	return Rect2(
+		middle - Vector2.ONE * _cell * YARD_BLOCK * 0.5, Vector2.ONE * _cell * YARD_BLOCK
+	)
+
+
 func _rect(cell: Vector2i) -> Rect2:
 	return Rect2(_origin + Vector2(cell) * _cell, Vector2.ONE * _cell)
 
@@ -532,9 +546,7 @@ func _draw_star(cell: Vector2i) -> void:
 ## contraste entre os dois é o que faz "peão na base" ser lido de longe.
 func _draw_yard(player: int) -> void:
 	var middle := _center(Vector2(YARD[player]) + Vector2(2.5, 2.5))
-	var block := Rect2(
-		middle - Vector2.ONE * _cell * YARD_BLOCK * 0.5, Vector2.ONE * _cell * YARD_BLOCK
-	)
+	var block := yard_rect(player)
 	draw_rect(block, Color(COLORS[player], 0.85))
 	# Contorno escuro: o bloco deixou de encostar nas bordas do canto, e sem a
 	# linha ele flutuava sobre o fundo do tabuleiro em vez de ser uma peça dele.

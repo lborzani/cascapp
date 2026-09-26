@@ -65,27 +65,25 @@ func _draw() -> void:
 	var radius := minf(size.x, size.y) * 0.5
 	var lit := _flash / FLASH_SECONDS
 
-	# O prato: a mesma superfície e o mesmo aro do direcional, para os dois
-	# polegares encontrarem a mesma coisa em cada canto da tela.
-	draw_circle(center, radius, Color(AppTheme.SURFACE, 0.92))
+	# O prato amarelo: é a ação da tela, e a ação da tela no tema é a placa
+	# amarela. O aro mais escuro é a borda da placa; no toque, o fogo acende o
+	# aro inteiro.
+	draw_circle(center, radius, AppTheme.ACCENT)
+	draw_circle(center - Vector2(0.0, radius * 0.06), radius * 0.92, AppTheme.ACCENT.lightened(0.06))
 	draw_arc(
-		center, radius, 0.0, TAU, 64,
-		Color(AppTheme.BORDER).lerp(FLAME_EDGE, lit), 3.0, true
+		center, radius - 1.5, 0.0, TAU, 64,
+		AppTheme.ACCENT_EDGE.lerp(FLAME_EDGE, lit), 3.0, true
 	)
 
 	# A bomba, encolhendo um fio no toque: é o afundar do botão sem mover o alvo
 	# de lugar, que é o que um botão que cresce e encolhe faz com o dedo.
-	#
-	# Clara e não escura, ao contrário da bomba do mapa: lá ela pousa num chão
-	# bege e o que a destaca é ser o objeto mais escuro da casa. Aqui o prato já é
-	# a superfície do tema, quase preta, e a mesma esfera escura sumia dentro dele
-	# — a mesma cor conta histórias opostas em fundos opostos. O que se preserva é
-	# a **forma**: esfera, calota, pavio aceso.
 	var bomb := radius * (0.56 - 0.04 * lit)
 	var seat := center + Vector2(0.0, radius * 0.06)
-	draw_circle(seat, bomb, BODY_LIGHT)
-	draw_circle(seat - Vector2(bomb * 0.20, bomb * 0.18), bomb * 0.60, BODY_LIGHT.lightened(0.22))
-	draw_arc(seat, bomb, 0.0, TAU, 48, BODY, maxf(1.5, radius * 0.035), true)
+	# Escura de novo sobre o amarelo: sobre o prato escuro de antes, a esfera
+	# escura sumia e precisava ser clara; sobre a placa, é a escura que se lê.
+	draw_circle(seat, bomb, BODY)
+	draw_circle(seat - Vector2(bomb * 0.20, bomb * 0.18), bomb * 0.55, BODY_LIGHT)
+	draw_arc(seat, bomb, 0.0, TAU, 48, AppTheme.ACCENT_INK, maxf(1.5, radius * 0.035), true)
 
 	# O pavio: um toco de corda e a fagulha. A fagulha é o único ponto quente do
 	# canto inteiro da tela, e é o que faz o botão ser encontrado sem ser lido.
