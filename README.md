@@ -1322,6 +1322,32 @@ sabe um código, um jogo e um número de ritmo, e nada mais.
 abrir a tela e a cada 6 segundos: uma sala aberta é uma pessoa esperando, e a
 lista tem de acompanhar isso sem ninguém puxar para atualizar.
 
+### Assistir
+
+Xadrez e damas podem ser **assistidos**: pelo código (botão "Assistir", ao lado
+de "Entrar") ou pela seção **"Ao vivo"** da mesma tela, que lista as partidas
+públicas com a mesa cheia (`GET /live`, o avesso de `/rooms`). Uma sala
+privada continua só de quem tem o código.
+
+No relay o espectador é um papel à parte (`{"t":"watch"}`): não ocupa assento,
+não muda a lotação, não segura viva a sala que os jogadores deixaram, e são no
+máximo oito por sala. Ele recebe tudo o que os jogadores falam e **nada do que ele
+manda sai do servidor** — os clientes confiam no assento que o relay carimba em
+cada mensagem, e um `bye` ou um `sync` de quem só assiste encerraria ou
+reescreveria a partida dos outros. O `Net` e o `RelayBridge` recusam o envio
+também, para nem um bug da tela chegar à rede.
+
+Quem chega no meio recebe uma **foto da partida** (`watch_state`): a mesa, os
+nomes, o histórico de lances e qual assento joga de brancas. Quem manda é o
+jogador de menor assento presente — a mesma conta de quem recebe um jogador que
+volta —, sempre que o contador de espectadores muda com alguém assistindo. Uma
+foto repetida é descartada como um resync que não traz nada novo.
+
+Os jogadores veem **"N assistindo"** na barra da partida: ninguém é assistido sem
+saber. A tela de quem assiste é a mesma `match.gd`, com as brancas embaixo, sem
+toque, sem pré-movimento, com o resultado contado pelas cores, e seguindo a
+revanche dos jogadores com as cores trocadas.
+
 ### Os três canais do código
 
 O anfitrião publica o mesmo payload nos três, e o convidado usa o que tiver à
@@ -1456,6 +1482,11 @@ após partida, que é meia vantagem repetida para sempre.
 Dois toques quase simultâneos viram acordo em vez de dois pedidos empacados: se
 o convite do outro chega enquanto o nosso está pendente, isso *é* a concordância
 que o convite pedia.
+
+Por causa da troca, **o assento não diz a cor**. A conferência "este lance é de
+quem tem a vez" deriva a cor do assento a partir do nosso assento e da nossa cor
+atual (`_seat_of`); a conta fixa "quem abriu joga de brancas" recusava o
+primeiro lance de toda revanche.
 
 No mesmo aparelho a revanche é imediata — os dois jogadores estão ali, e pedir
 confirmação a quem está do outro lado da mesa seria perguntar duas vezes.

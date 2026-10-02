@@ -29,6 +29,7 @@ func _ready() -> void:
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
 	await _test_rematch()
+	await _test_spectator()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_bot()
@@ -469,6 +470,19 @@ func _test_rematch() -> void:
 	_equals(Game.local_side, Board.Side.BLACK, "quem era brancas joga de pretas")
 	_equals(scene._board.flipped, true, "e o tabuleiro vira junto")
 
+	# Na revanche quem abriu (assento 0) joga de pretas, e o primeiro lance de
+	# brancas vem do assento 1. Com a conta fixa "assento 0 é brancas" ele era
+	# recusado como "não é a vez dele", e a revanche travava no primeiro lance.
+	Net.local_seat = 0
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	_equals(scene._opponent_name(), "Bia", "o cartão do oponente segue o assento dele")
+	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
+	scene._on_remote_move(e4.merged({"seat": 0}))
+	_equals(scene._state.ply, 0, "lance de brancas vindo do nosso assento é recusado")
+	scene._on_remote_move(e4.merged({"seat": 1}))
+	_equals(scene._state.ply, 1, "e o do assento que joga de brancas entra")
+	Net.player_names = {}
+
 	# Ele pede: a resposta é nossa, e recusar não recomeça nada.
 	scene._show_overlay("Fim", "", true)
 	scene._on_rematch_requested()
@@ -487,6 +501,73 @@ func _test_rematch() -> void:
 
 	scene.queue_free()
 	await get_tree().process_frame
+	Game.mode = Game.Mode.HOTSEAT
+
+
+## Quem assiste: o tabuleiro não responde ao toque, os cartões têm o nome de
+## quem joga, e a revanche dos jogadores é seguida com as cores trocadas — uma
+## vez só, mesmo quando os dois mandam o aceite.
+func _test_spectator() -> void:
+	print("espectador")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = true
+	Net.connected = true
+	Net.white_seat = 1
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	_equals(scene._board.flipped, false, "brancas embaixo")
+	scene._on_square_tapped(_square("e2"))
+	_check(
+		scene._selection.is_empty() and scene._premove_pick == Board.NO_SQUARE,
+		"o toque não seleciona nem planeja nada"
+	)
+	_equals(_node(scene, "%BottomTag").title, "Bia", "o cartão de baixo é de quem joga de brancas")
+	_equals(_node(scene, "%TopTag").title, "Ana", "e o de cima, de quem joga de pretas")
+
+	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
+	scene._on_remote_move(e4.merged({"seat": 0}))
+	_equals(scene._state.ply, 0, "lance de brancas vindo de quem joga de pretas é recusado")
+	scene._on_remote_move(e4.merged({"seat": 1}))
+	_equals(scene._state.ply, 1, "e o de quem joga de brancas entra")
+
+	scene._on_rematch_accepted()
+	_equals(scene._state.ply, 1, "aceite de revanche com a partida em curso é ignorado")
+
+	scene._flag(Board.Side.BLACK)
+	_check(not _node(scene, "%RematchButton").visible, "sem botão de revanche para quem assiste")
+	_check(
+		_node(scene, "%ResultDetail").text.begins_with("Pretas"),
+		"o resultado é contado pelas cores, e não por 'você'"
+	)
+	scene._on_rematch_accepted()
+	_equals(Net.white_seat, 0, "a revanche dos jogadores troca as cores de quem assiste")
+	_equals(scene._state.ply, 0, "e começa a partida nova")
+	_equals(_node(scene, "%BottomTag").title, "Ana", "com os nomes no lado certo")
+	scene._on_rematch_accepted()
+	_equals(Net.white_seat, 0, "o segundo aceite de um pedido cruzado não troca de novo")
+
+	# A revanche que ele não viu (caiu bem na hora): o histórico mais curto manda.
+	scene._apply_sync([{"p": [12, 28], "pr": 0}, {"p": [52, 36], "pr": 0}])
+	_equals(scene._state.ply, 2, "o histórico de quem joga é adotado")
+	scene._apply_sync([])
+	_equals(scene._state.ply, 0, "mesmo quando é mais curto que o de quem assiste")
+
+	# O contador da barra, que é o que os jogadores veem.
+	Net.watchers_changed.emit(2)
+	var caption: Label = scene._match_status._watchers
+	_check(caption.visible and caption.text == "2 assistindo", "a barra conta quem assiste")
+	Net.watchers_changed.emit(0)
+	_check(not caption.visible, "e some quando ninguém assiste")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Net.white_seat = 0
+	Net.player_names = {}
 	Game.mode = Game.Mode.HOTSEAT
 
 

@@ -72,8 +72,18 @@ var code := "":
 		_copied_left = 0.0
 		_refresh_code()
 
+## Quantos estão assistindo. Zero esconde a legenda: só aparece quando é
+## verdade, e é o que garante que ninguém é assistido sem saber.
+var watchers := 0:
+	set(value):
+		if watchers == value:
+			return
+		watchers = value
+		_refresh_watchers()
+
 var _clock: Label = null
 var _rounds: Label = null
+var _watchers: Label = null
 var _code: Button = null
 ## Segundo já escrito na tela. O relógio só reescreve o texto quando o segundo
 ## vira — a alternativa é um `Label` remontando o texto sessenta vezes por
@@ -89,6 +99,7 @@ func _ready() -> void:
 
 	_clock = _caption()
 	_rounds = _caption()
+	_watchers = _caption()
 
 	_code = Button.new()
 	# Chapado: a faixa é contexto, e um botão com fundo ao lado de duas legendas
@@ -104,6 +115,7 @@ func _ready() -> void:
 	add_child(_code)
 
 	_refresh_rounds()
+	_refresh_watchers()
 	_refresh_code()
 	set_process(true)
 
@@ -151,6 +163,13 @@ func _refresh_rounds() -> void:
 		return
 	_rounds.visible = counts_rounds
 	_rounds.text = "1 rodada" if rounds == 1 else "%d rodadas" % rounds
+
+
+func _refresh_watchers() -> void:
+	if _watchers == null:
+		return
+	_watchers.visible = watchers > 0
+	_watchers.text = "%d assistindo" % watchers
 
 
 func _refresh_code() -> void:

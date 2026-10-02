@@ -22,6 +22,9 @@ var taken := 1
 ## Apelido de quem abriu, já limpo pelo servidor. Vazio quando o relay é antigo
 ## ou quando quem abriu nunca escolheu um nome.
 var host_name := ""
+## Partida em andamento, da lista "Ao vivo": quantos já assistem. -1 é sala
+## esperando jogador, que é o cartão de sempre.
+var watchers := -1
 
 
 func _ready() -> void:
@@ -103,6 +106,9 @@ func _title() -> String:
 ## O que sai é o menos útil de cada caso. Na sala de dois é o código: ele está
 ## ali para ser digitado, e ninguém digita um código que já pode tocar.
 func _detail() -> String:
+	if watchers >= 0:
+		var who := host_name if not host_name.is_empty() else "código %s" % code
+		return "%s • %d assistindo" % [who, watchers] if watchers > 0 else "%s • ao vivo" % who
 	if seats > 2:
 		var table := "%d de %d jogadores" % [taken, seats]
 		if host_name.is_empty():

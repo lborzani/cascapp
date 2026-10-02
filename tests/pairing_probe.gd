@@ -569,6 +569,40 @@ func _probe_guest() -> void:
 	_equals(Net._expected_code, "AB12CD", "tocar na sala procura o código dela")
 	_equals(Game.game_id, Game.CHECKERS, "e leva o jogo da sala, não o que estava escolhido")
 
+	# Ao vivo: só os jogos que já têm tela de espectador, e o toque vai assistir.
+	Net.leave()
+	panel._joining = false
+	panel.show_live([
+		{"code": "LIVE01", "game": "chess", "tc": 0, "host": "Ana", "watchers": 2},
+		{"code": "LIVE02", "game": "ludo", "tc": 0, "watchers": 0},
+	])
+	var live := panel.get_node("%LiveRows").get_children()
+	_equals(live.size(), 1, "a lista ao vivo mostra só jogo que dá para assistir")
+	_check(panel.get_node("%LiveCaption").visible, "com o título da seção")
+	(live[0] as RoomCard).pressed.emit()
+	await get_tree().process_frame
+	_equals(Net._expected_code, "LIVE01", "tocar na partida ao vivo vai assistir")
+	_check(Net.is_spectator, "como espectador")
+	panel.show_live([])
+	_check(not panel.get_node("%LiveCaption").visible, "sem partida ao vivo a seção some")
+
+	# O mesmo código do campo, pelo botão Assistir.
+	Net.leave()
+	panel._joining = false
+	panel.get_node("%WatchButton").pressed.emit()
+	await get_tree().process_frame
+	_equals(Net._expected_code, "ZZZ999", "Assistir usa o código digitado")
+	_check(Net.is_spectator, "e entra como espectador")
+
+	# Jogo sem tela de espectador é recusado assim que o relay diz qual é.
+	panel._on_watching("ludo", 4)
+	await get_tree().process_frame
+	_check(
+		toast._message.contains("não está disponível"),
+		"assistir Ludo é recusado com o motivo (obtido: '%s')" % toast._message
+	)
+	_check(not Net.is_spectator, "e a sala é deixada")
+
 	# "Criar sala" mora aqui também: quem abriu o app para jogar com alguém já está
 	# nesta aba, e mandá-lo à coleção de jogos só para voltar é um desvio que não
 	# decide nada. A fileira abre a mesma folha do cardápio, já em Online.
