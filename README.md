@@ -1662,6 +1662,28 @@ oponente deixou. Não achou, é descartado com um aviso; acontece o tempo todo e
 não é erro, mas sem o aviso o jogador conclui que o toque dele se perdeu no
 caminho.
 
+#### Capturas que ainda não existem
+
+O plano é para a posição **depois** do lance do oponente, e três capturas só
+existem lá: a **recaptura** (a casa tem peça nossa agora, e é ela que o oponente
+vai comer), o **peão na diagonal vazia** (a peça do oponente ainda vai pousar ali)
+e a **peça cravada** (o lance dele pode desfazer a cravada). A lista legal de
+agora recusava as três, e a recaptura é o pré-movimento mais comum que existe.
+
+Os destinos saem de `ChessRules.premove_candidates`: as outras peças nossas
+viram inimigas (capturáveis), as diagonais vazias do peão ganham um alvo, e a
+legalidade não é conferida — ela é conferida na hora de jogar, como sempre. Com
+a peça erguida, o toque num destino arma o lance **mesmo com peça nossa ali**;
+só fora dos destinos o toque em peça nossa troca a peça erguida. É a ordem do
+chessground, e o rei erguido também aceita o toque na torre para rocar.
+
+O que continua bloqueando é a peça do oponente no caminho de quem desliza: o
+plano não atravessa uma peça que talvez saia.
+
+A espera pela animação do lance do oponente **não sai do relógio**: o tempo é
+devolvido antes de o lance sair, porque o pré-movimento existe para custar zero.
+E um link que cai nessa espera não apaga a corrente — ela sai quando ele volta.
+
 #### A corrente
 
 Dá para encadear **até quatro** lances. Cada elo é escolhido numa posição
@@ -1697,7 +1719,8 @@ deliberadamente não-latão — o latão quer dizer "é sua vez, aja aqui", e um
 é o contrário disso.
 
 Os destinos oferecidos ao escolher vêm de uma cópia do estado com a vez trocada e
-com os elos anteriores aplicados (`_premove_state`). É hipótese, não verdade, e é
+com os elos anteriores aplicados (`_premove_state`), passada a
+`premove_candidates`. É hipótese, não verdade, e é
 por isso que a revalidação existe; mas sem ela planejar seria adivinhar.
 
 Um detalhe que custou um bug: o direito de *en passant* **não** atravessa a troca

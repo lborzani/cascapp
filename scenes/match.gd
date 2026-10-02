@@ -354,14 +354,18 @@ func _castling_alias(square: int) -> int:
 	if Board.kind_of(piece) != Board.Kind.ROOK:
 		return Board.NO_SQUARE
 
-	var home := 0 if _state.side_to_move == Board.Side.WHITE else 56
 	for move in _moves_with_prefix(_selection):
-		if not move.tags.has("castle"):
-			continue
-		var rook_square: int = home + 7 if move.tags["castle"] == "king" else home
-		if rook_square == square:
+		if _castle_rook(move, _state.side_to_move) == square:
 			return move.to_square()
 	return Board.NO_SQUARE
+
+
+## A casa da torre que o roque move, ou nenhuma se o lance não é roque.
+static func _castle_rook(move: Move, side: int) -> int:
+	if not move.tags.has("castle"):
+		return Board.NO_SQUARE
+	var home := 0 if side == Board.Side.WHITE else 56
+	return home + 7 if move.tags["castle"] == "king" else home
 
 
 ## A tap that selects nothing used to be indistinguishable from a frozen board.
@@ -522,20 +526,34 @@ func _on_premove_tapped(square: int) -> void:
 			_premove = _premove.slice(0, _premove.size() - 2)
 		_refresh()
 		return
+	# O destino vem **antes** da troca de peça: na recaptura o destino é uma casa
+	# com peça nossa, e o toque nela tem de armar o lance, não erguer a outra
+	# peça. É a ordem do chessground, pelo mesmo motivo.
+	var target := _premove_castle_target(planned, square)
 	if square == _premove_pick:
+		_premove_pick = Board.NO_SQUARE
+	elif _premove_find(planned, _premove_pick, target, true) != null:
+		_premove.append(_premove_pick)
+		_premove.append(target)
 		_premove_pick = Board.NO_SQUARE
 	elif _premove_owns(planned, square):
 		_premove_pick = square
-	elif _premove_find(planned, _premove_pick, square) != null:
-		_premove.append(_premove_pick)
-		_premove.append(square)
-		_premove_pick = Board.NO_SQUARE
 	else:
 		# Destino que a hipótese não oferece: o elo não nasce. Sem isto, o toque
 		# armava um lance que a revalidação recusaria depois — e o jogador só
 		# descobriria na vez seguinte, quando o plano inteiro fosse descartado.
 		_premove_pick = Board.NO_SQUARE
 	_refresh()
+
+
+## Com o rei erguido, tocar na torre é rocar — como na vez de verdade
+## ([method _castling_alias]). Devolve a casa de destino do rei, ou a própria
+## casa tocada quando não há roque com aquela torre.
+func _premove_castle_target(state: MatchState, square: int) -> int:
+	for move in _premove_moves_in(state, _premove_pick):
+		if _castle_rook(move, Game.local_side) == square:
+			return move.to_square()
+	return square
 
 
 ## A peça é nossa **na hipótese**, que não é a posição de verdade: com elos já
@@ -575,7 +593,7 @@ func _premove_state() -> MatchState:
 	var hypothetical := _state.clone()
 	_premove_take_turn(hypothetical)
 	for index in range(0, _premove.size(), 2):
-		var link := _premove_find(hypothetical, _premove[index], _premove[index + 1])
+		var link := _premove_find(hypothetical, _premove[index], _premove[index + 1], true)
 		if link == null:
 			break
 		_ruleset.apply_move(hypothetical, link)
@@ -594,9 +612,14 @@ func _premove_take_turn(state: MatchState) -> void:
 ## Promoção planejada vira dama: é a escolha em quase toda partida, e a única que
 ## dá para assumir sem perguntar. Perguntar aqui pararia o lance justamente para
 ## gastar o tempo que o plano existia para economizar.
-func _premove_find(state: MatchState, from: int, to: int) -> Move:
+##
+## `planning` procura entre os lances **planejáveis** da hipótese
+## ([method ChessRules.premove_candidates]); sem ele, entre os legais — que é a
+## conferência da hora de jogar.
+func _premove_find(state: MatchState, from: int, to: int, planning := false) -> Move:
 	var fallback: Move = null
-	for move in _ruleset.generate_moves(state):
+	var moves := _premove_moves_in(state, from) if planning else _ruleset.generate_moves(state)
+	for move in moves:
 		if move.from_square() != from or move.to_square() != to:
 			continue
 		if move.promotion == Board.Kind.QUEEN:
@@ -610,11 +633,13 @@ func _premove_find(state: MatchState, from: int, to: int) -> Move:
 ## anteriores já aconteceram. Serve para o jogador ver para onde a peça pode ir;
 ## sem isso, planejar seria adivinhar.
 func _premove_moves(from: int) -> Array[Move]:
-	var found: Array[Move] = []
-	for move in _ruleset.generate_moves(_premove_state()):
-		if move.from_square() == from:
-			found.append(move)
-	return found
+	return _premove_moves_in(_premove_state(), from)
+
+
+func _premove_moves_in(state: MatchState, from: int) -> Array[Move]:
+	if from == Board.NO_SQUARE:
+		return []
+	return (_ruleset as ChessRules).premove_candidates(state, from)
 
 
 ## O primeiro elo sai assim que a vez chega — mas depois de o lance do oponente
@@ -634,6 +659,15 @@ func _run_premove() -> void:
 		await get_tree().create_timer(wait).timeout
 		if _state.ply != expected or _premove.size() < 2:
 			return
+		# A espera é para o jogador **ver** o lance do oponente, e não pode custar
+		# relógio: o premove existe para sair em tempo zero. Devolvido aqui, antes
+		# de `_play`, ele viaja certo no lance para o outro aparelho.
+		if Game.has_clock():
+			_clock[Game.local_side] = float(_clock[Game.local_side]) + wait
+	# Link caído na espera: a corrente fica. A vez continua nossa e o oponente não
+	# tem como jogar; quando o link volta, [method _on_link_restored] a solta.
+	if Game.mode == Game.Mode.ONLINE and not Net.connected and not _abandoned:
+		return
 	if not _is_local_turn() or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
 		_clear_premove()
 		_refresh()
@@ -856,6 +890,11 @@ func _on_link_restored() -> void:
 	_banner.show_message("Reconectado.", Banner.Kind.INFO)
 	Net.send_sync(_state.history, _clock_pair())
 	_refresh()
+	# Plano que esperava o link: a vez é nossa e nada mudou. Se mudou, o histórico
+	# do outro lado chega pelo resync e a reconstrução descarta a corrente. Na vez
+	# do oponente não há o que soltar — e `_run_premove` apagaria o plano.
+	if _is_local_turn():
+		_run_premove()
 
 
 ## Reconstrói do zero em vez de aplicar a diferença: replay é a mesma operação
