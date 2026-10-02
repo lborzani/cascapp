@@ -176,6 +176,7 @@ jobs:
           CHESS_RELAY_URL: ws://127.0.0.1:8080/ws
         run: |
           godot --headless --path . --script res://tests/relay_smoke.gd
+          godot --headless --path . --script res://tests/spectate_smoke.gd
           godot --headless --path . --script res://tests/table_smoke.gd
           godot --headless --path . --script res://tests/ludo_net_smoke.gd
           godot --headless --path . --script res://tests/ludo_bots_smoke.gd
