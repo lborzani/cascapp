@@ -52,6 +52,12 @@ signal peer_present(seat: int)
 signal peer_arrived(seat: int)
 signal peer_gone(seat: int)
 signal message_received(message: Dictionary, from_seat: int)
+## Entramos para **assistir**: a sala existe, mas não temos assento nela. Vem
+## também a cada reconexão do espectador.
+signal watching(game_id: String, capacity: int)
+## Quantos espectadores a sala tem agora. Chega aos **jogadores**: a cada entrada
+## ou saída de quem assiste, e no `joined` de quem volta de uma queda.
+signal watchers_changed(count: int)
 signal failed(reason: String)
 signal state_changed(state: State)
 
@@ -114,6 +120,7 @@ const ERROR_TEXT := {
 	"bad_code": "Código de sala inválido.",
 	"bad_seats": "Número de jogadores fora do que o servidor aceita.",
 	"not_in_room": "Erro de protocolo com o servidor.",
+	"watch_full": "Essa partida já tem espectadores demais.",
 }
 
 var url := DEFAULT_URL
@@ -122,7 +129,8 @@ var _socket: WebSocketPeer = null
 var _state := State.OFFLINE
 var _room := ""
 var _game := ""
-## "host" ou "join": reenviado a cada reconexão para reocupar o mesmo assento.
+## "host", "join" ou "watch": reenviado a cada reconexão para reocupar o mesmo
+## lugar — o assento, ou a vaga de espectador.
 var _role := ""
 var _listed := false
 ## Apelido de quem abriu, para a lista pública. O servidor limpa o que chega —
@@ -240,6 +248,12 @@ func join_room(code: String, key := "") -> void:
 	_key = key
 
 
+## Entra para assistir. Sem chave: espectador não tem assento a reocupar, e a
+## reconexão só pede de novo para assistir à mesma sala.
+func watch_room(code: String) -> void:
+	_start("watch", code, "")
+
+
 ## Endereço HTTP derivado do de WebSocket: os dois são o mesmo servidor, e ter
 ## duas configurações para um endereço só é uma para sair de sincronia.
 func rooms_url() -> String:
@@ -249,7 +263,17 @@ func rooms_url() -> String:
 	return base.trim_suffix("/ws") + "/rooms"
 
 
+## Partidas públicas em andamento, para quem quer assistir.
+func live_url() -> String:
+	return rooms_url().trim_suffix("/rooms") + "/live" if is_configured() else ""
+
+
+## Espectador não fala. O servidor já descarta o que ele mandar; recusar aqui
+## também garante que nem um bug da camada de cima ponha na rede um `sync` ou
+## um `bye` de quem só assiste.
 func send(message: Dictionary) -> void:
+	if _role == "watch":
+		return
 	if _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
 	_socket.send_text(JSON.stringify({"t": "msg", "d": message}))
@@ -455,6 +479,8 @@ func _send_hello() -> void:
 			"seats": _capacity,
 			"name": _host_name,
 		}))
+	elif _role == "watch":
+		_socket.send_text(JSON.stringify({"t": "watch", "room": _room}))
 	else:
 		# A chave só existe a partir da segunda entrada, e é ela que devolve o
 		# mesmo assento. Sem ela o servidor senta quem chega no primeiro livre —
@@ -476,11 +502,21 @@ func _handle(message: Dictionary) -> void:
 			_present = PackedInt32Array(message.get("present", []))
 			seated.emit(_seat, _capacity)
 			_sync_state()
+			watchers_changed.emit(int(message.get("watchers", 0)))
 			# Quem já estava sentado quando chegamos. Numa reconexão a lista vem
 			# igual à de antes e nada é anunciado duas vezes.
 			for seat_index in _present:
 				if seat_index != _seat and not before.has(seat_index):
 					peer_present.emit(seat_index)
+		"watching":
+			_retry_index = 0
+			_down_timer = 0.0
+			_capacity = int(message.get("seats", MIN_SEATS))
+			_present = PackedInt32Array(message.get("present", []))
+			_sync_state()
+			watching.emit(str(message.get("game", "")), _capacity)
+		"watchers":
+			watchers_changed.emit(int(message.get("n", 0)))
 		"peer":
 			var arriving := int(message.get("seat", -1))
 			if arriving >= 0 and not _present.has(arriving):

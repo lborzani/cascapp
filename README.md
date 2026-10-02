@@ -1322,6 +1322,32 @@ sabe um código, um jogo e um número de ritmo, e nada mais.
 abrir a tela e a cada 6 segundos: uma sala aberta é uma pessoa esperando, e a
 lista tem de acompanhar isso sem ninguém puxar para atualizar.
 
+### Assistir
+
+Xadrez e damas podem ser **assistidos**: pelo código (botão "Assistir", ao lado
+de "Entrar") ou pela seção **"Ao vivo"** da mesma tela, que lista as partidas
+públicas com a mesa cheia (`GET /live`, o avesso de `/rooms`). Uma sala
+privada continua só de quem tem o código.
+
+No relay o espectador é um papel à parte (`{"t":"watch"}`): não ocupa assento,
+não muda a lotação, não segura viva a sala que os jogadores deixaram, e são no
+máximo oito por sala. Ele recebe tudo o que os jogadores falam e **nada do que ele
+manda sai do servidor** — os clientes confiam no assento que o relay carimba em
+cada mensagem, e um `bye` ou um `sync` de quem só assiste encerraria ou
+reescreveria a partida dos outros. O `Net` e o `RelayBridge` recusam o envio
+também, para nem um bug da tela chegar à rede.
+
+Quem chega no meio recebe uma **foto da partida** (`watch_state`): a mesa, os
+nomes, o histórico de lances e qual assento joga de brancas. Quem manda é o
+jogador de menor assento presente — a mesma conta de quem recebe um jogador que
+volta —, sempre que o contador de espectadores muda com alguém assistindo. Uma
+foto repetida é descartada como um resync que não traz nada novo.
+
+Os jogadores veem **"N assistindo"** na barra da partida: ninguém é assistido sem
+saber. A tela de quem assiste é a mesma `match.gd`, com as brancas embaixo, sem
+toque, sem pré-movimento, com o resultado contado pelas cores, e seguindo a
+revanche dos jogadores com as cores trocadas.
+
 ### Os três canais do código
 
 O anfitrião publica o mesmo payload nos três, e o convidado usa o que tiver à
@@ -1456,6 +1482,11 @@ após partida, que é meia vantagem repetida para sempre.
 Dois toques quase simultâneos viram acordo em vez de dois pedidos empacados: se
 o convite do outro chega enquanto o nosso está pendente, isso *é* a concordância
 que o convite pedia.
+
+Por causa da troca, **o assento não diz a cor**. A conferência "este lance é de
+quem tem a vez" deriva a cor do assento a partir do nosso assento e da nossa cor
+atual (`_seat_of`); a conta fixa "quem abriu joga de brancas" recusava o
+primeiro lance de toda revanche.
 
 No mesmo aparelho a revanche é imediata — os dois jogadores estão ali, e pedir
 confirmação a quem está do outro lado da mesa seria perguntar duas vezes.
@@ -1631,6 +1662,28 @@ oponente deixou. Não achou, é descartado com um aviso; acontece o tempo todo e
 não é erro, mas sem o aviso o jogador conclui que o toque dele se perdeu no
 caminho.
 
+#### Capturas que ainda não existem
+
+O plano é para a posição **depois** do lance do oponente, e três capturas só
+existem lá: a **recaptura** (a casa tem peça nossa agora, e é ela que o oponente
+vai comer), o **peão na diagonal vazia** (a peça do oponente ainda vai pousar ali)
+e a **peça cravada** (o lance dele pode desfazer a cravada). A lista legal de
+agora recusava as três, e a recaptura é o pré-movimento mais comum que existe.
+
+Os destinos saem de `ChessRules.premove_candidates`: as outras peças nossas
+viram inimigas (capturáveis), as diagonais vazias do peão ganham um alvo, e a
+legalidade não é conferida — ela é conferida na hora de jogar, como sempre. Com
+a peça erguida, o toque num destino arma o lance **mesmo com peça nossa ali**;
+só fora dos destinos o toque em peça nossa troca a peça erguida. É a ordem do
+chessground, e o rei erguido também aceita o toque na torre para rocar.
+
+O que continua bloqueando é a peça do oponente no caminho de quem desliza: o
+plano não atravessa uma peça que talvez saia.
+
+A espera pela animação do lance do oponente **não sai do relógio**: o tempo é
+devolvido antes de o lance sair, porque o pré-movimento existe para custar zero.
+E um link que cai nessa espera não apaga a corrente — ela sai quando ele volta.
+
 #### A corrente
 
 Dá para encadear **até quatro** lances. Cada elo é escolhido numa posição
@@ -1666,7 +1719,8 @@ deliberadamente não-latão — o latão quer dizer "é sua vez, aja aqui", e um
 é o contrário disso.
 
 Os destinos oferecidos ao escolher vêm de uma cópia do estado com a vez trocada e
-com os elos anteriores aplicados (`_premove_state`). É hipótese, não verdade, e é
+com os elos anteriores aplicados (`_premove_state`), passada a
+`premove_candidates`. É hipótese, não verdade, e é
 por isso que a revalidação existe; mas sem ela planejar seria adivinhar.
 
 Um detalhe que custou um bug: o direito de *en passant* **não** atravessa a troca

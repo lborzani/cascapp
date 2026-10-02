@@ -107,6 +107,16 @@ signal fleet_received(cells: PackedInt32Array)
 ## lugar nenhum, então isto é fatal para a partida — e quem precisa saber é quem
 ## tentou abrir.
 signal relay_unavailable(reason: String)
+## Espectador: a mesa chegou e a partida pode ser aberta. O histórico vem pelo
+## `sync_received` — guardado até a cena chamar [method claim_sync], como o de
+## quem entra numa partida em curso.
+signal watch_started
+## Jogador: quantos assistem agora. Para o contador da barra.
+signal watchers_changed(count: int)
+## Jogador: alguém começou a assistir e **este** aparelho é quem descreve a
+## partida a ele. A cena responde com [method send_watch_state], porque é ela, e
+## não este arquivo, quem tem o histórico de lances.
+signal watcher_joined
 
 const HOST_SIDE := Board.Side.WHITE
 
@@ -164,6 +174,17 @@ var time_control := 0
 ## viajando inteira dentro dos lances.
 var option := 0
 
+## Este aparelho só assiste: não tem assento, não manda nada e não aparece para
+## os jogadores a não ser no contador.
+var is_spectator := false
+## Assento que joga de brancas, do ponto de vista do espectador. Jogador não
+## precisa dele: deriva do próprio assento e da própria cor (`match.gd`).
+var white_seat := 0
+## Quantos assistem à nossa partida. Só tem sentido para jogador.
+var watcher_count := 0
+## O espectador já recebeu a mesa ao menos uma vez nesta sala.
+var _watch_started := false
+
 ## Histórico que chegou antes de existir tela para recebê-lo. Ver o tratador de
 ## `sync` e [method claim_sync].
 var _pending_sync := {}
@@ -216,6 +237,10 @@ func leave() -> void:
 	_ready_seats = {}
 	player_names = {}
 	_pending_sync = {}
+	is_spectator = false
+	_watch_started = false
+	white_seat = 0
+	watcher_count = 0
 
 
 ## `clocks` é `[brancas, pretas]` em segundos, ou vazio sem relógio.
@@ -288,7 +313,12 @@ func _send(message: Dictionary) -> void:
 
 
 ## Usado também durante o aperto de mão, antes de `connected` valer.
+##
+## Espectador não fala: a cena é a mesma dos jogadores, e qualquer caminho dela
+## que mande algo (resync, revanche, bye) morre aqui.
 func _send_direct(message: Dictionary) -> void:
+	if is_spectator:
+		return
 	if _relay_bridge() != null:
 		_relay_bridge().send(message)
 
@@ -300,6 +330,8 @@ func _send_direct(message: Dictionary) -> void:
 ## modificado não consegue forjar. É por isso que ele viaja adiante em vez de
 ## ser descartado.
 func _handle_message(message: Dictionary, from_seat: int) -> void:
+	if is_spectator and _handle_as_spectator(message, from_seat):
+		return
 	match str(message.get("t", "")):
 		"welcome":
 			_on_welcome(message)
@@ -386,6 +418,62 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			rematch_declined.emit()
 		"bye":
 			_drop_seat(from_seat)
+
+
+## O que o espectador trata diferente dos jogadores. Devolve falso para o resto —
+## lance, histórico, revanche e `bye` —, que segue o caminho de sempre: a cena
+## do espectador é a mesma dos jogadores e recebe os mesmos sinais.
+func _handle_as_spectator(message: Dictionary, from_seat: int) -> bool:
+	match str(message.get("t", "")):
+		"welcome":
+			# A partida começou com o espectador já na sala: primeira partida,
+			# então quem abriu (assento 0) joga de brancas.
+			_begin_watch(message, 0, [], [])
+		"watch_state":
+			var history := _list(message.get("m"))
+			if history.size() > SYNC_LIMIT:
+				return true
+			_begin_watch(message, int(message.get("w", 0)), history, _list(message.get("c")))
+		"resume":
+			# Um jogador voltou. Para quem assiste só os nomes interessam; o resto do
+			# `resume` é convite a jogar, e espectador não joga.
+			_remember_names(message.get("names"))
+		"resumed":
+			_remember_name(from_seat, message.get("name"))
+			# Quem tinha caído voltou: o tabuleiro de quem assiste descongela.
+			if _watch_started and not connected:
+				connected = true
+				link_restored.emit()
+		_:
+			return false
+	return true
+
+
+## A mesa e o histórico, para quem assiste. Chega pelo `welcome` (partida que
+## começa com o espectador já na sala) ou pelo `watch_state` (partida em curso).
+## Um segundo `watch_state` — outro espectador entrou — vira um resync comum.
+func _begin_watch(message: Dictionary, white: int, history: Array, clocks: Array) -> void:
+	_adopt_table(message)
+	white_seat = white
+	_mark_connected()
+	if sync_received.get_connections().is_empty():
+		_pending_sync = {"m": history, "c": clocks}
+	else:
+		sync_received.emit(history, clocks)
+	if not _watch_started:
+		_watch_started = true
+		watch_started.emit()
+
+
+## A partida inteira para quem acabou de chegar para assistir. O relay entrega a
+## todos os espectadores; quem já estava em dia descarta como resync repetido.
+func send_watch_state(moves: Array, clocks: Array, white: int) -> void:
+	var state := _welcome()
+	state["t"] = "watch_state"
+	state["m"] = moves
+	state["c"] = clocks
+	state["w"] = white
+	_send(state)
 
 
 ## Uma lista vinda da rede, ou vazia.
@@ -744,6 +832,27 @@ func rooms_url() -> String:
 	return _relay_bridge().rooms_url() if _relay_bridge() != null else ""
 
 
+func live_url() -> String:
+	return _relay_bridge().live_url() if _relay_bridge() != null else ""
+
+
+## Entra para assistir. A tela de entrar espera o `watch_started`; recusa
+## (sala inexistente, espectadores demais) chega pelo `join_failed`.
+func watch_relay(code: String) -> void:
+	if not _wire_relay():
+		join_failed.emit("Servidor de partidas indisponível neste build.")
+		return
+	is_host = false
+	is_spectator = true
+	_watch_started = false
+	local_seat = -1
+	seats = 2
+	bot_seats = PackedInt32Array()
+	player_names = {}
+	_expected_code = code
+	_relay_bridge().watch_room(code)
+
+
 func join_relay(code: String, id: StringName, key := "") -> void:
 	if not _wire_relay():
 		join_failed.emit("Servidor de partidas indisponível neste build.")
@@ -786,7 +895,32 @@ func _wire_relay() -> bool:
 	_relay_bridge().message_received.connect(_handle_message)
 	_relay_bridge().failed.connect(_on_relay_failed)
 	_relay_bridge().state_changed.connect(_on_relay_state_changed)
+	_relay_bridge().watching.connect(_on_relay_watching)
+	_relay_bridge().watchers_changed.connect(_on_relay_watchers)
 	return true
+
+
+## O relay confirmou que assistimos. O jogo vem daqui; a mesa, do primeiro
+## `welcome` ou `watch_state`. Numa reconexão, é o aviso de que o link voltou —
+## o histórico atualizado chega logo atrás, porque a nossa volta muda o contador
+## e quem descreve a partida responde a ele.
+func _on_relay_watching(game: String, capacity: int) -> void:
+	game_id = StringName(game)
+	seats = capacity
+	if _watch_started and not connected:
+		connected = true
+		link_restored.emit()
+
+
+## O contador mudou. Com alguém assistindo, quem descreve a partida manda a foto
+## dela — a cada mudança, e não só quando aumenta: uma saída e uma entrada ao
+## mesmo tempo deixam o número igual, e o recém chegado ficaria sem partida.
+## Quem já estava em dia descarta a repetida.
+func _on_relay_watchers(count: int) -> void:
+	watcher_count = count
+	watchers_changed.emit(count)
+	if count > 0 and _session_started and not is_spectator and _greeter(-1) == local_seat:
+		watcher_joined.emit()
 
 
 ## Nosso lugar, confirmado pelo servidor — inclusive depois de uma reconexão,

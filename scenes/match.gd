@@ -92,7 +92,11 @@ func _ready() -> void:
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	_ruleset = Game.make_ruleset()
 	if Game.mode == Game.Mode.ONLINE:
-		Game.local_side = Net.local_side
+		# Quem assiste não tem cor: vê as brancas embaixo, como num tabuleiro de
+		# transmissão, e os dois cartões com o nome de quem joga.
+		Game.local_side = Board.Side.WHITE if Net.is_spectator else Net.local_side
+		Net.watcher_joined.connect(_send_watch_state)
+		Net.watchers_changed.connect(func(count: int) -> void: _match_status.watchers = count)
 		Net.move_received.connect(_on_remote_move)
 		Net.opponent_left.connect(_on_opponent_left)
 		Net.rematch_requested.connect(_on_rematch_requested)
@@ -136,6 +140,7 @@ func _ready() -> void:
 	Game.begin_match()
 	%Bar.bind()
 	_match_status = %Bar.status
+	_match_status.watchers = Net.watcher_count if Game.mode == Game.Mode.ONLINE else 0
 
 	_new_game()
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
@@ -240,7 +245,7 @@ func _flag(side: int) -> void:
 	var winner := Board.opponent(side)
 	var title := "Tempo esgotado"
 	var detail := "%s ficaram sem tempo." % ("Brancas" if side == Board.Side.WHITE else "Pretas")
-	if Game.mode != Game.Mode.HOTSEAT:
+	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		detail = "Você perdeu no tempo." if side == Game.local_side else "O oponente perdeu no tempo."
 	if _ruleset is ChessRules and not (_ruleset as ChessRules).has_mating_material(_state, winner):
 		title = "Empate"
@@ -264,6 +269,10 @@ func _clock_text(side: int) -> String:
 
 
 func _on_square_tapped(square: int) -> void:
+	# Quem assiste olha. Sem esta linha o toque selecionaria peça — e, com a cor
+	# de mentira que o espectador recebe, até jogaria um lance só no aparelho dele.
+	if Net.is_spectator:
+		return
 	if _abandoned or _flagged >= 0 or _outcome != Ruleset.Outcome.ONGOING:
 		return
 	if %PromotionLayer.visible:
@@ -345,14 +354,18 @@ func _castling_alias(square: int) -> int:
 	if Board.kind_of(piece) != Board.Kind.ROOK:
 		return Board.NO_SQUARE
 
-	var home := 0 if _state.side_to_move == Board.Side.WHITE else 56
 	for move in _moves_with_prefix(_selection):
-		if not move.tags.has("castle"):
-			continue
-		var rook_square: int = home + 7 if move.tags["castle"] == "king" else home
-		if rook_square == square:
+		if _castle_rook(move, _state.side_to_move) == square:
 			return move.to_square()
 	return Board.NO_SQUARE
+
+
+## A casa da torre que o roque move, ou nenhuma se o lance não é roque.
+static func _castle_rook(move: Move, side: int) -> int:
+	if not move.tags.has("castle"):
+		return Board.NO_SQUARE
+	var home := 0 if side == Board.Side.WHITE else 56
+	return home + 7 if move.tags["castle"] == "king" else home
 
 
 ## A tap that selects nothing used to be indistinguishable from a frozen board.
@@ -513,20 +526,34 @@ func _on_premove_tapped(square: int) -> void:
 			_premove = _premove.slice(0, _premove.size() - 2)
 		_refresh()
 		return
+	# O destino vem **antes** da troca de peça: na recaptura o destino é uma casa
+	# com peça nossa, e o toque nela tem de armar o lance, não erguer a outra
+	# peça. É a ordem do chessground, pelo mesmo motivo.
+	var target := _premove_castle_target(planned, square)
 	if square == _premove_pick:
+		_premove_pick = Board.NO_SQUARE
+	elif _premove_find(planned, _premove_pick, target, true) != null:
+		_premove.append(_premove_pick)
+		_premove.append(target)
 		_premove_pick = Board.NO_SQUARE
 	elif _premove_owns(planned, square):
 		_premove_pick = square
-	elif _premove_find(planned, _premove_pick, square) != null:
-		_premove.append(_premove_pick)
-		_premove.append(square)
-		_premove_pick = Board.NO_SQUARE
 	else:
 		# Destino que a hipótese não oferece: o elo não nasce. Sem isto, o toque
 		# armava um lance que a revalidação recusaria depois — e o jogador só
 		# descobriria na vez seguinte, quando o plano inteiro fosse descartado.
 		_premove_pick = Board.NO_SQUARE
 	_refresh()
+
+
+## Com o rei erguido, tocar na torre é rocar — como na vez de verdade
+## ([method _castling_alias]). Devolve a casa de destino do rei, ou a própria
+## casa tocada quando não há roque com aquela torre.
+func _premove_castle_target(state: MatchState, square: int) -> int:
+	for move in _premove_moves_in(state, _premove_pick):
+		if _castle_rook(move, Game.local_side) == square:
+			return move.to_square()
+	return square
 
 
 ## A peça é nossa **na hipótese**, que não é a posição de verdade: com elos já
@@ -566,7 +593,7 @@ func _premove_state() -> MatchState:
 	var hypothetical := _state.clone()
 	_premove_take_turn(hypothetical)
 	for index in range(0, _premove.size(), 2):
-		var link := _premove_find(hypothetical, _premove[index], _premove[index + 1])
+		var link := _premove_find(hypothetical, _premove[index], _premove[index + 1], true)
 		if link == null:
 			break
 		_ruleset.apply_move(hypothetical, link)
@@ -585,9 +612,14 @@ func _premove_take_turn(state: MatchState) -> void:
 ## Promoção planejada vira dama: é a escolha em quase toda partida, e a única que
 ## dá para assumir sem perguntar. Perguntar aqui pararia o lance justamente para
 ## gastar o tempo que o plano existia para economizar.
-func _premove_find(state: MatchState, from: int, to: int) -> Move:
+##
+## `planning` procura entre os lances **planejáveis** da hipótese
+## ([method ChessRules.premove_candidates]); sem ele, entre os legais — que é a
+## conferência da hora de jogar.
+func _premove_find(state: MatchState, from: int, to: int, planning := false) -> Move:
 	var fallback: Move = null
-	for move in _ruleset.generate_moves(state):
+	var moves := _premove_moves_in(state, from) if planning else _ruleset.generate_moves(state)
+	for move in moves:
 		if move.from_square() != from or move.to_square() != to:
 			continue
 		if move.promotion == Board.Kind.QUEEN:
@@ -601,11 +633,13 @@ func _premove_find(state: MatchState, from: int, to: int) -> Move:
 ## anteriores já aconteceram. Serve para o jogador ver para onde a peça pode ir;
 ## sem isso, planejar seria adivinhar.
 func _premove_moves(from: int) -> Array[Move]:
-	var found: Array[Move] = []
-	for move in _ruleset.generate_moves(_premove_state()):
-		if move.from_square() == from:
-			found.append(move)
-	return found
+	return _premove_moves_in(_premove_state(), from)
+
+
+func _premove_moves_in(state: MatchState, from: int) -> Array[Move]:
+	if from == Board.NO_SQUARE:
+		return []
+	return (_ruleset as ChessRules).premove_candidates(state, from)
 
 
 ## O primeiro elo sai assim que a vez chega — mas depois de o lance do oponente
@@ -625,6 +659,15 @@ func _run_premove() -> void:
 		await get_tree().create_timer(wait).timeout
 		if _state.ply != expected or _premove.size() < 2:
 			return
+		# A espera é para o jogador **ver** o lance do oponente, e não pode custar
+		# relógio: o premove existe para sair em tempo zero. Devolvido aqui, antes
+		# de `_play`, ele viaja certo no lance para o outro aparelho.
+		if Game.has_clock():
+			_clock[Game.local_side] = float(_clock[Game.local_side]) + wait
+	# Link caído na espera: a corrente fica. A vez continua nossa e o oponente não
+	# tem como jogar; quando o link volta, [method _on_link_restored] a solta.
+	if Game.mode == Game.Mode.ONLINE and not Net.connected and not _abandoned:
+		return
 	if not _is_local_turn() or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
 		_clear_premove()
 		_refresh()
@@ -731,6 +774,8 @@ func _show_result() -> void:
 func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
 	%ResultDetail.text = detail
+	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
+	allow_rematch = allow_rematch and not Net.is_spectator
 	%RematchButton.visible = allow_rematch
 	# Só quando o painel **abre**. Ele é reaberto por convite de revanche e por
 	# oponente que saiu, e tocar a fanfarra de novo em cada um faria a partida
@@ -758,7 +803,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 func _result_detail() -> String:
 	if _outcome == Ruleset.Outcome.DRAW:
 		return "Empate em %d lances." % _state.ply
-	if Game.mode != Game.Mode.HOTSEAT:
+	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		var won := (_outcome == Ruleset.Outcome.WHITE_WINS) == (Game.local_side == Board.Side.WHITE)
 		return "Você venceu em %d lances." % _state.ply if won else "Você perdeu em %d lances." % _state.ply
 	# Em 'xadrez' a única forma de terminar com o lado a jogar em xeque é o mate.
@@ -805,11 +850,22 @@ func _on_remote_move(data: Dictionary) -> void:
 	push_error("Rejected illegal remote move: %s" % incoming)
 
 
-## Assento de uma cor, numa sala de dois. O assento 0 é de quem abriu, e quem
-## abre joga de `Net.HOST_SIDE` — a conta mora aqui e não em `net_link.gd`
-## porque cor é conceito de jogo de dois, e aquele arquivo serve mesas de seis.
-static func _seat_of(side: int) -> int:
-	return 0 if side == Net.HOST_SIDE else 1
+## Assento de uma cor, numa sala de dois. A conta mora aqui e não em
+## `net_link.gd` porque cor é conceito de jogo de dois, e aquele arquivo serve
+## mesas de seis.
+##
+## Sai do **nosso** assento e da **nossa** cor, e não de "quem abriu joga de
+## brancas". Essa regra vale só na primeira partida: a revanche troca as cores,
+## e com a conta fixa o primeiro lance de brancas da revanche — vindo do assento
+## 1 — era recusado como "não é a vez dele", e o cartão mostrava o próprio nome
+## no lugar do oponente.
+##
+## Quem assiste não tem assento nem cor: ouve do relay qual assento joga de
+## brancas e troca junto com a revanche.
+func _seat_of(side: int) -> int:
+	if Net.is_spectator:
+		return Net.white_seat if side == Board.Side.WHITE else 1 - Net.white_seat
+	return Net.local_seat if side == Game.local_side else 1 - Net.local_seat
 
 
 ## O transporte caiu mas a sessão ainda pode voltar. `Net.connected` já é falso,
@@ -834,13 +890,20 @@ func _on_link_restored() -> void:
 	_banner.show_message("Reconectado.", Banner.Kind.INFO)
 	Net.send_sync(_state.history, _clock_pair())
 	_refresh()
+	# Plano que esperava o link: a vez é nossa e nada mudou. Se mudou, o histórico
+	# do outro lado chega pelo resync e a reconstrução descarta a corrente. Na vez
+	# do oponente não há o que soltar — e `_run_premove` apagaria o plano.
+	if _is_local_turn():
+		_run_premove()
 
 
 ## Reconstrói do zero em vez de aplicar a diferença: replay é a mesma operação
 ## que o jogo já faz a cada lance, e recomeçar do estado inicial não depende de
 ## a posição local estar correta — que é justamente o que está em dúvida aqui.
 func _apply_sync(moves: Array, clocks: Array = []) -> void:
-	if moves.size() < _state.history.size():
+	# Para quem assiste, quem manda é o histórico que chega, mesmo mais curto: é a
+	# revanche que ele não viu acontecer (caiu bem na hora), e não um jogador atrás.
+	if moves.size() < _state.history.size() and not Net.is_spectator:
 		# O outro lado está atrás. Um histórico mais curto é o pedido.
 		Net.send_sync(_state.history, _clock_pair())
 		return
@@ -895,10 +958,16 @@ func _on_opponent_left() -> void:
 	_abandoned = true
 	_board.cancel_animation()
 	_show_overlay(
-		"O oponente saiu",
+		"Um jogador saiu" if Net.is_spectator else "O oponente saiu",
 		"A partida foi encerrada no lance %d." % _state.ply,
 		false
 	)
+
+
+## Quem acabou de chegar para assistir recebe a partida inteira. O `Net` escolhe
+## qual aparelho responde; o histórico mora aqui.
+func _send_watch_state() -> void:
+	Net.send_watch_state(_state.history, _clock_pair(), _seat_of(Board.Side.WHITE))
 
 
 # --- revanche ----------------------------------------------------------------
@@ -925,6 +994,8 @@ func _request_rematch() -> void:
 
 
 func _on_rematch_requested() -> void:
+	if Net.is_spectator:
+		return
 	# Pedidos cruzados: já tínhamos pedido, e agora sabemos que ele também quer.
 	if _rematch == Rematch.ASKED:
 		_accept_rematch()
@@ -945,12 +1016,32 @@ func _decline_rematch() -> void:
 
 
 func _on_rematch_accepted() -> void:
+	if Net.is_spectator:
+		_follow_rematch()
+		return
 	if _rematch != Rematch.ASKED:
 		return
 	_start_rematch()
 
 
+## Os jogadores combinaram revanche: quem assiste vai junto, com as cores
+## trocadas como as deles.
+##
+## Só com a partida encerrada. Num pedido cruzado os **dois** mandam o aceite, e o
+## segundo chega com a revanche já começada — sem esta guarda o espectador
+## trocaria as cores duas vezes e veria os nomes do lado errado.
+func _follow_rematch() -> void:
+	if _outcome == Ruleset.Outcome.ONGOING and _flagged < 0 and not _abandoned:
+		return
+	Net.white_seat = 1 - Net.white_seat
+	Game.restart_match()
+	_match_status.started_at = Game.match_started_at
+	_new_game()
+
+
 func _on_rematch_declined() -> void:
+	if Net.is_spectator:
+		return
 	_rematch = Rematch.IDLE
 	_refresh_rematch()
 	_banner.show_message("O oponente não quis revanche.", Banner.Kind.ALERT)
@@ -1030,6 +1121,8 @@ func _is_local_turn() -> bool:
 		return true
 	if Game.mode == Game.Mode.SOLO:
 		return not Game.bot_turn(_state.side_to_move)
+	if Net.is_spectator:
+		return false
 	return Net.connected and _state.side_to_move == Game.local_side
 
 
@@ -1141,6 +1234,10 @@ func _refresh_cards() -> void:
 			# cor já é o nome do jogador.
 			view.title = side_names[card_side]
 			view.subtitle = ""
+		elif Net.is_spectator:
+			var seated := Net.name_of(_seat_of(card_side))
+			view.title = seated if not seated.is_empty() else side_names[card_side]
+			view.subtitle = side_names[card_side]
 		else:
 			var them := "Bot (%s)" % Bot.level_label(Game.bot_level) \
 				if Game.mode == Game.Mode.SOLO else _opponent_name()
@@ -1183,7 +1280,7 @@ func _refresh_banner() -> void:
 
 
 func _check_message() -> String:
-	if Game.mode == Game.Mode.HOTSEAT:
+	if Game.mode == Game.Mode.HOTSEAT or Net.is_spectator:
 		return "Xeque nas brancas!" if _state.side_to_move == Board.Side.WHITE else "Xeque nas pretas!"
 	return "Você está em xeque!" if _is_local_turn() else "Xeque no oponente!"
 

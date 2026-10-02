@@ -29,8 +29,10 @@ func _ready() -> void:
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
 	await _test_rematch()
+	await _test_spectator()
 	await _test_premove()
 	await _test_premove_limit()
+	await _test_premove_captures()
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
@@ -469,6 +471,19 @@ func _test_rematch() -> void:
 	_equals(Game.local_side, Board.Side.BLACK, "quem era brancas joga de pretas")
 	_equals(scene._board.flipped, true, "e o tabuleiro vira junto")
 
+	# Na revanche quem abriu (assento 0) joga de pretas, e o primeiro lance de
+	# brancas vem do assento 1. Com a conta fixa "assento 0 é brancas" ele era
+	# recusado como "não é a vez dele", e a revanche travava no primeiro lance.
+	Net.local_seat = 0
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	_equals(scene._opponent_name(), "Bia", "o cartão do oponente segue o assento dele")
+	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
+	scene._on_remote_move(e4.merged({"seat": 0}))
+	_equals(scene._state.ply, 0, "lance de brancas vindo do nosso assento é recusado")
+	scene._on_remote_move(e4.merged({"seat": 1}))
+	_equals(scene._state.ply, 1, "e o do assento que joga de brancas entra")
+	Net.player_names = {}
+
 	# Ele pede: a resposta é nossa, e recusar não recomeça nada.
 	scene._show_overlay("Fim", "", true)
 	scene._on_rematch_requested()
@@ -487,6 +502,73 @@ func _test_rematch() -> void:
 
 	scene.queue_free()
 	await get_tree().process_frame
+	Game.mode = Game.Mode.HOTSEAT
+
+
+## Quem assiste: o tabuleiro não responde ao toque, os cartões têm o nome de
+## quem joga, e a revanche dos jogadores é seguida com as cores trocadas — uma
+## vez só, mesmo quando os dois mandam o aceite.
+func _test_spectator() -> void:
+	print("espectador")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = true
+	Net.connected = true
+	Net.white_seat = 1
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	_equals(scene._board.flipped, false, "brancas embaixo")
+	scene._on_square_tapped(_square("e2"))
+	_check(
+		scene._selection.is_empty() and scene._premove_pick == Board.NO_SQUARE,
+		"o toque não seleciona nem planeja nada"
+	)
+	_equals(_node(scene, "%BottomTag").title, "Bia", "o cartão de baixo é de quem joga de brancas")
+	_equals(_node(scene, "%TopTag").title, "Ana", "e o de cima, de quem joga de pretas")
+
+	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
+	scene._on_remote_move(e4.merged({"seat": 0}))
+	_equals(scene._state.ply, 0, "lance de brancas vindo de quem joga de pretas é recusado")
+	scene._on_remote_move(e4.merged({"seat": 1}))
+	_equals(scene._state.ply, 1, "e o de quem joga de brancas entra")
+
+	scene._on_rematch_accepted()
+	_equals(scene._state.ply, 1, "aceite de revanche com a partida em curso é ignorado")
+
+	scene._flag(Board.Side.BLACK)
+	_check(not _node(scene, "%RematchButton").visible, "sem botão de revanche para quem assiste")
+	_check(
+		_node(scene, "%ResultDetail").text.begins_with("Pretas"),
+		"o resultado é contado pelas cores, e não por 'você'"
+	)
+	scene._on_rematch_accepted()
+	_equals(Net.white_seat, 0, "a revanche dos jogadores troca as cores de quem assiste")
+	_equals(scene._state.ply, 0, "e começa a partida nova")
+	_equals(_node(scene, "%BottomTag").title, "Ana", "com os nomes no lado certo")
+	scene._on_rematch_accepted()
+	_equals(Net.white_seat, 0, "o segundo aceite de um pedido cruzado não troca de novo")
+
+	# A revanche que ele não viu (caiu bem na hora): o histórico mais curto manda.
+	scene._apply_sync([{"p": [12, 28], "pr": 0}, {"p": [52, 36], "pr": 0}])
+	_equals(scene._state.ply, 2, "o histórico de quem joga é adotado")
+	scene._apply_sync([])
+	_equals(scene._state.ply, 0, "mesmo quando é mais curto que o de quem assiste")
+
+	# O contador da barra, que é o que os jogadores veem.
+	Net.watchers_changed.emit(2)
+	var caption: Label = scene._match_status._watchers
+	_check(caption.visible and caption.text == "2 assistindo", "a barra conta quem assiste")
+	Net.watchers_changed.emit(0)
+	_check(not caption.visible, "e some quando ninguém assiste")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Net.white_seat = 0
+	Net.player_names = {}
 	Game.mode = Game.Mode.HOTSEAT
 
 
@@ -519,18 +601,18 @@ func _test_premove() -> void:
 	#
 	# O plano é montado numa cópia do estado com a vez trocada, e o `ep` que está
 	# escrito ali veio do lance anterior — que é nosso, porque agora é a vez do
-	# outro. Com a vez trocada e o campo intacto, o peão de d2 ganhava uma
-	# diagonal grátis para e3: um destino que a revalidação depois recusa, e que o
-	# jogador não tem como entender ter sido oferecido.
-	# As duas listas, e a segunda é a que importa: o lance fantasma carrega uma
-	# casa em `captured`, então ele entrava em `capture_targets` e a tela marcava
-	# e3 como **captura** — uma peça inimiga que não existe, na casa por onde o
-	# nosso próprio peão acabou de passar.
+	# outro. Com o campo intacto, o peão de d2 ganhava um lance *en passant* para
+	# e3 que come o **nosso** peão de e4.
+	#
+	# A diagonal e3 continua oferecida, e com razão: é a captura antecipada, para
+	# o caso de uma peça do oponente pousar lá. O que não pode é ela ser o *en
+	# passant* fantasma.
+	var planned: Array = scene._premove_moves(_square("d2"))
 	_check(
-		not scene._board.targets.has(_square("e3"))
-		and not scene._board.capture_targets.has(_square("e3")),
-		"e sem a diagonal fantasma do nosso próprio avanço duplo"
+		planned.all(func(move: Move) -> bool: return not move.tags.has("en_passant")),
+		"e sem o en passant fantasma do nosso próprio avanço duplo"
 	)
+	_check(scene._board.capture_targets.has(_square("e3")), "a diagonal vazia vira captura antecipada")
 
 	scene._on_square_tapped(_square("d4"))
 	_equals(scene._premove_pick, Board.NO_SQUARE, "escolhido o destino, a peça baixa")
@@ -614,6 +696,124 @@ func _test_premove() -> void:
 	Net.connected = false
 	Game.mode = Game.Mode.HOTSEAT
 	Game.game_id = Game.CHESS
+
+
+## Capturas que só existem **depois** do lance do oponente: recaptura numa casa
+## que hoje tem peça nossa, peão para a diagonal vazia, peça cravada. A lista
+## legal de agora recusava as três; o plano é para a posição que vem.
+func _test_premove_captures() -> void:
+	print("capturas planejadas")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	Net.connected = true
+	# Com relógio, para conferir que a espera da animação não sai do nosso tempo.
+	var time_control := Game.time_control
+	Game.time_control = 3
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var W := Board.Side.WHITE
+	var B := Board.Side.BLACK
+	var K := Board.Kind
+
+	# Recaptura: o peão de c4 planeja d5, onde hoje está o nosso cavalo.
+	var recapture := [
+		["g1", W, K.KING], ["d5", W, K.KNIGHT], ["c4", W, K.PAWN],
+		["e8", B, K.KING], ["e6", B, K.PAWN], ["a7", B, K.PAWN],
+	]
+	_premove_position(scene, recapture)
+	scene._on_square_tapped(_square("c4"))
+	_check(scene._board.capture_targets.has(_square("d5")), "a casa do nosso cavalo é destino de recaptura")
+	scene._on_square_tapped(_square("d5"))
+	_equals(scene._premove, PackedInt32Array([_square("c4"), _square("d5")]), "e o toque nela arma o lance, sem erguer o cavalo")
+	var clock_before: float = scene._clock[W]
+	scene._on_remote_move({"p": [_square("e6"), _square("d5")], "pr": 0, "n": 0, "seat": 1})
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(scene._state.ply, 2, "o oponente come em d5 e a recaptura sai")
+	_equals(scene._state.squares[_square("d5")], Board.piece(W, K.PAWN), "com o peão em d5")
+	_check(
+		absf(float(scene._clock[W]) - clock_before) < 0.05,
+		"sem gastar relógio na espera (antes %.2f, depois %.2f)" % [clock_before, scene._clock[W]]
+	)
+
+	# A mesma recaptura, mas o oponente joga outra coisa: o plano cai, com aviso.
+	_premove_position(scene, recapture)
+	scene._on_square_tapped(_square("c4"))
+	scene._on_square_tapped(_square("d5"))
+	scene._on_remote_move({"p": [_square("a7"), _square("a6")], "pr": 0, "n": 0, "seat": 1})
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(scene._state.ply, 1, "sem captura em d5 a recaptura não sai")
+	_check(scene._premove.is_empty(), "e o plano é descartado")
+
+	# Peão para a diagonal vazia: a peça do oponente ainda vai chegar lá.
+	_premove_position(scene, [
+		["g1", W, K.KING], ["e4", W, K.PAWN], ["e8", B, K.KING], ["f6", B, K.KNIGHT],
+	])
+	scene._on_square_tapped(_square("e4"))
+	_check(scene._board.capture_targets.has(_square("d5")), "o peão oferece a diagonal vazia")
+	scene._on_square_tapped(_square("d5"))
+	scene._on_remote_move({"p": [_square("f6"), _square("d5")], "pr": 0, "n": 0, "seat": 1})
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(scene._state.ply, 2, "o cavalo chega em d5 e o peão captura")
+	_equals(scene._state.squares[_square("d5")], Board.piece(W, K.PAWN), "com o peão no lugar do cavalo")
+
+	# Peça cravada: o lance do oponente pode desfazer a cravada.
+	_premove_position(scene, [
+		["e1", W, K.KING], ["d2", W, K.KNIGHT],
+		["a8", B, K.KING], ["b4", B, K.BISHOP], ["f3", B, K.PAWN],
+	])
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("f3"))
+	_equals(scene._premove.size(), 2, "o cavalo cravado planeja a captura")
+	# Casa fora do desenho da peça continua recusada.
+	scene._clear_premove()
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("d3"))
+	_check(scene._premove.is_empty(), "cavalo não planeja casa vizinha")
+
+	# Roque pelo toque na torre, como na vez de verdade.
+	_premove_position(scene, [
+		["e1", W, K.KING], ["h1", W, K.ROOK], ["e8", B, K.KING], ["a7", B, K.PAWN],
+	], ChessRules.CASTLE_WK)
+	scene._on_square_tapped(_square("e1"))
+	scene._on_square_tapped(_square("h1"))
+	_equals(scene._premove, PackedInt32Array([_square("e1"), _square("g1")]), "tocar na torre planeja o roque")
+
+	# Link que cai na espera da animação não leva a corrente embora.
+	_premove_position(scene, recapture)
+	scene._on_square_tapped(_square("c4"))
+	scene._on_square_tapped(_square("d5"))
+	scene._on_remote_move({"p": [_square("e6"), _square("d5")], "pr": 0, "n": 0, "seat": 1})
+	Net.connected = false
+	await get_tree().create_timer(scene._board.remaining_animation() + 0.2).timeout
+	_equals(scene._premove.size(), 2, "o plano espera o link voltar")
+	Net.connected = true
+	scene._on_link_restored()
+	await get_tree().process_frame
+	_equals(scene._state.ply, 2, "e sai quando ele volta")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Game.time_control = time_control
+	Net.connected = false
+	Game.mode = Game.Mode.HOTSEAT
+
+
+func _premove_position(scene: Node, pieces: Array, castle := 0) -> void:
+	var state: MatchState = scene._state
+	state.squares = Board.empty_squares()
+	for entry in pieces:
+		_put(state, entry[0], entry[1], entry[2])
+	state.side_to_move = Board.Side.BLACK
+	state.meta = {"castle": castle, "ep": Board.NO_SQUARE, "halfmove": 0}
+	state.history.clear()
+	state.ply = 0
+	scene._clear_premove()
+	scene._board.cancel_animation()
+	scene._recompute()
 
 
 ## A corrente: mais de um lance planejado, saindo um por vez.
