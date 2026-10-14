@@ -36,10 +36,14 @@ const MATE := 1_000_000.0
 ## deixa uma peça de graça, e para quem está aprendendo isso já é um muro. O
 ## deslize dá o erro humano que a busca não comete sozinha — e é um lance da
 ## lista ordenada, não um lance aleatório, então nunca vira palhaçada.
+##
+## `elo` é a força do Stockfish no xadrez (`UCI_Elo`, piso 1320). O resto dos
+## campos é da busca própria, que continua jogando damas — e xadrez quando o
+## Stockfish não existe no aparelho.
 const LEVELS := [
-	{"label": "Fácil", "depth": 2, "ms": 250, "slip": 0.5, "spread": 4},
-	{"label": "Médio", "depth": 4, "ms": 900, "slip": 0.15, "spread": 2},
-	{"label": "Difícil", "depth": 6, "ms": 2500, "slip": 0.0, "spread": 0},
+	{"label": "Fácil", "depth": 2, "ms": 250, "slip": 0.5, "spread": 4, "elo": 1320},
+	{"label": "Médio", "depth": 4, "ms": 900, "slip": 0.15, "spread": 2, "elo": 1700},
+	{"label": "Difícil", "depth": 6, "ms": 2500, "slip": 0.0, "spread": 0, "elo": 2200},
 ]
 
 ## Nós entre duas consultas ao relógio. Perguntar as horas a cada nó custaria uma
@@ -75,6 +79,11 @@ var _deadline := 0
 var _ticks := 0
 var _expired := false
 var _abandoned := false
+## O processo do Stockfish vive a partida inteira — subir 100 MB de binário a
+## cada lance seria pagar a largada toda vez. Só a thread do bot fala com ele.
+var _engine: Stockfish = null
+var _engine_failed := false
+var _engine_elo := -1
 
 
 static func level_label(index: int) -> String:
@@ -131,9 +140,57 @@ func take_move() -> Move:
 func abandon() -> void:
 	_abandoned = true
 	if _thread != null:
+		# ponytail: com o Stockfish a espera vai até o fim do `movetime` (no máximo
+		# 2,5 s); mandar `stop` exigiria escrever no cano de outra thread.
 		_thread.wait_to_finish()
 		_thread = null
 	_found = null
+	_quit_engine()
+
+
+## Um processo do Stockfish sem dono continuaria rodando com o app fechado à
+## força. A cena chama `abandon()`, mas o bot também pode morrer sem ela.
+func _notification(what: int) -> void:
+	# Direto no campo: no PREDELETE o `self` já não aceita chamada de método.
+	if what == NOTIFICATION_PREDELETE and _engine != null:
+		_engine.quit()
+
+
+func _quit_engine() -> void:
+	if _engine != null:
+		_engine.quit()
+		_engine = null
+	_engine_elo = -1
+
+
+# --- Stockfish ---------------------------------------------------------------
+
+
+## O lance do Stockfish, ou `null` para a busca própria assumir. Uma falha na
+## largada (aparelho sem o binário, Android antigo) desliga o motor para o resto
+## da partida em vez de tentar subir de novo a cada lance.
+func _ask_engine(state: MatchState, settings: Dictionary) -> Move:
+	if _engine_failed:
+		return null
+	if _engine == null:
+		_engine = Stockfish.new()
+		if not _engine.start():
+			_engine = null
+			_engine_failed = true
+			print("stockfish indisponível — xadrez na busca própria")
+			return null
+		print("stockfish ok")
+	var elo := int(settings["elo"])
+	if elo != _engine_elo:
+		_engine.set_strength(elo)
+		_engine_elo = elo
+	var rules := ChessRules.new()
+	var seen := _engine.search(rules.fen(state), int(settings["ms"]))
+	if seen.is_empty():
+		_engine = null
+		_engine_failed = true
+		return null
+	return rules.move_from_uci(state, str(seen.get("best", "")))
 
 
 # --- busca -------------------------------------------------------------------
@@ -147,6 +204,10 @@ func abandon() -> void:
 ## Também é o que torna o orçamento de nós utilizável: estourar no meio de uma
 ## rodada não deixa o bot sem resposta, deixa com a resposta da rodada anterior.
 func _decide(game_id: StringName, state: MatchState, settings: Dictionary) -> Move:
+	if game_id == &"chess":
+		var engine_move := _ask_engine(state, settings)
+		if engine_move != null:
+			return engine_move
 	_ruleset = _make_ruleset(game_id)
 	_deadline = Time.get_ticks_msec() + int(settings["ms"])
 	_ticks = 0

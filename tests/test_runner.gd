@@ -267,6 +267,7 @@ func _test_bot_starved() -> void:
 	)
 
 	var bot := Bot.new()
+	bot._engine_failed = true  # o teste é da busca própria
 	bot.think(&"chess", state, 0, 1)
 	var chosen: Move = null
 	while chosen == null:
@@ -681,6 +682,9 @@ func _bot_move(game_id: StringName, _rules: Ruleset, state: MatchState, level: i
 
 func _bot_choice(game_id: StringName, state: MatchState, level: int) -> Move:
 	var bot := Bot.new()
+	# Estes testes são da busca própria: com Stockfish no PATH, o xadrez iria
+	# para ele e o teste mediria outro motor.
+	bot._engine_failed = true
 	return bot._decide(game_id, state.clone(), Bot.LEVELS[level])
 
 

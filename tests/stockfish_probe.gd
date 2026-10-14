@@ -37,8 +37,36 @@ func _initialize() -> void:
 		engine.quit()
 		_check(not engine.running(), "quit encerra")
 
+	_bot_game()
+
 	print("OK — stockfish." if _failures == 0 else "%d falha(s)." % _failures)
 	quit(1 if _failures > 0 else 0)
+
+
+## Fácil contra Difícil, 30 lances, pelo mesmo caminho da cena: `think` e
+## `take_move` com o relógio do bot. O que se prova é o encanamento — lance legal
+## sempre, motor de pé durante a partida e derrubado no `abandon`.
+func _bot_game() -> void:
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	var bots := [Bot.new(), Bot.new()]
+	var legal := true
+	for ply in 30:
+		if rules.outcome(state) != Ruleset.Outcome.ONGOING:
+			break
+		var bot: Bot = bots[ply % 2]
+		bot.think(&"chess", state, 0 if ply % 2 == 0 else 2, 200)
+		var move: Move = null
+		while move == null:
+			OS.delay_msec(10)
+			move = bot.take_move()
+		legal = legal and rules.move_from_uci(state, rules.uci(move)) != null
+		rules.apply_move(state, move)
+	_check(legal, "bot×bot via Stockfish: só lances legais (%d meios-lances)" % state.ply)
+	_check(bots[0]._engine != null and bots[0]._engine.running(), "bot usou o Stockfish")
+	for bot in bots:
+		bot.abandon()
+	_check(bots[0]._engine == null, "abandon derruba o motor")
 
 
 func _check(condition: bool, label: String) -> void:
