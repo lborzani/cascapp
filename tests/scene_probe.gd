@@ -29,6 +29,7 @@ func _ready() -> void:
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
 	await _test_rematch()
+	await _test_review()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_bot()
@@ -488,6 +489,52 @@ func _test_rematch() -> void:
 	scene.queue_free()
 	await get_tree().process_frame
 	Game.mode = Game.Mode.HOTSEAT
+
+
+## Mate do louco, e a revisão por cima do resultado. Sem Stockfish (a CI roda
+## esta suíte antes de instalar o motor) o replay funciona e a tela diz por que
+## não há marcas; com ele, o mate sai como o melhor lance.
+func _test_review() -> void:
+	print("revisão")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Fim", "", true)
+	var review_button: Button = _node(scene, "%ReviewButton")
+	_check(review_button.visible, "xadrez terminado oferece a revisão")
+
+	review_button.pressed.emit()
+	var panel: ReviewPanel = scene.get_child(scene.get_child_count() - 1)
+	_equals(panel._moves.get_child_count(), 4, "um botão por meio-lance")
+	panel._show(4)
+	_equals(panel._board.state.squares, scene._state.squares, "o fim do replay é a posição final")
+	panel._show(-3)
+	_equals(panel._ply, 0, "voltar além do começo para na posição inicial")
+
+	for _i in 300:
+		if panel._thread == null:
+			break
+		await get_tree().process_frame
+		OS.delay_msec(20)
+	_check(panel._thread == null, "a análise termina")
+	if panel._entries.is_empty():
+		_check(panel._status.text.contains("indisponível"), "sem motor, a tela diz por quê")
+	else:
+		panel._show(4)
+		_check(panel._status.text.contains("Dh4#"), "o mate aparece na revisão (%s)" % panel._status.text)
+		_equals(panel._entries[3]["verdict"], GameReview.Verdict.BEST, "o mate é o melhor lance")
+		_equals(panel._entries[2]["verdict"], GameReview.Verdict.BLUNDER, "2.g4 é erro grave")
+
+	panel.close()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "fechar a revisão a remove")
+	_check(_node(scene, "%ResultLayer").visible, "e o resultado continua lá embaixo")
+	scene.queue_free()
+	await get_tree().process_frame
 
 
 ## Pré-movimento: o lance escolhido enquanto o oponente pensa, que sai sozinho no

@@ -38,6 +38,7 @@ func _initialize() -> void:
 		_check(not engine.running(), "quit encerra")
 
 	_bot_game()
+	_review()
 
 	print("OK — stockfish." if _failures == 0 else "%d falha(s)." % _failures)
 	quit(1 if _failures > 0 else 0)
@@ -67,6 +68,31 @@ func _bot_game() -> void:
 	for bot in bots:
 		bot.abandon()
 	_check(bots[0]._engine == null, "abandon derruba o motor")
+
+
+## O mate do pastor que não aconteceu: 3...Cf6?? deixa Dxf7# na mesa, e 4.d3
+## deixa passar. A outra linha dá o mate, que não pode virar "mate perdido".
+func _review() -> void:
+	var missed := _history(["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6", "d2d3"])
+	var entries := GameReview.new().analyse(missed)
+	_check(entries.size() == 7, "uma entrada por lance (%d)" % entries.size())
+	if entries.size() == 7:
+		_check(entries[5]["verdict"] == GameReview.Verdict.BLUNDER, "3...Cf6 é erro grave (%s)" % GameReview.LABEL[entries[5]["verdict"]])
+		_check(entries[6]["missed_mate"], "4.d3 deixa o mate passar")
+		_check(entries[6]["best_san"] == "Dxf7#", "o melhor era Dxf7# (veio %s)" % entries[6]["best_san"])
+		_check(not entries[4]["missed_mate"], "lance sem mate na mesa não é mate perdido")
+
+	var mated := GameReview.new().analyse(_history(["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6", "h5f7"]))
+	_check(mated.size() == 7 and not mated[6]["missed_mate"], "dar o mate não é mate perdido")
+	_check(mated.size() == 7 and mated[6]["verdict"] == GameReview.Verdict.BEST, "Dxf7# é o melhor lance")
+
+
+func _history(moves: Array) -> Array:
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	for text in moves:
+		rules.apply_move(state, rules.move_from_uci(state, text))
+	return state.history
 
 
 func _check(condition: bool, label: String) -> void:

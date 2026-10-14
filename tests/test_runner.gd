@@ -18,6 +18,7 @@ func _initialize() -> void:
 	_test_chess_special_moves()
 	_test_chess_notation()
 	_test_chess_uci()
+	_test_review_rules()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -459,6 +460,21 @@ func _test_chess_uci() -> void:
 		var move := rules.move_from_uci(promotion, text)
 		_equals(rules.uci(move) if move != null else "<nulo>", text, "promoção ida e volta " + text)
 	_check(rules.move_from_uci(promotion, "a7a8") == null, "promoção sem peça é recusada")
+
+
+func _test_review_rules() -> void:
+	print("review — classificação")
+	_equals(GameReview.expected([1000, 0, 0]), 100.0, "mate é 100%")
+	_equals(GameReview.expected([0, 1000, 0]), 50.0, "empate seco é 50%")
+	_equals(GameReview.classify(60.0, 20.0, true), GameReview.Verdict.BEST, "lance do motor é o melhor, custe o que custar")
+	_equals(GameReview.classify(60.0, 55.0, false), GameReview.Verdict.GOOD, "perder 5 pontos é bom lance")
+	_equals(GameReview.classify(60.0, 50.0, false), GameReview.Verdict.INACCURACY, "10 pontos é imprecisão")
+	_equals(GameReview.classify(60.0, 40.0, false), GameReview.Verdict.MISTAKE, "20 pontos é erro")
+	_equals(GameReview.classify(60.0, 30.0, false), GameReview.Verdict.BLUNDER, "30 pontos é erro grave")
+	_check(GameReview.missed_mate(2, 0, false), "havia mate em 2 e sumiu: mate perdido")
+	_check(not GameReview.missed_mate(2, -2, false), "mate só ficou mais longo: não perdeu")
+	_check(not GameReview.missed_mate(1, 0, true), "deu o mate: não perdeu")
+	_check(not GameReview.missed_mate(0, 0, false), "sem mate antes: nada a perder")
 
 
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:

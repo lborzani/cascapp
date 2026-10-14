@@ -127,6 +127,7 @@ func _ready() -> void:
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
 	%ResultExitButton.pressed.connect(_exit)
+	%ReviewButton.pressed.connect(_open_review)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
 
@@ -732,6 +733,8 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
 	%ResultDetail.text = detail
 	%RematchButton.visible = allow_rematch
+	# Só xadrez: a revisão é do Stockfish, e ele não joga damas.
+	%ReviewButton.visible = _ruleset is ChessRules and not _state.history.is_empty()
 	# Só quando o painel **abre**. Ele é reaberto por convite de revanche e por
 	# oponente que saiu, e tocar a fanfarra de novo em cada um faria a partida
 	# parecer que acabou três vezes.
@@ -753,6 +756,14 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 		panel.scale = Vector2(0.93, 0.93)
 		tween.parallel().tween_property(panel, "scale", Vector2.ONE, 0.24) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Por cima de tudo, inclusive do painel de resultado — que continua lá embaixo
+## para quando a revisão fechar.
+func _open_review() -> void:
+	var panel := ReviewPanel.new()
+	add_child(panel)
+	panel.open(_state.history, _board.flipped)
 
 
 func _result_detail() -> String:
