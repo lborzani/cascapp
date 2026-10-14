@@ -113,6 +113,7 @@ jobs:
       - name: Construir o plugin Android
         run: |
           chmod +x ./gradlew
+          ./fetch_stockfish.sh
           ./gradlew :plugin:assembleRelease --no-daemon
           cp plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar ../android/plugins/
         working-directory: android_plugin

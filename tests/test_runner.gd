@@ -17,6 +17,7 @@ func _initialize() -> void:
 	_test_chess_perft()
 	_test_chess_special_moves()
 	_test_chess_notation()
+	_test_chess_uci()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -421,6 +422,44 @@ func _test_checkers_notation() -> void:
 ## Notação do lance `from`-`to` na posição dada, ou uma mensagem de falha se o
 ## lance não existir — assim um teste que erra a posição diz isso, em vez de
 ## comparar contra uma string vazia e parecer um bug de notação.
+func _test_chess_uci() -> void:
+	print("xadrez FEN/UCI")
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	_equals(rules.fen(state), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "FEN inicial")
+
+	# e4 marca en passant em e3 e passa a vez; Cf6 mexe no relógio dos 50 lances.
+	for text in ["e2e4", "g8f6"]:
+		rules.apply_move(state, rules.move_from_uci(state, text))
+	_equals(rules.fen(state), "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2", "FEN depois de e4 Cf6")
+	rules.apply_move(state, rules.move_from_uci(state, "e4e5"))
+	rules.apply_move(state, rules.move_from_uci(state, "d7d5"))
+	_check(rules.fen(state).contains(" w KQkq d6 0 3"), "FEN com casa de en passant")
+
+	var ep := rules.move_from_uci(state, "e5d6")
+	_check(ep != null and ep.tags.has("en_passant"), "UCI acha o en passant")
+	_check(rules.move_from_uci(state, "e5e7") == null, "UCI recusa lance ilegal")
+
+	var castle := _position(rules, {
+		"e1": [Board.Side.WHITE, Board.Kind.KING],
+		"h1": [Board.Side.WHITE, Board.Kind.ROOK],
+		"e8": [Board.Side.BLACK, Board.Kind.KING],
+	}, ChessRules.CASTLE_WK)
+	var short := rules.move_from_uci(castle, "e1g1")
+	_check(short != null and short.tags.get("castle") == "king", "UCI e1g1 é o roque")
+	_check(rules.fen(castle).contains(" w K - "), "FEN só com o roque que resta")
+
+	var promotion := _position(rules, {
+		"e1": [Board.Side.WHITE, Board.Kind.KING],
+		"a7": [Board.Side.WHITE, Board.Kind.PAWN],
+		"h8": [Board.Side.BLACK, Board.Kind.KING],
+	})
+	for text in ["a7a8q", "a7a8n"]:
+		var move := rules.move_from_uci(promotion, text)
+		_equals(rules.uci(move) if move != null else "<nulo>", text, "promoção ida e volta " + text)
+	_check(rules.move_from_uci(promotion, "a7a8") == null, "promoção sem peça é recusada")
+
+
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:
 	var move := _find(rules, state, from, to)
 	if move == null:
