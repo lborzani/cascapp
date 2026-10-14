@@ -30,6 +30,7 @@ func _ready() -> void:
 	await _test_checkers_capture_taps()
 	await _test_rematch()
 	await _test_review()
+	await _test_puzzle()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_bot()
@@ -535,6 +536,70 @@ func _test_review() -> void:
 	_check(_node(scene, "%ResultLayer").visible, "e o resultado continua lá embaixo")
 	scene.queue_free()
 	await get_tree().process_frame
+
+
+## 4.d3 deixa passar o Dxf7#: a revisão oferece o desafio, três erros trazem a
+## dica, e o mate resolve. Sem Stockfish não há análise e nem desafio.
+func _test_puzzle() -> void:
+	print("desafio do mate")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["e2", "e4"], ["e7", "e5"], ["f1", "c4"], ["b8", "c6"], ["d1", "h5"], ["g8", "f6"], ["d2", "d3"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Fim", "", true)
+	(_node(scene, "%ReviewButton") as Button).pressed.emit()
+	var panel: ReviewPanel = scene.get_child(scene.get_child_count() - 1)
+	await _settle(panel, "_thread")
+	if panel._entries.is_empty():
+		panel._show(7)
+		_check(not panel._retry.visible, "sem análise, sem desafio")
+		panel.close()
+		scene.queue_free()
+		await get_tree().process_frame
+		return
+
+	panel._show(6)
+	_check(not panel._retry.visible, "lance sem mate perdido não oferece desafio")
+	panel._show(7)
+	_check(panel._retry.visible, "o mate perdido oferece o desafio")
+	panel._retry.pressed.emit()
+	_check(panel._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % panel._status.text)
+	_equals(panel._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")
+	_check(not panel._nav.visible, "a navegação some durante o desafio")
+
+	for attempt in 3:
+		panel._on_tap(_square("a2"))
+		panel._on_tap(_square("a3"))
+		await _settle(panel, "_checker")
+		_check(panel._status.text.contains("escapar"), "a3 é recusado (%d)" % (attempt + 1))
+	_equals(panel._pick, _square("h5"), "depois de três erros a dama vira a dica")
+
+	panel._on_tap(_square("f7"))
+	await _settle(panel, "_checker")
+	_check(panel._solved, "Dxf7# resolve o desafio")
+	_check(panel._status.text.contains("xeque-mate"), "e a tela comemora (%s)" % panel._status.text)
+	panel._retry.pressed.emit()
+	_check(panel._puzzle < 0 and panel._nav.visible, "voltar devolve a revisão")
+
+	panel.close()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "fechar no meio de tudo não trava")
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## Espera a thread `field` do painel terminar, quadro a quadro — é o `_process`
+## dele que recolhe o resultado.
+func _settle(panel: ReviewPanel, field: String) -> void:
+	for _i in 400:
+		if panel.get(field) == null:
+			return
+		await get_tree().process_frame
+		OS.delay_msec(20)
+	_check(false, "a thread %s terminou" % field)
 
 
 ## Pré-movimento: o lance escolhido enquanto o oponente pensa, que sai sozinho no

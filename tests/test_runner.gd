@@ -475,6 +475,10 @@ func _test_review_rules() -> void:
 	_check(not GameReview.missed_mate(2, -2, false), "mate só ficou mais longo: não perdeu")
 	_check(not GameReview.missed_mate(1, 0, true), "deu o mate: não perdeu")
 	_check(not GameReview.missed_mate(0, 0, false), "sem mate antes: nada a perder")
+	_check(GameReview.keeps_mate(-3, false), "desafio: mate mais longo também vale")
+	_check(GameReview.keeps_mate(0, true), "desafio: dar o mate vale")
+	_check(not GameReview.keeps_mate(0, false), "desafio: sem mate na mesa, errou")
+	_check(not GameReview.keeps_mate(2, false), "desafio: mate virou do adversário, errou")
 
 
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:

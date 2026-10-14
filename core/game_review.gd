@@ -69,7 +69,14 @@ static func classify(before: float, after: float, is_best: bool) -> Verdict:
 ## continua de pé ele é negativo, mesmo que mais longo — trocar um mate em 2 por
 ## um em 3 não é perder o mate.
 static func missed_mate(mate_before: int, mate_after: int, delivered: bool) -> bool:
-	return mate_before > 0 and not delivered and mate_after >= 0
+	return mate_before > 0 and not keeps_mate(mate_after, delivered)
+
+
+## O lance deu o mate ou deixou o adversário sem saída (`mate_after` negativo,
+## do ponto de vista dele). É a régua do desafio "encontre o mate": vale
+## qualquer caminho, não só o que o motor escolheu.
+static func keeps_mate(mate_after: int, delivered: bool) -> bool:
+	return delivered or mate_after < 0
 
 
 ## Uma entrada por lance de `history`:
@@ -90,7 +97,7 @@ func analyse(history: Array) -> Array:
 	total = history.size()
 	progress = 0
 	var out := []
-	var seen := _look(engine, rules, state)
+	var seen := look(engine, rules, state)
 	for data in history:
 		if _abandoned or seen.is_empty():
 			break
@@ -112,7 +119,7 @@ func analyse(history: Array) -> Array:
 			entry["best_san"] = rules.notation(state, best_move)
 
 		rules.apply_move(state, move)
-		var after := _look(engine, rules, state)
+		var after := look(engine, rules, state)
 		if after.is_empty():
 			break
 		entry["after"] = 100.0 - float(after["score"])
@@ -133,7 +140,7 @@ func abandon() -> void:
 
 ## Nota da posição para quem tem a vez. Posição terminal não vai ao motor (ele
 ## responde `bestmove (none)` sem nota útil): mate é 0, empate 50.
-func _look(engine: Stockfish, rules: ChessRules, state: MatchState) -> Dictionary:
+static func look(engine: Stockfish, rules: ChessRules, state: MatchState) -> Dictionary:
 	match rules.outcome(state):
 		Ruleset.Outcome.WHITE_WINS, Ruleset.Outcome.BLACK_WINS:
 			return {"score": 0.0, "mate": 0, "best": "", "mated": true}
