@@ -31,6 +31,9 @@ var _ply := 0
 var _board := BoardView.new()
 var _status := Label.new()
 var _detail := Label.new()
+## O par de rótulos vai num cartão tingido pela nota do lance: a mensagem é o
+## que a revisão tem a dizer, e em cinza pequeno ela sumia embaixo do tabuleiro.
+var _message := PanelContainer.new()
 var _moves := HFlowContainer.new()
 var _next_mistake := Button.new()
 var _retry := Button.new()
@@ -83,12 +86,19 @@ func _ready() -> void:
 	_board.square_tapped.connect(_on_tap)
 	column.add_child(_board)
 
+	var texts := VBoxContainer.new()
+	texts.add_theme_constant_override("separation", 4)
 	for label in [_status, _detail]:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(label)
-	_status.theme_type_variation = &"Subtitle"
-	_detail.theme_type_variation = &"Hint"
+		texts.add_child(label)
+	_status.add_theme_font_override("font", AppTheme.font(800))
+	_status.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M)
+	_detail.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	_detail.add_theme_color_override("font_color", AppTheme.TEXT)
+	_message.add_child(texts)
+	column.add_child(_message)
+	_tone(AppTheme.TEXT_DIM)
 
 	_retry = _button("Tentar de novo", &"PrimaryButton", _toggle_puzzle)
 	_retry.visible = false
@@ -171,7 +181,7 @@ func _show(ply: int) -> void:
 	_board.state = _states[_ply]
 	_board.last_move = PackedInt32Array(_history[_ply - 1]["p"]) if _ply > 0 else PackedInt32Array()
 	_board.refresh()
-	_status.remove_theme_color_override("font_color")
+	_tone(AppTheme.TEXT_DIM)
 	_retry.visible = false
 	for i in _moves.get_child_count():
 		(_moves.get_child(i) as Button).button_pressed = i == _ply - 1
@@ -190,10 +200,11 @@ func _show(ply: int) -> void:
 
 	var entry: Dictionary = _entries[_ply - 1]
 	var verdict: int = entry["verdict"]
-	_status.text = "%s — %s" % [_move_text(_ply - 1, entry), GameReview.LABEL[verdict]]
-	_status.add_theme_color_override("font_color", VERDICT_COLOR[verdict])
+	var label: String = "Mate perdido" if entry["missed_mate"] else GameReview.LABEL[verdict]
+	_status.text = "%s — %s" % [_move_text(_ply - 1, entry), label]
+	_tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
 	if entry["missed_mate"]:
-		_detail.text = "Mate perdido! Havia %s." % entry["best_san"]
+		_detail.text = "Havia %s." % entry["best_san"]
 		_retry.visible = true
 	elif verdict >= GameReview.Verdict.INACCURACY and entry["best_san"] != "":
 		_detail.text = "O melhor era %s." % entry["best_san"]
@@ -244,11 +255,12 @@ func _start_puzzle(index: int) -> void:
 	_nav.visible = false
 	_scroll.visible = false
 	_retry.text = "Desistir"
-	_status.remove_theme_color_override("font_color")
+	_tone(AppTheme.TEXT_DIM)
 	_status.text = "Encontre o mate! Jogam as %s." % (
 		"brancas" if _puzzle_state.side_to_move == Board.Side.WHITE else "pretas"
 	)
 	_detail.text = "Toque na peça e depois na casa."
+	_tone(AppTheme.ACCENT)
 	_draw_puzzle(PackedInt32Array())
 
 
@@ -352,14 +364,14 @@ func _judged(solved: bool) -> void:
 	if solved:
 		_solved = true
 		_status.text = "Isso! %s %s" % [san, "é xeque-mate." if san.ends_with("#") else "mantém o mate."]
-		_status.add_theme_color_override("font_color", AppTheme.SUCCESS)
+		_tone(AppTheme.SUCCESS)
 		_detail.text = ""
 		_retry.text = "Voltar à revisão"
 		return
 	_misses += 1
 	_pick = Board.NO_SQUARE
 	_status.text = "%s deixa o mate escapar. Tente de novo." % san
-	_status.add_theme_color_override("font_color", AppTheme.DANGER)
+	_tone(AppTheme.DANGER)
 	_detail.text = ""
 	if _misses >= HINT_AFTER:
 		var best := ChessRules.new().move_from_uci(_puzzle_state, str(_entries[_puzzle]["best"]))
@@ -367,6 +379,17 @@ func _judged(solved: bool) -> void:
 			_pick = best.from_square()
 			_detail.text = "Dica: a peça destacada dá o mate."
 	_draw_puzzle(PackedInt32Array())
+
+
+## Cartão e título na cor da mensagem; o neutro (`TEXT_DIM`) mantém o título
+## em texto claro sobre um cartão discreto.
+func _tone(color: Color) -> void:
+	var neutral := color == AppTheme.TEXT_DIM
+	_message.add_theme_stylebox_override("panel", AppTheme.box(
+		AppTheme.SURFACE if neutral else Color(color, 0.16), AppTheme.RADIUS,
+		AppTheme.LINE_SOFT if neutral else color, 2
+	))
+	_status.add_theme_color_override("font_color", AppTheme.TEXT if neutral else color)
 
 
 func _jump_to_mistake() -> void:
@@ -384,7 +407,11 @@ static func _move_number(index: int) -> String:
 
 
 static func _move_text(index: int, entry: Dictionary) -> String:
-	var mark: String = "#?" if entry["missed_mate"] else GameReview.SYMBOL[entry["verdict"]]
+	# Mate perdido é sempre um erro, mesmo quando a partida continuava ganha.
+	var verdict: int = entry["verdict"]
+	if entry["missed_mate"]:
+		verdict = maxi(verdict, GameReview.Verdict.BLUNDER)
+	var mark: String = GameReview.SYMBOL[verdict]
 	return "%s%s%s" % [_move_number(index), entry["san"], mark]
 
 
