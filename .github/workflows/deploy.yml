@@ -125,7 +125,11 @@ jobs:
       - name: Publicar
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: flyctl deploy --remote-only --config relay/fly.toml --dockerfile relay/Dockerfile relay
+        # Só a pasta: o `flyctl` acha o `fly.toml` dentro dela, e o `dockerfile` do
+        # `[build]` é relativo a ele. Com `--config relay/fly.toml` junto, o
+        # flyctl novo resolve o caminho a partir da pasta e procura
+        # `relay/relay/fly.toml`.
+        run: flyctl deploy --remote-only relay
 
       # **Uma máquina, e isto não é otimização de custo.**
       #
