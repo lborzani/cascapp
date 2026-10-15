@@ -1152,7 +1152,7 @@ func _test_bot() -> void:
 	# escolheu um nome. O nome original volta no fim da seção.
 	var saved_name := Prefs.player_name() if Prefs.has_name() else ""
 	Prefs.set_player_name("")
-	Game.bot_level = 0
+	Game.chess_level = 0
 	Game.bot_side = Board.Side.BLACK
 	Game.start_solo(Game.CHESS)
 	var scene := preload("res://scenes/match.tscn").instantiate()

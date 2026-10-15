@@ -622,6 +622,15 @@ var pending_sheet: StringName = &""
 ## pensa alguns segundos por lance, e nenhum dos dois é a primeira impressão que
 ## se quer dar de um adversário.
 var bot_level := 1
+## Índice em `Bot.CHESS_LEVELS`, o título do adversário no xadrez. Começa em
+## Avançado (1600), perto do Médio de antes.
+var chess_level := 2
+
+
+## O nível valendo para o jogo atual: o título no xadrez, o índice de
+## `Bot.LEVELS` nos outros.
+func current_bot_level() -> int:
+	return chess_level if game_id == CHESS else bot_level
 ## Cor do bot. O jogador escolhe a dele no painel de ajustes, e a revanche troca
 ## as duas — pelo mesmo motivo da revanche em rede: começar sempre de brancas é
 ## meia vantagem repetida.

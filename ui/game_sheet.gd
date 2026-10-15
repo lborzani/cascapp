@@ -41,6 +41,8 @@ var _players: HBoxContainer = null
 var _clock: GridContainer = null
 var _formats: GridContainer = null
 var _levels: HBoxContainer = null
+var _title_label: Label = null
+var _elo_label: Label = null
 var _sides: HBoxContainer = null
 var _visibility: HBoxContainer = null
 var _start: Button = null
@@ -429,14 +431,52 @@ func _build_levels() -> void:
 	_clear(_levels)
 	if not Game.bot_levels(game_id):
 		return
+	if game_id == Game.CHESS:
+		_build_titles()
+		return
 	for index in Bot.LEVELS.size():
-		_levels.add_child(_chip(Bot.level_label(index), _select_level.bind(index)))
+		_levels.add_child(_chip(Bot.level_label(game_id, index), _select_level.bind(index)))
 	_select_level(Game.bot_level)
 
 
 func _select_level(index: int) -> void:
 	Game.bot_level = index
 	_mark(_levels, index)
+
+
+## Xadrez: oito títulos não cabem como chips numa linha, então é um seletor —
+## − título e Elo + —, do iniciante ao grande mestre.
+func _build_titles() -> void:
+	_title_label = Label.new()
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title_label.add_theme_font_override("font", AppTheme.font(800))
+	_title_label.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	_elo_label = Label.new()
+	_elo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_elo_label.theme_type_variation = &"Caption"
+	var middle := VBoxContainer.new()
+	middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	middle.alignment = BoxContainer.ALIGNMENT_CENTER
+	middle.add_child(_title_label)
+	middle.add_child(_elo_label)
+	var down := _chip("−", func(): _select_title(Game.chess_level - 1))
+	var up := _chip("+", func(): _select_title(Game.chess_level + 1))
+	for arrow in [down, up]:
+		arrow.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		arrow.custom_minimum_size = Vector2(56, 46)
+		arrow.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_L)
+	_levels.add_child(down)
+	_levels.add_child(middle)
+	_levels.add_child(up)
+	_select_title(Game.chess_level)
+
+
+func _select_title(index: int) -> void:
+	Game.chess_level = clampi(index, 0, Bot.CHESS_LEVELS.size() - 1)
+	_title_label.text = Bot.level_label(Game.CHESS, Game.chess_level)
+	_elo_label.text = Bot.level_elo(Game.CHESS, Game.chess_level)
+	_levels.get_child(0).disabled = Game.chess_level == 0
+	_levels.get_child(2).disabled = Game.chess_level == Bot.CHESS_LEVELS.size() - 1
 
 
 func _build_sides() -> void:

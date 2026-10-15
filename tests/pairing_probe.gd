@@ -356,9 +356,17 @@ func _probe_game_sheet() -> void:
 	_check(sheet._section("level").visible, "contra o bot o nível aparece")
 	_check(sheet._section("side").visible, "e a escolha de cor")
 	_check(not sheet._section("visibility").visible, "sem sala, sem quem pode entrar")
-	_equals(sheet._levels.get_child_count(), Bot.LEVELS.size(), "um botão por nível do bot")
-	sheet._levels.get_child(2).pressed.emit()
-	_equals(Game.bot_level, 2, "escolher o nível grava a escolha")
+	# Xadrez: seletor de título (− título +), do iniciante ao grande mestre.
+	Game.chess_level = 0
+	sheet._build_levels()
+	_equals(sheet._title_label.text, "Iniciante", "o seletor começa no título escolhido")
+	_check(sheet._levels.get_child(0).disabled, "abaixo de iniciante não há")
+	for _i in Bot.CHESS_LEVELS.size() + 2:
+		sheet._levels.get_child(2).pressed.emit()
+	_equals(Game.chess_level, Bot.CHESS_LEVELS.size() - 1, "subir para no último título")
+	_equals(sheet._title_label.text, "Grande Mestre", "que é grande mestre")
+	_equals(sheet._elo_label.text, "Elo 2500", "com o Elo")
+	_check(sheet._levels.get_child(2).disabled, "e acima dele não há")
 	# A cor escolhida é a do jogador; o que fica guardado é a do bot.
 	sheet._sides.get_child(1).pressed.emit()
 	_equals(Game.bot_side, Board.Side.WHITE, "escolher pretas deixa as brancas com o bot")
