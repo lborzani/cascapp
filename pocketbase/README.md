@@ -14,11 +14,14 @@ A porta 443 do Funnel é do bot de música (`/` → `:3000`) e não é tocada.
 ## Conta anônima
 
 O app cria a própria conta no primeiro uso: e-mail sintético
-`<uuid>@anon.cascapp.invalid` e senha aleatória, guardados no aparelho. A
-migration em `pb_migrations/` deixa cada conta ver e mexer só em si mesma,
-desliga alerta de login e OTP por e-mail (o e-mail não existe), limita o nome a
-18 caracteres (o mesmo do app) e liga o limite de requisições — 5 contas novas
-por minuto por IP. O IP real chega pelo `X-Forwarded-For` do Funnel.
+`<hash>@anon.cascapp.invalid` e senha, os dois derivados por hash do id do
+aparelho (`ANDROID_ID`) — reinstalar o app volta para a mesma conta. As
+migrations em `pb_migrations/` deixam cada conta ver e mexer só em si mesma,
+desligam alerta de login e OTP por e-mail (o e-mail não existe), limitam o nome
+a 18 caracteres (o mesmo do app) e ligam o limite de requisições por IP — 30
+contas novas e 60 entradas por minuto, folgado porque no celular uma operadora
+inteira sai pelo mesmo IP (CGNAT). O IP real chega pelo `X-Forwarded-For` do
+Funnel.
 
 Backup automático todo dia às 4h, guardando 7, dentro do volume `pb_data`.
 

@@ -2,8 +2,15 @@ extends Node
 
 ## A conta do jogador no PocketBase do servidor de casa (`pocketbase/`).
 ##
-## Anônima e sem tela: no primeiro uso o app cria a própria conta com um e-mail
-## sintético e uma senha aleatória, guarda no `Prefs` e daí em diante só entra.
+## Anônima e sem tela: o e-mail sintético e a senha são **derivados do
+## aparelho** (`OS.get_unique_id()`, o `ANDROID_ID` no Android) por hash. No
+## primeiro uso o app cria a conta com eles; daí em diante só entra.
+##
+## Derivados, e não sorteados e guardados: desinstalar apaga o `user://`, e com
+## a credencial guardada lá cada reinstalação nascia uma conta nova. O
+## `ANDROID_ID` sobrevive à reinstalação (muda com reset de fábrica e com outra
+## chave de assinatura), então reinstalar volta para a mesma conta. O id em si
+## nunca sai do aparelho — só o hash.
 ## O nome é o da tela "Você" — salvar lá sobe para a conta.
 ##
 ## Nada aqui é obrigatório para jogar. Servidor fora do ar, sem rede, resposta
@@ -19,6 +26,9 @@ const RETRY_SECONDS := 60.0
 const TIMEOUT_SECONDS := 8.0
 
 var token := ""
+## Só para os testes: troca o id do aparelho, para cada execução ter a própria
+## conta num PocketBase que guarda as anteriores.
+var device_seed := ""
 var user_id := ""
 ## O nome que a conta tem no servidor, como a última resposta disse.
 var _name := ""
@@ -59,10 +69,14 @@ func sign_in() -> bool:
 	if _busy or base_url().is_empty():
 		return signed_in()
 	_busy = true
-	var stored := Prefs.account()
-	if stored["email"].is_empty():
-		stored = await _create()
-	var ok := not stored.is_empty() and await _authenticate(stored["email"], stored["password"])
+	var credentials := _credentials()
+	var code := await _authenticate(credentials)
+	if code == 400:
+		# Recusada: a conta deste aparelho ainda não existe — primeiro uso, ou
+		# apagada no painel. Nasce agora, com a mesma credencial.
+		if await _create(credentials):
+			code = await _authenticate(credentials)
+	var ok := code == 200
 	_busy = false
 	if ok and Prefs.has_name() and _name != Prefs.player_name():
 		# O nome mudou enquanto o servidor estava fora: a conta alcança agora.
@@ -88,36 +102,50 @@ func sign_out() -> void:
 	_set_token("", "")
 
 
-func _create() -> Dictionary:
-	var email := "%s@%s" % [_random_hex(16), EMAIL_DOMAIN]
-	var password := _random_hex(24)
-	var body := {"email": email, "password": password, "passwordConfirm": password}
+## `{"email", "password"}` deste aparelho, sempre os mesmos.
+##
+## Sem id de aparelho (plataforma que não informa), um sorteado uma vez e
+## guardado no `Prefs` faz o papel — e aí a reinstalação volta a criar outra.
+func _credentials() -> Dictionary:
+	var seed := device_seed if not device_seed.is_empty() else OS.get_unique_id()
+	if seed.is_empty():
+		seed = Prefs.account_seed()
+		if seed.is_empty():
+			seed = _random_hex(16)
+			Prefs.set_account_seed(seed)
+	return {
+		"email": "%s@%s" % [("cascapp:email:" + seed).sha256_text().left(32), EMAIL_DOMAIN],
+		"password": ("cascapp:password:" + seed).sha256_text(),
+	}
+
+
+func _create(credentials: Dictionary) -> bool:
+	var body := {
+		"email": credentials["email"],
+		"password": credentials["password"],
+		"passwordConfirm": credentials["password"],
+	}
 	if Prefs.has_name():
 		body["name"] = Prefs.player_name()
 	var reply := await _call(HTTPClient.METHOD_POST, "/api/collections/users/records", body)
-	if reply["code"] != 200:
-		return {}
-	Prefs.set_account(email, password)
-	return {"email": email, "password": password}
+	return reply["code"] == 200
 
 
-func _authenticate(email: String, password: String) -> bool:
+## O código HTTP da tentativa: 200 entrou, 400 credencial recusada, 0 sem
+## resposta (rede, servidor fora do ar).
+func _authenticate(credentials: Dictionary) -> int:
 	var reply := await _call(
 		HTTPClient.METHOD_POST, "/api/collections/users/auth-with-password",
-		{"identity": email, "password": password}
+		{"identity": credentials["email"], "password": credentials["password"]}
 	)
 	var data: Variant = reply["data"]
-	if reply["code"] == 400:
-		# Credencial recusada: a conta foi apagada no servidor (ou o banco foi
-		# recriado). Esquecer e nascer de novo na próxima tentativa, em vez de
-		# bater na mesma porta para sempre.
-		Prefs.forget_account()
-		return false
-	if reply["code"] != 200 or not data is Dictionary or not data.has("token"):
-		return false
+	if reply["code"] != 200:
+		return reply["code"]
+	if not data is Dictionary or not data.has("token"):
+		return 0
 	_name = str(data["record"].get("name", ""))
 	_set_token(str(data["token"]), str(data["record"]["id"]))
-	return true
+	return 200
 
 
 func _set_token(value: String, id: String) -> void:
