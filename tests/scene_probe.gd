@@ -39,6 +39,7 @@ func _ready() -> void:
 	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
+	await _test_update_notice()
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -1208,6 +1209,65 @@ func _test_welcome() -> void:
 	Prefs.set_player_name(saved_name)
 	if not saved_welcomed:
 		Prefs.forget_welcome()
+
+
+## O aviso de versão nova no menu, com a resposta da API injetada: o teste não
+## depende de rede, e no editor o menu nem pergunta (só build exportado pergunta).
+##
+## Aparece para versão mais nova, some no "Agora não", e não volta para a mesma
+## versão — mas volta para a seguinte.
+func _test_update_notice() -> void:
+	print("aviso de versão nova")
+	var saved_skipped := Prefs.skipped_update()
+	var saved_welcomed := Prefs.welcomed()
+	Prefs.skip_update("")
+	# Sem as boas-vindas por cima: o aviso é do menu, e não da primeira abertura.
+	Prefs.set_welcomed()
+
+	var menu := preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(menu._update == null, "sem resposta, sem aviso")
+
+	menu._offer_update(_github_release("v0.1"))
+	_check(menu._update == null, "release mais velha que a instalada não avisa")
+
+	menu._offer_update(_github_release("v99.0"))
+	var card: Control = menu._update
+	_check(card != null and card.is_inside_tree(), "release mais nova põe o cartão no menu")
+	if card == null:
+		menu.queue_free()
+		return
+	_equals(card.get_index(), menu.get_node("%Favorites").get_index() - 1, "em cima do catálogo")
+	_check(card.find_child("Download", true, false) is Button, "com o botão de baixar")
+
+	var later: Button = card.find_child("Later", true, false)
+	later.pressed.emit()
+	await get_tree().process_frame
+	_check(not is_instance_valid(card), "\"Agora não\" tira o cartão")
+	_equals(Prefs.skipped_update(), "99.0", "e guarda a versão pulada")
+
+	menu._offer_update(_github_release("v99.0"))
+	_check(menu._update == null, "a versão pulada não avisa de novo")
+	menu._offer_update(_github_release("v99.1"))
+	_check(menu._update != null, "a seguinte avisa")
+
+	menu.queue_free()
+	await get_tree().process_frame
+	Prefs.skip_update(saved_skipped)
+	if not saved_welcomed:
+		Prefs.forget_welcome()
+
+
+func _github_release(tag: String) -> Dictionary:
+	var file := "cascapp-%s.apk" % tag.trim_prefix("v")
+	return {
+		"tag_name": tag,
+		"assets": [{
+			"name": file,
+			"browser_download_url": "%s%s/%s" % [UpdateCheck.DOWNLOADS, tag, file],
+		}],
+	}
 
 
 func _find_status(node: Node) -> MatchStatus:

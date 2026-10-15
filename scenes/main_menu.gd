@@ -38,6 +38,8 @@ const FAV_HEIGHT := 132.0
 
 var _leaving := false
 var _sheet: GameSheet = null
+## O cartão de versão nova, enquanto está na tela.
+var _update: PanelContainer = null
 
 
 func _ready() -> void:
@@ -69,6 +71,7 @@ func _ready() -> void:
 	_fill_games()
 	_offer_rejoin()
 	_greet()
+	_check_update()
 
 	# A folha volta aberta para quem chegou aqui saindo de uma partida ou da sala:
 	# quem voltou está escolhendo como jogar de novo, e não navegando do zero.
@@ -338,6 +341,97 @@ func _greet() -> void:
 		if is_inside_tree():
 			%AppBar.greet(Prefs.player_name())
 	)
+
+
+# --- versão nova ---------------------------------------------------------------
+
+
+## Pergunta ao GitHub se saiu versão nova, no máximo uma vez por dia.
+##
+## Só em build exportado: pelo editor a versão é a do `project.godot`, que não
+## acompanha as releases, e o aviso apareceria em toda execução. Falha de rede,
+## de API ou de JSON é silêncio — e o dia não conta como consultado, então a
+## próxima volta ao menu tenta de novo.
+func _check_update() -> void:
+	var now := int(Time.get_unix_time_from_system())
+	if not OS.has_feature("template") or not UpdateCheck.due(now):
+		return
+	var http := HTTPRequest.new()
+	http.timeout = 10.0
+	add_child(http)
+	http.request_completed.connect(
+		func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+			http.queue_free()
+			if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+				return
+			var release = JSON.parse_string(body.get_string_from_utf8())
+			if not release is Dictionary:
+				return
+			Prefs.set_update_checked(now)
+			_offer_update(release)
+	)
+	if http.request(UpdateCheck.URL) != OK:
+		http.queue_free()
+
+
+## O cartão da versão nova, a partir do JSON da release.
+##
+## Recebe a resposta pronta, e não a busca, para o teste de cena injetá-la sem
+## rede. Cartão no topo, e não o `Banner`: o banner some sozinho e deixa o toque
+## passar, e aqui há uma decisão a tomar com dois botões.
+##
+## Abaixo do cartão de voltar para a partida, se houver: lá tem gente esperando,
+## aqui não.
+func _offer_update(release: Dictionary) -> void:
+	var offer := UpdateCheck.offer(release, AppVersion.text(), Prefs.skipped_update())
+	if offer.is_empty() or _update != null:
+		return
+	_update = PanelContainer.new()
+	_update.theme_type_variation = &"Card"
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	_update.add_child(box)
+
+	var title := Label.new()
+	title.text = "Versão %s disponível" % offer["version"]
+	title.theme_type_variation = &"SectionHeader"
+	box.add_child(title)
+	var detail := Label.new()
+	detail.text = "Você está na %s. O APK baixa pelo navegador; abra o arquivo para instalar por cima." % AppVersion.text()
+	detail.theme_type_variation = &"Hint"
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(detail)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	box.add_child(row)
+	var later := Button.new()
+	later.name = "Later"
+	later.text = "Agora não"
+	later.theme_type_variation = &"GhostButton"
+	later.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	later.pressed.connect(func() -> void:
+		Sound.play(Sound.Cue.TAP)
+		Prefs.skip_update(offer["version"])
+		_update.queue_free()
+		_update = null
+	)
+	row.add_child(later)
+	# "Baixar" não fecha o cartão: se o download for cancelado ou falhar no
+	# navegador, o botão continua à mão.
+	var download := Button.new()
+	download.name = "Download"
+	download.text = "Baixar"
+	download.theme_type_variation = &"PrimaryButton"
+	download.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	download.pressed.connect(func() -> void:
+		Sound.play(Sound.Cue.TAP)
+		OS.shell_open(offer["url"])
+	)
+	row.add_child(download)
+
+	%Content.add_child(_update)
+	%Content.move_child(_update, %Favorites.get_index())
 
 
 ## Um QR lido numa execução anterior do processo. Se o Android recolheu o app
