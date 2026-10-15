@@ -20,6 +20,7 @@ func _initialize() -> void:
 	_test_chess_uci()
 	_test_review_rules()
 	_test_review_curve()
+	_test_review_accuracy()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -501,6 +502,26 @@ func _test_review_curve() -> void:
 	_equals(curve[3], 100.0, "mate das brancas termina em 100")
 	var mated := GameReview.white_curve([{"side": black, "score": 60.0, "after": 100.0}])
 	_equals(mated[1], 0.0, "mate das pretas termina em 0")
+
+
+func _test_review_accuracy() -> void:
+	print("review — precisão")
+	_equals(GameReview.move_accuracy(50.0, 50.0), 100.0, "lance que não perde nada vale 100")
+	_equals(GameReview.move_accuracy(40.0, 60.0), 100.0, "lance que melhora também")
+	var blunder := GameReview.move_accuracy(60.0, 30.0)
+	_check(blunder > 20.0 and blunder < 30.0, "perder 30 pontos deixa perto de 25 (%.1f)" % blunder)
+	var white := Board.Side.WHITE
+	var black := Board.Side.BLACK
+	var entries := [
+		{"side": white, "score": 52.0, "after": 52.0},
+		{"side": black, "score": 48.0, "after": 47.0},
+		{"side": white, "score": 53.0, "after": 53.0},
+		{"side": black, "score": 47.0, "after": 10.0},
+	]
+	_check(GameReview.accuracy(entries, white) > 99.0, "brancas sem erro: perto de 100")
+	var black_accuracy := GameReview.accuracy(entries, black)
+	_check(black_accuracy > 10.0 and black_accuracy < 60.0, "um erro grave derruba as pretas (%.1f)" % black_accuracy)
+	_equals(GameReview.accuracy([], white), -1.0, "quem não jogou não tem nota")
 
 
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:

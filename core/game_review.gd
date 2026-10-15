@@ -50,6 +50,36 @@ static func expected(wdl: Array) -> float:
 	return (float(wdl[0]) + float(wdl[1]) * 0.5) / 10.0
 
 
+## Precisão de um lance, de 0 a 100, pela fórmula do Lichess: cai depressa com
+## a vitória esperada que o lance jogou fora. Lance que não perdeu nada vale 100.
+static func move_accuracy(before: float, after: float) -> float:
+	if after >= before:
+		return 100.0
+	return clampf(103.1668 * exp(-0.04354 * (before - after)) - 3.1669, 0.0, 100.0)
+
+
+## Precisão da partida de um lado, ou -1 se ele não jogou. A média harmônica
+## pesa os erros (um lance a 10% derruba a nota de verdade) e a aritmética
+## segura uma partida longa e limpa; o Lichess mistura as duas.
+##
+## ponytail: sem os pesos por volatilidade do Lichess (janela deslizante); a
+## nota sai um pouco diferente da de lá em partidas que oscilam muito.
+static func accuracy(entries: Array, side: int) -> float:
+	var total := 0.0
+	var inverse := 0.0
+	var count := 0
+	for entry in entries:
+		if entry["side"] != side:
+			continue
+		var value := maxf(move_accuracy(entry["score"], entry["after"]), 0.5)
+		total += value
+		inverse += 1.0 / value
+		count += 1
+	if count == 0:
+		return -1.0
+	return (total / count + count / inverse) / 2.0
+
+
 ## `before` e `after` são a vitória esperada de **quem jogou**, antes e depois.
 static func classify(before: float, after: float, is_best: bool) -> Verdict:
 	if is_best:

@@ -546,6 +546,8 @@ func _test_review() -> void:
 		_check(panel._status.text.contains("Dh4#"), "o mate aparece na revisão (%s)" % panel._status.text)
 		_equals(panel._entries[3]["verdict"], GameReview.Verdict.BEST, "o mate é o melhor lance")
 		_equals(panel._entries[2]["verdict"], GameReview.Verdict.BLUNDER, "2.g4 é erro grave")
+		panel._show(0)
+		_check(panel._status.text.begins_with("Precisão: brancas"), "a revisão abre com a precisão (%s)" % panel._status.text)
 		_check(panel._graph.visible, "o gráfico aparece com a análise")
 		_equals(panel._curve.size(), 5, "um ponto por posição")
 		_equals(panel._curve[4], 0.0, "o mate das pretas leva a curva a zero")

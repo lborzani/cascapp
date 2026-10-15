@@ -226,8 +226,8 @@ func _show(ply: int) -> void:
 		_detail.text = ""
 		return
 	if _ply == 0 or _ply > _entries.size():
-		_status.text = "Posição inicial" if _ply == 0 else ""
-		_detail.text = "%d lances analisados." % _entries.size() if _ply == 0 else ""
+		_status.text = _accuracy_text() if _ply == 0 else ""
+		_detail.text = "%d lances analisados. Toque num lance ou no gráfico." % _entries.size() if _ply == 0 else ""
 		return
 
 	var entry: Dictionary = _entries[_ply - 1]
@@ -436,6 +436,16 @@ func _jump_to_mistake() -> void:
 			_show(index + 1)
 			return
 	_detail.text = "Nenhum erro nesta partida."
+
+
+## "Precisão: brancas 87% · pretas 64%" — o resumo que abre a revisão.
+func _accuracy_text() -> String:
+	var parts := PackedStringArray()
+	for pair in [[Board.Side.WHITE, "brancas"], [Board.Side.BLACK, "pretas"]]:
+		var value := GameReview.accuracy(_entries, pair[0])
+		if value >= 0.0:
+			parts.append("%s %d%%" % [pair[1], roundi(value)])
+	return "Precisão: " + " · ".join(parts)
 
 
 static func _move_number(index: int) -> String:
