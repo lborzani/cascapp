@@ -346,32 +346,22 @@ func _greet() -> void:
 # --- versão nova ---------------------------------------------------------------
 
 
-## Pergunta ao GitHub se saiu versão nova, no máximo uma vez por dia.
+## Pergunta ao GitHub se saiu versão nova, no máximo uma vez por hora.
 ##
 ## Só em build exportado: pelo editor a versão é a do `project.godot`, que não
 ## acompanha as releases, e o aviso apareceria em toda execução. Falha de rede,
-## de API ou de JSON é silêncio — e o dia não conta como consultado, então a
+## de API ou de JSON é silêncio — e a hora não conta como consultada, então a
 ## próxima volta ao menu tenta de novo.
 func _check_update() -> void:
 	var now := int(Time.get_unix_time_from_system())
 	if not OS.has_feature("template") or not UpdateCheck.due(now):
 		return
-	var http := HTTPRequest.new()
-	http.timeout = 10.0
-	add_child(http)
-	http.request_completed.connect(
-		func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-			http.queue_free()
-			if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-				return
-			var release = JSON.parse_string(body.get_string_from_utf8())
-			if not release is Dictionary:
-				return
-			Prefs.set_update_checked(now)
-			_offer_update(release)
+	UpdateCheck.fetch(self, func(release: Dictionary) -> void:
+		if release.is_empty():
+			return
+		Prefs.set_update_checked(now)
+		_offer_update(release)
 	)
-	if http.request(UpdateCheck.URL) != OK:
-		http.queue_free()
 
 
 ## O cartão da versão nova, a partir do JSON da release.

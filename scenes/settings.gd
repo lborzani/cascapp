@@ -19,6 +19,8 @@ const JOIN_SCENE := "res://scenes/join.tscn"
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
+## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
+var _update_url := ""
 
 
 func _ready() -> void:
@@ -60,6 +62,7 @@ func _ready() -> void:
 	var games := Prefs.history().size()
 	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
 	%HistoryButton.pressed.connect(_open_history)
+	%UpdateButton.pressed.connect(_check_updates)
 	_update_preview()
 
 
@@ -141,6 +144,40 @@ func go_back() -> void:
 		_history.close()
 		return
 	_leave()
+
+
+# --- atualização ----------------------------------------------------------------
+
+
+## Procura versão nova na hora, sem a espera de uma hora do menu e sem o "Agora
+## não" que o jogador deu lá: quem toca aqui quer a resposta. Achou, o mesmo
+## botão vira "Baixar".
+func _check_updates() -> void:
+	Sound.play(Sound.Cue.TAP)
+	if not _update_url.is_empty():
+		OS.shell_open(_update_url)
+		return
+	%UpdateButton.disabled = true
+	%UpdateButton.text = "Procurando…"
+	UpdateCheck.fetch(self, _show_update)
+
+
+func _show_update(release: Dictionary) -> void:
+	%UpdateButton.disabled = false
+	%UpdateResult.visible = true
+	var offer := UpdateCheck.offer(release, AppVersion.text(), "") if not release.is_empty() else {}
+	if release.is_empty():
+		%UpdateResult.text = "Não deu para consultar agora. Confira a internet e tente de novo."
+		%UpdateButton.text = "Procurar atualização"
+	elif offer.is_empty():
+		Prefs.set_update_checked(int(Time.get_unix_time_from_system()))
+		%UpdateResult.text = "Você já está na versão mais recente (%s)." % AppVersion.text()
+		%UpdateButton.text = "Procurar atualização"
+	else:
+		_update_url = offer["url"]
+		%UpdateResult.text = "Versão %s disponível. O APK baixa pelo navegador; abra o arquivo para instalar por cima." % offer["version"]
+		%UpdateButton.text = "Baixar a versão %s" % offer["version"]
+		%UpdateButton.theme_type_variation = &"PrimaryButton"
 
 
 ## Por cima desta tela, e não uma cena: fechar volta para cá como estava.
