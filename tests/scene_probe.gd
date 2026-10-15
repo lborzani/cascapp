@@ -543,7 +543,7 @@ func _test_review() -> void:
 		OS.delay_msec(20)
 	_check(panel._thread == null, "a análise termina")
 	if panel._entries.is_empty():
-		_check(panel._status.text.contains("indisponível"), "sem motor, a tela diz por quê")
+		_check(panel._status.text.begins_with("Não foi possível analisar"), "sem motor, a tela diz por quê")
 		_check(not panel._graph.visible and not panel._bar.visible, "e não há gráfico nem barra")
 	else:
 		panel._show(4)

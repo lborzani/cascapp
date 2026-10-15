@@ -167,7 +167,7 @@ func _process(_delta: float) -> void:
 	if _thread == null:
 		return
 	if _thread.is_alive():
-		_status.text = "Analisando com o Stockfish… %d/%d" % [_review.progress, _history.size()]
+		_status.text = "Analisando a partida… %d/%d" % [_review.progress, _history.size()]
 		return
 	var entries: Array = _thread.wait_to_finish()
 	_thread = null
@@ -224,7 +224,7 @@ func _show(ply: int) -> void:
 		_detail.text = ""
 		return
 	if _entries.is_empty() and not _history.is_empty():
-		_status.text = "Não foi possível analisar — Stockfish indisponível."
+		_status.text = "Não foi possível analisar a partida agora."
 		_detail.text = ""
 		return
 	if _ply == 0 or _ply > _entries.size():
