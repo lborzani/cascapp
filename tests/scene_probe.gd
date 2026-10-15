@@ -619,6 +619,7 @@ func _test_puzzle() -> void:
 
 	panel._show(7)
 	_check(panel._retry.visible, "o mate perdido oferece o desafio")
+	_check(not panel._detail.text.contains("Dxf7") and not panel._status.text.contains("Dxf7"), "sem entregar a resposta (%s)" % panel._detail.text)
 	panel._retry.pressed.emit()
 	_check(panel._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % panel._status.text)
 	_equals(panel._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")

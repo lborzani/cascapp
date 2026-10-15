@@ -237,13 +237,17 @@ func _show(ply: int) -> void:
 	var label: String = "Mate perdido" if entry["missed_mate"] else GameReview.LABEL[verdict]
 	_status.text = "%s — %s" % [_move_text(_ply - 1, entry), label]
 	_tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
+	# O lance certo não é dito: quem errou descobre no desafio, que é o que
+	# ensina. A revisão só aponta que havia coisa melhor.
+	_retry.visible = (
+		(entry["missed_mate"] or verdict >= GameReview.Verdict.INACCURACY) and entry["best"] != ""
+	)
 	if entry["missed_mate"]:
-		_detail.text = "Havia %s." % entry["best_san"]
-	elif verdict >= GameReview.Verdict.INACCURACY and entry["best_san"] != "":
-		_detail.text = "O melhor era %s." % entry["best_san"]
+		_detail.text = "Havia um mate. Toque em Tentar de novo para achar."
+	elif _retry.visible:
+		_detail.text = "Havia um lance melhor. Toque em Tentar de novo para achar."
 	else:
 		_detail.text = ""
-	_retry.visible = entry["missed_mate"] or verdict == GameReview.Verdict.BLUNDER
 
 
 ## Um botão por meio-lance. Antes da análise eles já existem — o replay não
