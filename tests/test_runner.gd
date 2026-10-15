@@ -481,6 +481,8 @@ func _test_review_rules() -> void:
 	_check(GameReview.keeps_mate(0, true), "desafio: dar o mate vale")
 	_check(not GameReview.keeps_mate(0, false), "desafio: sem mate na mesa, errou")
 	_check(not GameReview.keeps_mate(2, false), "desafio: mate virou do adversário, errou")
+	_check(GameReview.holds(60.0, 55.0), "desafio: perder 5 pontos ainda segura")
+	_check(not GameReview.holds(60.0, 45.0), "desafio: perder 15 não segura")
 
 
 ## Entradas de mentira, só com o que a curva lê: a nota de quem jogou, antes

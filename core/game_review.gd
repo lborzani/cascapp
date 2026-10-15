@@ -102,6 +102,13 @@ static func missed_mate(mate_before: int, mate_after: int, delivered: bool) -> b
 	return mate_before > 0 and not keeps_mate(mate_after, delivered)
 
 
+## A régua do desafio "ache um lance melhor": o lance não jogou fora vitória
+## esperada a ponto de virar imprecisão. Vale qualquer lance bom, não só o do
+## motor — em muita posição há dois ou três que seguram.
+static func holds(before: float, after: float) -> bool:
+	return before - after < INACCURACY_DROP
+
+
 ## O lance deu o mate ou deixou o adversário sem saída (`mate_after` negativo,
 ## do ponto de vista dele). É a régua do desafio "encontre o mate": vale
 ## qualquer caminho, não só o que o motor escolheu.

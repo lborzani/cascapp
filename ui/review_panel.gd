@@ -51,6 +51,8 @@ var _puzzle_state: MatchState = null
 var _pick := Board.NO_SQUARE
 var _misses := 0
 var _solved := false
+## Mate perdido pede o mate de volta; erro grave pede só um lance que segure.
+var _mate_puzzle := false
 var _tried: Move = null
 var _view_flipped := false
 ## A conferência do lance roda numa thread, com um Stockfish só do desafio — o
@@ -237,11 +239,11 @@ func _show(ply: int) -> void:
 	_tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
 	if entry["missed_mate"]:
 		_detail.text = "Havia %s." % entry["best_san"]
-		_retry.visible = true
 	elif verdict >= GameReview.Verdict.INACCURACY and entry["best_san"] != "":
 		_detail.text = "O melhor era %s." % entry["best_san"]
 	else:
 		_detail.text = ""
+	_retry.visible = entry["missed_mate"] or verdict == GameReview.Verdict.BLUNDER
 
 
 ## Um botão por meio-lance. Antes da análise eles já existem — o replay não
@@ -282,6 +284,7 @@ func _start_puzzle(index: int) -> void:
 	_solved = false
 	_pick = Board.NO_SQUARE
 	_puzzle_state = _states[index].clone()
+	_mate_puzzle = _entries[index]["missed_mate"]
 	_view_flipped = _board.flipped
 	_board.flipped = _puzzle_state.side_to_move == Board.Side.BLACK
 	_nav.visible = false
@@ -291,9 +294,10 @@ func _start_puzzle(index: int) -> void:
 	_bar.visible = false
 	_retry.text = "Desistir"
 	_tone(AppTheme.TEXT_DIM)
-	_status.text = "Encontre o mate! Jogam as %s." % (
-		"brancas" if _puzzle_state.side_to_move == Board.Side.WHITE else "pretas"
-	)
+	_status.text = "%s Jogam as %s." % [
+		"Encontre o mate!" if _mate_puzzle else "Ache um lance melhor!",
+		"brancas" if _puzzle_state.side_to_move == Board.Side.WHITE else "pretas",
+	]
 	_detail.text = "Toque na peça e depois na casa."
 	_tone(AppTheme.ACCENT)
 	_draw_puzzle(PackedInt32Array())
@@ -379,11 +383,13 @@ func _try(move: Move) -> void:
 	_status.text = "Conferindo…"
 	_detail.text = ""
 	_checker = Thread.new()
-	_checker.start(_judge.bind(after, ChessRules.new().uci(move), str(_entries[_puzzle]["best"])))
+	var entry: Dictionary = _entries[_puzzle]
+	_checker.start(_judge.bind(after, ChessRules.new().uci(move), str(entry["best"]), float(entry["score"])))
 
 
-## Na thread. Sem motor, só o lance que ele tinha apontado vale.
-func _judge(after: MatchState, played: String, best: String) -> bool:
+## Na thread. Sem motor, só o lance que ele tinha apontado vale. `before` é a
+## vitória esperada de quem joga na posição do desafio.
+func _judge(after: MatchState, played: String, best: String, before: float) -> bool:
 	var rules := ChessRules.new()
 	if _puzzle_engine == null:
 		_puzzle_engine = Stockfish.new()
@@ -392,28 +398,41 @@ func _judge(after: MatchState, played: String, best: String) -> bool:
 	if _puzzle_engine == null:
 		return played == best
 	var seen := GameReview.look(_puzzle_engine, rules, after)
-	return not seen.is_empty() and GameReview.keeps_mate(seen["mate"], seen["mated"])
+	if seen.is_empty():
+		return played == best
+	if _mate_puzzle:
+		return GameReview.keeps_mate(seen["mate"], seen["mated"])
+	return GameReview.holds(before, 100.0 - float(seen["score"]))
 
 
 func _judged(solved: bool) -> void:
 	var san := ChessRules.new().notation(_puzzle_state, _tried)
 	if solved:
 		_solved = true
-		_status.text = "Isso! %s %s" % [san, "é xeque-mate." if san.ends_with("#") else "mantém o mate."]
+		var praise := "segura a posição."
+		if san.ends_with("#"):
+			praise = "é xeque-mate."
+		elif _mate_puzzle:
+			praise = "mantém o mate."
+		elif san == _entries[_puzzle]["best_san"]:
+			praise = "era o melhor lance."
+		_status.text = "Isso! %s %s" % [san, praise]
 		_tone(AppTheme.SUCCESS)
 		_detail.text = ""
 		_retry.text = "Voltar à revisão"
 		return
 	_misses += 1
 	_pick = Board.NO_SQUARE
-	_status.text = "%s deixa o mate escapar. Tente de novo." % san
+	_status.text = "%s %s Tente de novo." % [
+		san, "deixa o mate escapar." if _mate_puzzle else "ainda perde muito."
+	]
 	_tone(AppTheme.DANGER)
 	_detail.text = ""
 	if _misses >= HINT_AFTER:
 		var best := ChessRules.new().move_from_uci(_puzzle_state, str(_entries[_puzzle]["best"]))
 		if best != null:
 			_pick = best.from_square()
-			_detail.text = "Dica: a peça destacada dá o mate."
+			_detail.text = "Dica: a peça destacada %s." % ("dá o mate" if _mate_puzzle else "faz o melhor lance")
 	_draw_puzzle(PackedInt32Array())
 
 

@@ -588,8 +588,30 @@ func _test_puzzle() -> void:
 		await get_tree().process_frame
 		return
 
+	panel._show(1)
+	_check(not panel._retry.visible, "lance bom não oferece desafio")
+
+	# 3...Cf6?? deixa o mate: o desafio é achar um lance que segure. a6 não
+	# segura (Dxf7# continua), e depois de três erros a dica aponta a peça.
 	panel._show(6)
-	_check(not panel._retry.visible, "lance sem mate perdido não oferece desafio")
+	_check(panel._retry.visible, "erro grave oferece o desafio")
+	panel._retry.pressed.emit()
+	_check(panel._status.text.begins_with("Ache um lance melhor! Jogam as pretas"), "o desafio do erro começa (%s)" % panel._status.text)
+	for attempt in 3:
+		panel._on_tap(_square("a7"))
+		panel._on_tap(_square("a6"))
+		await _settle(panel, "_checker")
+		_check(panel._status.text.contains("ainda perde muito"), "a6 é recusado (%d)" % (attempt + 1))
+	var best := ChessRules.new().move_from_uci(panel._puzzle_state, str(panel._entries[5]["best"]))
+	_equals(panel._pick, best.from_square(), "a dica aponta a peça do melhor lance")
+	# Vale qualquer lance que segure, não só o do motor: g6 e De7 tapam o f7.
+	var other := "d8e7" if panel._entries[5]["best"] != "d8e7" else "g7g6"
+	panel._on_tap(Board.square(other.unicode_at(0) - 97, int(other[1]) - 1))
+	panel._on_tap(Board.square(other.unicode_at(2) - 97, int(other[3]) - 1))
+	await _settle(panel, "_checker")
+	_check(panel._solved, "outro lance bom também resolve (%s)" % panel._status.text)
+	panel._retry.pressed.emit()
+
 	panel._show(7)
 	_check(panel._retry.visible, "o mate perdido oferece o desafio")
 	panel._retry.pressed.emit()
