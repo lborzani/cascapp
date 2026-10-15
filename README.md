@@ -1919,11 +1919,28 @@ deu certo é o processo **respondendo**, e não o código de saída do `deploy`.
 
 ### Release por tag
 
-`.github/workflows/release.yml` publica um APK **assinado** a partir de uma tag:
+`.github/workflows/release.yml` publica um APK **assinado** a partir de uma tag.
+A tag e o bump saem de um comando só:
 
 ```bash
-git tag v1.16 && git push origin v1.16
+tools/release.sh 1.21
 ```
+
+```bash
+git push origin HEAD v1.21
+```
+
+O primeiro escreve `version/name` e `version/code` no `export_presets.cfg`,
+commita só esse arquivo (`chore: versão 1.21 (code 121)`) e cria a tag anotada
+`v1.21` — sem empurrar nada. O segundo é a decisão de publicar, e continua sendo
+um comando que alguém digita. Rode na branch de onde a release deve sair.
+
+O `version/code` é derivado do nome: maior × 100 + menor, então 1.21 → 121 e
+2.0 → 200. O Android só instala por cima um APK de code maior, e escrever o code
+à mão era como ele ficava para trás (a 1.20 saiu com code 19). O script recusa
+versão que não sobe (pela ordem numérica: 1.9 < 1.10), menor acima de 99, tag
+que já existe e preset com mudança local, que iria junto no commit sem ninguém
+ver.
 
 A esteira roda as suítes de novo, confere que a tag e o `version/name` do
 `export_presets.cfg` dizem o mesmo número, exporta em release, verifica a
@@ -1938,6 +1955,24 @@ release cujo número ninguém consegue citar sem errar.
 Disparada à mão pelo botão do GitHub, a esteira faz tudo menos publicar: o APK
 sai como artefato do trabalho. É o caminho para testar a assinatura sem queimar
 uma tag.
+
+#### O aviso de versão nova
+
+O app instalado descobre a release sozinho. No menu, no máximo uma vez por dia,
+ele consulta `https://api.github.com/repos/lborzani/cascapp/releases/latest`
+(sem servidor próprio e sem token — a API pública aceita 60 consultas por hora
+por IP). Se a `tag_name` é maior que a versão instalada e tem um `.apk` anexado,
+aparece um cartão no topo do menu com **Baixar**, que abre o APK no navegador, e
+**Agora não**, que cala aquela versão — a seguinte avisa de novo.
+
+Falha de rede ou resposta estranha é silêncio, e o dia não conta como
+consultado. Só build exportado pergunta: pelo editor a versão é a do
+`project.godot`, que não acompanha as releases. A decisão está em
+`UpdateCheck.offer()` (`net/update_check.gd`), pura, testada no `test_runner`; o
+cartão, no `scene_probe`, com a resposta injetada.
+
+Por isso a release precisa do APK **anexado** — é o que a esteira faz. Uma
+release criada à mão sem o arquivo não gera aviso.
 
 #### Os três segredos
 
