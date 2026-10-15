@@ -25,6 +25,12 @@ primary_region = 'gru'
 [build]
   dockerfile = 'Dockerfile'
 
+# PocketBase das contas, no servidor de casa (`pocketbase/`). Não é segredo: é o
+# mesmo endereço público que o app usa. Sem ele o relay não confirma nome de
+# ninguém e as salas são as de sempre (ver `src/accounts.ts`).
+[env]
+  POCKETBASE_URL = 'https://mammus.tailb8b7e1.ts.net:8443'
+
 [http_service]
   internal_port = 8080
   force_https = true
