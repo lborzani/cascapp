@@ -6,6 +6,7 @@ import {
   parseClientMessage,
   type ClientMessage,
   type ErrorReason,
+  type LiveSummary,
   type RoomSummary,
   type Seat,
   type ServerMessage,
@@ -16,6 +17,7 @@ import {
   peersOf,
   presentSeats,
   RoomRegistry,
+  watchersOf,
   type Room,
   type SeatOutcome,
 } from './rooms.js';
@@ -93,6 +95,8 @@ const DEFAULTS = {
 interface Session {
   room: Room<WebSocket> | null;
   seat: Seat | null;
+  /** Assiste à sala em `room`, sem assento. */
+  watching: boolean;
   alive: boolean;
   helloTimer: NodeJS.Timeout;
   rateStart: number;
@@ -146,6 +150,25 @@ export function createRelay(options: RelayOptions = {}): Relay {
       response.end(JSON.stringify({ rooms }));
       return;
     }
+    // Partidas públicas em andamento, para quem quer assistir. Mesmo critério de
+    // privacidade de `/rooms`: só aparece quem abriu a sala pedindo para aparecer.
+    if (request.url === '/live') {
+      const rooms: LiveSummary[] = registry
+        .listLive(config.roomListLimit)
+        .map((room) => ({
+          code: room.code,
+          game: room.game,
+          host: room.host,
+          tc: room.tc,
+          age: Math.round((Date.now() - room.createdAt) / 1000),
+          seats: room.capacity,
+          taken: occupied(room),
+          watchers: watchersOf(room).length,
+        }));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ rooms }));
+      return;
+    }
     if (request.url === '/healthz') {
       response.writeHead(200, { 'content-type': 'application/json' });
       // `machine` responde à única pergunta que este serviço não consegue
@@ -174,6 +197,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     const session: Session = {
       room: null,
       seat: null,
+      watching: false,
       alive: true,
       helloTimer: setTimeout(() => {
         if (session.room === null) {
@@ -228,6 +252,9 @@ export function createRelay(options: RelayOptions = {}): Relay {
             registry.joinRoom(code, socket, message.key)
           );
           break;
+        case 'watch':
+          watch(socket, session, message.room);
+          break;
         default:
           fail(socket, 'not_in_room', 'Entre em uma sala antes de enviar mensagens.');
       }
@@ -239,9 +266,17 @@ export function createRelay(options: RelayOptions = {}): Relay {
         // Para todos os outros, e com a assinatura de quem falou. Com dois
         // assentos "o outro" era um endereço; com quatro, quem recebe precisa
         // saber de quem veio para saber de quem é a vez.
+        //
+        // Espectador não tem assento e cai aqui: o que ele manda não sai para
+        // ninguém. É isso que deixa a sala aberta a quem só tem o código sem
+        // abrir a partida a um lance, um `bye` ou um `sync` forjado por ele.
         if (session.seat === null) break;
+        const relayed: ServerMessage = { t: 'msg', d: message.d, from: session.seat };
         for (const peer of peersOf(session.room, session.seat)) {
-          send(peer, { t: 'msg', d: message.d, from: session.seat });
+          send(peer, relayed);
+        }
+        for (const watcher of watchersOf(session.room)) {
+          send(watcher, relayed);
         }
         break;
       }
@@ -291,14 +326,63 @@ export function createRelay(options: RelayOptions = {}): Relay {
       seats: outcome.room.capacity,
       present: presentSeats(outcome.room),
       key: outcome.key,
+      watchers: watchersOf(outcome.room).length,
     });
     for (const peer of peersOf(outcome.room, outcome.seat)) {
       send(peer, { t: 'peer', seat: outcome.seat });
+    }
+    for (const watcher of watchersOf(outcome.room)) {
+      send(watcher, { t: 'peer', seat: outcome.seat });
+    }
+  }
+
+  function watch(socket: WebSocket, session: Session, rawCode: string): void {
+    const code = rawCode.toUpperCase();
+    if (!isValidRoomCode(code)) {
+      fail(socket, 'bad_code', 'Código de sala inválido.');
+      return;
+    }
+    const outcome = registry.watchRoom(code, socket);
+    if (!outcome.ok) {
+      fail(
+        socket,
+        outcome.reason,
+        outcome.reason === 'watch_full'
+          ? 'Essa partida já tem espectadores demais.'
+          : ERROR_DETAIL.room_not_found
+      );
+      return;
+    }
+    clearTimeout(session.helloTimer);
+    session.room = outcome.room;
+    session.watching = true;
+    const watchers = watchersOf(outcome.room).length;
+    send(socket, {
+      t: 'watching',
+      game: outcome.room.game,
+      seats: outcome.room.capacity,
+      present: presentSeats(outcome.room),
+      watchers,
+    });
+    announceWatchers(outcome.room);
+  }
+
+  /** O contador dos jogadores. Vai inteiro, e não como "+1": um aviso perdido não deixa o número errado para sempre. */
+  function announceWatchers(room: Room<WebSocket>): void {
+    const n = watchersOf(room).length;
+    for (const seated of room.seats) {
+      if (seated !== null) send(seated, { t: 'watchers', n });
     }
   }
 
   function releaseSeat(socket: WebSocket, session: Session): void {
     const { room, seat } = session;
+    if (room !== null && session.watching) {
+      session.room = null;
+      registry.unwatch(room, socket);
+      announceWatchers(room);
+      return;
+    }
     if (room === null || seat === null) return;
     session.room = null;
 
@@ -307,6 +391,9 @@ export function createRelay(options: RelayOptions = {}): Relay {
     // de voltar, e os outros veriam "jogador saiu" no meio da partida.
     for (const peer of registry.release(room, seat, socket)) {
       send(peer, { t: 'peer_left', seat });
+    }
+    for (const watcher of watchersOf(room)) {
+      send(watcher, { t: 'peer_left', seat });
     }
   }
 
@@ -350,6 +437,9 @@ export function createRelay(options: RelayOptions = {}): Relay {
     for (const room of registry.sweep()) {
       for (const seated of room.seats) {
         seated?.terminate();
+      }
+      for (const watcher of room.watchers) {
+        watcher.terminate();
       }
     }
   }, config.sweepIntervalMs);

@@ -41,7 +41,8 @@ export type ErrorReason =
   | 'too_many_rooms'
   | 'hello_timeout'
   | 'rate_limited'
-  | 'not_in_room';
+  | 'not_in_room'
+  | 'watch_full';
 
 /** Índice do assento na sala. 0 é quem abriu. */
 export type Seat = number;
@@ -54,6 +55,16 @@ export type Seat = number;
  */
 export const MIN_SEATS = 2;
 export const MAX_SEATS = 6;
+
+/**
+ * Teto de espectadores por sala.
+ *
+ * Cada espectador é um socket a mais recebendo cada lance, e entrar só pede o
+ * código: sem teto, uma sala vira um alto-falante para quantos sockets alguém
+ * quiser abrir. Oito cobre a roda de amigos olhando por cima do ombro, que é o
+ * caso deste app.
+ */
+export const MAX_WATCHERS = 8;
 
 export type ClientMessage =
   | {
@@ -68,6 +79,12 @@ export type ClientMessage =
     }
   /** `key` vazia é a primeira entrada; preenchida, é uma volta ao mesmo assento. */
   | { t: 'join'; room: string; key: string }
+  /**
+   * Entra como espectador: recebe tudo o que os jogadores falam, e nada do que
+   * ele mandar sai daqui. Não ocupa assento, então não muda a lotação da sala
+   * nem impede que ela expire quando os jogadores vão embora.
+   */
+  | { t: 'watch'; room: string }
   | { t: 'msg'; d: unknown }
   | { t: 'ping' }
   | { t: 'leave' };
@@ -95,6 +112,15 @@ export interface RoomSummary {
   taken: number;
 }
 
+/**
+ * Uma partida em andamento na lista "ao vivo" (`/live`). É a mesma descrição de
+ * `/rooms` mais quantos já estão assistindo; os nomes dos jogadores não são
+ * daqui, porque o servidor só conhece o apelido de quem abriu.
+ */
+export interface LiveSummary extends RoomSummary {
+  watchers: number;
+}
+
 export type ServerMessage =
   /**
    * `present` é a sala inteira vista de fora: quem já está sentado, por índice.
@@ -108,7 +134,19 @@ export type ServerMessage =
       seats: number;
       present: Seat[];
       key: string;
+      /** Espectadores já na sala: quem volta de uma queda vê o contador certo. */
+      watchers: number;
     }
+  /** A resposta ao `watch`. Sem assento e sem chave: espectador não tem lugar. */
+  | {
+      t: 'watching';
+      game: string;
+      seats: number;
+      present: Seat[];
+      watchers: number;
+    }
+  /** Para os jogadores: quantos espectadores há agora. Vai a cada entrada e saída. */
+  | { t: 'watchers'; n: number }
   | { t: 'peer'; seat: Seat }
   | { t: 'peer_left'; seat: Seat }
   /** `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir. */
@@ -254,6 +292,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
             key: typeof record.key === 'string' ? record.key : '',
           }
         : null;
+    case 'watch':
+      return typeof record.room === 'string' ? { t: 'watch', room: record.room } : null;
     case 'msg':
       return { t: 'msg', d: record.d };
     case 'ping':

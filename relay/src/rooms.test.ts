@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { isValidRoomCode, isValidSeatCount, parseClientMessage } from './protocol.js';
-import { occupied, OPEN, presentSeats, RoomRegistry } from './rooms.js';
+import { MAX_WATCHERS } from './protocol.js';
+import { occupied, OPEN, presentSeats, RoomRegistry, watchersOf } from './rooms.js';
 
 /** Socket de mentira: o registro só pergunta se ele está aberto. */
 class FakeSocket {
@@ -343,6 +344,90 @@ describe('RoomRegistry', () => {
   });
 });
 
+describe('espectadores', () => {
+  it('assiste a uma sala que existe, e não a uma que ninguém abriu', () => {
+    const rooms = registry();
+    rooms.openRoom('WATCH1', 'chess', new FakeSocket());
+    const viewer = new FakeSocket();
+
+    const watched = rooms.watchRoom('WATCH1', viewer);
+    assert.equal(watched.ok, true);
+    assert.deepEqual(watched.ok && watchersOf(watched.room), [viewer]);
+
+    const nowhere = rooms.watchRoom('NOPE01', new FakeSocket());
+    assert.equal(nowhere.ok === false && nowhere.reason, 'room_not_found');
+  });
+
+  // Espectador não é jogador: não ocupa assento, não muda a lotação e não
+  // impede que a sala abandonada pelos jogadores expire.
+  it('não ocupa assento nem segura a sala viva', () => {
+    let clock = 1_000;
+    const rooms = registry(() => clock);
+    const opened = rooms.openRoom('WATCH2', 'chess', new FakeSocket());
+    assert.ok(opened.ok);
+    rooms.watchRoom('WATCH2', new FakeSocket());
+
+    assert.equal(occupied(opened.room), 1);
+    assert.equal(rooms.joinRoom('WATCH2', new FakeSocket()).ok, true, 'o assento livre continua livre');
+
+    const room = opened.room;
+    for (const [seat, socket] of room.seats.entries()) {
+      if (socket !== null) rooms.release(room, seat, socket);
+    }
+    clock += 91_000;
+    assert.equal(rooms.sweep().length, 1, 'a sala vazia de jogadores expira mesmo com espectador');
+  });
+
+  it('para no teto, contando só quem ainda está conectado', () => {
+    const rooms = registry();
+    rooms.openRoom('WATCH3', 'chess', new FakeSocket());
+    const viewers = Array.from({ length: MAX_WATCHERS }, () => new FakeSocket());
+    for (const viewer of viewers) assert.equal(rooms.watchRoom('WATCH3', viewer).ok, true);
+
+    const extra = rooms.watchRoom('WATCH3', new FakeSocket());
+    assert.equal(extra.ok === false && extra.reason, 'watch_full');
+
+    // Quem caiu sem fechar não pode guardar a vaga.
+    viewers[0]!.kill();
+    assert.equal(rooms.watchRoom('WATCH3', new FakeSocket()).ok, true);
+  });
+
+  it('sai da lista de quem assiste', () => {
+    const rooms = registry();
+    rooms.openRoom('WATCH4', 'chess', new FakeSocket());
+    const viewer = new FakeSocket();
+    const watched = rooms.watchRoom('WATCH4', viewer);
+    assert.ok(watched.ok);
+    rooms.unwatch(watched.room, viewer);
+    assert.deepEqual(watchersOf(watched.room), []);
+  });
+
+  // A lista ao vivo é o avesso da pública: só salas listadas **cheias**. Uma
+  // sala privada continua só de quem tem o código.
+  it('lista ao vivo só partida pública com a mesa cheia, mais nova primeiro', () => {
+    let clock = 1_000;
+    const rooms = registry(() => clock);
+    rooms.openRoom('PRIV02', 'chess', new FakeSocket());
+    rooms.joinRoom('PRIV02', new FakeSocket());
+    clock += 1_000;
+    rooms.openRoom('WAIT02', 'chess', new FakeSocket(), true);
+    clock += 1_000;
+    rooms.openRoom('LIVE01', 'chess', new FakeSocket(), true);
+    rooms.joinRoom('LIVE01', new FakeSocket());
+    clock += 1_000;
+    rooms.openRoom('LIVE02', 'checkers', new FakeSocket(), true);
+    rooms.joinRoom('LIVE02', new FakeSocket());
+
+    assert.deepEqual(rooms.listLive(10).map((room) => room.code), ['LIVE02', 'LIVE01']);
+    assert.deepEqual(rooms.listLive(1).map((room) => room.code), ['LIVE02']);
+    assert.deepEqual(
+      rooms.listPublic(10).map((room) => room.code),
+      ['WAIT02'],
+      'a lista de quem espera jogador não muda'
+    );
+  });
+});
+
 describe('protocolo', () => {
   it('aceita só códigos plausíveis', () => {
     assert.equal(isValidRoomCode('ABC123'), true);
@@ -358,6 +443,14 @@ describe('protocolo', () => {
     assert.equal(isValidSeatCount(1), false);
     assert.equal(isValidSeatCount(7), false);
     assert.equal(isValidSeatCount(2.5), false);
+  });
+
+  it('entende o pedido de assistir', () => {
+    assert.deepEqual(parseClientMessage('{"t":"watch","room":"ABC123"}'), {
+      t: 'watch',
+      room: 'ABC123',
+    });
+    assert.equal(parseClientMessage('{"t":"watch"}'), null);
   });
 
   it('devolve null para qualquer coisa que não seja do protocolo', () => {

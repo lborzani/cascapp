@@ -45,6 +45,9 @@ signal create_requested(game_id: StringName)
 ## longo o bastante para não virar uma requisição por segundo.
 const ROOM_REFRESH := 6.0
 const BOMBER_LOBBY_SCENE := "res://scenes/bomber_lobby.tscn"
+## Jogos que já sabem receber espectador: os que usam `match.gd`. Os outros
+## recebem quem assiste no relay, mas nenhuma tela deles mostraria a partida.
+const WATCHABLE: Array[StringName] = [Game.CHESS, Game.CHECKERS]
 
 ## Trava contra dois toques seguidos em "Entrar", ou um QR lido no meio de uma
 ## tentativa que ainda não respondeu.
@@ -53,6 +56,7 @@ var _rooms_timer := 0.0
 ## A última resposta do servidor, como veio. O filtro por jogo redesenha a partir
 ## daqui.
 var _rooms: Array = []
+var _live: Array = []
 ## Código da sala para onde se está **voltando** com a chave guardada, ou vazio. É o
 ## que transforma um "nenhuma partida com esse código" genérico em "essa partida já
 ## acabou" — e o que diz que a cadeira guardada pode ser esquecida.
@@ -75,12 +79,15 @@ func _ready() -> void:
 	Pairing.relay.state_changed.connect(_on_relay_state_changed)
 	Pairing.relay.peer_present.connect(func(_seat: int): _show_waiting())
 	Pairing.relay.peer_gone.connect(func(_seat: int): _show_waiting())
+	Pairing.relay.watching.connect(_on_watching)
 	Pairing.nfc.failed.connect(_fail)
 	Pairing.qr_scanner.failed.connect(_fail)
 
 	%RefreshButton.pressed.connect(_fetch_rooms)
 	%RoomsRequest.request_completed.connect(_on_rooms_fetched)
 	%JoinButton.pressed.connect(_join_by_code)
+	%WatchButton.pressed.connect(_watch_by_code)
+	%LiveRequest.request_completed.connect(_on_live_fetched)
 	# A sexta casa vale o mesmo que tocar em "Entrar": quem acabou de digitar o
 	# código inteiro não deveria ter de procurar um botão.
 	%CodeInput.completed.connect(func(_code: String) -> void: _join_by_code())
@@ -93,7 +100,9 @@ func _ready() -> void:
 	# resposta traz todas as salas abertas, que são poucas por natureza, e
 	# refiltrar no aparelho responde no toque em vez de numa ida à rede.
 	%GameFilter.setup(ChipBar.online_game_items())
-	%GameFilter.selected.connect(func(_id: StringName) -> void: _render_rooms())
+	%GameFilter.selected.connect(func(_id: StringName) -> void:
+		_render_rooms()
+		_render_live())
 	_set_hint()
 	_clear_status()
 
@@ -161,6 +170,8 @@ func _fetch_rooms() -> void:
 	# resultado velho não interessa mais.
 	%RoomsRequest.cancel_request()
 	%RoomsRequest.request(address)
+	%LiveRequest.cancel_request()
+	%LiveRequest.request(Net.live_url())
 
 
 func _on_rooms_fetched(
@@ -230,6 +241,44 @@ func _render_rooms() -> void:
 		%RoomRows.add_child(card)
 
 
+## Partidas públicas em andamento. Um relay antigo responde 404 em `/live`, e aí
+## a seção simplesmente não aparece — ela não é o caminho principal desta tela.
+func _on_live_fetched(
+	_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8()) if code == 200 else null
+	show_live(Array(parsed.get("rooms", [])) if parsed is Dictionary else [])
+
+
+## Pública pelo mesmo motivo de [method show_rooms]: dá para plantar a lista.
+func show_live(rooms: Array) -> void:
+	_live = rooms
+	_render_live()
+
+
+func _render_live() -> void:
+	for child in %LiveRows.get_children():
+		child.queue_free()
+	var wanted: StringName = %GameFilter.current
+	var shown := 0
+	for entry in _live:
+		if entry is not Dictionary:
+			continue
+		var id := StringName(str(entry.get("game", "")))
+		if not WATCHABLE.has(id) or (wanted != ChipBar.ALL and id != wanted):
+			continue
+		var card := RoomCard.new()
+		card.code = str(entry.get("code", ""))
+		card.game_id = id
+		card.clock_label = Game.clock_label_for(int(entry.get("tc", 0)))
+		card.host_name = str(entry.get("host", ""))
+		card.watchers = int(entry.get("watchers", 0))
+		card.pressed.connect(_watch_room.bind(card.code))
+		%LiveRows.add_child(card)
+		shown += 1
+	%LiveCaption.visible = shown > 0
+
+
 func _clear_rooms() -> void:
 	for child in %RoomRows.get_children():
 		if child is RoomCard:
@@ -253,6 +302,35 @@ func _join_by_code() -> void:
 	# Sem jogo junto: quem digita um código não sabe — nem precisa saber — o que o
 	# anfitrião abriu, e o aperto de mão é quem responde isso.
 	_enter_room(Game.game_id, code)
+
+
+func _watch_by_code() -> void:
+	var code: String = %CodeInput.code
+	if code.length() != Pairing.CODE_LENGTH:
+		_fail("O código tem %d caracteres." % Pairing.CODE_LENGTH)
+		return
+	_watch_room(code)
+
+
+## Assistir. A tela troca de cena no `Net.watch_started`; recusa (sala que não
+## existe, espectadores demais) volta pelo `join_failed`, como a de entrar.
+func _watch_room(code: String) -> void:
+	if _joining:
+		_fail("Já estou tentando entrar numa sala. Espere terminar para tentar outra.")
+		return
+	_joining = true
+	Game.mode = Game.Mode.ONLINE
+	_set_status("Entrando para assistir a sala %s…" % code)
+	Net.watch_relay(code)
+
+
+## O relay confirmou a sala. Jogo que ainda não tem tela de espectador é recusado
+## aqui, antes de esperar por uma partida que nunca seria desenhada.
+func _on_watching(game_id: String, _capacity: int) -> void:
+	if not _joining or WATCHABLE.has(StringName(game_id)):
+		return
+	Net.leave()
+	_on_join_failed("Assistir ainda não está disponível para %s." % Game.game_title(StringName(game_id)))
 
 
 ## As bolachas de "Criar sala": um jogo por bolacha, só os que têm Online.
@@ -373,6 +451,10 @@ signal waiting_ended
 
 func _show_waiting() -> void:
 	if not _joining:
+		return
+	# Quem assiste não tem cadeira na mesa que enche: só espera ela começar.
+	if Net.is_spectator:
+		_set_status("Na sala. A partida começa quando os jogadores chegarem…")
 		return
 	var capacity := Pairing.relay.capacity()
 	waiting.emit(

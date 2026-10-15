@@ -768,7 +768,9 @@ func reset_to_menu() -> void:
 	# `connected` é o que separa os dois: é ele que faz o `leave` mandar o `bye`.
 	# E a partida que acabou porque o outro foi embora também não tem para onde
 	# voltar, mesmo sem `bye` nosso.
-	if Net.connected or Net.session_ended():
+	# Quem só assistia não tinha cadeira, e a volta guardada é de outra partida:
+	# a dele, de quando caiu antes de vir assistir.
+	if (Net.connected or Net.session_ended()) and not Net.is_spectator:
 		Prefs.forget_rejoin()
 	Net.leave()
 	Pairing.nfc.stop()

@@ -52,6 +52,8 @@ func _ready() -> void:
 	Net.opponent_joined.connect(_on_opponent_joined)
 	# Mesa de mais de dois: a partida começa quando ela enche.
 	Net.table_ready.connect(_on_table_ready)
+	# Espectador: a mesa e o histórico chegaram.
+	Net.watch_started.connect(_enter_match)
 	# A mesma barra e a mesma gaveta da tela inicial: multiplayer não é uma etapa
 	# dentro da coleção de jogos, é um lugar do app ao lado dela. Com uma seta de
 	# voltar ele pareceria um desvio do caminho de escolher jogo, que é

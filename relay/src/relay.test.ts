@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { WebSocket } from 'ws';
 
-import type { ServerMessage } from './protocol.js';
+import { MAX_WATCHERS, type ServerMessage } from './protocol.js';
 import { createRelay, type Relay } from './server.js';
 
 /**
@@ -357,5 +357,131 @@ describe('relay', () => {
     assert.equal(body.ok, true);
     assert.equal(typeof body.rooms, 'number');
     assert.ok(body.machine.length > 0, 'a máquina que respondeu vem no corpo');
+  });
+  it('o espectador recebe a partida e não fala nada para ninguém', async () => {
+    const { host, guest } = await pair('WATCH5');
+
+    const viewer = await Client.open(url);
+    viewer.send({ t: 'watch', room: 'WATCH5' });
+    assert.deepEqual(await viewer.next(), {
+      t: 'watching',
+      game: 'chess',
+      seats: 2,
+      present: [0, 1],
+      watchers: 1,
+    });
+    // Os jogadores ficam sabendo: ninguém é assistido sem saber.
+    assert.deepEqual(await host.next(), { t: 'watchers', n: 1 });
+    assert.deepEqual(await guest.next(), { t: 'watchers', n: 1 });
+
+    const e4 = { t: 'msg', d: { t: 'move', p: [12, 28], n: 0 }, from: 0 };
+    host.send({ t: 'msg', d: e4.d });
+    assert.deepEqual(await guest.next(), e4);
+    assert.deepEqual(await viewer.next(), e4);
+
+    // O que o espectador manda morre no servidor: um `bye` forjado por ele não
+    // pode encerrar a partida de ninguém.
+    viewer.send({ t: 'msg', d: { t: 'bye' } });
+    const e5 = { t: 'msg', d: { t: 'move', p: [52, 36], n: 1 }, from: 1 };
+    guest.send({ t: 'msg', d: e5.d });
+    assert.deepEqual(
+      await host.next(),
+      e5,
+      'o próximo que o anfitrião ouve é o lance, e não o bye do espectador'
+    );
+    assert.deepEqual(await viewer.next(), e5);
+
+    // A saída de um jogador chega a quem assiste; a do espectador baixa o contador.
+    guest.kill();
+    assert.deepEqual(await host.next(), { t: 'peer_left', seat: 1 });
+    assert.deepEqual(await viewer.next(), { t: 'peer_left', seat: 1 });
+    viewer.close();
+    assert.deepEqual(await host.next(), { t: 'watchers', n: 0 });
+
+    host.close();
+  });
+
+  it('quem senta depois já sabe quantos assistem', async () => {
+    const { host, guest } = await pair('WATCH6');
+    const viewer = await Client.open(url);
+    viewer.send({ t: 'watch', room: 'WATCH6' });
+    await viewer.next();
+    await host.next();
+    await guest.next();
+
+    guest.kill();
+    await host.next();
+    const back = await Client.open(url);
+    back.send({ t: 'join', room: 'WATCH6' });
+    const seated = await back.next();
+    assert.equal(seated.t === 'joined' && seated.watchers, 1);
+    assert.deepEqual(await viewer.next(), { t: 'peer_left', seat: 1 });
+    assert.deepEqual(await viewer.next(), { t: 'peer', seat: 1 }, 'quem assiste vê o jogador voltar');
+
+    for (const client of [host, back, viewer]) client.close();
+  });
+
+  it('recusa espectador de sala inexistente e o que passa do teto', async () => {
+    const lost = await Client.open(url);
+    lost.send({ t: 'watch', room: 'NOPE02' });
+    const missing = await lost.next();
+    assert.equal(missing.t === 'error' && missing.reason, 'room_not_found');
+    await lost.closed();
+
+    const { host, guest } = await pair('WATCH7');
+    const viewers: Client[] = [];
+    for (let index = 0; index < MAX_WATCHERS; index += 1) {
+      const viewer = await Client.open(url);
+      viewer.send({ t: 'watch', room: 'WATCH7' });
+      assert.equal((await viewer.next()).t, 'watching');
+      viewers.push(viewer);
+    }
+    const extra = await Client.open(url);
+    extra.send({ t: 'watch', room: 'WATCH7' });
+    const refusal = await extra.next();
+    assert.equal(refusal.t === 'error' && refusal.reason, 'watch_full');
+    await extra.closed();
+
+    for (const client of [host, guest, ...viewers]) client.close();
+  });
+
+  it('lista ao vivo só a partida pública em andamento, com espectadores', async () => {
+    const address = relay.httpServer.address();
+    assert.ok(typeof address === 'object' && address !== null);
+    const live = async () =>
+      (await (await fetch(`http://127.0.0.1:${address.port}/live`)).json()) as {
+        rooms: { code: string; game: string; seats: number; taken: number; watchers: number }[];
+      };
+
+    const open = await Client.open(url);
+    open.send({ t: 'host', room: 'LIVE11', game: 'chess', listed: true });
+    await open.next();
+    assert.equal(
+      (await live()).rooms.some((room) => room.code === 'LIVE11'),
+      false,
+      'esperando jogador ainda não é ao vivo'
+    );
+
+    const guest = await Client.open(url);
+    guest.send({ t: 'join', room: 'LIVE11' });
+    await guest.next();
+    const viewer = await Client.open(url);
+    viewer.send({ t: 'watch', room: 'LIVE11' });
+    await viewer.next();
+
+    const entry = (await live()).rooms.find((room) => room.code === 'LIVE11');
+    assert.ok(entry, 'a mesa cheia e pública aparece');
+    assert.equal(entry.game, 'chess');
+    assert.equal(entry.taken, 2);
+    assert.equal(entry.watchers, 1);
+
+    const hidden = await pair('LIVE12');
+    assert.equal(
+      (await live()).rooms.some((room) => room.code === 'LIVE12'),
+      false,
+      'sala privada não aparece, nem cheia'
+    );
+
+    for (const client of [open, guest, viewer, hidden.host, hidden.guest]) client.close();
   });
 });

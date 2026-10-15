@@ -112,6 +112,58 @@ func generate_moves(state: MatchState) -> Array[Move]:
 	return legal
 
 
+## Os lances que a peça de `from` pode **planejar** enquanto o oponente pensa.
+##
+## Não são os lances legais da posição, e é esse o ponto: o plano vale para a
+## posição **depois** do lance do oponente, que ninguém conhece ainda. Três
+## capturas só existem lá, e a lista legal de agora recusava todas:
+##
+## - **recaptura**: a casa tem peça nossa agora — é ela que o oponente vai comer;
+## - **captura antecipada do peão**: a diagonal está vazia agora — é para lá que a
+##   peça do oponente vai;
+## - **peça cravada**: o lance do oponente pode desfazer a cravada.
+##
+## Por isso as outras peças nossas viram inimigas (capturáveis), as diagonais
+## vazias do peão ganham um alvo, e a legalidade não é conferida. O rei fica
+## nosso: ninguém recaptura no lugar do próprio rei. O roque vem da lista legal,
+## porque com as peças trocadas de lado as casas dele pareceriam atacadas.
+##
+## A conferência de verdade acontece na hora de jogar, contra a posição real.
+##
+## ponytail: peça do oponente que bloqueia o caminho agora continua bloqueando o
+## plano (o chessground ignora ocupação de todo). Liberar isso se alguém sentir
+## falta de planejar "através" de uma peça que vai sair.
+func premove_candidates(state: MatchState, from: int) -> Array[Move]:
+	var mover := state.squares[from]
+	var side := Board.side_of(mover)
+	var enemy := Board.opponent(side)
+	var ghost := state.clone()
+	ghost.side_to_move = side
+	ghost.meta["ep"] = Board.NO_SQUARE
+	for square in Board.SQUARE_COUNT:
+		var piece := ghost.squares[square]
+		if square == from or piece == 0 or Board.side_of(piece) != side:
+			continue
+		if Board.kind_of(piece) != Board.Kind.KING:
+			ghost.squares[square] = Board.piece(enemy, Board.kind_of(piece))
+	if Board.kind_of(mover) == Board.Kind.PAWN:
+		var forward := 1 if side == Board.Side.WHITE else -1
+		for df: int in [-1, 1]:
+			var file := Board.file_of(from) + df
+			var rank := Board.rank_of(from) + forward
+			if Board.in_bounds(file, rank) and ghost.squares[Board.square(file, rank)] == 0:
+				ghost.squares[Board.square(file, rank)] = Board.piece(enemy, Board.Kind.PAWN)
+
+	var found: Array[Move] = []
+	for move in _pseudo_moves(ghost):
+		if move.from_square() == from and not move.tags.has("castle"):
+			found.append(move)
+	for move in generate_moves(state):
+		if move.from_square() == from and move.tags.has("castle"):
+			found.append(move)
+	return found
+
+
 ## Verdadeiro no en passant, e só nele: a peça capturada não está na casa onde o
 ## lance pousa.
 static func _captures_off_square(move: Move) -> bool:

@@ -234,6 +234,11 @@ func _next() -> void:
 		var panel: JoinPanel = _scene.get_node("%JoinPanel")
 		panel.set_process(false)
 		panel.get_node("%RoomsRequest").cancel_request()
+		panel.get_node("%LiveRequest").cancel_request()
+		panel.show_live([
+			{"code": "W4TCH2", "game": "chess", "tc": 2, "host": "Guidon", "watchers": 3},
+			{"code": "D4M4S9", "game": "checkers", "tc": 0, "watchers": 0},
+		])
 		panel.show_rooms([
 			{"code": "K7QW2M", "game": "chess", "tc": 2, "age": 20, "host": "Lucas"},
 			# Mesa de quatro com apelido no limite: é a linha mais comprida que a

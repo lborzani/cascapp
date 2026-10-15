@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { isValidSeatCount, MIN_SEATS, type Seat } from './protocol.js';
+import { isValidSeatCount, MAX_WATCHERS, MIN_SEATS, type Seat } from './protocol.js';
 
 /**
  * Registro de salas, separado do transporte para poder ser testado sem abrir
@@ -47,6 +47,11 @@ export interface Room<S extends OpenState> {
    * aparelho que vai trazê-lo de volta na próxima queda.
    */
   readonly keys: string[];
+  /**
+   * Quem assiste. Fora de `seats` de propósito: espectador não ocupa lugar, não
+   * conta na lotação e não segura a sala viva — `emptySince` só olha assentos.
+   */
+  readonly watchers: Set<S>;
   readonly createdAt: number;
   /**
    * Momento em que a sala ficou sem ninguém. `null` enquanto houver alguém.
@@ -62,6 +67,10 @@ export type SeatOutcome<S extends OpenState> =
       ok: false;
       reason: 'room_taken' | 'room_not_found' | 'room_full' | 'bad_seats' | 'too_many_rooms';
     };
+
+export type WatchOutcome<S extends OpenState> =
+  | { ok: true; room: Room<S> }
+  | { ok: false; reason: 'room_not_found' | 'watch_full' };
 
 export function isOpen<S extends OpenState>(socket: S | null | undefined): socket is S {
   return socket !== null && socket !== undefined && socket.readyState === OPEN;
@@ -87,6 +96,11 @@ export function peersOf<S extends OpenState>(room: Room<S>, seat: Seat): S[] {
     if (index !== seat && isOpen(socket)) peers.push(socket);
   });
   return peers;
+}
+
+/** Espectadores com socket vivo. */
+export function watchersOf<S extends OpenState>(room: Room<S>): S[] {
+  return [...room.watchers].filter((socket) => isOpen(socket));
 }
 
 export class RoomRegistry<S extends OpenState> {
@@ -168,6 +182,7 @@ export class RoomRegistry<S extends OpenState> {
       host,
       seats: new Array<S | null>(capacity).fill(null),
       keys: Array.from({ length: capacity }, () => this.newKey()),
+      watchers: new Set<S>(),
       createdAt: this.now(),
       emptySince: null,
     };
@@ -194,6 +209,49 @@ export class RoomRegistry<S extends OpenState> {
     }
     open.sort((a, b) => b.createdAt - a.createdAt);
     return open.slice(0, limit);
+  }
+
+  /**
+   * Partidas públicas em andamento: listadas e com a mesa cheia. É o avesso de
+   * `listPublic` — lá aparece quem ainda espera jogador, aqui quem já está
+   * jogando e pode ser assistido.
+   *
+   * Uma sala privada nunca aparece aqui: quem quer assistir a ela precisa do
+   * código, que continua sendo o segredo que sempre foi.
+   */
+  listLive(limit: number): Room<S>[] {
+    const live: Room<S>[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.listed && occupied(room) >= room.capacity) live.push(room);
+    }
+    live.sort((a, b) => b.createdAt - a.createdAt);
+    return live.slice(0, limit);
+  }
+
+  /**
+   * Põe o socket para assistir. Vale com a mesa ainda enchendo: quem chega cedo
+   * vê o aperto de mão passar e a partida começar.
+   *
+   * O teto conta só sockets vivos — um espectador que caiu sem `close` não pode
+   * ocupar a vaga de quem quer entrar.
+   */
+  watchRoom(code: string, socket: S): WatchOutcome<S> {
+    const room = this.rooms.get(code);
+    if (room === undefined) {
+      return { ok: false, reason: 'room_not_found' };
+    }
+    for (const watcher of room.watchers) {
+      if (!isOpen(watcher)) room.watchers.delete(watcher);
+    }
+    if (room.watchers.size >= MAX_WATCHERS) {
+      return { ok: false, reason: 'watch_full' };
+    }
+    room.watchers.add(socket);
+    return { ok: true, room };
+  }
+
+  unwatch(room: Room<S>, socket: S): void {
+    room.watchers.delete(socket);
   }
 
   /**
