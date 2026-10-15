@@ -32,6 +32,7 @@ func _ready() -> void:
 	await _test_review()
 	await _test_puzzle()
 	await _test_match_history()
+	_test_verified_names()
 	await _test_spectator()
 	await _test_premove()
 	await _test_premove_limit()
@@ -547,7 +548,9 @@ func _test_review() -> void:
 		panel._show(4)
 		_check(panel._status.text.contains("Dh4#"), "o mate aparece na revisão (%s)" % panel._status.text)
 		_equals(panel._entries[3]["verdict"], GameReview.Verdict.BEST, "o mate é o melhor lance")
-		_equals(panel._entries[2]["verdict"], GameReview.Verdict.BLUNDER, "2.g4 é erro grave")
+		# Erro ou erro grave: a nota exata depende da versão do motor e do tempo
+		# de busca (o Stockfish da CI é outro), e o que importa é não passar batido.
+		_check(panel._entries[2]["verdict"] >= GameReview.Verdict.MISTAKE, "2.g4 é marcado como erro")
 		panel._show(0)
 		_check(panel._status.text.begins_with("Precisão: brancas"), "a revisão abre com a precisão (%s)" % panel._status.text)
 		_check(panel._graph.visible, "o gráfico aparece com a análise")
@@ -688,6 +691,25 @@ func _test_match_history() -> void:
 	settings.queue_free()
 	await get_tree().process_frame
 	Prefs.forget_history()
+
+
+## O nome que o relay conferiu na conta vale por cima do apelido que o aparelho
+## do outro manda; quando o assento troca de dono, a confirmação vai embora.
+func _test_verified_names() -> void:
+	print("nome confirmado pela conta")
+	Net.player_names = {}
+	Net.verified_seats = {}
+	Net._remember_name(1, "Apelido")
+	_equals(Net.name_of(1), "Apelido", "sem conta, vale o apelido do aparelho")
+	Net._on_relay_identity(1, "Ana")
+	_equals(Net.name_of(1), "Ana", "a confirmação do relay troca pelo nome da conta")
+	Net._remember_name(1, "Forjado")
+	_equals(Net.name_of(1), "Ana", "e um apelido depois não passa por cima")
+	Net._on_relay_peer_arrived(1)
+	Net._remember_name(1, "Outra pessoa")
+	_equals(Net.name_of(1), "Outra pessoa", "assento com dono novo volta a aceitar apelido")
+	Net.player_names = {}
+	Net.verified_seats = {}
 
 
 ## Espera a thread `field` do painel terminar, quadro a quadro — é o `_process`

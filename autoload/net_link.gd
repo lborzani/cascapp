@@ -236,6 +236,7 @@ func leave() -> void:
 	_expected_code = ""
 	_ready_seats = {}
 	player_names = {}
+	verified_seats = {}
 	_pending_sync = {}
 	is_spectator = false
 	_watch_started = false
@@ -610,6 +611,9 @@ func _welcome() -> Dictionary:
 ## exatamente igual e o cartão volta a dizer "Jogador 3". Nome é enfeite, e é por
 ## isso que ele pode viajar por fora do histórico de lances.
 var player_names := {}
+## Assentos cujo nome o relay conferiu na conta. O apelido que o aparelho do
+## outro mandar depois não passa por cima do nome confirmado.
+var verified_seats := {}
 
 ## Como **este** aparelho se apresenta.
 ##
@@ -642,7 +646,7 @@ func _name_list() -> Array:
 
 func _remember_name(seat: int, raw: Variant) -> void:
 	var clean := _clean_name(raw)
-	if seat < 0 or clean.is_empty():
+	if seat < 0 or clean.is_empty() or verified_seats.has(seat):
 		return
 	if str(player_names.get(seat, "")) == clean:
 		return
@@ -849,6 +853,7 @@ func watch_relay(code: String) -> void:
 	seats = 2
 	bot_seats = PackedInt32Array()
 	player_names = {}
+	verified_seats = {}
 	_expected_code = code
 	_relay_bridge().watch_room(code)
 
@@ -897,6 +902,7 @@ func _wire_relay() -> bool:
 	_relay_bridge().state_changed.connect(_on_relay_state_changed)
 	_relay_bridge().watching.connect(_on_relay_watching)
 	_relay_bridge().watchers_changed.connect(_on_relay_watchers)
+	_relay_bridge().identity.connect(_on_relay_identity)
 	return true
 
 
@@ -966,7 +972,21 @@ func _on_relay_peer_present(_seat: int) -> void:
 
 ## Alguém chegou com a partida em curso: quem voltou de uma queda, ou quem senta
 ## numa cadeira de máquina. Um aparelho só responde — ver [method _greeter].
+## Nome conferido pelo relay: vale por cima do apelido que o aparelho mandou.
+func _on_relay_identity(seat: int, raw_name: String) -> void:
+	var clean := _clean_name(raw_name)
+	if seat < 0 or clean.is_empty():
+		return
+	verified_seats[seat] = true
+	if str(player_names.get(seat, "")) != clean:
+		player_names[seat] = clean
+		names_changed.emit()
+
+
 func _on_relay_peer_arrived(seat: int) -> void:
+	# Pode ser outra pessoa no mesmo assento: o nome confirmado era do anterior.
+	# Se for a mesma de volta, o relay confirma de novo logo em seguida.
+	verified_seats.erase(seat)
 	# Numa mesa de dois que já acabou para quem ficou, receber de volta abriria
 	# uma partida do lado de lá contra uma tela de "a partida acabou" do lado de cá.
 	if not _session_started or _opponent_gone or _greeter(seat) != local_seat:

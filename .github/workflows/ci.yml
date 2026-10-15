@@ -94,6 +94,18 @@ jobs:
           sudo apt-get install -y -qq stockfish
           STOCKFISH=/usr/games/stockfish godot --headless --path . --script res://tests/stockfish_probe.gd
 
+      # A conta anônima contra um PocketBase de verdade, na mesma versão do
+      # servidor (lida do Dockerfile) e com as mesmas migrations. Fora daqui o
+      # `Account` não liga: sem `CASCAPP_PB_URL`, nenhuma suíte cria conta.
+      - name: Contas (PocketBase)
+        run: |
+          pb=$(grep -oP '(?<=^ARG PB_VERSION=).+' pocketbase/Dockerfile)
+          wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${pb}/pocketbase_${pb}_linux_amd64.zip" -O /tmp/pb.zip
+          unzip -q /tmp/pb.zip pocketbase -d /tmp/pb
+          /tmp/pb/pocketbase serve --http 127.0.0.1:18091 --dir /tmp/pb/data --migrationsDir pocketbase/pb_migrations > pb.log 2>&1 &
+          timeout 30 bash -c 'until curl -sf 127.0.0.1:18091/api/health >/dev/null; do sleep 0.5; done'
+          CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/account_probe.tscn
+
       # Tema e componentes base: fontes embarcadas com os acentos do português,
       # contraste dos pares de texto, as variações que as telas pedem, e a
       # geometria e o comportamento de cada componente. O que só a imagem prova —

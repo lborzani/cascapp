@@ -475,11 +475,13 @@ describe('protocolo', () => {
       tc: 0,
       seats: 2,
       name: '',
+      token: '',
     });
     assert.deepEqual(parseClientMessage('{"t":"join","room":"ABC123"}'), {
       t: 'join',
       room: 'ABC123',
       key: '',
+      token: '',
     });
   });
 

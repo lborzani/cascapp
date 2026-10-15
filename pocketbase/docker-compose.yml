@@ -1,0 +1,24 @@
+# Stack das contas no servidor de casa (`mammus`).
+#
+# Escuta só no 127.0.0.1: quem publica é o Tailscale — a API pela internet
+# (Funnel, porta 8443, só /api) e o painel admin só pela tailnet (porta 8091).
+# Ver o README desta pasta.
+name: cascapp-contas
+
+services:
+  pocketbase:
+    build: .
+    image: cascapp-pocketbase:0.40.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - pb_data:/pb/pb_data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pb_data:

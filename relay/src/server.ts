@@ -1,4 +1,6 @@
 import http from 'node:http';
+
+import type { TokenVerifier } from './accounts.js';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import {
@@ -61,6 +63,11 @@ export interface RelayOptions {
   roomListLimit?: number;
   /** Teto de salas na memória. Ver `RoomRegistry`. */
   roomLimit?: number;
+  /**
+   * Confere o token de conta mandado no `host`/`join`. Ausente, nenhum nome é
+   * confirmado e a sala é exatamente como era antes das contas.
+   */
+  verifyToken?: TokenVerifier;
 }
 
 /**
@@ -85,7 +92,7 @@ const DEFAULTS = {
   // O teto não existe para limitar o jogo: existe para o abuso bater num número
   // antes de bater na memória.
   roomLimit: 1_000,
-} as const satisfies Required<RelayOptions>;
+} as const satisfies Required<Omit<RelayOptions, 'verifyToken'>>;
 
 /**
  * O estado por conexão mora aqui e não em campos enxertados no `WebSocket`,
@@ -235,7 +242,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     if (session.room === null) {
       switch (message.t) {
         case 'host':
-          claimSeat(socket, session, message.room, (code) =>
+          claimSeat(socket, session, message.room, message.token, (code) =>
             registry.openRoom(
               code,
               message.game,
@@ -248,7 +255,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
           );
           break;
         case 'join':
-          claimSeat(socket, session, message.room, (code) =>
+          claimSeat(socket, session, message.room, message.token, (code) =>
             registry.joinRoom(code, socket, message.key)
           );
           break;
@@ -295,6 +302,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     socket: WebSocket,
     session: Session,
     rawCode: string,
+    token: string,
     claim: (code: string) => SeatOutcome<WebSocket>
   ): void {
     const code = rawCode.toUpperCase();
@@ -334,6 +342,56 @@ export function createRelay(options: RelayOptions = {}): Relay {
     for (const watcher of watchersOf(outcome.room)) {
       send(watcher, { t: 'peer', seat: outcome.seat });
     }
+    sendIdentities(socket, outcome.room);
+    confirmIdentity(socket, session, outcome.room, outcome.seat, token);
+  }
+
+  // --- nomes confirmados pela conta -----------------------------------------
+
+  /** Por sala, o nome conferido de cada assento. Some junto com a sala. */
+  const identities = new WeakMap<Room<WebSocket>, Map<Seat, string>>();
+
+  function identitiesOf(room: Room<WebSocket>): Map<Seat, string> {
+    let map = identities.get(room);
+    if (map === undefined) {
+      map = new Map();
+      identities.set(room, map);
+    }
+    return map;
+  }
+
+  /** Quem chega fica sabendo dos nomes já confirmados na sala. */
+  function sendIdentities(socket: WebSocket, room: Room<WebSocket>): void {
+    for (const [seat, name] of identitiesOf(room)) {
+      send(socket, { t: 'identity', seat, name });
+    }
+  }
+
+  /**
+   * O assento acabou de ser ocupado: o nome confirmado de antes era de quem
+   * estava nele, e sai. A conferência roda por fora — a entrada na sala não
+   * espera o PocketBase —, e só vale se, quando a resposta chegar, o mesmo
+   * socket ainda estiver no mesmo assento.
+   */
+  function confirmIdentity(
+    socket: WebSocket,
+    session: Session,
+    room: Room<WebSocket>,
+    seat: Seat,
+    token: string
+  ): void {
+    identitiesOf(room).delete(seat);
+    if (token === '' || config.verifyToken === undefined) return;
+    void config.verifyToken(token).then((name) => {
+      if (name === null || session.room !== room || session.seat !== seat) return;
+      if (room.seats[seat] !== socket) return;
+      identitiesOf(room).set(seat, name);
+      const message: ServerMessage = { t: 'identity', seat, name };
+      for (const seated of room.seats) {
+        if (seated !== null) send(seated, message);
+      }
+      for (const watcher of watchersOf(room)) send(watcher, message);
+    });
   }
 
   function watch(socket: WebSocket, session: Session, rawCode: string): void {
@@ -364,6 +422,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
       present: presentSeats(outcome.room),
       watchers,
     });
+    sendIdentities(socket, outcome.room);
     announceWatchers(outcome.room);
   }
 

@@ -1,8 +1,14 @@
+import { createVerifier } from './accounts.js';
 import { createRelay } from './server.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 
-const relay = createRelay();
+// Sem a variável o relay é o de sempre: ninguém tem o nome confirmado.
+const POCKETBASE_URL = process.env.POCKETBASE_URL ?? '';
+
+const relay = createRelay(
+  POCKETBASE_URL === '' ? {} : { verifyToken: createVerifier(POCKETBASE_URL) }
+);
 
 void relay.listen(PORT).then((port) => {
   const machine = process.env.FLY_MACHINE_ID ?? 'local';

@@ -61,6 +61,7 @@ describe('parseClientMessage host', () => {
       tc: 0,
       seats: 2,
       name: '',
+      token: '',
     });
   });
 

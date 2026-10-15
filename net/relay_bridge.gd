@@ -58,6 +58,9 @@ signal watching(game_id: String, capacity: int)
 ## Quantos espectadores a sala tem agora. Chega aos **jogadores**: a cada entrada
 ## ou saída de quem assiste, e no `joined` de quem volta de uma queda.
 signal watchers_changed(count: int)
+## O servidor conferiu a conta de quem está em `seat` e este é o nome dela.
+## Ver `relay/src/accounts.ts`.
+signal identity(seat: int, name: String)
 signal failed(reason: String)
 signal state_changed(state: State)
 
@@ -468,6 +471,13 @@ func _tick_open(delta: float) -> void:
 		_drop("Sem resposta do servidor.")
 
 
+## O token da conta, se houver uma ativa. Pelo nó, e não pelo nome do autoload:
+## as suítes de rede rodam com `--script`, onde autoload nenhum existe.
+func _account_token() -> String:
+	var account := get_node_or_null("/root/Account")
+	return str(account.token) if account != null else ""
+
+
 func _send_hello() -> void:
 	if _role == "host":
 		_socket.send_text(JSON.stringify({
@@ -478,6 +488,7 @@ func _send_hello() -> void:
 			"tc": _time_control,
 			"seats": _capacity,
 			"name": _host_name,
+			"token": _account_token(),
 		}))
 	elif _role == "watch":
 		_socket.send_text(JSON.stringify({"t": "watch", "room": _room}))
@@ -485,7 +496,7 @@ func _send_hello() -> void:
 		# A chave só existe a partir da segunda entrada, e é ela que devolve o
 		# mesmo assento. Sem ela o servidor senta quem chega no primeiro livre —
 		# certo na primeira vez, errado numa mesa com dois buracos abertos.
-		_socket.send_text(JSON.stringify({"t": "join", "room": _room, "key": _key}))
+		_socket.send_text(JSON.stringify({"t": "join", "room": _room, "key": _key, "token": _account_token()}))
 	_hello_sent = true
 	_set_state(State.WAITING)
 
@@ -517,6 +528,8 @@ func _handle(message: Dictionary) -> void:
 			watching.emit(str(message.get("game", "")), _capacity)
 		"watchers":
 			watchers_changed.emit(int(message.get("n", 0)))
+		"identity":
+			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")))
 		"peer":
 			var arriving := int(message.get("seat", -1))
 			if arriving >= 0 and not _present.has(arriving):
