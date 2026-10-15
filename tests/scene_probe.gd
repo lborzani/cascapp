@@ -38,6 +38,7 @@ func _ready() -> void:
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
+	_test_stockfish_license()
 	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
@@ -1103,6 +1104,20 @@ func _test_bot() -> void:
 	Game.bot_side = Board.Side.BLACK
 	Game.mode = Game.Mode.HOTSEAT
 	Game.local_side = Board.Side.WHITE
+
+
+## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
+## distribui o binário. Uma linha nos Ajustes cumpre isso — e apagá-la numa
+## limpeza de tela não quebraria nada que outro teste veja.
+func _test_stockfish_license() -> void:
+	print("licença do Stockfish")
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	var link: LinkButton = settings.get_node_or_null("%StockfishLicense")
+	_check(link != null, "os Ajustes têm o aviso")
+	if link != null:
+		_check(link.text.contains("GPLv3"), "o aviso nomeia a licença")
+		_check(link.uri.ends_with("/tree/sf_19"), "e leva ao código-fonte da versão que vai no APK")
+	settings.free()
 
 
 ## Toda tela sabe receber o botão de voltar do sistema.

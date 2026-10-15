@@ -129,6 +129,15 @@ layout_mode = 2
 theme_type_variation = &"Caption"
 autowrap_mode = 3
 
+[node name="StockfishLicense" type="LinkButton" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.94902, 0.752941, 0.160784, 1)
+theme_override_font_sizes/font_size = 14
+text = "Stockfish 19 · GPLv3 · código-fonte"
+uri = "https://github.com/official-stockfish/Stockfish/tree/sf_19"
+
 [node name="Tabs" type="Control" parent="Safe/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
