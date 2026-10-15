@@ -441,7 +441,7 @@ func _maybe_think() -> void:
 	_bot_wait = BOT_MIN_THINK
 	# Começa junto com a animação do lance do jogador, e não depois dela: o tempo
 	# que a peça leva para andar é tempo de busca de graça.
-	_bot.think(Game.game_id, _state, Game.bot_level, _bot_budget())
+	_bot.think(Game.game_id, _state, Game.current_bot_level(), _bot_budget())
 
 
 ## Teto de reflexão vindo do relógio do próprio bot. Um vigésimo do que resta dá
@@ -828,7 +828,7 @@ func _record_game(title: String, detail: String) -> void:
 	_recorded = true
 	var against := "No mesmo aparelho"
 	if Game.mode == Game.Mode.SOLO:
-		against = "Contra o bot (%s)" % Bot.level_label(Game.bot_level)
+		against = "Contra o bot (%s)" % Bot.level_label(Game.game_id, Game.current_bot_level())
 	elif Game.mode == Game.Mode.ONLINE:
 		against = "Online contra %s" % _opponent_name()
 	Prefs.record_game({
@@ -1283,7 +1283,7 @@ func _refresh_cards() -> void:
 			view.title = seated if not seated.is_empty() else side_names[card_side]
 			view.subtitle = side_names[card_side]
 		else:
-			var them := "Bot (%s)" % Bot.level_label(Game.bot_level) \
+			var them := "Bot (%s)" % Bot.level_label(Game.game_id, Game.current_bot_level()) \
 				if Game.mode == Game.Mode.SOLO else _opponent_name()
 			view.title = Prefs.player_name() if card_side == Game.local_side else them
 			view.subtitle = side_names[card_side]

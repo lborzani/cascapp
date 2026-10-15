@@ -37,13 +37,32 @@ const MATE := 1_000_000.0
 ## deslize dá o erro humano que a busca não comete sozinha — e é um lance da
 ## lista ordenada, não um lance aleatório, então nunca vira palhaçada.
 ##
-## `elo` é a força do Stockfish no xadrez (`UCI_Elo`, piso 1320). O resto dos
-## campos é da busca própria, que continua jogando damas — e xadrez quando o
-## Stockfish não existe no aparelho.
+## São os níveis das damas, e a base da busca própria no xadrez (ver
+## `CHESS_LEVELS`).
 const LEVELS := [
-	{"label": "Fácil", "depth": 2, "ms": 250, "slip": 0.5, "spread": 4, "elo": 1320},
-	{"label": "Médio", "depth": 4, "ms": 900, "slip": 0.15, "spread": 2, "elo": 1700},
-	{"label": "Difícil", "depth": 6, "ms": 2500, "slip": 0.0, "spread": 0, "elo": 2200},
+	{"label": "Fácil", "depth": 2, "ms": 250, "slip": 0.5, "spread": 4},
+	{"label": "Médio", "depth": 4, "ms": 900, "slip": 0.15, "spread": 2},
+	{"label": "Difícil", "depth": 6, "ms": 2500, "slip": 0.0, "spread": 0},
+]
+
+## No xadrez o jogador escolhe a força pelo título, de iniciante a grande
+## mestre, e o Elo é o do Stockfish (`UCI_Elo`). Os números seguem as faixas da
+## FIDE para os títulos (CM 2200, FM 2300, IM 2400, GM 2500) e as classes de
+## clube abaixo deles.
+##
+## `base` é o nível de `LEVELS` que dá o tempo de busca e que joga quando o
+## Stockfish não existe no aparelho. Iniciante não tem `elo`: o piso do
+## Stockfish é 1320, forte demais para quem está aprendendo, e ali joga a busca
+## própria com deslizes — que é exatamente o adversário que erra peças.
+const CHESS_LEVELS := [
+	{"label": "Iniciante", "elo": 0, "shown": "~800", "base": 0},
+	{"label": "Intermediário", "elo": 1350, "base": 0},
+	{"label": "Avançado", "elo": 1600, "base": 1},
+	{"label": "Especialista", "elo": 1900, "base": 1},
+	{"label": "Candidato a Mestre", "elo": 2200, "base": 2},
+	{"label": "Mestre FIDE", "elo": 2300, "base": 2},
+	{"label": "Mestre Internacional", "elo": 2400, "base": 2},
+	{"label": "Grande Mestre", "elo": 2500, "base": 2},
 ]
 
 ## Nós entre duas consultas ao relógio. Perguntar as horas a cada nó custaria uma
@@ -86,8 +105,21 @@ var _engine_failed := false
 var _engine_elo := -1
 
 
-static func level_label(index: int) -> String:
-	return str(LEVELS[clampi(index, 0, LEVELS.size() - 1)]["label"])
+static func levels(game_id: StringName) -> Array:
+	return CHESS_LEVELS if game_id == &"chess" else LEVELS
+
+
+static func level_label(game_id: StringName, index: int) -> String:
+	var all := levels(game_id)
+	return str(all[clampi(index, 0, all.size() - 1)]["label"])
+
+
+## "Elo 2500", ou "Elo ~800" para quem não é o Stockfish. Vazio fora do xadrez.
+static func level_elo(game_id: StringName, index: int) -> String:
+	if game_id != &"chess":
+		return ""
+	var level: Dictionary = CHESS_LEVELS[clampi(index, 0, CHESS_LEVELS.size() - 1)]
+	return "Elo %s" % str(level.get("shown", level["elo"]))
 
 
 ## Começa a pensar. Retorna na hora; o lance sai por `take_move()`.
@@ -97,9 +129,14 @@ static func level_label(index: int) -> String:
 ## gastaria os mesmos dois segundos e meio por lance com dez minutos na conta ou
 ## com cinco segundos — e perderia no tempo pensando bonito.
 func think(game_id: StringName, state: MatchState, level: int, budget_ms := 0) -> void:
-	var settings: Dictionary = LEVELS[clampi(level, 0, LEVELS.size() - 1)]
+	var settings: Dictionary
+	if game_id == &"chess":
+		var chess: Dictionary = CHESS_LEVELS[clampi(level, 0, CHESS_LEVELS.size() - 1)]
+		settings = (LEVELS[int(chess["base"])] as Dictionary).duplicate()
+		settings["elo"] = chess["elo"]
+	else:
+		settings = (LEVELS[clampi(level, 0, LEVELS.size() - 1)] as Dictionary).duplicate()
 	if budget_ms > 0 and budget_ms < int(settings["ms"]):
-		settings = settings.duplicate()
 		settings["ms"] = budget_ms
 	var position := state.clone()
 	_found = null
@@ -170,7 +207,8 @@ func _quit_engine() -> void:
 ## largada (aparelho sem o binário, Android antigo) desliga o motor para o resto
 ## da partida em vez de tentar subir de novo a cada lance.
 func _ask_engine(state: MatchState, settings: Dictionary) -> Move:
-	if _engine_failed:
+	# Iniciante: abaixo do piso do Stockfish, joga a busca própria.
+	if _engine_failed or int(settings.get("elo", 0)) <= 0:
 		return null
 	if _engine == null:
 		_engine = Stockfish.new()
@@ -180,7 +218,7 @@ func _ask_engine(state: MatchState, settings: Dictionary) -> Move:
 			print("stockfish indisponível — xadrez na busca própria")
 			return null
 		print("stockfish ok")
-	var elo := int(settings["elo"])
+	var elo := int(settings.get("elo", 0))
 	if elo != _engine_elo:
 		_engine.set_strength(elo)
 		_engine_elo = elo

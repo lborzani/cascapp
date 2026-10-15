@@ -56,7 +56,8 @@ func _bot_game() -> void:
 		if rules.outcome(state) != Ruleset.Outcome.ONGOING:
 			break
 		var bot: Bot = bots[ply % 2]
-		bot.think(&"chess", state, 0 if ply % 2 == 0 else 2, 200)
+		# Intermediário (Stockfish a 1350) contra Grande Mestre (2500).
+		bot.think(&"chess", state, 1 if ply % 2 == 0 else Bot.CHESS_LEVELS.size() - 1, 200)
 		var move: Move = null
 		while move == null:
 			OS.delay_msec(10)
@@ -65,6 +66,16 @@ func _bot_game() -> void:
 		rules.apply_move(state, move)
 	_check(legal, "bot×bot via Stockfish: só lances legais (%d meios-lances)" % state.ply)
 	_check(bots[0]._engine != null and bots[0]._engine.running(), "bot usou o Stockfish")
+	# Iniciante fica abaixo do piso do Stockfish: joga a busca própria e nem
+	# sobe o motor.
+	var beginner := Bot.new()
+	beginner.think(&"chess", rules.initial_state(), 0, 200)
+	var opening: Move = null
+	while opening == null:
+		OS.delay_msec(10)
+		opening = beginner.take_move()
+	_check(beginner._engine == null, "iniciante joga sem o Stockfish")
+	beginner.abandon()
 	for bot in bots:
 		bot.abandon()
 	_check(bots[0]._engine == null, "abandon derruba o motor")
