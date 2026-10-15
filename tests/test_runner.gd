@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_test_chess_notation()
 	_test_chess_uci()
 	_test_review_rules()
+	_test_review_curve()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -479,6 +480,27 @@ func _test_review_rules() -> void:
 	_check(GameReview.keeps_mate(0, true), "desafio: dar o mate vale")
 	_check(not GameReview.keeps_mate(0, false), "desafio: sem mate na mesa, errou")
 	_check(not GameReview.keeps_mate(2, false), "desafio: mate virou do adversário, errou")
+
+
+## Entradas de mentira, só com o que a curva lê: a nota de quem jogou, antes
+## (`score`) e depois (`after`), e de que lado ele estava.
+func _test_review_curve() -> void:
+	print("review — curva de vantagem")
+	_equals(GameReview.white_curve([]), [], "sem análise, sem curva")
+	var white := Board.Side.WHITE
+	var black := Board.Side.BLACK
+	var entries := [
+		{"side": white, "score": 52.0, "after": 51.0},
+		{"side": black, "score": 49.0, "after": 70.0},
+		{"side": white, "score": 30.0, "after": 100.0},
+	]
+	var curve := GameReview.white_curve(entries)
+	_equals(curve.size(), 4, "um ponto por posição: a inicial e uma depois de cada lance")
+	_equals(curve[0], 52.0, "começa na nota das brancas antes do primeiro lance")
+	_equals(curve[2], 30.0, "lance das pretas vira: 70 para elas é 30 para as brancas")
+	_equals(curve[3], 100.0, "mate das brancas termina em 100")
+	var mated := GameReview.white_curve([{"side": black, "score": 60.0, "after": 100.0}])
+	_equals(mated[1], 0.0, "mate das pretas termina em 0")
 
 
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:

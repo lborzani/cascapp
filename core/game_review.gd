@@ -79,6 +79,24 @@ static func keeps_mate(mate_after: int, delivered: bool) -> bool:
 	return delivered or mate_after < 0
 
 
+## A partida inteira do ponto de vista das brancas: a vitória esperada delas em
+## cada posição, da inicial (`[0]`) à que ficou depois do último lance analisado
+## (`[entries.size()]`). As entradas guardam a nota de **quem jogou**; aqui ela é
+## virada quando quem jogou foram as pretas. Vazia sem análise.
+static func white_curve(entries: Array) -> Array:
+	if entries.is_empty():
+		return []
+	var first: Dictionary = entries[0]
+	var curve := [_white(first["score"], first["side"])]
+	for entry in entries:
+		curve.append(_white(entry["after"], entry["side"]))
+	return curve
+
+
+static func _white(score: float, side: int) -> float:
+	return score if side == Board.Side.WHITE else 100.0 - score
+
+
 ## Uma entrada por lance de `history`:
 ##
 ##   {"san", "uci", "side", "fen", "best", "best_san", "score", "after",

@@ -540,11 +540,20 @@ func _test_review() -> void:
 	_check(panel._thread == null, "a análise termina")
 	if panel._entries.is_empty():
 		_check(panel._status.text.contains("indisponível"), "sem motor, a tela diz por quê")
+		_check(not panel._graph.visible and not panel._bar.visible, "e não há gráfico nem barra")
 	else:
 		panel._show(4)
 		_check(panel._status.text.contains("Dh4#"), "o mate aparece na revisão (%s)" % panel._status.text)
 		_equals(panel._entries[3]["verdict"], GameReview.Verdict.BEST, "o mate é o melhor lance")
 		_equals(panel._entries[2]["verdict"], GameReview.Verdict.BLUNDER, "2.g4 é erro grave")
+		_check(panel._graph.visible, "o gráfico aparece com a análise")
+		_equals(panel._curve.size(), 5, "um ponto por posição")
+		_equals(panel._curve[4], 0.0, "o mate das pretas leva a curva a zero")
+		_check(panel._graph.dots.has(3), "o erro grave vira ponto no gráfico")
+		panel._graph.seek.emit(2)
+		_equals(panel._ply, 2, "tocar no gráfico leva ao lance")
+		_check(panel._bar.visible, "a barra mostra quem está na frente")
+		_equals(panel._bar.white, panel._curve[2], "com a nota da posição na tela")
 
 	panel.close()
 	await get_tree().process_frame
@@ -585,6 +594,7 @@ func _test_puzzle() -> void:
 	_check(panel._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % panel._status.text)
 	_equals(panel._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")
 	_check(not panel._nav.visible, "a navegação some durante o desafio")
+	_check(not panel._graph.visible and not panel._bar.visible, "gráfico e barra também, para não entregar a resposta")
 
 	for attempt in 3:
 		panel._on_tap(_square("a2"))
@@ -599,6 +609,7 @@ func _test_puzzle() -> void:
 	_check(panel._status.text.contains("xeque-mate"), "e a tela comemora (%s)" % panel._status.text)
 	panel._retry.pressed.emit()
 	_check(panel._puzzle < 0 and panel._nav.visible, "voltar devolve a revisão")
+	_check(panel._graph.visible and panel._bar.visible, "com gráfico e barra de volta")
 
 	panel.close()
 	await get_tree().process_frame

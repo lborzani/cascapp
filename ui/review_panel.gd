@@ -39,6 +39,10 @@ var _next_mistake := Button.new()
 var _retry := Button.new()
 var _nav := HBoxContainer.new()
 var _scroll := ScrollContainer.new()
+var _graph := EvalGraph.new()
+var _bar := EvalGraph.Bar.new()
+## Vitória esperada das brancas por posição; vazia até a análise chegar.
+var _curve: Array = []
 
 ## Desafio "encontre o mate": índice da entrada em jogo, -1 fora dele.
 const HINT_AFTER := 3
@@ -80,6 +84,9 @@ func _ready() -> void:
 	header.add_child(_button("Fechar", &"GhostButton", close))
 	column.add_child(header)
 
+	_bar.visible = false
+	column.add_child(_bar)
+
 	_board.ruleset = ChessRules.new()
 	_board.size_flags_vertical = SIZE_EXPAND_FILL
 	_board.custom_minimum_size = Vector2(0, 300)
@@ -103,6 +110,10 @@ func _ready() -> void:
 	_retry = _button("Tentar de novo", &"PrimaryButton", _toggle_puzzle)
 	_retry.visible = false
 	column.add_child(_retry)
+
+	_graph.visible = false
+	_graph.seek.connect(_show)
+	column.add_child(_graph)
 
 	_nav.add_theme_constant_override("separation", 8)
 	_nav.add_child(_button("Anterior", &"GhostButton", func(): _show(_ply - 1)))
@@ -156,9 +167,26 @@ func _process(_delta: float) -> void:
 	if _thread.is_alive():
 		_status.text = "Analisando com o Stockfish… %d/%d" % [_review.progress, _history.size()]
 		return
-	_entries = _thread.wait_to_finish()
+	var entries: Array = _thread.wait_to_finish()
 	_thread = null
+	_analysed(entries)
+
+
+## A análise chegou: marcas nos chips, gráfico e barra.
+func _analysed(entries: Array) -> void:
+	_entries = entries
 	_next_mistake.disabled = _entries.is_empty()
+	_curve = GameReview.white_curve(_entries)
+	var dots := {}
+	for i in _entries.size():
+		var entry: Dictionary = _entries[i]
+		if entry["missed_mate"]:
+			dots[i + 1] = AppTheme.DANGER
+		elif entry["verdict"] >= GameReview.Verdict.INACCURACY:
+			dots[i + 1] = VERDICT_COLOR[entry["verdict"]]
+	_graph.curve = _curve
+	_graph.dots = dots
+	_graph.visible = not _curve.is_empty() and _puzzle < 0
 	_fill_moves()
 	_show(_ply)
 
@@ -185,6 +213,10 @@ func _show(ply: int) -> void:
 	_retry.visible = false
 	for i in _moves.get_child_count():
 		(_moves.get_child(i) as Button).button_pressed = i == _ply - 1
+	_graph.cursor = _ply
+	_bar.visible = _ply < _curve.size() and _puzzle < 0
+	if _bar.visible:
+		_bar.white = _curve[_ply]
 
 	if _thread != null:
 		_detail.text = ""
@@ -254,6 +286,9 @@ func _start_puzzle(index: int) -> void:
 	_board.flipped = _puzzle_state.side_to_move == Board.Side.BLACK
 	_nav.visible = false
 	_scroll.visible = false
+	# A barra e o gráfico entregariam a resposta: a curva cai logo depois do lance.
+	_graph.visible = false
+	_bar.visible = false
 	_retry.text = "Desistir"
 	_tone(AppTheme.TEXT_DIM)
 	_status.text = "Encontre o mate! Jogam as %s." % (
@@ -276,6 +311,7 @@ func _end_puzzle() -> void:
 	_board.capture_targets = PackedInt32Array()
 	_nav.visible = true
 	_scroll.visible = true
+	_graph.visible = not _curve.is_empty()
 	_retry.text = "Tentar de novo"
 	_show(_ply)
 
