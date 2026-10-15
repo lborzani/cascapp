@@ -31,6 +31,7 @@ func _ready() -> void:
 	await _test_rematch()
 	await _test_review()
 	await _test_puzzle()
+	await _test_match_history()
 	await _test_spectator()
 	await _test_premove()
 	await _test_premove_limit()
@@ -640,6 +641,52 @@ func _test_puzzle() -> void:
 	_check(not is_instance_valid(panel), "fechar no meio de tudo não trava")
 	scene.queue_free()
 	await get_tree().process_frame
+
+
+## A partida que termina vai para o histórico uma vez só, e o histórico abre a
+## revisão dela. O voltar do sistema fecha as camadas de cima para baixo.
+func _test_match_history() -> void:
+	print("histórico de partidas")
+	Prefs.forget_history()
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Pretas venceram", "Xeque-mate em 4 lances.", true)
+	scene._show_overlay("Pretas venceram", "Xeque-mate em 4 lances.", true)
+	var games := Prefs.history()
+	_equals(games.size(), 1, "a partida entra uma vez só, mesmo com o painel reaberto")
+	if not games.is_empty():
+		_equals(games[0]["against"], "No mesmo aparelho", "com o modo")
+		_equals((games[0]["moves"] as Array).size(), 4, "e os lances")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	var button: Button = settings.get_node("%HistoryButton")
+	_equals(button.text, "Histórico de partidas (1)", "a tela Você conta as partidas")
+	button.pressed.emit()
+	var panel: HistoryPanel = settings._history
+	_check(panel != null, "o botão abre o histórico")
+	var review_buttons := panel.find_children("*", "Button", true, false).filter(func(b): return b.text == "Revisar")
+	_equals(review_buttons.size(), 1, "uma linha por partida")
+	review_buttons[0].pressed.emit()
+	_check(is_instance_valid(panel._review), "Revisar abre a revisão da partida")
+	_equals(panel._review._moves.get_child_count(), 4, "com os lances dela")
+	settings.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel._review) and is_instance_valid(panel), "voltar fecha a revisão primeiro")
+	settings.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "e depois o histórico")
+	settings.queue_free()
+	await get_tree().process_frame
+	Prefs.forget_history()
 
 
 ## Espera a thread `field` do painel terminar, quadro a quadro — é o `_process`

@@ -18,6 +18,7 @@ const JOIN_SCENE := "res://scenes/join.tscn"
 
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
+var _history: HistoryPanel = null
 
 
 func _ready() -> void:
@@ -56,6 +57,9 @@ func _ready() -> void:
 	%Switches.add_child(_haptics_switch)
 
 	%StatusLabel.text = _status_text()
+	var games := Prefs.history().size()
+	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
+	%HistoryButton.pressed.connect(_open_history)
 	_update_preview()
 
 
@@ -131,7 +135,16 @@ func _update_preview() -> void:
 ## já gravaram sozinhos, então o que se perde é no máximo um nome digitado pela
 ## metade e nunca confirmado.
 func go_back() -> void:
+	if is_instance_valid(_history):
+		_history.close()
+		return
 	_leave()
+
+
+## Por cima desta tela, e não uma cena: fechar volta para cá como estava.
+func _open_history() -> void:
+	_history = HistoryPanel.new()
+	add_child(_history)
 
 
 func _leave() -> void:

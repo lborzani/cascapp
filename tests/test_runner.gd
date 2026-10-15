@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test_pairing_payload()
 	_test_app_version()
 	_test_prefs()
+	_test_history()
 	_test_rounds_played()
 	_test_match_clock()
 
@@ -1030,6 +1031,23 @@ func _test_app_version() -> void:
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar
 ## dele enquanto ninguém escolheu — que é o estado em que a maioria vai jogar.
+func _test_history() -> void:
+	print("histórico de partidas")
+	Prefs.forget_history()
+	_equals(Prefs.history(), [], "começa vazio")
+	for i in Prefs.HISTORY_LIMIT + 2:
+		Prefs.record_game({"at": i, "moves": [{"p": PackedInt32Array([12, 28]), "pr": 0}]})
+	var games := Prefs.history()
+	_equals(games.size(), Prefs.HISTORY_LIMIT, "passou do limite, a mais antiga sai")
+	_equals(games[0]["at"], Prefs.HISTORY_LIMIT + 1, "a mais recente vem primeiro")
+	_equals(games[games.size() - 1]["at"], 2, "e as duas primeiras saíram")
+	Prefs.forget()
+	var reloaded := Prefs.history()
+	_equals(reloaded.size(), Prefs.HISTORY_LIMIT, "sobrevive a fechar o app")
+	_equals(PackedInt32Array(reloaded[0]["moves"][0]["p"]), PackedInt32Array([12, 28]), "com os lances intactos")
+	Prefs.forget_history()
+
+
 func _test_prefs() -> void:
 	print("preferências")
 	var backup := Prefs.player_name() if Prefs.has_name() else ""

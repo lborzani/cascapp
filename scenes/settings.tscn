@@ -118,6 +118,18 @@ layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Salvar"
 
+[node name="GamesSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Partidas"
+
+[node name="HistoryButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Histórico de partidas"
+
 [node name="AboutSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
