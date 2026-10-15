@@ -17,6 +17,10 @@ func _initialize() -> void:
 	_test_chess_perft()
 	_test_chess_special_moves()
 	_test_chess_notation()
+	_test_chess_uci()
+	_test_review_rules()
+	_test_review_curve()
+	_test_review_accuracy()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -33,6 +37,7 @@ func _initialize() -> void:
 	_test_version_compare()
 	_test_update_offer()
 	_test_prefs()
+	_test_history()
 	_test_rounds_played()
 	_test_match_clock()
 
@@ -268,6 +273,7 @@ func _test_bot_starved() -> void:
 	)
 
 	var bot := Bot.new()
+	bot._engine_failed = true  # o teste é da busca própria
 	bot.think(&"chess", state, 0, 1)
 	var chosen: Move = null
 	while chosen == null:
@@ -423,6 +429,106 @@ func _test_checkers_notation() -> void:
 ## Notação do lance `from`-`to` na posição dada, ou uma mensagem de falha se o
 ## lance não existir — assim um teste que erra a posição diz isso, em vez de
 ## comparar contra uma string vazia e parecer um bug de notação.
+func _test_chess_uci() -> void:
+	print("xadrez FEN/UCI")
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	_equals(rules.fen(state), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "FEN inicial")
+
+	# e4 marca en passant em e3 e passa a vez; Cf6 mexe no relógio dos 50 lances.
+	for text in ["e2e4", "g8f6"]:
+		rules.apply_move(state, rules.move_from_uci(state, text))
+	_equals(rules.fen(state), "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2", "FEN depois de e4 Cf6")
+	rules.apply_move(state, rules.move_from_uci(state, "e4e5"))
+	rules.apply_move(state, rules.move_from_uci(state, "d7d5"))
+	_check(rules.fen(state).contains(" w KQkq d6 0 3"), "FEN com casa de en passant")
+
+	var ep := rules.move_from_uci(state, "e5d6")
+	_check(ep != null and ep.tags.has("en_passant"), "UCI acha o en passant")
+	_check(rules.move_from_uci(state, "e5e7") == null, "UCI recusa lance ilegal")
+
+	var castle := _position(rules, {
+		"e1": [Board.Side.WHITE, Board.Kind.KING],
+		"h1": [Board.Side.WHITE, Board.Kind.ROOK],
+		"e8": [Board.Side.BLACK, Board.Kind.KING],
+	}, ChessRules.CASTLE_WK)
+	var short := rules.move_from_uci(castle, "e1g1")
+	_check(short != null and short.tags.get("castle") == "king", "UCI e1g1 é o roque")
+	_check(rules.fen(castle).contains(" w K - "), "FEN só com o roque que resta")
+
+	var promotion := _position(rules, {
+		"e1": [Board.Side.WHITE, Board.Kind.KING],
+		"a7": [Board.Side.WHITE, Board.Kind.PAWN],
+		"h8": [Board.Side.BLACK, Board.Kind.KING],
+	})
+	for text in ["a7a8q", "a7a8n"]:
+		var move := rules.move_from_uci(promotion, text)
+		_equals(rules.uci(move) if move != null else "<nulo>", text, "promoção ida e volta " + text)
+	_check(rules.move_from_uci(promotion, "a7a8") == null, "promoção sem peça é recusada")
+
+
+func _test_review_rules() -> void:
+	print("review — classificação")
+	_equals(GameReview.expected([1000, 0, 0]), 100.0, "mate é 100%")
+	_equals(GameReview.expected([0, 1000, 0]), 50.0, "empate seco é 50%")
+	_equals(GameReview.classify(60.0, 20.0, true), GameReview.Verdict.BEST, "lance do motor é o melhor, custe o que custar")
+	_equals(GameReview.classify(60.0, 55.0, false), GameReview.Verdict.GOOD, "perder 5 pontos é bom lance")
+	_equals(GameReview.classify(60.0, 50.0, false), GameReview.Verdict.INACCURACY, "10 pontos é imprecisão")
+	_equals(GameReview.classify(60.0, 40.0, false), GameReview.Verdict.MISTAKE, "20 pontos é erro")
+	_equals(GameReview.classify(60.0, 30.0, false), GameReview.Verdict.BLUNDER, "30 pontos é erro grave")
+	_check(GameReview.missed_mate(2, 0, false), "havia mate em 2 e sumiu: mate perdido")
+	_check(not GameReview.missed_mate(2, -2, false), "mate só ficou mais longo: não perdeu")
+	_check(not GameReview.missed_mate(1, 0, true), "deu o mate: não perdeu")
+	_check(not GameReview.missed_mate(0, 0, false), "sem mate antes: nada a perder")
+	_check(GameReview.keeps_mate(-3, false), "desafio: mate mais longo também vale")
+	_check(GameReview.keeps_mate(0, true), "desafio: dar o mate vale")
+	_check(not GameReview.keeps_mate(0, false), "desafio: sem mate na mesa, errou")
+	_check(not GameReview.keeps_mate(2, false), "desafio: mate virou do adversário, errou")
+	_check(GameReview.holds(60.0, 55.0), "desafio: perder 5 pontos ainda segura")
+	_check(not GameReview.holds(60.0, 45.0), "desafio: perder 15 não segura")
+
+
+## Entradas de mentira, só com o que a curva lê: a nota de quem jogou, antes
+## (`score`) e depois (`after`), e de que lado ele estava.
+func _test_review_curve() -> void:
+	print("review — curva de vantagem")
+	_equals(GameReview.white_curve([]), [], "sem análise, sem curva")
+	var white := Board.Side.WHITE
+	var black := Board.Side.BLACK
+	var entries := [
+		{"side": white, "score": 52.0, "after": 51.0},
+		{"side": black, "score": 49.0, "after": 70.0},
+		{"side": white, "score": 30.0, "after": 100.0},
+	]
+	var curve := GameReview.white_curve(entries)
+	_equals(curve.size(), 4, "um ponto por posição: a inicial e uma depois de cada lance")
+	_equals(curve[0], 52.0, "começa na nota das brancas antes do primeiro lance")
+	_equals(curve[2], 30.0, "lance das pretas vira: 70 para elas é 30 para as brancas")
+	_equals(curve[3], 100.0, "mate das brancas termina em 100")
+	var mated := GameReview.white_curve([{"side": black, "score": 60.0, "after": 100.0}])
+	_equals(mated[1], 0.0, "mate das pretas termina em 0")
+
+
+func _test_review_accuracy() -> void:
+	print("review — precisão")
+	_equals(GameReview.move_accuracy(50.0, 50.0), 100.0, "lance que não perde nada vale 100")
+	_equals(GameReview.move_accuracy(40.0, 60.0), 100.0, "lance que melhora também")
+	var blunder := GameReview.move_accuracy(60.0, 30.0)
+	_check(blunder > 20.0 and blunder < 30.0, "perder 30 pontos deixa perto de 25 (%.1f)" % blunder)
+	var white := Board.Side.WHITE
+	var black := Board.Side.BLACK
+	var entries := [
+		{"side": white, "score": 52.0, "after": 52.0},
+		{"side": black, "score": 48.0, "after": 47.0},
+		{"side": white, "score": 53.0, "after": 53.0},
+		{"side": black, "score": 47.0, "after": 10.0},
+	]
+	_check(GameReview.accuracy(entries, white) > 99.0, "brancas sem erro: perto de 100")
+	var black_accuracy := GameReview.accuracy(entries, black)
+	_check(black_accuracy > 10.0 and black_accuracy < 60.0, "um erro grave derruba as pretas (%.1f)" % black_accuracy)
+	_equals(GameReview.accuracy([], white), -1.0, "quem não jogou não tem nota")
+
+
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:
 	var move := _find(rules, state, from, to)
 	if move == null:
@@ -644,6 +750,9 @@ func _bot_move(game_id: StringName, _rules: Ruleset, state: MatchState, level: i
 
 func _bot_choice(game_id: StringName, state: MatchState, level: int) -> Move:
 	var bot := Bot.new()
+	# Estes testes são da busca própria: com Stockfish no PATH, o xadrez iria
+	# para ele e o teste mediria outro motor.
+	bot._engine_failed = true
 	return bot._decide(game_id, state.clone(), Bot.LEVELS[level])
 
 
@@ -969,6 +1078,23 @@ func _test_update_offer() -> void:
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar
 ## dele enquanto ninguém escolheu — que é o estado em que a maioria vai jogar.
+func _test_history() -> void:
+	print("histórico de partidas")
+	Prefs.forget_history()
+	_equals(Prefs.history(), [], "começa vazio")
+	for i in Prefs.HISTORY_LIMIT + 2:
+		Prefs.record_game({"at": i, "moves": [{"p": PackedInt32Array([12, 28]), "pr": 0}]})
+	var games := Prefs.history()
+	_equals(games.size(), Prefs.HISTORY_LIMIT, "passou do limite, a mais antiga sai")
+	_equals(games[0]["at"], Prefs.HISTORY_LIMIT + 1, "a mais recente vem primeiro")
+	_equals(games[games.size() - 1]["at"], 2, "e as duas primeiras saíram")
+	Prefs.forget()
+	var reloaded := Prefs.history()
+	_equals(reloaded.size(), Prefs.HISTORY_LIMIT, "sobrevive a fechar o app")
+	_equals(PackedInt32Array(reloaded[0]["moves"][0]["p"]), PackedInt32Array([12, 28]), "com os lances intactos")
+	Prefs.forget_history()
+
+
 func _test_prefs() -> void:
 	print("preferências")
 	var backup := Prefs.player_name() if Prefs.has_name() else ""

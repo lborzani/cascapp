@@ -68,6 +68,10 @@ const PREMOVE_MAX_LINKS := 4
 
 ## O adversário local. Existe sempre; só é acionado no modo solo.
 var _bot := Bot.new()
+## A partida que acabou já foi para o histórico. O painel de resultado reabre
+## por convite de revanche e por oponente que sai, e cada abertura gravaria de novo.
+var _recorded := false
+var _review: ReviewPanel = null
 ## Um lance do bot foi pedido e ainda não foi jogado.
 var _bot_pending := false
 var _bot_wait := 0.0
@@ -131,6 +135,7 @@ func _ready() -> void:
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
 	%ResultExitButton.pressed.connect(_exit)
+	%ReviewButton.pressed.connect(_open_review)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
 
@@ -153,6 +158,7 @@ func _new_game() -> void:
 	# trocar o estado é o que impede o lance dela de cair no tabuleiro novo.
 	_bot.abandon()
 	_bot_pending = false
+	_recorded = false
 	_state = _ruleset.initial_state()
 	_selection.clear()
 	_hint = ""
@@ -774,9 +780,16 @@ func _show_result() -> void:
 func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
 	%ResultDetail.text = detail
+	_record_game(title, detail)
 	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
 	allow_rematch = allow_rematch and not Net.is_spectator
 	%RematchButton.visible = allow_rematch
+	# Só xadrez: a revisão é do Stockfish, e ele não joga damas. Nem para quem
+	# assiste: a partida não é dele, e a revanche dos jogadores pode trocar o
+	# histórico por baixo do painel aberto.
+	%ReviewButton.visible = (
+		_ruleset is ChessRules and not _state.history.is_empty() and not Net.is_spectator
+	)
 	# Só quando o painel **abre**. Ele é reaberto por convite de revanche e por
 	# oponente que saiu, e tocar a fanfarra de novo em cada um faria a partida
 	# parecer que acabou três vezes.
@@ -798,6 +811,34 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 		panel.scale = Vector2(0.93, 0.93)
 		tween.parallel().tween_property(panel, "scale", Vector2.ONE, 0.24) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Por cima de tudo, inclusive do painel de resultado — que continua lá embaixo
+## para quando a revisão fechar.
+func _open_review() -> void:
+	_review = ReviewPanel.new()
+	add_child(_review)
+	_review.open(_state.history, _board.flipped)
+
+
+## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
+func _record_game(title: String, detail: String) -> void:
+	if _recorded or not _ruleset is ChessRules or _state.history.is_empty() or Net.is_spectator:
+		return
+	_recorded = true
+	var against := "No mesmo aparelho"
+	if Game.mode == Game.Mode.SOLO:
+		against = "Contra o bot (%s)" % Bot.level_label(Game.bot_level)
+	elif Game.mode == Game.Mode.ONLINE:
+		against = "Online contra %s" % _opponent_name()
+	Prefs.record_game({
+		"at": int(Time.get_unix_time_from_system()),
+		"moves": _state.history.duplicate(),
+		"against": against,
+		"side": Game.local_side if Game.mode != Game.Mode.HOTSEAT else Board.Side.WHITE,
+		"title": title,
+		"detail": detail,
+	})
 
 
 func _result_detail() -> String:
@@ -1095,6 +1136,9 @@ func _refresh_rematch() -> void:
 ## única saída, e o painel não é uma camada para desfazer — a partida acabou atrás
 ## dele.
 func go_back() -> void:
+	if is_instance_valid(_review):
+		_review.close()
+		return
 	if %ResultLayer.visible:
 		_exit()
 		return

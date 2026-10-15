@@ -505,6 +505,74 @@ func _file_letter(sq: int) -> String:
 	return char("a".unicode_at(0) + Board.file_of(sq))
 
 
+# --- UCI ---------------------------------------------------------------------
+#
+# A ponte com o Stockfish: ele fala FEN para a posição e "e2e4"/"e7e8q" para o
+# lance. O roque no UCI é o rei andando duas casas ("e1g1"), que é exatamente
+# como `Move` o representa — então não há caso especial.
+
+const FEN_LETTER := {
+	Board.Kind.PAWN: "p",
+	Board.Kind.KNIGHT: "n",
+	Board.Kind.BISHOP: "b",
+	Board.Kind.ROOK: "r",
+	Board.Kind.QUEEN: "q",
+	Board.Kind.KING: "k",
+}
+
+
+func fen(state: MatchState) -> String:
+	var rows := PackedStringArray()
+	for rank in range(Board.SIZE - 1, -1, -1):
+		var row := ""
+		var gap := 0
+		for file in Board.SIZE:
+			var p := state.squares[Board.square(file, rank)]
+			if Board.is_empty(p):
+				gap += 1
+				continue
+			if gap > 0:
+				row += str(gap)
+				gap = 0
+			var letter: String = FEN_LETTER[Board.kind_of(p)]
+			row += letter.to_upper() if Board.side_of(p) == Board.Side.WHITE else letter
+		if gap > 0:
+			row += str(gap)
+		rows.append(row)
+
+	var rights := int(state.meta.get("castle", 0))
+	var castle := ""
+	for pair in [[CASTLE_WK, "K"], [CASTLE_WQ, "Q"], [CASTLE_BK, "k"], [CASTLE_BQ, "q"]]:
+		if rights & int(pair[0]):
+			castle += pair[1]
+	var ep := int(state.meta.get("ep", Board.NO_SQUARE))
+	return "%s %s %s %s %d %d" % [
+		"/".join(rows),
+		"w" if state.side_to_move == Board.Side.WHITE else "b",
+		castle if castle != "" else "-",
+		Board.square_name(ep) if ep != Board.NO_SQUARE else "-",
+		int(state.meta.get("halfmove", 0)),
+		state.ply / 2 + 1,
+	]
+
+
+func uci(move: Move) -> String:
+	var text := Board.square_name(move.from_square()) + Board.square_name(move.to_square())
+	if move.promotion != Board.Kind.EMPTY:
+		text += FEN_LETTER[move.promotion]
+	return text
+
+
+## O lance legal que o texto UCI descreve, ou `null`. Procurar na lista legal em
+## vez de montar o `Move` à mão é o que traz junto as marcas que só o gerador
+## sabe pôr (roque, en passant, captura).
+func move_from_uci(state: MatchState, text: String) -> Move:
+	for move in generate_moves(state):
+		if uci(move) == text:
+			return move
+	return null
+
+
 # --- move generation ---------------------------------------------------------
 
 

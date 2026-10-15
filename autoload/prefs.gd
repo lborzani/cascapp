@@ -278,6 +278,39 @@ static func forget_rejoin() -> void:
 	_file().save(PATH)
 
 
+# --- histórico de partidas ----------------------------------------------------
+#
+# As partidas de xadrez que terminaram, mais recente primeiro, para a tela de
+# histórico abrir a revisão de qualquer uma. Cada uma é um dicionário com os
+# lances no formato do fio (`moves`) e o que a lista mostra: quando, contra quem,
+# de que lado e como acabou. Uma partida de 40 lances ocupa ~1 KB.
+
+const HISTORY_SECTION := "history"
+const HISTORY_KEY := "games"
+const HISTORY_LIMIT := 50
+
+
+static func history() -> Array:
+	return (_file().get_value(HISTORY_SECTION, HISTORY_KEY, []) as Array).duplicate()
+
+
+## Guarda na frente e corta a cauda: passou de `HISTORY_LIMIT`, a mais antiga sai.
+static func record_game(game: Dictionary) -> void:
+	var games := history()
+	games.push_front(game)
+	if games.size() > HISTORY_LIMIT:
+		games.resize(HISTORY_LIMIT)
+	_file().set_value(HISTORY_SECTION, HISTORY_KEY, games)
+	_file().save(PATH)
+
+
+## Só para os testes, como `forget_favorites()`.
+static func forget_history() -> void:
+	if _file().has_section(HISTORY_SECTION):
+		_file().erase_section(HISTORY_SECTION)
+		_file().save(PATH)
+
+
 ## Arquivo carregado uma vez por execução. Ausente é o caso normal na primeira
 ## abertura — um `ConfigFile` vazio responde a tudo com o padrão, então não há
 ## nada a tratar.

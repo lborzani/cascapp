@@ -87,6 +87,13 @@ jobs:
       - name: Regras (perft, damas, QR, prefs)
         run: godot --headless --path . --script res://tests/test_runner.gd
 
+      # O Stockfish do apt é mais velho que o do APK, e não importa: o que se
+      # testa aqui é a conversa UCI, que é a mesma desde sempre.
+      - name: Stockfish (UCI)
+        run: |
+          sudo apt-get install -y -qq stockfish
+          STOCKFISH=/usr/games/stockfish godot --headless --path . --script res://tests/stockfish_probe.gd
+
       # Tema e componentes base: fontes embarcadas com os acentos do português,
       # contraste dos pares de texto, as variações que as telas pedem, e a
       # geometria e o comportamento de cada componente. O que só a imagem prova —
@@ -224,7 +231,7 @@ jobs:
 
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.1.12297006"
 
       - name: Instalar o Godot
         uses: ./.github/actions/godot
@@ -238,6 +245,7 @@ jobs:
       - name: Construir o plugin Android
         run: |
           chmod +x ./gradlew
+          ./build_stockfish.sh
           ./gradlew :plugin:assembleRelease --no-daemon
           cp plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar ../android/plugins/
         working-directory: android_plugin

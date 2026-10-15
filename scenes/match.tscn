@@ -270,6 +270,14 @@ layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "Agora não"
 
+[node name="ReviewButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Revisar partida"
+
 [node name="ResultExitButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=866953306]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)

@@ -38,6 +38,9 @@
         <meta-data
             android:name="org.godotengine.plugin.v2.GodotQrScanner"
             android:value="org.chessandcheckers.qr.GodotQrScannerPlugin" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.GodotStockfish"
+            android:value="org.chessandcheckers.stockfish.GodotStockfishPlugin" />
 
         <!--
           Host Card Emulation: enquanto a sala está aberta, este aparelho

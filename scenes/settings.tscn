@@ -118,6 +118,18 @@ layout_mode = 2
 theme_type_variation = &"PrimaryButton"
 text = "Salvar"
 
+[node name="GamesSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Partidas"
+
+[node name="HistoryButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Histórico de partidas"
+
 [node name="AboutSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
@@ -128,6 +140,15 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 autowrap_mode = 3
+
+[node name="StockfishLicense" type="LinkButton" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_colors/font_color = Color(0.94902, 0.752941, 0.160784, 1)
+theme_override_font_sizes/font_size = 14
+text = "Stockfish 19 · GPLv3 · código-fonte"
+uri = "https://github.com/official-stockfish/Stockfish/tree/sf_19"
 
 [node name="Tabs" type="Control" parent="Safe/VBox"]
 unique_name_in_owner = true

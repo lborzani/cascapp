@@ -29,6 +29,9 @@ func _ready() -> void:
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
 	await _test_rematch()
+	await _test_review()
+	await _test_puzzle()
+	await _test_match_history()
 	await _test_spectator()
 	await _test_premove()
 	await _test_premove_limit()
@@ -36,6 +39,7 @@ func _ready() -> void:
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
+	_test_stockfish_license()
 	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
@@ -506,6 +510,197 @@ func _test_rematch() -> void:
 	Game.mode = Game.Mode.HOTSEAT
 
 
+## Mate do louco, e a revisão por cima do resultado. Sem Stockfish (a CI roda
+## esta suíte antes de instalar o motor) o replay funciona e a tela diz por que
+## não há marcas; com ele, o mate sai como o melhor lance.
+func _test_review() -> void:
+	print("revisão")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Fim", "", true)
+	var review_button: Button = _node(scene, "%ReviewButton")
+	_check(review_button.visible, "xadrez terminado oferece a revisão")
+
+	review_button.pressed.emit()
+	var panel: ReviewPanel = scene.get_child(scene.get_child_count() - 1)
+	_equals(panel._moves.get_child_count(), 4, "um botão por meio-lance")
+	panel._show(4)
+	_equals(panel._board.state.squares, scene._state.squares, "o fim do replay é a posição final")
+	panel._show(-3)
+	_equals(panel._ply, 0, "voltar além do começo para na posição inicial")
+
+	for _i in 300:
+		if panel._thread == null:
+			break
+		await get_tree().process_frame
+		OS.delay_msec(20)
+	_check(panel._thread == null, "a análise termina")
+	if panel._entries.is_empty():
+		_check(panel._status.text.contains("indisponível"), "sem motor, a tela diz por quê")
+		_check(not panel._graph.visible and not panel._bar.visible, "e não há gráfico nem barra")
+	else:
+		panel._show(4)
+		_check(panel._status.text.contains("Dh4#"), "o mate aparece na revisão (%s)" % panel._status.text)
+		_equals(panel._entries[3]["verdict"], GameReview.Verdict.BEST, "o mate é o melhor lance")
+		_equals(panel._entries[2]["verdict"], GameReview.Verdict.BLUNDER, "2.g4 é erro grave")
+		panel._show(0)
+		_check(panel._status.text.begins_with("Precisão: brancas"), "a revisão abre com a precisão (%s)" % panel._status.text)
+		_check(panel._graph.visible, "o gráfico aparece com a análise")
+		_equals(panel._curve.size(), 5, "um ponto por posição")
+		_equals(panel._curve[4], 0.0, "o mate das pretas leva a curva a zero")
+		_check(panel._graph.dots.has(3), "o erro grave vira ponto no gráfico")
+		panel._graph.seek.emit(2)
+		_equals(panel._ply, 2, "tocar no gráfico leva ao lance")
+		_check(panel._bar.visible, "a barra mostra quem está na frente")
+		_equals(panel._bar.white, panel._curve[2], "com a nota da posição na tela")
+
+	panel.close()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "fechar a revisão a remove")
+	_check(_node(scene, "%ResultLayer").visible, "e o resultado continua lá embaixo")
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## 4.d3 deixa passar o Dxf7#: a revisão oferece o desafio, três erros trazem a
+## dica, e o mate resolve. Sem Stockfish não há análise e nem desafio.
+func _test_puzzle() -> void:
+	print("desafio do mate")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["e2", "e4"], ["e7", "e5"], ["f1", "c4"], ["b8", "c6"], ["d1", "h5"], ["g8", "f6"], ["d2", "d3"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Fim", "", true)
+	(_node(scene, "%ReviewButton") as Button).pressed.emit()
+	var panel: ReviewPanel = scene.get_child(scene.get_child_count() - 1)
+	await _settle(panel, "_thread")
+	if panel._entries.is_empty():
+		panel._show(7)
+		_check(not panel._retry.visible, "sem análise, sem desafio")
+		panel.close()
+		scene.queue_free()
+		await get_tree().process_frame
+		return
+
+	panel._show(1)
+	_check(not panel._retry.visible, "lance bom não oferece desafio")
+
+	# 3...Cf6?? deixa o mate: o desafio é achar um lance que segure. a6 não
+	# segura (Dxf7# continua), e depois de três erros a dica aponta a peça.
+	panel._show(6)
+	_check(panel._retry.visible, "erro grave oferece o desafio")
+	panel._retry.pressed.emit()
+	_check(panel._status.text.begins_with("Ache um lance melhor! Jogam as pretas"), "o desafio do erro começa (%s)" % panel._status.text)
+	for attempt in 3:
+		panel._on_tap(_square("a7"))
+		panel._on_tap(_square("a6"))
+		await _settle(panel, "_checker")
+		_check(panel._status.text.contains("ainda perde muito"), "a6 é recusado (%d)" % (attempt + 1))
+	var best := ChessRules.new().move_from_uci(panel._puzzle_state, str(panel._entries[5]["best"]))
+	_equals(panel._pick, best.from_square(), "a dica aponta a peça do melhor lance")
+	# Vale qualquer lance que segure, não só o do motor: g6 e De7 tapam o f7.
+	var other := "d8e7" if panel._entries[5]["best"] != "d8e7" else "g7g6"
+	panel._on_tap(Board.square(other.unicode_at(0) - 97, int(other[1]) - 1))
+	panel._on_tap(Board.square(other.unicode_at(2) - 97, int(other[3]) - 1))
+	await _settle(panel, "_checker")
+	_check(panel._solved, "outro lance bom também resolve (%s)" % panel._status.text)
+	panel._retry.pressed.emit()
+
+	panel._show(7)
+	_check(panel._retry.visible, "o mate perdido oferece o desafio")
+	panel._retry.pressed.emit()
+	_check(panel._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % panel._status.text)
+	_equals(panel._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")
+	_check(not panel._nav.visible, "a navegação some durante o desafio")
+	_check(not panel._graph.visible and not panel._bar.visible, "gráfico e barra também, para não entregar a resposta")
+
+	for attempt in 3:
+		panel._on_tap(_square("a2"))
+		panel._on_tap(_square("a3"))
+		await _settle(panel, "_checker")
+		_check(panel._status.text.contains("escapar"), "a3 é recusado (%d)" % (attempt + 1))
+	_equals(panel._pick, _square("h5"), "depois de três erros a dama vira a dica")
+
+	panel._on_tap(_square("f7"))
+	await _settle(panel, "_checker")
+	_check(panel._solved, "Dxf7# resolve o desafio")
+	_check(panel._status.text.contains("xeque-mate"), "e a tela comemora (%s)" % panel._status.text)
+	panel._retry.pressed.emit()
+	_check(panel._puzzle < 0 and panel._nav.visible, "voltar devolve a revisão")
+	_check(panel._graph.visible and panel._bar.visible, "com gráfico e barra de volta")
+
+	panel.close()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "fechar no meio de tudo não trava")
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## A partida que termina vai para o histórico uma vez só, e o histórico abre a
+## revisão dela. O voltar do sistema fecha as camadas de cima para baixo.
+func _test_match_history() -> void:
+	print("histórico de partidas")
+	Prefs.forget_history()
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	scene._board.cancel_animation()
+	scene._show_overlay("Pretas venceram", "Xeque-mate em 4 lances.", true)
+	scene._show_overlay("Pretas venceram", "Xeque-mate em 4 lances.", true)
+	var games := Prefs.history()
+	_equals(games.size(), 1, "a partida entra uma vez só, mesmo com o painel reaberto")
+	if not games.is_empty():
+		_equals(games[0]["against"], "No mesmo aparelho", "com o modo")
+		_equals((games[0]["moves"] as Array).size(), 4, "e os lances")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	var button: Button = settings.get_node("%HistoryButton")
+	_equals(button.text, "Histórico de partidas (1)", "a tela Você conta as partidas")
+	button.pressed.emit()
+	var panel: HistoryPanel = settings._history
+	_check(panel != null, "o botão abre o histórico")
+	var review_buttons := panel.find_children("*", "Button", true, false).filter(func(b): return b.text == "Revisar")
+	_equals(review_buttons.size(), 1, "uma linha por partida")
+	review_buttons[0].pressed.emit()
+	_check(is_instance_valid(panel._review), "Revisar abre a revisão da partida")
+	_equals(panel._review._moves.get_child_count(), 4, "com os lances dela")
+	settings.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel._review) and is_instance_valid(panel), "voltar fecha a revisão primeiro")
+	settings.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "e depois o histórico")
+	settings.queue_free()
+	await get_tree().process_frame
+	Prefs.forget_history()
+
+
+## Espera a thread `field` do painel terminar, quadro a quadro — é o `_process`
+## dele que recolhe o resultado.
+func _settle(panel: ReviewPanel, field: String) -> void:
+	for _i in 400:
+		if panel.get(field) == null:
+			return
+		await get_tree().process_frame
+		OS.delay_msec(20)
+	_check(false, "a thread %s terminou" % field)
+
+
 ## Quem assiste: o tabuleiro não responde ao toque, os cartões têm o nome de
 ## quem joga, e a revanche dos jogadores é seguida com as cores trocadas — uma
 ## vez só, mesmo quando os dois mandam o aceite.
@@ -541,6 +736,7 @@ func _test_spectator() -> void:
 
 	scene._flag(Board.Side.BLACK)
 	_check(not _node(scene, "%RematchButton").visible, "sem botão de revanche para quem assiste")
+	_check(not _node(scene, "%ReviewButton").visible, "nem de revisão")
 	_check(
 		_node(scene, "%ResultDetail").text.begins_with("Pretas"),
 		"o resultado é contado pelas cores, e não por 'você'"
@@ -991,6 +1187,20 @@ func _test_bot() -> void:
 	Game.bot_side = Board.Side.BLACK
 	Game.mode = Game.Mode.HOTSEAT
 	Game.local_side = Board.Side.WHITE
+
+
+## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
+## distribui o binário. Uma linha nos Ajustes cumpre isso — e apagá-la numa
+## limpeza de tela não quebraria nada que outro teste veja.
+func _test_stockfish_license() -> void:
+	print("licença do Stockfish")
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	var link: LinkButton = settings.get_node_or_null("%StockfishLicense")
+	_check(link != null, "os Ajustes têm o aviso")
+	if link != null:
+		_check(link.text.contains("GPLv3"), "o aviso nomeia a licença")
+		_check(link.uri.ends_with("/tree/sf_19"), "e leva ao código-fonte da versão que vai no APK")
+	settings.free()
 
 
 ## Toda tela sabe receber o botão de voltar do sistema.
