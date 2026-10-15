@@ -114,6 +114,8 @@ func _status_text() -> String:
 func _save() -> void:
 	Prefs.set_player_name(%NameEdit.text)
 	_update_preview()
+	# Sem esperar: o nome já valeu no aparelho, e a conta acompanha quando der.
+	Account.push_name(Prefs.player_name())
 
 
 func _save_and_leave() -> void:

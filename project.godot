@@ -27,6 +27,7 @@ BomberNet="*res://autoload/bomber_net.gd"
 Pairing="*res://autoload/pairing.gd"
 Sound="*res://autoload/sound.gd"
 Nav="*res://autoload/nav.gd"
+Account="*res://autoload/account.gd"
 
 [display]
 

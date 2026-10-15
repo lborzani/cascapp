@@ -278,6 +278,35 @@ static func forget_rejoin() -> void:
 	_file().save(PATH)
 
 
+# --- conta ---------------------------------------------------------------------
+#
+# A credencial da conta anônima do PocketBase (`autoload/account.gd`). Em texto
+# no `user://`, que é a área privada do app: a conta não tem nada além do nome, e
+# quem já lê os arquivos do app já está dentro do aparelho.
+
+const ACCOUNT_SECTION := "account"
+
+
+static func account() -> Dictionary:
+	return {
+		"email": str(_file().get_value(ACCOUNT_SECTION, "email", "")),
+		"password": str(_file().get_value(ACCOUNT_SECTION, "password", "")),
+	}
+
+
+static func set_account(email: String, password: String) -> void:
+	_file().set_value(ACCOUNT_SECTION, "email", email)
+	_file().set_value(ACCOUNT_SECTION, "password", password)
+	_file().save(PATH)
+
+
+## Só para os testes.
+static func forget_account() -> void:
+	if _file().has_section(ACCOUNT_SECTION):
+		_file().erase_section(ACCOUNT_SECTION)
+		_file().save(PATH)
+
+
 # --- histórico de partidas ----------------------------------------------------
 #
 # As partidas de xadrez que terminaram, mais recente primeiro, para a tela de
