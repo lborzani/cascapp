@@ -76,9 +76,11 @@ export type ClientMessage =
       seats: number;
       /** Como quem abriu quer ser chamado na lista pública. Vazio é anônimo. */
       name: string;
+      /** Token da conta (PocketBase). Vazio é jogador sem conta. Ver `accounts.ts`. */
+      token: string;
     }
   /** `key` vazia é a primeira entrada; preenchida, é uma volta ao mesmo assento. */
-  | { t: 'join'; room: string; key: string }
+  | { t: 'join'; room: string; key: string; token: string }
   /**
    * Entra como espectador: recebe tudo o que os jogadores falam, e nada do que
    * ele mandar sai daqui. Não ocupa assento, então não muda a lotação da sala
@@ -151,6 +153,13 @@ export type ServerMessage =
   | { t: 'peer_left'; seat: Seat }
   /** `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir. */
   | { t: 'msg'; d: unknown; from: Seat }
+  /**
+   * O nome da conta de quem está no assento, conferido pelo servidor. Chega
+   * depois do `joined`/`peer` (a conferência não atrasa a entrada), e para quem
+   * entra depois vem logo após o `joined`/`watching`. Assento sem `identity` é
+   * jogador sem conta confirmada: vale o apelido que o próprio aparelho mandar.
+   */
+  | { t: 'identity'; seat: Seat; name: string }
   | { t: 'pong' }
   | { t: 'error'; reason: ErrorReason; detail: string };
 
@@ -189,6 +198,13 @@ export const MAX_NAME_LENGTH = 18;
  * escapamento de HTML porque não há HTML: quem desenha é `draw_string` num
  * `Control`, e ali uma tag é literalmente o texto "<b>".
  */
+/** Token de conta é um JWT de algumas centenas de bytes; muito maior é lixo. */
+export const MAX_TOKEN_LENGTH = 2048;
+
+export function cleanToken(value: unknown): string {
+  return typeof value === 'string' && value.length <= MAX_TOKEN_LENGTH ? value : '';
+}
+
 export function cleanName(value: unknown): string {
   if (typeof value !== 'string') return '';
   let clean = '';
@@ -282,6 +298,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
             // cliente antigo não manda o campo, e a sala dele fica sem apelido —
             // que é como todas as salas eram até aqui.
             name: cleanName(record.name),
+            token: cleanToken(record.token),
           }
         : null;
     case 'join':
@@ -290,6 +307,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
             t: 'join',
             room: record.room,
             key: typeof record.key === 'string' ? record.key : '',
+            token: cleanToken(record.token),
           }
         : null;
     case 'watch':
