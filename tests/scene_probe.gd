@@ -41,6 +41,7 @@ func _ready() -> void:
 	await _test_battleship()
 	_test_back_navigation()
 	_test_stockfish_license()
+	await _test_manual_update()
 	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
@@ -1210,6 +1211,27 @@ func _test_bot() -> void:
 	Game.bot_side = Board.Side.BLACK
 	Game.mode = Game.Mode.HOTSEAT
 	Game.local_side = Board.Side.WHITE
+
+
+## O botão da tela Você procura na hora e responde ali mesmo — inclusive para
+## uma versão que o jogador tinha pulado no cartão do menu.
+func _test_manual_update() -> void:
+	print("procurar atualização")
+	var saved_skipped := Prefs.skipped_update()
+	Prefs.skip_update("99.0")
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	settings._show_update({})
+	_check(settings.get_node("%UpdateResult").text.begins_with("Não deu para consultar"), "sem resposta, diz que não deu")
+	settings._show_update(_github_release("v0.1"))
+	_check(settings.get_node("%UpdateResult").text.begins_with("Você já está na versão mais recente"), "release velha: já está atualizado")
+	settings._show_update(_github_release("v99.0"))
+	_equals(settings.get_node("%UpdateButton").text, "Baixar a versão 99.0", "versão nova: o botão vira Baixar, mesmo a pulada no menu")
+	_check(settings._update_url.begins_with(UpdateCheck.DOWNLOADS), "com o link do APK da release")
+	settings.queue_free()
+	await get_tree().process_frame
+	Prefs.skip_update(saved_skipped)
 
 
 ## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
