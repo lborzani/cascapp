@@ -30,6 +30,8 @@ func _initialize() -> void:
 	_test_qr_structure()
 	_test_pairing_payload()
 	_test_app_version()
+	_test_version_compare()
+	_test_update_offer()
 	_test_prefs()
 	_test_rounds_played()
 	_test_match_clock()
@@ -918,6 +920,51 @@ func _test_app_version() -> void:
 	_equals(AppVersion.read(stamp), project, "carimbo vazio volta para a versão do projeto")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(stamp))
+
+
+## A ordem das versões é a do número, segmento a segmento. O caso que importa é
+## o "1.9 < 1.10": como texto ele dá o contrário, e o aviso de atualização
+## mandaria quem está na 1.10 "atualizar" para a 1.9.
+func _test_version_compare() -> void:
+	print("comparação de versão")
+	_check(AppVersion.compare("1.9", "1.10") < 0, "1.9 vem antes de 1.10")
+	_check(AppVersion.compare("1.10", "1.9") > 0, "e 1.10 depois de 1.9")
+	_equals(AppVersion.compare("1.20", "1.20"), 0, "1.20 é 1.20")
+	_equals(AppVersion.compare("v1.20", "1.20"), 0, "o v da tag não conta")
+	_equals(AppVersion.compare("1.2", "1.2.0"), 0, "segmento que falta vale zero")
+	_check(AppVersion.compare("2.0", "1.99") > 0, "o maior manda")
+	_check(AppVersion.compare("1.21", "1.20.9") > 0, "e o segundo antes do terceiro")
+
+
+## A decisão do aviso, sem rede: o JSON da release entra pronto.
+func _test_update_offer() -> void:
+	print("aviso de versão nova")
+	var url := UpdateCheck.DOWNLOADS + "v1.21/cascapp-1.21.apk"
+	var release := {
+		"tag_name": "v1.21",
+		"assets": [
+			{"name": "notas.txt", "browser_download_url": UpdateCheck.DOWNLOADS + "v1.21/notas.txt"},
+			{"name": "cascapp-1.21.apk", "browser_download_url": url},
+		],
+	}
+	_equals(
+		UpdateCheck.offer(release, "1.20", ""), {"version": "1.21", "url": url},
+		"release mais nova é oferecida, com o link do APK"
+	)
+	_equals(UpdateCheck.offer(release, "1.21", ""), {}, "a mesma versão não")
+	_equals(UpdateCheck.offer(release, "1.30", ""), {}, "nem uma mais velha")
+	_equals(UpdateCheck.offer(release, "1.20", "1.21"), {}, "nem a que o jogador pulou")
+	_equals(
+		UpdateCheck.offer(release, "1.20", "1.20").get("version"), "1.21",
+		"pular uma versão não cala a seguinte"
+	)
+	_equals(UpdateCheck.offer({"tag_name": "v1.21", "assets": []}, "1.20", ""), {}, "sem APK, sem aviso")
+	var elsewhere := {
+		"tag_name": "v1.21",
+		"assets": [{"name": "x.apk", "browser_download_url": "https://exemplo.com/x.apk"}],
+	}
+	_equals(UpdateCheck.offer(elsewhere, "1.20", ""), {}, "link de fora do repositório não é aberto")
+	_equals(UpdateCheck.offer({"message": "Not Found"}, "1.20", ""), {}, "resposta de erro é silêncio")
 
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar
