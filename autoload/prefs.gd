@@ -280,31 +280,20 @@ static func forget_rejoin() -> void:
 
 # --- conta ---------------------------------------------------------------------
 #
-# A credencial da conta anônima do PocketBase (`autoload/account.gd`). Em texto
-# no `user://`, que é a área privada do app: a conta não tem nada além do nome, e
-# quem já lê os arquivos do app já está dentro do aparelho.
+# A conta anônima (`autoload/account.gd`) é derivada do id do aparelho e não
+# precisa de nada guardado. Só onde a plataforma não informa id fica aqui um
+# sorteado, que faz o papel dele.
 
 const ACCOUNT_SECTION := "account"
 
 
-static func account() -> Dictionary:
-	return {
-		"email": str(_file().get_value(ACCOUNT_SECTION, "email", "")),
-		"password": str(_file().get_value(ACCOUNT_SECTION, "password", "")),
-	}
+static func account_seed() -> String:
+	return str(_file().get_value(ACCOUNT_SECTION, "seed", ""))
 
 
-static func set_account(email: String, password: String) -> void:
-	_file().set_value(ACCOUNT_SECTION, "email", email)
-	_file().set_value(ACCOUNT_SECTION, "password", password)
+static func set_account_seed(seed: String) -> void:
+	_file().set_value(ACCOUNT_SECTION, "seed", seed)
 	_file().save(PATH)
-
-
-## Só para os testes.
-static func forget_account() -> void:
-	if _file().has_section(ACCOUNT_SECTION):
-		_file().erase_section(ACCOUNT_SECTION)
-		_file().save(PATH)
 
 
 # --- histórico de partidas ----------------------------------------------------
