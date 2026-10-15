@@ -291,3 +291,29 @@ static func _file() -> ConfigFile:
 ## Só para os testes: obriga a próxima leitura a voltar ao disco.
 static func forget() -> void:
 	_config = null
+
+
+## O aviso de versão nova: quando a última consulta respondeu, e a versão a que o
+## jogador disse "agora não".
+##
+## A versão pulada, e não só "não perguntar mais": quem recusou a 1.21 não quer
+## ouvir dela de novo, mas a 1.22 é outra conversa.
+const UPDATE_SECTION := "update"
+
+
+static func update_checked_at() -> int:
+	return int(_file().get_value(UPDATE_SECTION, "checked_at", 0))
+
+
+static func set_update_checked(now: int) -> void:
+	_file().set_value(UPDATE_SECTION, "checked_at", now)
+	_file().save(PATH)
+
+
+static func skipped_update() -> String:
+	return str(_file().get_value(UPDATE_SECTION, "skipped", ""))
+
+
+static func skip_update(version: String) -> void:
+	_file().set_value(UPDATE_SECTION, "skipped", version)
+	_file().save(PATH)
