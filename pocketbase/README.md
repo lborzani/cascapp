@@ -25,16 +25,24 @@ Funnel.
 
 Backup automático todo dia às 4h, guardando 7, dentro do volume `pb_data`.
 
+## Perfil público
+
+Qualquer conta logada vê o perfil das outras: nome, avatar, código de amigo e
+Elo do xadrez — o e-mail não. Listar todas continua fechado; acha-se alguém
+pelo código, em `GET /api/cascapp/by-code/{code}` (`pb_hooks/perfil.pb.js`).
+O código e o Elo são do servidor: nascem no hook de criação e a regra de
+atualização recusa qualquer pedido do app que tente escrevê-los.
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `mammus` pela tailnet:
 
 ```bash
-tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations | ssh mammus@mammus 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
+tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations pb_hooks | ssh mammus@mammus 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
 ssh mammus@mammus 'cd ~/cascapp-contas && docker compose up -d --build'
 ```
 
-As migrations rodam sozinhas na subida. Versão nova do PocketBase: trocar o
+As migrations rodam sozinhas na subida, e os hooks de `pb_hooks/` carregam junto. Versão nova do PocketBase: trocar o
 `PB_VERSION` do `Dockerfile` e a tag da `image` no compose, ler as notas de
 release e subir de novo.
 

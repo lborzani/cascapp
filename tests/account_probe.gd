@@ -67,6 +67,51 @@ func _ready() -> void:
 	record = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
 	_equals(record.get("name"), "Renomeado", "e a conta alcança o nome do aparelho")
 
+	print("perfil público")
+	var own: Dictionary = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+	var code := str(own.get("friend_code", ""))
+	_equals(code.length(), 6, "a conta nasce com código de amigo")
+	_equals(own.get("elo_chess"), 1200.0, "e Elo 1200")
+	_equals(own.get("games_chess"), 0.0, "e nenhuma partida")
+	for field: String in ["elo_chess", "games_chess", "friend_code"]:
+		var forged := await Account._call(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + first, {field: 3000 if field != "friend_code" else "AAAAAA"})
+		_check(forged["code"] != 200, "o app não escreve %s (HTTP %d)" % [field, forged["code"]])
+	own = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+	_equals(own.get("elo_chess"), 1200.0, "o Elo segue o do servidor")
+	_equals(own.get("friend_code"), code, "e o código também")
+
+	var forged_email := "forjada-%d@%s" % [Time.get_ticks_usec(), Account.EMAIL_DOMAIN]
+	await Account._call(HTTPClient.METHOD_POST, "/api/collections/users/records", {
+		"email": forged_email, "password": "senha-forjada-123", "passwordConfirm": "senha-forjada-123",
+		"elo_chess": 9999, "games_chess": 50, "friend_code": "AAAAAA",
+	})
+	var forged_auth: Variant = (await Account._call(HTTPClient.METHOD_POST, "/api/collections/users/auth-with-password", {"identity": forged_email, "password": "senha-forjada-123"}))["data"]
+	var forged_record: Dictionary = forged_auth["record"] if forged_auth is Dictionary and forged_auth.has("record") else {}
+	_equals(forged_record.get("elo_chess"), 1200.0, "criar mandando Elo não muda o Elo inicial")
+	_check(str(forged_record.get("friend_code", "")) not in ["", "AAAAAA"], "nem escolhe o código")
+
+	Account.device_seed = device + "-outro"
+	Account.sign_out()
+	_check(await Account.sign_in(), "outra conta entra")
+	var seen := await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {})
+	_equals(seen["code"], 200, "e vê o perfil da primeira")
+	var seen_data: Dictionary = seen["data"] if seen["data"] is Dictionary else {}
+	_equals(seen_data.get("friend_code"), code, "com o código")
+	_check(str(seen_data.get("email", "")).is_empty(), "sem o e-mail")
+	var found := await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code.to_lower(), {})
+	_equals(found["code"], 200, "acha a primeira pelo código, em minúsculas")
+	var found_data: Dictionary = found["data"] if found["data"] is Dictionary else {}
+	_equals(found_data.get("id"), first, "e é ela")
+	_check(not found_data.has("email"), "sem e-mail na busca")
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/ZZZZZ1", {}))["code"], 404, "código que não existe: 404")
+	var listing: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records?perPage=50", {}))["data"]
+	var items: Array = listing.get("items", []) if listing is Dictionary else []
+	_check(items.size() == 1 and items[0]["id"] == Account.user_id, "listar contas só devolve a própria")
+	Account.device_seed = device
+	Account.sign_out()
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code, {}))["code"], 401, "sem conta não busca")
+	_check(await Account.sign_in(), "volta ao primeiro aparelho")
+
 	print("servidor fora do ar")
 	var url := Account.base_url()
 	Account.sign_out()
