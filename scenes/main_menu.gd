@@ -51,10 +51,10 @@ func _ready() -> void:
 	if _resume_pending_scan():
 		return
 
-	%AppBar.greet(Prefs.player_name())
+	%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	%AppBar.action_pressed.connect(_open_settings)
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
-	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name()))
+	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
 	%Tabs.current = AppTabs.GAMES
 	# Sem servidor de partidas não há sala para procurar. A aba continua lá,
@@ -341,7 +341,7 @@ func _greet() -> void:
 	# se apresentar deve ver a saudação com o nome que escolheu.
 	welcome.tree_exited.connect(func() -> void:
 		if is_inside_tree():
-			%AppBar.greet(Prefs.player_name())
+			%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	)
 
 

@@ -102,13 +102,14 @@ func _init() -> void:
 ##
 ## Chamar de novo só troca o nome: é o que a tela faz quando as boas-vindas
 ## terminam, para a saudação mostrar o nome recém escolhido sem reabrir o app.
-func greet(player_name: String) -> void:
+## `photo` é a foto da conta; sem ela a bolacha fica com a inicial. Vem de quem
+## chama, e não do `Account`: a barra é do kit de UI e roda sem os autoloads.
+func greet(player_name: String, photo: Texture2D = null) -> void:
 	if _greeting == null:
 		_build_greeting()
 	_greeting_name.text = player_name.to_upper()
 	_avatar.player_name = player_name
-	# A foto da conta, quando há; sem ela a bolacha fica com a inicial.
-	_avatar.photo = Account.local_avatar()
+	_avatar.photo = photo
 
 
 func _build_greeting() -> void:

@@ -41,6 +41,7 @@ func _ready() -> void:
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
+	await _test_scroll_drag()
 	_test_stockfish_license()
 	await _test_manual_update()
 	await _test_match_bar()
@@ -1318,6 +1319,40 @@ func _test_stockfish_license() -> void:
 ## Varre o diretório em vez de conferir uma lista escrita aqui: uma lista é uma
 ## segunda coisa a lembrar de atualizar quando uma tela nova nascer, e esquecer
 ## dela é exatamente o esquecimento que o teste deveria pegar.
+## Botão dentro de lista que rola deixa o arrasto passar (`Nav`): com o `STOP`
+## padrão, arrastar começando em cima de um item não rolava a lista. Que o
+## `PASS` rola e não aperta sem querer foi conferido com janela; sem janela o
+## Godot não entrega toque, então aqui fica a parte que é nossa: quem recebe.
+func _test_scroll_drag() -> void:
+	print("arrasto em lista")
+	var scroll := ScrollContainer.new()
+	var column := VBoxContainer.new()
+	var inside := Button.new()
+	var quiet := Button.new()
+	quiet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(inside)
+	column.add_child(quiet)
+	scroll.add_child(column)
+	var outside := Button.new()
+	add_child(outside)
+	add_child(scroll)
+	_equals(inside.mouse_filter, Control.MOUSE_FILTER_PASS, "botão dentro da lista deixa o arrasto passar")
+	_equals(quiet.mouse_filter, Control.MOUSE_FILTER_IGNORE, "botão que já ignorava o toque fica como estava")
+	_equals(outside.mouse_filter, Control.MOUSE_FILTER_STOP, "botão fora de lista fica com o toque")
+	var late := Button.new()
+	column.add_child(late)
+	_equals(late.mouse_filter, Control.MOUSE_FILTER_PASS, "e vale para item que entra depois")
+	_equals(scroll.scroll_deadzone, Nav.SCROLL_DEADZONE, "e a lista dá folga para o toque tremido não virar arrasto")
+	scroll.queue_free()
+	outside.queue_free()
+	var screen: Node = load("res://scenes/settings.tscn").instantiate()
+	add_child(screen)
+	await get_tree().process_frame
+	_equals(screen.get_node("%HistoryButton").mouse_filter, Control.MOUSE_FILTER_PASS, "e nas telas de verdade (Você)")
+	screen.queue_free()
+	await get_tree().process_frame
+
+
 func _test_back_navigation() -> void:
 	print("botão de voltar do sistema")
 	var files := DirAccess.get_files_at("res://scenes")
@@ -1688,10 +1723,10 @@ func _test_friends() -> void:
 	var bar := AppBar.new()
 	add_child(bar)
 	var photo := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGB8))
-	Account._local_texture = photo
-	bar.greet("Ana")
+	bar.greet("Ana", photo)
 	_equals(bar._avatar.photo, photo, "a saudação do menu mostra a foto da conta")
-	Account._local_texture = null
+	bar.greet("Ana")
+	_check(bar._avatar.photo == null, "e sem foto volta para a inicial")
 	bar.queue_free()
 	await get_tree().process_frame
 
