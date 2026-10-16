@@ -24,6 +24,7 @@ func _ready() -> void:
 		await get_tree().process_frame
 	# A foto de outra execução entraria na primeira conta nova.
 	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
 	Prefs.set_avatar_pending(false)
 
 	print("conta do aparelho")
@@ -131,6 +132,7 @@ func _ready() -> void:
 	_check(thumb_image != null and thumb_image.get_width() == 128, "e a miniatura de 128")
 
 	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
 	Account.sign_out()
 	_check(await Account.sign_in(), "reinstalado, entra")
 	_check(Account.local_avatar() != null, "e baixa a foto da conta")
@@ -145,6 +147,7 @@ func _ready() -> void:
 	_check(await Account.sign_in(), "volta a entrar")
 	_check(not Prefs.avatar_pending() and Account.avatar_file != first_file, "e a conta alcança a foto nova")
 	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
 
 	print("servidor fora do ar")
 	var url := Account.base_url()

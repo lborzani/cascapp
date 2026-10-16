@@ -1,6 +1,6 @@
 import http from 'node:http';
 
-import type { TokenVerifier } from './accounts.js';
+import type { Account, TokenVerifier } from './accounts.js';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import {
@@ -348,10 +348,10 @@ export function createRelay(options: RelayOptions = {}): Relay {
 
   // --- nomes confirmados pela conta -----------------------------------------
 
-  /** Por sala, o nome conferido de cada assento. Some junto com a sala. */
-  const identities = new WeakMap<Room<WebSocket>, Map<Seat, string>>();
+  /** Por sala, a conta conferida de cada assento. Some junto com a sala. */
+  const identities = new WeakMap<Room<WebSocket>, Map<Seat, Account>>();
 
-  function identitiesOf(room: Room<WebSocket>): Map<Seat, string> {
+  function identitiesOf(room: Room<WebSocket>): Map<Seat, Account> {
     let map = identities.get(room);
     if (map === undefined) {
       map = new Map();
@@ -360,10 +360,14 @@ export function createRelay(options: RelayOptions = {}): Relay {
     return map;
   }
 
+  function identityMessage(seat: Seat, account: Account): ServerMessage {
+    return { t: 'identity', seat, name: account.name, user: account.id, avatar: account.avatar, elo: account.elo };
+  }
+
   /** Quem chega fica sabendo dos nomes já confirmados na sala. */
   function sendIdentities(socket: WebSocket, room: Room<WebSocket>): void {
-    for (const [seat, name] of identitiesOf(room)) {
-      send(socket, { t: 'identity', seat, name });
+    for (const [seat, account] of identitiesOf(room)) {
+      send(socket, identityMessage(seat, account));
     }
   }
 
@@ -382,11 +386,11 @@ export function createRelay(options: RelayOptions = {}): Relay {
   ): void {
     identitiesOf(room).delete(seat);
     if (token === '' || config.verifyToken === undefined) return;
-    void config.verifyToken(token).then((name) => {
-      if (name === null || session.room !== room || session.seat !== seat) return;
+    void config.verifyToken(token).then((account) => {
+      if (account === null || session.room !== room || session.seat !== seat) return;
       if (room.seats[seat] !== socket) return;
-      identitiesOf(room).set(seat, name);
-      const message: ServerMessage = { t: 'identity', seat, name };
+      identitiesOf(room).set(seat, account);
+      const message = identityMessage(seat, account);
       for (const seated of room.seats) {
         if (seated !== null) send(seated, message);
       }

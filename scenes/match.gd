@@ -113,6 +113,8 @@ func _ready() -> void:
 		# quem volta no `resumed`, e os dois caem no meio de uma partida já
 		# desenhada. Sem isto o cartão só se corrigia no lance seguinte.
 		Net.names_changed.connect(_refresh)
+		# A foto do outro chega depois do nome: é um download à parte.
+		Account.remote_avatar_loaded.connect(_refresh)
 		# Orientação decidida pelo lado que se joga, e não por botão: em rede as
 		# pretas veem o tabuleiro do lado delas, e é o único arranjo certo.
 		_board.flipped = Game.local_side == Board.Side.BLACK
@@ -1287,6 +1289,27 @@ func _refresh_cards() -> void:
 				if Game.mode == Game.Mode.SOLO else _opponent_name()
 			view.title = Prefs.player_name() if card_side == Game.local_side else them
 			view.subtitle = side_names[card_side]
+		_apply_profile(view, card_side)
+
+
+## Foto e Elo de quem tem conta, nas partidas em rede. Os nossos vêm da própria
+## conta; os do outro, do que o relay confirmou para o assento dele. Sem conta
+## confirmada, a etiqueta fica como sempre foi.
+func _apply_profile(view: PlayerTag, side: int) -> void:
+	view.photo = null
+	if Game.mode != Game.Mode.ONLINE:
+		return
+	var elo := 0
+	if side == Game.local_side and not Net.is_spectator:
+		view.photo = Account.local_avatar()
+		elo = Account.elo if Account.signed_in() else 0
+	else:
+		var profile := Net.profile_of(_seat_of(side))
+		view.photo = Account.avatar_of(str(profile.get("user", "")), str(profile.get("avatar", "")))
+		elo = int(profile.get("elo", 0))
+	# O Elo é do xadrez: nas damas ele não diria nada.
+	if _ruleset is ChessRules and elo > 0:
+		view.subtitle = "%s · %d" % [view.subtitle, elo]
 
 
 ## Como o outro se chama, ou "Oponente" enquanto ele não se apresentou.

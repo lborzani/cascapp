@@ -58,9 +58,10 @@ signal watching(game_id: String, capacity: int)
 ## Quantos espectadores a sala tem agora. Chega aos **jogadores**: a cada entrada
 ## ou saída de quem assiste, e no `joined` de quem volta de uma queda.
 signal watchers_changed(count: int)
-## O servidor conferiu a conta de quem está em `seat` e este é o nome dela.
+## O servidor conferiu a conta de quem está em `seat`: o nome dela e o perfil
+## público (`{"user", "avatar", "elo"}`, ver `Net.profile_of`).
 ## Ver `relay/src/accounts.ts`.
-signal identity(seat: int, name: String)
+signal identity(seat: int, name: String, profile: Dictionary)
 signal failed(reason: String)
 signal state_changed(state: State)
 
@@ -529,7 +530,11 @@ func _handle(message: Dictionary) -> void:
 		"watchers":
 			watchers_changed.emit(int(message.get("n", 0)))
 		"identity":
-			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")))
+			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")), {
+				"user": str(message.get("user", "")),
+				"avatar": str(message.get("avatar", "")),
+				"elo": int(message.get("elo", 0)),
+			})
 		"peer":
 			var arriving := int(message.get("seat", -1))
 			if arriving >= 0 and not _present.has(arriving):

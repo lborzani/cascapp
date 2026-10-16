@@ -20,6 +20,8 @@ extends Node
 signal signed_in_changed(now: bool)
 ## A foto deste aparelho mudou: escolhida agora ou baixada da conta.
 signal avatar_changed
+## Chegou a foto de outra conta pedida em [method avatar_of].
+signal remote_avatar_loaded
 
 const DEFAULT_URL := "https://mammus.tailb8b7e1.ts.net:8443"
 const EMAIL_DOMAIN := "anon.cascapp.invalid"
@@ -36,9 +38,14 @@ var device_seed := ""
 var user_id := ""
 ## O nome do arquivo da foto na conta (`avatar` do registro); vazio sem foto.
 var avatar_file := ""
+## O Elo do xadrez desta conta, como a última entrada disse. 0 sem Elo.
+var elo := 0
 ## O nome que a conta tem no servidor, como a última resposta disse.
 var _name := ""
 var _busy := false
+var _local_texture: Texture2D = null
+## Nome do arquivo → foto de outra conta (`null` enquanto baixa).
+var _remote := {}
 var _retry: Timer = null
 
 
@@ -123,16 +130,43 @@ func set_avatar(webp: PackedByteArray) -> void:
 	var file := FileAccess.open(AVATAR_CACHE, FileAccess.WRITE)
 	file.store_buffer(webp)
 	file.close()
+	_local_texture = null
 	Prefs.set_avatar_pending(true)
 	avatar_changed.emit()
 	push_avatar()
 
 
-## A foto deste aparelho, ou `null` sem foto.
+## A foto deste aparelho, ou `null` sem foto. Decodificada uma vez: a etiqueta
+## da partida pergunta a cada lance.
 func local_avatar() -> Texture2D:
-	if not FileAccess.file_exists(AVATAR_CACHE):
+	if _local_texture == null and FileAccess.file_exists(AVATAR_CACHE):
+		_local_texture = Avatar.texture(FileAccess.get_file_as_bytes(AVATAR_CACHE))
+	return _local_texture
+
+
+## A foto de outra conta, pela miniatura. `null` enquanto ela não chegou: o
+## primeiro pedido dispara o download, e [signal remote_avatar_loaded] avisa
+## quando ela estiver aqui. Uma vez por arquivo enquanto o app está aberto — a
+## foto trocada nasce com outro nome, e o pedido seguinte já é o dela.
+func avatar_of(id: String, file: String) -> Texture2D:
+	if id.is_empty() or file.is_empty():
 		return null
-	return Avatar.texture(FileAccess.get_file_as_bytes(AVATAR_CACHE))
+	if not _remote.has(file):
+		_remote[file] = null
+		_load_remote(id, file)
+	return _remote[file]
+
+
+func _load_remote(id: String, file: String) -> void:
+	var path := avatar_url(id, file, "128x128").trim_prefix(base_url())
+	var reply := await _raw(HTTPClient.METHOD_GET, path, "", PackedByteArray())
+	var picture := Avatar.texture(reply["body"]) if reply["code"] == 200 else null
+	if picture == null:
+		# Falhou: esquece, para a próxima pergunta tentar de novo.
+		_remote.erase(file)
+		return
+	_remote[file] = picture
+	remote_avatar_loaded.emit()
 
 
 func push_avatar() -> bool:
@@ -169,6 +203,7 @@ func _fetch_own_avatar() -> void:
 	var file := FileAccess.open(AVATAR_CACHE, FileAccess.WRITE)
 	file.store_buffer(reply["body"])
 	file.close()
+	_local_texture = null
 	avatar_changed.emit()
 
 
@@ -220,6 +255,7 @@ func _authenticate(credentials: Dictionary) -> int:
 		return 0
 	_name = str(data["record"].get("name", ""))
 	avatar_file = str(data["record"].get("avatar", ""))
+	elo = int(data["record"].get("elo_chess", 0))
 	_set_token(str(data["token"]), str(data["record"]["id"]))
 	return 200
 

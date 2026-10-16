@@ -158,8 +158,12 @@ export type ServerMessage =
    * depois do `joined`/`peer` (a conferência não atrasa a entrada), e para quem
    * entra depois vem logo após o `joined`/`watching`. Assento sem `identity` é
    * jogador sem conta confirmada: vale o apelido que o próprio aparelho mandar.
+   *
+   * `user` é o id da conta, `avatar` o nome do arquivo da foto nela (`''` sem
+   * foto; o app monta o endereço) e `elo` o Elo do xadrez (0 sem Elo). App de
+   * antes do perfil lê só o nome e ignora o resto.
    */
-  | { t: 'identity'; seat: Seat; name: string }
+  | { t: 'identity'; seat: Seat; name: string; user: string; avatar: string; elo: number }
   | { t: 'pong' }
   | { t: 'error'; reason: ErrorReason; detail: string };
 

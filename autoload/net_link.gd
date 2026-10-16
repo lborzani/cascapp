@@ -611,8 +611,9 @@ func _welcome() -> Dictionary:
 ## exatamente igual e o cartão volta a dizer "Jogador 3". Nome é enfeite, e é por
 ## isso que ele pode viajar por fora do histórico de lances.
 var player_names := {}
-## Assentos cujo nome o relay conferiu na conta. O apelido que o aparelho do
-## outro mandar depois não passa por cima do nome confirmado.
+## Assentos cujo nome o relay conferiu na conta, cada um com o perfil público da
+## conta (ver [method profile_of]). O apelido que o aparelho do outro mandar
+## depois não passa por cima do nome confirmado.
 var verified_seats := {}
 
 ## Como **este** aparelho se apresenta.
@@ -635,6 +636,12 @@ var player_name := ""
 ## Como este assento se chama, ou vazio se ninguém disse.
 func name_of(seat: int) -> String:
 	return str(player_names.get(seat, ""))
+
+
+## `{"user", "avatar", "elo"}` da conta confirmada no assento, ou vazio. `avatar`
+## é o nome do arquivo na conta (vazio sem foto) e `elo` o do xadrez (0 sem).
+func profile_of(seat: int) -> Dictionary:
+	return verified_seats.get(seat, {})
 
 
 func _name_list() -> Array:
@@ -973,13 +980,14 @@ func _on_relay_peer_present(_seat: int) -> void:
 ## Alguém chegou com a partida em curso: quem voltou de uma queda, ou quem senta
 ## numa cadeira de máquina. Um aparelho só responde — ver [method _greeter].
 ## Nome conferido pelo relay: vale por cima do apelido que o aparelho mandou.
-func _on_relay_identity(seat: int, raw_name: String) -> void:
+func _on_relay_identity(seat: int, raw_name: String, profile := {}) -> void:
 	var clean := _clean_name(raw_name)
 	if seat < 0 or clean.is_empty():
 		return
-	verified_seats[seat] = true
-	if str(player_names.get(seat, "")) != clean:
-		player_names[seat] = clean
+	var changed: bool = verified_seats.get(seat) != profile or str(player_names.get(seat, "")) != clean
+	verified_seats[seat] = profile
+	player_names[seat] = clean
+	if changed:
 		names_changed.emit()
 
 

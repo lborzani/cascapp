@@ -710,6 +710,10 @@ func _test_verified_names() -> void:
 	Net._on_relay_peer_arrived(1)
 	Net._remember_name(1, "Outra pessoa")
 	_equals(Net.name_of(1), "Outra pessoa", "assento com dono novo volta a aceitar apelido")
+	Net._on_relay_identity(1, "Ana", {"user": "anaanaanaana123", "avatar": "a.webp", "elo": 1350})
+	_equals(Net.profile_of(1).get("elo"), 1350, "o perfil confirmado fica com o assento")
+	Net._on_relay_peer_arrived(1)
+	_equals(Net.profile_of(1), {}, "e sai com o dono do assento")
 	Net.player_names = {}
 	Net.verified_seats = {}
 
@@ -748,6 +752,18 @@ func _test_spectator() -> void:
 	)
 	_equals(_node(scene, "%BottomTag").title, "Bia", "o cartão de baixo é de quem joga de brancas")
 	_equals(_node(scene, "%TopTag").title, "Ana", "e o de cima, de quem joga de pretas")
+
+	# Perfil confirmado pelo relay: Elo no subtítulo, foto na bolacha.
+	var photo := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGB8))
+	Account._remote["bia.webp"] = photo
+	Net._on_relay_identity(0, "Ana", {"user": "anaanaanaana123", "avatar": "", "elo": 1350})
+	Net._on_relay_identity(1, "Bia", {"user": "biabiabiabia123", "avatar": "bia.webp", "elo": 0})
+	_equals(_node(scene, "%TopTag").subtitle, "Pretas · 1350", "Elo confirmado aparece ao lado do lado")
+	_check(_node(scene, "%TopTag").photo == null, "conta sem foto fica com a peça")
+	_equals(_node(scene, "%BottomTag").photo, photo, "conta com foto mostra a foto")
+	_equals(_node(scene, "%BottomTag").subtitle, "Brancas", "e sem Elo, nada de número")
+	Account._remote.erase("bia.webp")
+	Net.verified_seats = {}
 
 	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
 	scene._on_remote_move(e4.merged({"seat": 0}))

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { WebSocket } from 'ws';
 
-import { createVerifier, type TokenVerifier } from './accounts.js';
+import { createVerifier, type Account, type TokenVerifier } from './accounts.js';
 import type { ServerMessage } from './protocol.js';
 import { createRelay, type Relay } from './server.js';
 
@@ -22,14 +22,43 @@ function fakeFetch(answers: Record<string, () => Promise<Response>>): {
   return { fetchImpl, calls: () => calls };
 }
 
-const ok = (name: string) => () =>
-  Promise.resolve(new Response(JSON.stringify({ token: 'novo', record: { name } }), { status: 200 }));
+const ok = (name: string, extra: Record<string, unknown> = {}) => () =>
+  Promise.resolve(
+    new Response(JSON.stringify({ token: 'novo', record: { id: 'abcdefghij12345', name, ...extra } }), { status: 200 })
+  );
 
 describe('verificador de token', () => {
   it('token válido devolve o nome da conta, limpo', async () => {
     const { fetchImpl } = fakeFetch({ bom: ok('  Borzani\u0007 ') });
     const verify = createVerifier('http://pb', { fetchImpl });
-    assert.equal(await verify('bom'), 'Borzani');
+    assert.equal((await verify('bom'))?.name, 'Borzani');
+  });
+
+  it('devolve o perfil público: id, foto e Elo', async () => {
+    const { fetchImpl } = fakeFetch({
+      bom: ok('Ana', { avatar: 'avatar_x1y2z3.webp', elo_chess: 1350, email: 'x@anon.cascapp.invalid' }),
+    });
+    const verify = createVerifier('http://pb', { fetchImpl });
+    assert.deepEqual(await verify('bom'), {
+      id: 'abcdefghij12345',
+      name: 'Ana',
+      avatar: 'avatar_x1y2z3.webp',
+      elo: 1350,
+    });
+  });
+
+  it('conta de antes do perfil vem sem foto e com Elo 0; campo estranho não passa', async () => {
+    const { fetchImpl } = fakeFetch({
+      velha: ok('Velha'),
+      estranha: ok('Estranha', { avatar: '../../etc/passwd', elo_chess: 'muito' }),
+      sem_id: () => Promise.resolve(new Response(JSON.stringify({ record: { name: 'X' } }), { status: 200 })),
+    });
+    const verify = createVerifier('http://pb', { fetchImpl });
+    assert.deepEqual(await verify('velha'), { id: 'abcdefghij12345', name: 'Velha', avatar: '', elo: 0 });
+    const odd = await verify('estranha');
+    assert.equal(odd?.avatar, '', 'caminho no nome do arquivo não passa');
+    assert.equal(odd?.elo, 0);
+    assert.equal(await verify('sem_id'), null, 'sem id não é conta');
   });
 
   it('token recusado, sem nome ou com erro de rede é null', async () => {
@@ -66,7 +95,7 @@ describe('verificador de token', () => {
     assert.equal(calls(), 1, 'a segunda pergunta sai do cache');
     assert.equal(await verify('volta'), null);
     up = true;
-    assert.equal(await verify('volta'), 'Bia', 'a falha passageira não ficou guardada');
+    assert.equal((await verify('volta'))?.name, 'Bia', 'a falha passageira não ficou guardada');
   });
 });
 
@@ -76,14 +105,17 @@ let relay: Relay;
 let url: string;
 let release: () => void = () => {};
 
+const ANA: Account = { id: 'anaanaanaana123', name: 'Ana', avatar: 'avatar_x1y2z3.webp', elo: 1350 };
+const LENTO: Account = { id: 'lentolentolent0', name: 'Lento', avatar: '', elo: 1200 };
+
 /** `lento` só responde quando o teste chamar `release()`. */
 const verifyToken: TokenVerifier = async (token) => {
-  if (token === 'ana') return 'Ana';
+  if (token === 'ana') return ANA;
   if (token === 'lento') {
     await new Promise<void>((resolve) => {
       release = resolve;
     });
-    return 'Lento';
+    return LENTO;
   }
   return null;
 };
@@ -154,19 +186,19 @@ describe('nome confirmado na sala', () => {
     const host = await Client.open();
     host.send({ t: 'host', room: 'CONTA1', game: 'chess', token: 'ana' });
     assert.equal((await host.next()).t, 'joined');
-    assert.deepEqual(await host.next(), { t: 'identity', seat: 0, name: 'Ana' });
+    assert.deepEqual(await host.next(), { t: 'identity', seat: 0, name: 'Ana', user: ANA.id, avatar: ANA.avatar, elo: ANA.elo });
 
     const guest = await Client.open();
     guest.send({ t: 'join', room: 'CONTA1' });
     assert.equal((await guest.next()).t, 'joined');
-    assert.deepEqual(await guest.next(), { t: 'identity', seat: 0, name: 'Ana' });
+    assert.deepEqual(await guest.next(), { t: 'identity', seat: 0, name: 'Ana', user: ANA.id, avatar: ANA.avatar, elo: ANA.elo });
     assert.deepEqual(await host.next(), { t: 'peer', seat: 1 });
     await guest.quiet();
 
     const watcher = await Client.open();
     watcher.send({ t: 'watch', room: 'CONTA1' });
     assert.equal((await watcher.next()).t, 'watching');
-    assert.deepEqual(await watcher.next(), { t: 'identity', seat: 0, name: 'Ana' });
+    assert.deepEqual(await watcher.next(), { t: 'identity', seat: 0, name: 'Ana', user: ANA.id, avatar: ANA.avatar, elo: ANA.elo });
     host.close();
     guest.close();
     watcher.close();
@@ -189,8 +221,8 @@ describe('nome confirmado na sala', () => {
     assert.equal((await guest.next()).t, 'joined', 'entrou sem esperar o PocketBase');
     assert.deepEqual(await host.next(), { t: 'peer', seat: 1 });
     release();
-    assert.deepEqual(await host.next(), { t: 'identity', seat: 1, name: 'Lento' });
-    assert.deepEqual(await guest.next(), { t: 'identity', seat: 1, name: 'Lento' });
+    assert.deepEqual(await host.next(), { t: 'identity', seat: 1, name: 'Lento', user: LENTO.id, avatar: '', elo: 1200 });
+    assert.deepEqual(await guest.next(), { t: 'identity', seat: 1, name: 'Lento', user: LENTO.id, avatar: '', elo: 1200 });
     host.close();
     guest.close();
   });
