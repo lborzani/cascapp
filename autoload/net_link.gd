@@ -65,6 +65,8 @@ signal seat_left(seat: int)
 ## faria de qualquer jeito — mandar o assento levaria cada tela a implementar uma
 ## atualização parcial para pintar quatro rótulos.
 signal names_changed
+## A partida de xadrez contou para o Elo. `[{"seat", "elo", "delta"}, ...]`.
+signal rated(ratings: Array)
 ## A lista de cadeiras de máquina mudou no meio da partida.
 ##
 ## Ela muda nos dois sentidos: uma cadeira **vira** máquina quando alguém some de
@@ -284,6 +286,13 @@ func send_rematch_accept() -> void:
 
 func send_rematch_decline() -> void:
 	_send({"t": "rematch_no"})
+
+
+## Como a partida de xadrez acabou, para o relay arbitrar o Elo. `winner_seat`
+## -1 é empate. Fora do relay (rede local, NFC) não há árbitro, e nada sai.
+func send_result(winner_seat: int, white_seat: int, plies: int, moves_hash: String) -> void:
+	if _relay_bridge() != null and not is_spectator:
+		_relay_bridge().send_result(winner_seat, white_seat, plies, moves_hash)
 
 
 ## A lista de lances inteira, mandada pelos dois lados depois de uma reconexão.
@@ -910,6 +919,7 @@ func _wire_relay() -> bool:
 	_relay_bridge().watching.connect(_on_relay_watching)
 	_relay_bridge().watchers_changed.connect(_on_relay_watchers)
 	_relay_bridge().identity.connect(_on_relay_identity)
+	_relay_bridge().rated.connect(func(ratings: Array): rated.emit(ratings))
 	return true
 
 

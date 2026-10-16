@@ -33,6 +33,22 @@ pelo código, em `GET /api/cascapp/by-code/{code}` (`pb_hooks/perfil.pb.js`).
 O código e o Elo são do servidor: nascem no hook de criação e a regra de
 atualização recusa qualquer pedido do app que tente escrevê-los.
 
+## Elo do xadrez
+
+Quem muda o Elo é o relay, depois de conferir que os dois jogadores contam o
+mesmo desfecho: ele chama `POST /api/cascapp/chess-result`
+(`pb_hooks/elo.pb.js`) com o segredo compartilhado no cabeçalho
+`X-Cascapp-Relay`. A partida fica em `chess_games`, que cada um lê só as
+próprias e nenhuma conta escreve. K 40 nas 20 primeiras partidas, 20 depois.
+
+O segredo mora num `.env` no `mammus`, ao lado do compose, e no Fly como secret
+do relay — os dois iguais. Uma vez (o `read -s` evita que ele fique no
+histórico do shell):
+
+```bash
+read -rs SECRET && printf 'CASCAPP_RELAY_SECRET=%s\n' "$SECRET" > ~/cascapp-contas/.env && chmod 600 ~/cascapp-contas/.env; unset SECRET
+```
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `mammus` pela tailnet:

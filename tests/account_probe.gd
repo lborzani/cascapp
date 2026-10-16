@@ -111,10 +111,36 @@ func _ready() -> void:
 	var listing: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records?perPage=50", {}))["data"]
 	var items: Array = listing.get("items", []) if listing is Dictionary else []
 	_check(items.size() == 1 and items[0]["id"] == Account.user_id, "listar contas só devolve a própria")
+	var second := Account.user_id
 	Account.device_seed = device
 	Account.sign_out()
 	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code, {}))["code"], 401, "sem conta não busca")
 	_check(await Account.sign_in(), "volta ao primeiro aparelho")
+
+	print("resultado do xadrez (rota do relay)")
+	var secret := OS.get_environment("CASCAPP_RELAY_SECRET")
+	if secret.is_empty():
+		_check(false, "defina CASCAPP_RELAY_SECRET igual ao do PocketBase de teste")
+	else:
+		var key := "probe-%d" % Time.get_ticks_usec()
+		var game := {"key": key, "white": first, "black": second, "result": "white", "plies": 40}
+		_equals((await _relay_result(game, "errado"))["code"], 403, "segredo errado: recusado")
+		_equals((await _relay_result(game, ""))["code"], 403, "sem segredo: recusado")
+		var rated := await _relay_result(game, secret)
+		_equals(rated["code"], 200, "o relay registra a vitória das brancas")
+		_equals(rated["data"], {"white": {"elo": 1220.0, "delta": 20.0}, "black": {"elo": 1180.0, "delta": -20.0}}, "1200 contra 1200 com K 40: +20 e -20")
+		var again := await _relay_result(game, secret)
+		_equals(again["data"], rated["data"], "mandado de novo devolve o mesmo")
+		own = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+		_equals([own.get("elo_chess"), own.get("games_chess")], [1220.0, 1.0], "e conta uma vez só")
+		var draw := game.merged({"key": key + "-2", "result": "draw"}, true)
+		_equals((await _relay_result(draw, secret))["data"]["white"]["delta"], -2.0, "empate com quem está abaixo custa pouco")
+		_equals((await _relay_result(game.merged({"key": key + "-3", "black": "naoexiste123456"}, true), secret))["code"], 400, "conta que não existe: 400")
+		_equals((await _relay_result(game.merged({"key": key + "-4", "black": first}, true), secret))["code"], 400, "contra si mesmo: 400")
+		var history: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/chess_games/records", {}))["data"]
+		_equals(history.get("totalItems") if history is Dictionary else -1, 2.0, "cada um lê as próprias partidas")
+		var forged := await Account._call(HTTPClient.METHOD_POST, "/api/collections/chess_games/records", game.merged({"key": key + "-5"}, true))
+		_check(forged["code"] != 200, "e o app não cria partida (HTTP %d)" % forged["code"])
 
 	print("avatar")
 	var photo := Image.create(640, 480, false, Image.FORMAT_RGB8)
@@ -168,6 +194,20 @@ func _ready() -> void:
 	Prefs.set_player_name(name_before)
 	print("OK — conta." if _failures == 0 else "%d falha(s)." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## A rota que só o relay chama, com o segredo dele no cabeçalho.
+func _relay_result(game: Dictionary, secret: String) -> Dictionary:
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request(
+		Account.base_url() + "/api/cascapp/chess-result",
+		PackedStringArray(["Content-Type: application/json", "X-Cascapp-Relay: " + secret]),
+		HTTPClient.METHOD_POST, JSON.stringify(game)
+	)
+	var result: Array = await http.request_completed
+	http.queue_free()
+	return {"code": result[1], "data": JSON.parse_string((result[3] as PackedByteArray).get_string_from_utf8())}
 
 
 ## Espera a foto pendente subir; falso se ela não subiu em `Account.TIMEOUT_SECONDS`.

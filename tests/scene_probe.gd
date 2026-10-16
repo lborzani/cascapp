@@ -34,6 +34,7 @@ func _ready() -> void:
 	await _test_match_history()
 	_test_verified_names()
 	await _test_spectator()
+	await _test_rated_result()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_premove_captures()
@@ -440,6 +441,46 @@ func _test_checkers_capture_taps() -> void:
 	scene._on_square_tapped(_square("g7"))
 	_equals(scene._state.ply, 1, "escolhida a rota, o lance acontece")
 
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## Elo: o desfecho vai ao relay uma vez, o hash dos lances é o mesmo nos dois
+## aparelhos, e o Elo que o relay devolve fica no painel mesmo quando ele reabre.
+func _test_rated_result() -> void:
+	var MatchScript: GDScript = preload("res://scenes/match.gd")
+	print("Elo da partida online")
+	_equals(
+		MatchScript.moves_hash([{"p": PackedInt32Array([12, 28]), "pr": 0}]),
+		MatchScript.moves_hash([{"p": [12.0, 28.0], "pr": 0.0}]),
+		"lance jogado aqui e lance vindo de JSON dão o mesmo hash"
+	)
+	_check(
+		MatchScript.moves_hash([{"p": [12, 28]}]) != MatchScript.moves_hash([{"p": [12, 20]}]),
+		"lances diferentes, hash diferente"
+	)
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	scene._on_opponent_left()
+	_check(scene._reported, "o abandono do outro vai para o relay")
+	scene._show_overlay("O oponente saiu", "A partida foi encerrada no lance 0.", false)
+	Net.rated.emit([{"seat": 1, "elo": 1180, "delta": -20}, {"seat": 0, "elo": 1220, "delta": 20}])
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "o painel mostra o nosso Elo novo")
+	_equals(Account.elo, 1220, "e a conta fica com ele")
+	scene._show_overlay("O oponente saiu", "De novo.", false)
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "e ele continua lá quando o painel reabre")
+
+	scene._new_game()
+	_check(not scene._reported and scene._rating_text.is_empty(), "a revanche começa sem relato nem Elo")
+	Account.elo = 0
 	scene.queue_free()
 	await get_tree().process_frame
 

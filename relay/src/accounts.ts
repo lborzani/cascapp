@@ -23,7 +23,13 @@ export interface Account {
   elo: number;
 }
 
-export type TokenVerifier = (token: string) => Promise<Account | null>;
+/**
+ * `setElo` acerta o cache depois de uma partida que contou: sem ele, quem abre
+ * outra sala nos dez minutos seguintes aparece com o Elo de antes.
+ */
+export type TokenVerifier = ((token: string) => Promise<Account | null>) & {
+  setElo?: (id: string, elo: number) => void;
+};
 
 export interface VerifierOptions {
   timeoutMs?: number;
@@ -59,7 +65,7 @@ export function createVerifier(baseUrl: string, options: VerifierOptions = {}): 
   const cache = new Map<string, { account: Account; until: number }>();
   const url = `${baseUrl.replace(/\/+$/, '')}/api/collections/users/auth-refresh`;
 
-  return async (token: string) => {
+  const verify: TokenVerifier = async (token: string) => {
     const now = Date.now();
     const hit = cache.get(token);
     if (hit !== undefined && hit.until > now) return hit.account;
@@ -83,4 +89,10 @@ export function createVerifier(baseUrl: string, options: VerifierOptions = {}): 
       return null;
     }
   };
+  verify.setElo = (id, elo) => {
+    for (const entry of cache.values()) {
+      if (entry.account.id === id) entry.account = { ...entry.account, elo };
+    }
+  };
+  return verify;
 }

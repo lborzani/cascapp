@@ -62,6 +62,9 @@ signal watchers_changed(count: int)
 ## público (`{"user", "avatar", "elo"}`, ver `Net.profile_of`).
 ## Ver `relay/src/accounts.ts`.
 signal identity(seat: int, name: String, profile: Dictionary)
+## A partida de xadrez contou para o Elo: `[{"seat", "elo", "delta"}, ...]`.
+## Ver `relay/src/ratings.ts`.
+signal rated(ratings: Array)
 signal failed(reason: String)
 signal state_changed(state: State)
 
@@ -281,6 +284,16 @@ func send(message: Dictionary) -> void:
 	if _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
 	_socket.send_text(JSON.stringify({"t": "msg", "d": message}))
+
+
+## Como a partida de xadrez acabou, para o relay — e só para ele: não é
+## repassado a ninguém. Ver `relay/src/ratings.ts`.
+func send_result(winner_seat: int, white_seat: int, plies: int, moves_hash: String) -> void:
+	if _role == "watch" or _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	_socket.send_text(JSON.stringify({
+		"t": "result", "winner": winner_seat, "white": white_seat, "plies": plies, "moves": moves_hash,
+	}))
 
 
 func leave() -> void:
@@ -527,6 +540,10 @@ func _handle(message: Dictionary) -> void:
 			_present = PackedInt32Array(message.get("present", []))
 			_sync_state()
 			watching.emit(str(message.get("game", "")), _capacity)
+		"rated":
+			var ratings: Variant = message.get("ratings", [])
+			if ratings is Array:
+				rated.emit(ratings)
 		"watchers":
 			watchers_changed.emit(int(message.get("n", 0)))
 		"identity":

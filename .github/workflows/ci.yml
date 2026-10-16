@@ -102,6 +102,7 @@ jobs:
           pb=$(grep -oP '(?<=^ARG PB_VERSION=).+' pocketbase/Dockerfile)
           wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${pb}/pocketbase_${pb}_linux_amd64.zip" -O /tmp/pb.zip
           unzip -q /tmp/pb.zip pocketbase -d /tmp/pb
+          export CASCAPP_RELAY_SECRET=segredo-da-ci
           /tmp/pb/pocketbase serve --http 127.0.0.1:18091 --dir /tmp/pb/data --migrationsDir pocketbase/pb_migrations --hooksDir pocketbase/pb_hooks > pb.log 2>&1 &
           timeout 30 bash -c 'until curl -sf 127.0.0.1:18091/api/health >/dev/null; do sleep 0.5; done'
           CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/account_probe.tscn

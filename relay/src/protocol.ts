@@ -31,6 +31,8 @@
  * código —, ela só responde "qual assento era o meu".
  */
 
+import { parseReport, type Report } from './ratings.js';
+
 /** Motivos de recusa. O cliente escolhe a mensagem que mostra a partir daqui. */
 export type ErrorReason =
   | 'bad_code'
@@ -89,7 +91,9 @@ export type ClientMessage =
   | { t: 'watch'; room: string }
   | { t: 'msg'; d: unknown }
   | { t: 'ping' }
-  | { t: 'leave' };
+  | { t: 'leave' }
+  /** Como a partida de xadrez acabou, do ponto de vista deste aparelho. Ver `ratings.ts`. */
+  | ({ t: 'result' } & Report);
 
 /**
  * Uma sala na lista pública. É tudo o que o servidor conta sobre uma partida, e
@@ -164,6 +168,11 @@ export type ServerMessage =
    * antes do perfil lê só o nome e ignora o resto.
    */
   | { t: 'identity'; seat: Seat; name: string; user: string; avatar: string; elo: number }
+  /**
+   * A partida contou para o Elo: o Elo novo e a mudança de cada assento. Vai
+   * para os dois jogadores e para quem assiste.
+   */
+  | { t: 'rated'; ratings: { seat: Seat; elo: number; delta: number }[] }
   | { t: 'pong' }
   | { t: 'error'; reason: ErrorReason; detail: string };
 
@@ -322,6 +331,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { t: 'ping' };
     case 'leave':
       return { t: 'leave' };
+    case 'result': {
+      const report = parseReport(record);
+      return report === null ? null : { t: 'result', ...report };
+    }
     default:
       return null;
   }
