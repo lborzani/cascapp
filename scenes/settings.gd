@@ -63,6 +63,9 @@ func _ready() -> void:
 	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
 	%HistoryButton.pressed.connect(_open_history)
 	%UpdateButton.pressed.connect(_check_updates)
+	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
+	%PhotoButton.pressed.connect(_pick_photo)
+	Account.avatar_changed.connect(_update_preview)
 	_update_preview()
 
 
@@ -133,6 +136,32 @@ func _update_preview() -> void:
 	# A bolacha é a mesma que os outros vão ver na mesa: mostrar o nome e a bolacha
 	# juntos responde "como eu apareço" sem o jogador ter de abrir uma partida.
 	%Avatar.player_name = Prefs.player_name()
+	%Avatar.photo = Account.local_avatar()
+	%PhotoButton.text = "Trocar foto" if %Avatar.photo != null else "Escolher foto"
+
+
+# --- foto -----------------------------------------------------------------------
+
+
+## O seletor do sistema (no Android, o da galeria). A foto é recortada e
+## comprimida aqui mesmo, e sobe para a conta quando der — ver `Account`.
+func _pick_photo() -> void:
+	Sound.play(Sound.Cue.TAP)
+	DisplayServer.file_dialog_show(
+		"Escolher foto", "", "", false, DisplayServer.FILE_DIALOG_MODE_OPEN_FILE,
+		PackedStringArray(["*.jpg,*.jpeg,*.png,*.webp;Fotos;image/jpeg,image/png,image/webp"]),
+		_on_photo_picked
+	)
+
+
+func _on_photo_picked(picked: bool, paths: PackedStringArray, _filter: int) -> void:
+	if not picked or paths.is_empty():
+		return
+	var webp := Avatar.compress(FileAccess.get_file_as_bytes(paths[0]))
+	if webp.is_empty():
+		%Preview.text = "Essa imagem não abriu. Tente uma foto JPEG ou PNG."
+		return
+	Account.set_avatar(webp)
 
 
 ## O gesto de voltar é o botão "Voltar", e não o "Salvar": quem sai pelo gesto

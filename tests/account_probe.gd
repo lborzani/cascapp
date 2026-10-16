@@ -22,6 +22,9 @@ func _ready() -> void:
 	# O autoload já tentou entrar sozinho; espera ele terminar antes de mexer.
 	while Account._busy:
 		await get_tree().process_frame
+	# A foto de outra execução entraria na primeira conta nova.
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Prefs.set_avatar_pending(false)
 
 	print("conta do aparelho")
 	# Um aparelho novo por execução: o PocketBase local guarda as anteriores.
@@ -112,6 +115,37 @@ func _ready() -> void:
 	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code, {}))["code"], 401, "sem conta não busca")
 	_check(await Account.sign_in(), "volta ao primeiro aparelho")
 
+	print("avatar")
+	var photo := Image.create(640, 480, false, Image.FORMAT_RGB8)
+	photo.fill(Color.ORANGE)
+	Account.set_avatar(Avatar.compress(photo.save_jpg_to_buffer()))
+	_check(Account.local_avatar() != null, "a foto vale no aparelho na hora")
+	_check(await _settled(), "e sobe para a conta")
+	var first_file := Account.avatar_file
+	_check(not first_file.is_empty(), "que guarda o arquivo (%s)" % first_file)
+	var full := await Account._raw(HTTPClient.METHOD_GET, Account.avatar_url(first, first_file).trim_prefix(Account.base_url()), "", PackedByteArray())
+	var full_image := Avatar.decode(full["body"])
+	_check(full_image != null and full_image.get_size() == Vector2i(Avatar.SIZE, Avatar.SIZE), "a foto volta pelo endereço público")
+	var thumb := await Account._raw(HTTPClient.METHOD_GET, Account.avatar_url(first, first_file, "128x128").trim_prefix(Account.base_url()), "", PackedByteArray())
+	var thumb_image := Avatar.decode(thumb["body"])
+	_check(thumb_image != null and thumb_image.get_width() == 128, "e a miniatura de 128")
+
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account.sign_out()
+	_check(await Account.sign_in(), "reinstalado, entra")
+	_check(Account.local_avatar() != null, "e baixa a foto da conta")
+
+	var url_before := Account.base_url()
+	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
+	photo.fill(Color.TEAL)
+	Account.set_avatar(Avatar.compress(photo.save_png_to_buffer()))
+	_check(not await _settled(), "foto trocada com o servidor fora fica pendente")
+	OS.set_environment("CASCAPP_PB_URL", url_before)
+	Account.sign_out()
+	_check(await Account.sign_in(), "volta a entrar")
+	_check(not Prefs.avatar_pending() and Account.avatar_file != first_file, "e a conta alcança a foto nova")
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+
 	print("servidor fora do ar")
 	var url := Account.base_url()
 	Account.sign_out()
@@ -131,6 +165,14 @@ func _ready() -> void:
 	Prefs.set_player_name(name_before)
 	print("OK — conta." if _failures == 0 else "%d falha(s)." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## Espera a foto pendente subir; falso se ela não subiu em `Account.TIMEOUT_SECONDS`.
+func _settled() -> bool:
+	var deadline := Time.get_ticks_msec() + int(Account.TIMEOUT_SECONDS * 1000) + 500
+	while Prefs.avatar_pending() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	return not Prefs.avatar_pending()
 
 
 func _check(condition: bool, label: String) -> void:
