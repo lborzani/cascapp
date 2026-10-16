@@ -47,6 +47,7 @@ func _ready() -> void:
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
+	await _test_friends()
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -1668,6 +1669,33 @@ func _time_control_with_increment() -> int:
 ## Um nó que sumiu da cena tem de virar falha, não um `null` que aborta a função
 ## e leva junto todas as asserções que viriam depois — foi assim que este arquivo
 ## passou a reportar sucesso sem testar nada.
+## Amigos: o QR de amigo não se confunde com o de sala, a tela abre sem conta
+## dizendo o porquê, e a saudação do menu mostra a foto da conta.
+func _test_friends() -> void:
+	print("amigos")
+	_equals(FriendsPanel.code_from_qr("XDMF|abc234"), "ABC234", "QR de amigo dá o código")
+	_equals(FriendsPanel.code_from_qr(Pairing.build_payload(Game.CHESS, "ABC234")), "", "QR de sala não é de amigo")
+	_equals(FriendsPanel.code_from_qr("XDMF|AB"), "", "código curto é recusado")
+	_check(Pairing.parse_payload("XDMF|ABC234").is_empty(), "e o de amigo não abre sala")
+	Account.sign_out()
+	var panel := FriendsPanel.new()
+	add_child(panel)
+	await get_tree().process_frame
+	var texts := panel.find_children("", "Label", true, false).map(func(label: Label) -> String: return label.text)
+	_check(texts.any(func(text: String) -> bool: return text.begins_with("Sem conexão")), "sem conta, a tela diz por quê")
+	panel.close()
+
+	var bar := AppBar.new()
+	add_child(bar)
+	var photo := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGB8))
+	Account._local_texture = photo
+	bar.greet("Ana")
+	_equals(bar._avatar.photo, photo, "a saudação do menu mostra a foto da conta")
+	Account._local_texture = null
+	bar.queue_free()
+	await get_tree().process_frame
+
+
 func _node(match_scene: Node, path: String) -> Node:
 	var found := match_scene.get_node_or_null(path)
 	if found == null:

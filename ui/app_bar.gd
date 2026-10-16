@@ -107,6 +107,8 @@ func greet(player_name: String) -> void:
 		_build_greeting()
 	_greeting_name.text = player_name.to_upper()
 	_avatar.player_name = player_name
+	# A foto da conta, quando há; sem ela a bolacha fica com a inicial.
+	_avatar.photo = Account.local_avatar()
 
 
 func _build_greeting() -> void:
