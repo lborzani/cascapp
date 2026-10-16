@@ -53,6 +53,8 @@ func _ready() -> void:
 
 	%AppBar.greet(Prefs.player_name())
 	%AppBar.action_pressed.connect(_open_settings)
+	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
+	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name()))
 
 	%Tabs.current = AppTabs.GAMES
 	# Sem servidor de partidas não há sala para procurar. A aba continua lá,

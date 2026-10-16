@@ -40,6 +40,8 @@ var user_id := ""
 var avatar_file := ""
 ## O Elo do xadrez desta conta, como a última entrada disse. 0 sem Elo.
 var elo := 0
+## O código de amigo desta conta, como a última entrada disse; vazio sem conta.
+var friend_code := ""
 ## O nome que a conta tem no servidor, como a última resposta disse.
 var _name := ""
 var _busy := false
@@ -116,6 +118,41 @@ func push_name(name: String) -> bool:
 	if reply["code"] == 200:
 		_name = name
 	return reply["code"] == 200
+
+
+# --- amigos ---------------------------------------------------------------------
+#
+# Rotas de `pocketbase/pb_hooks/amigos.pb.js`. Adicionar pelo código vale para os
+# dois lados: quem tem o código de alguém recebeu dele.
+
+
+## Os amigos desta conta, cada um com o perfil público
+## (`{"id", "name", "avatar", "friend_code", "elo_chess", "games_chess"}`).
+## `null` quando não deu para perguntar — diferente de lista vazia.
+func friends() -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/friends", {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("items") is Array:
+		return null
+	return data["items"]
+
+
+## Adiciona pelo código de amigo. `{"code": HTTP, "data": perfil ou erro}`:
+## 200 virou amigo (ou já era), 404 código que não existe, 400 o próprio código,
+## 0 sem conta ou sem servidor.
+func add_friend(code: String) -> Dictionary:
+	if not signed_in():
+		return {"code": 0, "data": null}
+	return await _call(HTTPClient.METHOD_POST, "/api/cascapp/friends/" + code.uri_encode(), {})
+
+
+func remove_friend(id: String) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/" + id.uri_encode(), {})
+	return reply["code"] == 204
 
 
 # --- avatar ---------------------------------------------------------------------
@@ -256,6 +293,7 @@ func _authenticate(credentials: Dictionary) -> int:
 	_name = str(data["record"].get("name", ""))
 	avatar_file = str(data["record"].get("avatar", ""))
 	elo = int(data["record"].get("elo_chess", 0))
+	friend_code = str(data["record"].get("friend_code", ""))
 	_set_token(str(data["token"]), str(data["record"]["id"]))
 	return 200
 

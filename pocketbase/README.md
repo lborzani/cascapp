@@ -49,6 +49,14 @@ histórico do shell):
 read -rs SECRET && printf 'CASCAPP_RELAY_SECRET=%s\n' "$SECRET" > ~/cascapp-contas/.env && chmod 600 ~/cascapp-contas/.env; unset SECRET
 ```
 
+## Amigos
+
+Adicionar pelo código de amigo (`POST /api/cascapp/friends/{code}`) vale para os
+dois lados na hora: quem tem o código de alguém recebeu dele, então não há pedido
+para aceitar. `GET /api/cascapp/friends` lista os amigos com o perfil público, e
+`DELETE /api/cascapp/friends/{id}` desfaz dos dois lados. A coleção `friendships`
+não tem regra aberta: só essas rotas (`pb_hooks/amigos.pb.js`) leem e escrevem.
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `mammus` pela tailnet:

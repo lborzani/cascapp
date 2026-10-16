@@ -117,6 +117,37 @@ func _ready() -> void:
 	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code, {}))["code"], 401, "sem conta não busca")
 	_check(await Account.sign_in(), "volta ao primeiro aparelho")
 
+	print("amigos")
+	_equals(Account.friend_code, code, "a entrada traz o próprio código")
+	_equals(await Account.friends(), [], "conta nova sem amigos")
+	_equals((await Account.add_friend(code))["code"], 400, "o próprio código: recusado")
+	_equals((await Account.add_friend("ZZZZZ1"))["code"], 404, "código que não existe: 404")
+	Account.device_seed = device + "-outro"
+	Account.sign_out()
+	await Account.sign_in()
+	var added := await Account.add_friend(code.to_lower())
+	_equals(added["code"], 200, "a outra conta adiciona pelo código, em minúsculas")
+	_equals((added["data"] as Dictionary).get("id") if added["data"] is Dictionary else null, first, "e recebe o perfil da primeira")
+	_equals((await Account.add_friend(code))["code"], 200, "adicionar de novo não é erro")
+	var mine: Variant = await Account.friends()
+	_check(mine is Array and mine.size() == 1 and mine[0]["id"] == first, "a primeira aparece uma vez na lista")
+	_check(mine is Array and not (mine[0] as Dictionary).has("email"), "sem e-mail na lista")
+	Account.device_seed = device
+	Account.sign_out()
+	await Account.sign_in()
+	var theirs: Variant = await Account.friends()
+	_check(theirs is Array and theirs.size() == 1 and theirs[0]["id"] == second, "e vale para os dois lados")
+	_check(await Account.remove_friend(second), "desfazer a amizade")
+	_equals(await Account.friends(), [], "some da lista de quem desfez")
+	Account.device_seed = device + "-outro"
+	Account.sign_out()
+	await Account.sign_in()
+	_equals(await Account.friends(), [], "e da lista do outro")
+	Account.device_seed = device
+	Account.sign_out()
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/friends", {}))["code"], 401, "sem conta não lista")
+	_check(await Account.sign_in(), "volta ao primeiro aparelho")
+
 	print("resultado do xadrez (rota do relay)")
 	var secret := OS.get_environment("CASCAPP_RELAY_SECRET")
 	if secret.is_empty():

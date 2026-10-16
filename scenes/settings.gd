@@ -19,6 +19,7 @@ const JOIN_SCENE := "res://scenes/join.tscn"
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
+var _friends: FriendsPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 var _update_url := ""
 
@@ -62,6 +63,7 @@ func _ready() -> void:
 	var games := Prefs.history().size()
 	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
 	%HistoryButton.pressed.connect(_open_history)
+	%FriendsButton.pressed.connect(_open_friends)
 	%UpdateButton.pressed.connect(_check_updates)
 	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
@@ -172,6 +174,9 @@ func go_back() -> void:
 	if is_instance_valid(_history):
 		_history.close()
 		return
+	if is_instance_valid(_friends):
+		_friends.close()
+		return
 	_leave()
 
 
@@ -213,6 +218,12 @@ func _show_update(release: Dictionary) -> void:
 func _open_history() -> void:
 	_history = HistoryPanel.new()
 	add_child(_history)
+
+
+func _open_friends() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_friends = FriendsPanel.new()
+	add_child(_friends)
 
 
 func _leave() -> void:
