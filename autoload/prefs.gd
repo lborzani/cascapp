@@ -296,6 +296,16 @@ static func set_account_seed(seed: String) -> void:
 	_file().save(PATH)
 
 
+## Foto escolhida que a conta ainda não recebeu (servidor fora na hora).
+static func avatar_pending() -> bool:
+	return bool(_file().get_value(ACCOUNT_SECTION, "avatar_pending", false))
+
+
+static func set_avatar_pending(pending: bool) -> void:
+	_file().set_value(ACCOUNT_SECTION, "avatar_pending", pending)
+	_file().save(PATH)
+
+
 # --- histórico de partidas ----------------------------------------------------
 #
 # As partidas de xadrez que terminaram, mais recente primeiro, para a tela de

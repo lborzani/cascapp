@@ -22,6 +22,10 @@ func _ready() -> void:
 	# O autoload já tentou entrar sozinho; espera ele terminar antes de mexer.
 	while Account._busy:
 		await get_tree().process_frame
+	# A foto de outra execução entraria na primeira conta nova.
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
+	Prefs.set_avatar_pending(false)
 
 	print("conta do aparelho")
 	# Um aparelho novo por execução: o PocketBase local guarda as anteriores.
@@ -67,6 +71,110 @@ func _ready() -> void:
 	record = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
 	_equals(record.get("name"), "Renomeado", "e a conta alcança o nome do aparelho")
 
+	print("perfil público")
+	var own: Dictionary = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+	var code := str(own.get("friend_code", ""))
+	_equals(code.length(), 6, "a conta nasce com código de amigo")
+	_equals(own.get("elo_chess"), 1200.0, "e Elo 1200")
+	_equals(own.get("games_chess"), 0.0, "e nenhuma partida")
+	for field: String in ["elo_chess", "games_chess", "friend_code"]:
+		var forged := await Account._call(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + first, {field: 3000 if field != "friend_code" else "AAAAAA"})
+		_check(forged["code"] != 200, "o app não escreve %s (HTTP %d)" % [field, forged["code"]])
+	own = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+	_equals(own.get("elo_chess"), 1200.0, "o Elo segue o do servidor")
+	_equals(own.get("friend_code"), code, "e o código também")
+
+	var forged_email := "forjada-%d@%s" % [Time.get_ticks_usec(), Account.EMAIL_DOMAIN]
+	await Account._call(HTTPClient.METHOD_POST, "/api/collections/users/records", {
+		"email": forged_email, "password": "senha-forjada-123", "passwordConfirm": "senha-forjada-123",
+		"elo_chess": 9999, "games_chess": 50, "friend_code": "AAAAAA",
+	})
+	var forged_auth: Variant = (await Account._call(HTTPClient.METHOD_POST, "/api/collections/users/auth-with-password", {"identity": forged_email, "password": "senha-forjada-123"}))["data"]
+	var forged_record: Dictionary = forged_auth["record"] if forged_auth is Dictionary and forged_auth.has("record") else {}
+	_equals(forged_record.get("elo_chess"), 1200.0, "criar mandando Elo não muda o Elo inicial")
+	_check(str(forged_record.get("friend_code", "")) not in ["", "AAAAAA"], "nem escolhe o código")
+
+	Account.device_seed = device + "-outro"
+	Account.sign_out()
+	_check(await Account.sign_in(), "outra conta entra")
+	var seen := await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {})
+	_equals(seen["code"], 200, "e vê o perfil da primeira")
+	var seen_data: Dictionary = seen["data"] if seen["data"] is Dictionary else {}
+	_equals(seen_data.get("friend_code"), code, "com o código")
+	_check(str(seen_data.get("email", "")).is_empty(), "sem o e-mail")
+	var found := await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code.to_lower(), {})
+	_equals(found["code"], 200, "acha a primeira pelo código, em minúsculas")
+	var found_data: Dictionary = found["data"] if found["data"] is Dictionary else {}
+	_equals(found_data.get("id"), first, "e é ela")
+	_check(not found_data.has("email"), "sem e-mail na busca")
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/ZZZZZ1", {}))["code"], 404, "código que não existe: 404")
+	var listing: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records?perPage=50", {}))["data"]
+	var items: Array = listing.get("items", []) if listing is Dictionary else []
+	_check(items.size() == 1 and items[0]["id"] == Account.user_id, "listar contas só devolve a própria")
+	var second := Account.user_id
+	Account.device_seed = device
+	Account.sign_out()
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/by-code/" + code, {}))["code"], 401, "sem conta não busca")
+	_check(await Account.sign_in(), "volta ao primeiro aparelho")
+
+	print("resultado do xadrez (rota do relay)")
+	var secret := OS.get_environment("CASCAPP_RELAY_SECRET")
+	if secret.is_empty():
+		_check(false, "defina CASCAPP_RELAY_SECRET igual ao do PocketBase de teste")
+	else:
+		var key := "probe-%d" % Time.get_ticks_usec()
+		var game := {"key": key, "white": first, "black": second, "result": "white", "plies": 40}
+		_equals((await _relay_result(game, "errado"))["code"], 403, "segredo errado: recusado")
+		_equals((await _relay_result(game, ""))["code"], 403, "sem segredo: recusado")
+		var rated := await _relay_result(game, secret)
+		_equals(rated["code"], 200, "o relay registra a vitória das brancas")
+		_equals(rated["data"], {"white": {"elo": 1220.0, "delta": 20.0}, "black": {"elo": 1180.0, "delta": -20.0}}, "1200 contra 1200 com K 40: +20 e -20")
+		var again := await _relay_result(game, secret)
+		_equals(again["data"], rated["data"], "mandado de novo devolve o mesmo")
+		own = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/users/records/" + first, {}))["data"]
+		_equals([own.get("elo_chess"), own.get("games_chess")], [1220.0, 1.0], "e conta uma vez só")
+		var draw := game.merged({"key": key + "-2", "result": "draw"}, true)
+		_equals((await _relay_result(draw, secret))["data"]["white"]["delta"], -2.0, "empate com quem está abaixo custa pouco")
+		_equals((await _relay_result(game.merged({"key": key + "-3", "black": "naoexiste123456"}, true), secret))["code"], 400, "conta que não existe: 400")
+		_equals((await _relay_result(game.merged({"key": key + "-4", "black": first}, true), secret))["code"], 400, "contra si mesmo: 400")
+		var history: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/chess_games/records", {}))["data"]
+		_equals(history.get("totalItems") if history is Dictionary else -1, 2.0, "cada um lê as próprias partidas")
+		var forged := await Account._call(HTTPClient.METHOD_POST, "/api/collections/chess_games/records", game.merged({"key": key + "-5"}, true))
+		_check(forged["code"] != 200, "e o app não cria partida (HTTP %d)" % forged["code"])
+
+	print("avatar")
+	var photo := Image.create(640, 480, false, Image.FORMAT_RGB8)
+	photo.fill(Color.ORANGE)
+	Account.set_avatar(Avatar.compress(photo.save_jpg_to_buffer()))
+	_check(Account.local_avatar() != null, "a foto vale no aparelho na hora")
+	_check(await _settled(), "e sobe para a conta")
+	var first_file := Account.avatar_file
+	_check(not first_file.is_empty(), "que guarda o arquivo (%s)" % first_file)
+	var full := await Account._raw(HTTPClient.METHOD_GET, Account.avatar_url(first, first_file).trim_prefix(Account.base_url()), "", PackedByteArray())
+	var full_image := Avatar.decode(full["body"])
+	_check(full_image != null and full_image.get_size() == Vector2i(Avatar.SIZE, Avatar.SIZE), "a foto volta pelo endereço público")
+	var thumb := await Account._raw(HTTPClient.METHOD_GET, Account.avatar_url(first, first_file, "128x128").trim_prefix(Account.base_url()), "", PackedByteArray())
+	var thumb_image := Avatar.decode(thumb["body"])
+	_check(thumb_image != null and thumb_image.get_width() == 128, "e a miniatura de 128")
+
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
+	Account.sign_out()
+	_check(await Account.sign_in(), "reinstalado, entra")
+	_check(Account.local_avatar() != null, "e baixa a foto da conta")
+
+	var url_before := Account.base_url()
+	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
+	photo.fill(Color.TEAL)
+	Account.set_avatar(Avatar.compress(photo.save_png_to_buffer()))
+	_check(not await _settled(), "foto trocada com o servidor fora fica pendente")
+	OS.set_environment("CASCAPP_PB_URL", url_before)
+	Account.sign_out()
+	_check(await Account.sign_in(), "volta a entrar")
+	_check(not Prefs.avatar_pending() and Account.avatar_file != first_file, "e a conta alcança a foto nova")
+	DirAccess.remove_absolute(Account.AVATAR_CACHE)
+	Account._local_texture = null
+
 	print("servidor fora do ar")
 	var url := Account.base_url()
 	Account.sign_out()
@@ -86,6 +194,28 @@ func _ready() -> void:
 	Prefs.set_player_name(name_before)
 	print("OK — conta." if _failures == 0 else "%d falha(s)." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## A rota que só o relay chama, com o segredo dele no cabeçalho.
+func _relay_result(game: Dictionary, secret: String) -> Dictionary:
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request(
+		Account.base_url() + "/api/cascapp/chess-result",
+		PackedStringArray(["Content-Type: application/json", "X-Cascapp-Relay: " + secret]),
+		HTTPClient.METHOD_POST, JSON.stringify(game)
+	)
+	var result: Array = await http.request_completed
+	http.queue_free()
+	return {"code": result[1], "data": JSON.parse_string((result[3] as PackedByteArray).get_string_from_utf8())}
+
+
+## Espera a foto pendente subir; falso se ela não subiu em `Account.TIMEOUT_SECONDS`.
+func _settled() -> bool:
+	var deadline := Time.get_ticks_msec() + int(Account.TIMEOUT_SECONDS * 1000) + 500
+	while Prefs.avatar_pending() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	return not Prefs.avatar_pending()
 
 
 func _check(condition: bool, label: String) -> void:

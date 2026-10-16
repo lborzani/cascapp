@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_version_compare()
 	_test_update_offer()
 	_test_prefs()
+	_test_avatar()
 	_test_history()
 	_test_rounds_played()
 	_test_match_clock()
@@ -1128,3 +1129,45 @@ func _write(path: String, contents: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	file.store_string(contents)
 	file.close()
+
+
+## A foto vira o avatar no aparelho: quadrado do centro, `Avatar.SIZE`, WebP
+## abaixo do teto do servidor — e de pé, quando a câmera anotou o giro no EXIF.
+func _test_avatar() -> void:
+	print("avatar")
+	# Ruído é o pior caso da compressão: nada se repete.
+	var noise := Image.create_from_data(
+		4000, 3000, false, Image.FORMAT_RGB8, Crypto.new().generate_random_bytes(4000 * 3000 * 3)
+	)
+	var out := Avatar.compress(noise.save_jpg_to_buffer(0.9))
+	var back := Avatar.decode(out)
+	_check(back != null, "foto grande vira avatar")
+	if back != null:
+		_equals(back.get_size(), Vector2i(Avatar.SIZE, Avatar.SIZE), "no tamanho do avatar")
+	_check(out.size() <= Avatar.MAX_BYTES, "abaixo do teto do servidor (%d bytes)" % out.size())
+	_equals(out.slice(8, 12).get_string_from_ascii(), "WEBP", "em WebP")
+
+	# Em pé: o quadrado é o do meio, e a faixa de cima e a de baixo saem.
+	var tall := Image.create(300, 900, false, Image.FORMAT_RGB8)
+	tall.fill(Color.RED)
+	tall.fill_rect(Rect2i(0, 300, 300, 300), Color.BLUE)
+	back = Avatar.decode(Avatar.compress(tall.save_png_to_buffer()))
+	_check(back != null and back.get_pixel(128, 128).b > 0.8, "foto em pé fica com o quadrado do meio")
+
+	# Deitada com EXIF 6 ("girar 90° no horário"): vermelho à esquerda vira em cima.
+	var wide := Image.create(200, 100, false, Image.FORMAT_RGB8)
+	wide.fill(Color.BLUE)
+	wide.fill_rect(Rect2i(0, 0, 100, 100), Color.RED)
+	var jpeg := wide.save_jpg_to_buffer(0.95)
+	var tiff := PackedByteArray([0x4D, 0x4D, 0, 0x2A, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0])
+	var app1 := PackedByteArray([0xFF, 0xE1, 0, 2 + 6 + tiff.size(), 0x45, 0x78, 0x69, 0x66, 0, 0]) + tiff
+	jpeg = jpeg.slice(0, 2) + app1 + jpeg.slice(2)
+	_equals(Avatar.jpeg_orientation(jpeg), 6, "lê a orientação do EXIF")
+	back = Avatar.decode(Avatar.compress(jpeg))
+	_check(
+		back != null and back.get_pixel(128, 20).r > 0.8 and back.get_pixel(128, 236).b > 0.8,
+		"e põe a foto de pé"
+	)
+	_equals(Avatar.jpeg_orientation(wide.save_jpg_to_buffer()), 1, "JPEG sem EXIF não gira")
+
+	_equals(Avatar.compress("não é imagem".to_utf8_buffer()), PackedByteArray(), "o que não é imagem não vira avatar")

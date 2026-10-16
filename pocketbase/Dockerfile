@@ -11,8 +11,9 @@ RUN apk add --no-cache ca-certificates unzip wget \
     && apk del unzip wget
 
 COPY pb_migrations /pb/pb_migrations
+COPY pb_hooks /pb/pb_hooks
 
 EXPOSE 8090
 
 # 0.0.0.0 dentro do container; quem limita ao localhost é o `ports` do compose.
-CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data", "--migrationsDir=/pb/pb_migrations"]
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data", "--migrationsDir=/pb/pb_migrations", "--hooksDir=/pb/pb_hooks"]

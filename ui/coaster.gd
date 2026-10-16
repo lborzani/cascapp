@@ -25,6 +25,12 @@ const TURN_GAP_RATIO := 0.06
 	set(value):
 		piece = value
 		queue_redraw()
+## A foto do jogador, por cima da inicial. A peça, quando há, vence: no
+## cardápio a bolacha é o ícone do jogo, e não de alguém.
+@export var photo: Texture2D = null:
+	set(value):
+		photo = value
+		queue_redraw()
 @export var fill := AppTheme.COASTER:
 	set(value):
 		fill = value
@@ -55,9 +61,21 @@ func _draw() -> void:
 		draw_arc(center, radius - ring_width * 0.5, 0.0, TAU, 48, AppTheme.ACCENT, ring_width, true)
 		radius -= ring_width + diameter * TURN_GAP_RATIO
 	draw_circle(center, radius, fill)
+	if piece == 0 and photo != null:
+		# Um disco com a textura mapeada: o recorte redondo sai do polígono, sem
+		# shader nem máscara. O anel vem por cima e esconde o serrilhado da borda.
+		var points := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		for step in 48:
+			var direction := Vector2.from_angle(TAU * step / 48.0)
+			points.append(center + direction * radius)
+			uvs.append(Vector2(0.5, 0.5) + direction * 0.5)
+		draw_colored_polygon(points, Color.WHITE, uvs, photo)
 	draw_arc(center, radius - ring_width * 0.5, 0.0, TAU, 48, ring, ring_width, true)
 	if piece != 0:
 		PieceRenderer.draw_piece(self, piece, center, radius * 1.25)
+		return
+	if photo != null:
 		return
 	var face := AppTheme.display(900)
 	var font_size := maxi(8, int(radius * 1.05))

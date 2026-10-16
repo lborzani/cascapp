@@ -58,9 +58,13 @@ signal watching(game_id: String, capacity: int)
 ## Quantos espectadores a sala tem agora. Chega aos **jogadores**: a cada entrada
 ## ou saída de quem assiste, e no `joined` de quem volta de uma queda.
 signal watchers_changed(count: int)
-## O servidor conferiu a conta de quem está em `seat` e este é o nome dela.
+## O servidor conferiu a conta de quem está em `seat`: o nome dela e o perfil
+## público (`{"user", "avatar", "elo"}`, ver `Net.profile_of`).
 ## Ver `relay/src/accounts.ts`.
-signal identity(seat: int, name: String)
+signal identity(seat: int, name: String, profile: Dictionary)
+## A partida de xadrez contou para o Elo: `[{"seat", "elo", "delta"}, ...]`.
+## Ver `relay/src/ratings.ts`.
+signal rated(ratings: Array)
 signal failed(reason: String)
 signal state_changed(state: State)
 
@@ -280,6 +284,16 @@ func send(message: Dictionary) -> void:
 	if _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
 	_socket.send_text(JSON.stringify({"t": "msg", "d": message}))
+
+
+## Como a partida de xadrez acabou, para o relay — e só para ele: não é
+## repassado a ninguém. Ver `relay/src/ratings.ts`.
+func send_result(winner_seat: int, white_seat: int, plies: int, moves_hash: String) -> void:
+	if _role == "watch" or _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		return
+	_socket.send_text(JSON.stringify({
+		"t": "result", "winner": winner_seat, "white": white_seat, "plies": plies, "moves": moves_hash,
+	}))
 
 
 func leave() -> void:
@@ -526,10 +540,18 @@ func _handle(message: Dictionary) -> void:
 			_present = PackedInt32Array(message.get("present", []))
 			_sync_state()
 			watching.emit(str(message.get("game", "")), _capacity)
+		"rated":
+			var ratings: Variant = message.get("ratings", [])
+			if ratings is Array:
+				rated.emit(ratings)
 		"watchers":
 			watchers_changed.emit(int(message.get("n", 0)))
 		"identity":
-			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")))
+			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")), {
+				"user": str(message.get("user", "")),
+				"avatar": str(message.get("avatar", "")),
+				"elo": int(message.get("elo", 0)),
+			})
 		"peer":
 			var arriving := int(message.get("seat", -1))
 			if arriving >= 0 and not _present.has(arriving):

@@ -34,6 +34,7 @@ func _ready() -> void:
 	await _test_match_history()
 	_test_verified_names()
 	await _test_spectator()
+	await _test_rated_result()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_premove_captures()
@@ -444,6 +445,46 @@ func _test_checkers_capture_taps() -> void:
 	await get_tree().process_frame
 
 
+## Elo: o desfecho vai ao relay uma vez, o hash dos lances é o mesmo nos dois
+## aparelhos, e o Elo que o relay devolve fica no painel mesmo quando ele reabre.
+func _test_rated_result() -> void:
+	var MatchScript: GDScript = preload("res://scenes/match.gd")
+	print("Elo da partida online")
+	_equals(
+		MatchScript.moves_hash([{"p": PackedInt32Array([12, 28]), "pr": 0}]),
+		MatchScript.moves_hash([{"p": [12.0, 28.0], "pr": 0.0}]),
+		"lance jogado aqui e lance vindo de JSON dão o mesmo hash"
+	)
+	_check(
+		MatchScript.moves_hash([{"p": [12, 28]}]) != MatchScript.moves_hash([{"p": [12, 20]}]),
+		"lances diferentes, hash diferente"
+	)
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	scene._on_opponent_left()
+	_check(scene._reported, "o abandono do outro vai para o relay")
+	scene._show_overlay("O oponente saiu", "A partida foi encerrada no lance 0.", false)
+	Net.rated.emit([{"seat": 1, "elo": 1180, "delta": -20}, {"seat": 0, "elo": 1220, "delta": 20}])
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "o painel mostra o nosso Elo novo")
+	_equals(Account.elo, 1220, "e a conta fica com ele")
+	scene._show_overlay("O oponente saiu", "De novo.", false)
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "e ele continua lá quando o painel reabre")
+
+	scene._new_game()
+	_check(not scene._reported and scene._rating_text.is_empty(), "a revanche começa sem relato nem Elo")
+	Account.elo = 0
+	scene.queue_free()
+	await get_tree().process_frame
+
+
 ## Revanche em rede é convite: quem pede espera, quem recebe decide, e as cores
 ## trocam. Antes um toque reiniciava os dois lados na hora — o outro jogador era
 ## arrastado para um tabuleiro novo sem ter sido consultado, e quem começou de
@@ -710,6 +751,10 @@ func _test_verified_names() -> void:
 	Net._on_relay_peer_arrived(1)
 	Net._remember_name(1, "Outra pessoa")
 	_equals(Net.name_of(1), "Outra pessoa", "assento com dono novo volta a aceitar apelido")
+	Net._on_relay_identity(1, "Ana", {"user": "anaanaanaana123", "avatar": "a.webp", "elo": 1350})
+	_equals(Net.profile_of(1).get("elo"), 1350, "o perfil confirmado fica com o assento")
+	Net._on_relay_peer_arrived(1)
+	_equals(Net.profile_of(1), {}, "e sai com o dono do assento")
 	Net.player_names = {}
 	Net.verified_seats = {}
 
@@ -748,6 +793,18 @@ func _test_spectator() -> void:
 	)
 	_equals(_node(scene, "%BottomTag").title, "Bia", "o cartão de baixo é de quem joga de brancas")
 	_equals(_node(scene, "%TopTag").title, "Ana", "e o de cima, de quem joga de pretas")
+
+	# Perfil confirmado pelo relay: Elo no subtítulo, foto na bolacha.
+	var photo := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGB8))
+	Account._remote["bia.webp"] = photo
+	Net._on_relay_identity(0, "Ana", {"user": "anaanaanaana123", "avatar": "", "elo": 1350})
+	Net._on_relay_identity(1, "Bia", {"user": "biabiabiabia123", "avatar": "bia.webp", "elo": 0})
+	_equals(_node(scene, "%TopTag").subtitle, "Pretas · 1350", "Elo confirmado aparece ao lado do lado")
+	_check(_node(scene, "%TopTag").photo == null, "conta sem foto fica com a peça")
+	_equals(_node(scene, "%BottomTag").photo, photo, "conta com foto mostra a foto")
+	_equals(_node(scene, "%BottomTag").subtitle, "Brancas", "e sem Elo, nada de número")
+	Account._remote.erase("bia.webp")
+	Net.verified_seats = {}
 
 	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
 	scene._on_remote_move(e4.merged({"seat": 0}))

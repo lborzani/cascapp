@@ -25,16 +25,40 @@ Funnel.
 
 Backup automático todo dia às 4h, guardando 7, dentro do volume `pb_data`.
 
+## Perfil público
+
+Qualquer conta logada vê o perfil das outras: nome, avatar, código de amigo e
+Elo do xadrez — o e-mail não. Listar todas continua fechado; acha-se alguém
+pelo código, em `GET /api/cascapp/by-code/{code}` (`pb_hooks/perfil.pb.js`).
+O código e o Elo são do servidor: nascem no hook de criação e a regra de
+atualização recusa qualquer pedido do app que tente escrevê-los.
+
+## Elo do xadrez
+
+Quem muda o Elo é o relay, depois de conferir que os dois jogadores contam o
+mesmo desfecho: ele chama `POST /api/cascapp/chess-result`
+(`pb_hooks/elo.pb.js`) com o segredo compartilhado no cabeçalho
+`X-Cascapp-Relay`. A partida fica em `chess_games`, que cada um lê só as
+próprias e nenhuma conta escreve. K 40 nas 20 primeiras partidas, 20 depois.
+
+O segredo mora num `.env` no `mammus`, ao lado do compose, e no Fly como secret
+do relay — os dois iguais. Uma vez (o `read -s` evita que ele fique no
+histórico do shell):
+
+```bash
+read -rs SECRET && printf 'CASCAPP_RELAY_SECRET=%s\n' "$SECRET" > ~/cascapp-contas/.env && chmod 600 ~/cascapp-contas/.env; unset SECRET
+```
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `mammus` pela tailnet:
 
 ```bash
-tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations | ssh mammus@mammus 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
+tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations pb_hooks | ssh mammus@mammus 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
 ssh mammus@mammus 'cd ~/cascapp-contas && docker compose up -d --build'
 ```
 
-As migrations rodam sozinhas na subida. Versão nova do PocketBase: trocar o
+As migrations rodam sozinhas na subida, e os hooks de `pb_hooks/` carregam junto. Versão nova do PocketBase: trocar o
 `PB_VERSION` do `Dockerfile` e a tag da `image` no compose, ler as notas de
 release e subir de novo.
 
