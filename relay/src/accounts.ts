@@ -7,8 +7,10 @@ import { cleanName } from './protocol.js';
  *
  * `null` nunca impede ninguém de jogar. O relay só deixa de **confirmar** quem
  * está no assento, e a sala segue com o apelido que cada aparelho escolheu, como
- * sempre foi. É por isso que o tempo é curto: esperar mais não muda o que
- * acontece, só atrasa a confirmação de quem tem conta.
+ * sempre foi. A conferência corre por fora (a entrada não espera por ela), e
+ * por isso o tempo pode ser folgado: do Fly até o servidor de casa, pelo Funnel,
+ * o primeiro pedido de uma conexão nova levou ~1 s medido, e com o teto antigo
+ * de 1,5 s um pico deixava o assento sem conta a sala inteira — e sem Elo.
  *
  * Usa o `auth-refresh`, que valida a assinatura e a existência da conta numa
  * chamada só. O token novo que ele devolve é descartado — quem renova é o app.
@@ -58,7 +60,7 @@ export function toAccount(record: unknown): Account | null {
 }
 
 export function createVerifier(baseUrl: string, options: VerifierOptions = {}): TokenVerifier {
-  const timeoutMs = options.timeoutMs ?? 1500;
+  const timeoutMs = options.timeoutMs ?? 5000;
   const cacheMs = options.cacheMs ?? 10 * 60_000;
   const cacheLimit = options.cacheLimit ?? 5000;
   const fetchImpl = options.fetchImpl ?? fetch;

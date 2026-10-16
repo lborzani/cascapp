@@ -365,7 +365,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     if (verdict.kind === 'none') return;
     const report = verdict.report;
     // A conta de alguém ainda está sendo conferida (o PocketBase responde em até
-    // 1,5 s): os relatos ficam, e a confirmação chama `judge` de novo.
+    // 5 s): os relatos ficam, e a confirmação chama `judge` de novo.
     const people = identitiesOf(room);
     if (!people.has(0) || !people.has(1)) return;
     rating.settled.add(report.moves);
