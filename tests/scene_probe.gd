@@ -1154,6 +1154,27 @@ func _test_premove_captures() -> void:
 	await get_tree().process_frame
 	_equals(scene._state.ply, 2, "e sai quando ele volta")
 
+	# Peça erguida para planejar, e o oponente captura justo nela. A marca ficava
+	# na casa, agora com o bispo dele: o tabuleiro acendia os destinos da peça
+	# inimiga até o jogador erguer outra peça dele na vez seguinte do oponente.
+	_premove_position(scene, [
+		["g1", W, K.KING], ["f3", W, K.KNIGHT], ["a2", W, K.PAWN],
+		["e8", B, K.KING], ["g4", B, K.BISHOP],
+	])
+	scene._on_square_tapped(_square("f3"))
+	_equals(scene._premove_pick, _square("f3"), "o cavalo é erguido para o plano")
+	scene._on_remote_move({"p": [_square("g4"), _square("f3")], "pr": 0, "n": 0, "seat": 1})
+	_equals(scene._premove_pick, Board.NO_SQUARE, "o lance do oponente baixa a peça erguida")
+	_check(
+		scene._board.targets.is_empty() and scene._board.capture_targets.is_empty(),
+		"e nenhum destino da peça inimiga fica aceso"
+	)
+	scene._on_square_tapped(_square("f3"))
+	_check(scene._selection.is_empty(), "o bispo inimigo não se seleciona")
+	scene._on_square_tapped(_square("g1"))
+	_equals(scene._selection, PackedInt32Array([_square("g1")]), "e o rei se seleciona normalmente")
+	scene._board.cancel_animation()
+
 	scene.queue_free()
 	await get_tree().process_frame
 	Game.time_control = time_control

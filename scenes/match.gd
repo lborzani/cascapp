@@ -758,6 +758,11 @@ func _play(move: Move, broadcast: bool) -> void:
 	_board.last_move = move.path.duplicate()
 	_board.play_move(move.path, taken)
 	_selection.clear()
+	# A peça erguida para o plano era da posição de antes. Sobrevivendo ao lance
+	# do oponente, a marca ficava na casa mesmo com ele capturando ali — e o
+	# tabuleiro acendia os destinos da peça **dele**. A corrente já armada fica:
+	# ela é revalidada elo a elo quando sai.
+	_premove_pick = Board.NO_SQUARE
 	_hint = ""
 	# O incremento entra depois do lance, para quem jogou. É o que torna partida
 	# curta jogável num celular: sem ele os últimos lances viram corrida de toque.
