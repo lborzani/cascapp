@@ -64,6 +64,7 @@ func _ready() -> void:
 ## sobrevive — o socket do relay em particular *é* a partida, e pertence a `Net`.
 func _exit_tree() -> void:
 	Pairing.nfc.stop()
+	Friends.pending_invite = ""
 
 
 func _setup_host() -> void:
@@ -122,6 +123,10 @@ func _on_relay_state_changed(state: RelayBridge.State) -> void:
 			%StatusLabel.text = "Falando com o servidor…"
 		RelayBridge.State.WAITING:
 			%StatusLabel.text = "Sala %s aberta. %s" % [_code, _waiting_text()]
+			# A sala existe no relay agora: o amigo chamado pela gaveta já acha ela.
+			var invited := Friends.send_pending_invite(Game.game_id, _code)
+			if not invited.is_empty():
+				%Toast.show_message("Chamei %s para esta sala." % invited, Banner.Kind.INFO)
 		RelayBridge.State.RECONNECTING:
 			%StatusLabel.text = "Conexão instável; tentando de novo…"
 		_:

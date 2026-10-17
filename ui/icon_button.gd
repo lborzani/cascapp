@@ -8,13 +8,13 @@ extends Button
 ## e quando não existe, o botão da tela inicial vira um retângulo vazio sem que
 ## nada tenha falhado. Um traço desenhado sai igual em todo aparelho.
 ##
-## Três formas, que é o que o app fora da partida precisa: a gaveta, os ajustes e
-## a volta. Acrescentar uma quarta é acrescentar um `match` aqui.
+## Poucas formas, que é o que o app fora da partida precisa: fechar, voltar e os
+## amigos. Acrescentar uma quarta é acrescentar um `match` aqui.
 ##
 ## Herda `Button` e não `Control`: o estado de toque, o foco e o `pressed` já são
 ## dele, e o desenho por cima é só `_draw`.
 
-enum Kind { BACK, CLOSE }
+enum Kind { BACK, CLOSE, FRIENDS }
 
 const SIZE := 44.0
 ## Metade do traço some quando a linha é fina demais num aparelho denso; 2 px é o
@@ -73,6 +73,8 @@ func _draw() -> void:
 			_draw_chevron(center, -1.0)
 		Kind.CLOSE:
 			_draw_close(center)
+		Kind.FRIENDS:
+			_draw_friends(center)
 
 
 func _draw_chevron(center: Vector2, direction: float) -> void:
@@ -85,6 +87,16 @@ func _draw_chevron(center: Vector2, direction: float) -> void:
 		]),
 		tint, STROKE, true
 	)
+
+
+## Duas pessoas, a de trás menor: cabeça em círculo e ombros em arco.
+func _draw_friends(center: Vector2) -> void:
+	var back := center + Vector2(5.0, -1.0)
+	var front := center + Vector2(-3.0, 1.0)
+	draw_arc(back + Vector2(0.0, -5.0), 3.0, 0.0, TAU, 16, tint, STROKE, true)
+	draw_arc(back + Vector2(0.0, 7.0), 6.0, PI * 1.15, PI * 1.85, 12, tint, STROKE, true)
+	draw_arc(front + Vector2(0.0, -5.0), 4.0, 0.0, TAU, 20, tint, STROKE, true)
+	draw_arc(front + Vector2(0.0, 9.0), 8.0, PI * 1.1, PI * 1.9, 16, tint, STROKE, true)
 
 
 func _draw_close(center: Vector2) -> void:

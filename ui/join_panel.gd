@@ -380,6 +380,10 @@ func _start_scan() -> void:
 ## Público porque a tela também chama: um QR lido antes de o Android recolher o
 ## app sobrevive no plugin, e o pareamento continua por aqui.
 func join_payload(info: Dictionary) -> void:
+	# Assistir a um amigo, vindo da gaveta de amigos do menu.
+	if info.get("watch", false):
+		_watch_room(str(info.get("code", "")))
+		return
 	_enter_room(StringName(str(info.get("game", Game.game_id))), str(info.get("code", "")))
 
 

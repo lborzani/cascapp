@@ -21,6 +21,8 @@ extends MarginContainer
 
 signal leading_pressed
 signal action_pressed
+## O botão de amigos da saudação do menu.
+signal friends_pressed
 
 const RULE_ALPHA := 0.07
 
@@ -146,6 +148,12 @@ func _build_greeting() -> void:
 	_greeting_name.theme_type_variation = &"Greeting"
 	_greeting_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	words.add_child(_greeting_name)
+
+	var friends := IconButton.new()
+	friends.kind = IconButton.Kind.FRIENDS
+	friends.name = "FriendsButton"
+	friends.pressed.connect(func() -> void: friends_pressed.emit())
+	_greeting.add_child(friends)
 
 	# Um botão sem pele segurando a bolacha: a bolacha não recebe toque (ela é o
 	# mesmo desenho dentro da partida, onde o toque é do que está em volta).

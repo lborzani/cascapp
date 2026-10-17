@@ -211,6 +211,11 @@ export class RoomRegistry<S extends OpenState> {
     return open.slice(0, limit);
   }
 
+  /** Todas as salas na memória. A presença dos amigos procura nelas onde cada conta está sentada. */
+  all(): IterableIterator<Room<S>> {
+    return this.rooms.values();
+  }
+
   /**
    * Partidas públicas em andamento: listadas e com a mesa cheia. É o avesso de
    * `listPublic` — lá aparece quem ainda espera jogador, aqui quem já está

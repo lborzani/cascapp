@@ -1,4 +1,4 @@
-import { cleanName } from './protocol.js';
+import { cleanName, ID_PATTERN } from './protocol.js';
 
 /**
  * Confere o token de uma conta no PocketBase das contas (`pocketbase/`, no
@@ -42,8 +42,6 @@ export interface VerifierOptions {
   fetchImpl?: typeof fetch;
 }
 
-/** O formato do id do PocketBase: 15 caracteres, minúsculas e dígitos. */
-const ID_PATTERN = /^[a-z0-9]{15}$/;
 /** O nome que o PocketBase dá ao arquivo (`avatar_<sufixo>.webp`). Nada de barra. */
 const FILE_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/;
 
