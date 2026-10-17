@@ -105,15 +105,17 @@ func _row(game: Dictionary) -> Control:
 	open.theme_type_variation = &"PrimaryButton"
 	open.custom_minimum_size = Vector2(110, 44)
 	open.size_flags_vertical = SIZE_SHRINK_CENTER
-	open.pressed.connect(_open.bind(moves, side == "pretas"))
+	# Partida gravada antes do campo `hotseat` abre com a cor gravada: brancas.
+	var played := -1 if game.get("hotseat", false) else int(game.get("side", Board.Side.WHITE))
+	open.pressed.connect(_open.bind(moves, played))
 	line.add_child(open)
 	return card
 
 
-func _open(moves: Array, flipped: bool) -> void:
+func _open(moves: Array, side: int) -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
-	_review.open(moves, flipped)
+	_review.open(moves, side)
 
 
 ## "14/10 às 17:32", na hora local do aparelho.

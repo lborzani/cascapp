@@ -201,7 +201,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notas="APK assinado da versão ${{ steps.versao.outputs.version }}, gerado por \`${{ github.workflow }}\` a partir de \`${{ github.sha }}\`."
+          # As notas são a seção da versão no CHANGELOG.md: é o que o app mostra na
+          # tela de atualizar. A origem do build vai abaixo do `---`, que o app
+          # não lê (`Changelog.items`).
+          secao=$(awk -v v="## ${{ steps.versao.outputs.version }}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+          if ! printf '%s\n' "$secao" | grep -q '^- '; then
+            echo "::error::o CHANGELOG.md não tem novidades para ${{ steps.versao.outputs.version }}"
+            exit 1
+          fi
+          notas=$(printf '%s\n\n---\n\nAPK assinado da versão %s, gerado por `%s` a partir de `%s`.' \
+            "$secao" "${{ steps.versao.outputs.version }}" "${{ github.workflow }}" "${{ github.sha }}")
           if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
             gh release upload "${{ github.ref_name }}" "$apk" --clobber
           else

@@ -44,7 +44,9 @@ export type ErrorReason =
   | 'hello_timeout'
   | 'rate_limited'
   | 'not_in_room'
-  | 'watch_full';
+  | 'watch_full'
+  /** A presença pede conta: token que o PocketBase não confirmou. */
+  | 'bad_token';
 
 /** Índice do assento na sala. 0 é quem abriu. */
 export type Seat = number;
@@ -93,7 +95,30 @@ export type ClientMessage =
   | { t: 'ping' }
   | { t: 'leave' }
   /** Como a partida de xadrez acabou, do ponto de vista deste aparelho. Ver `ratings.ts`. */
-  | ({ t: 'result' } & Report);
+  | ({ t: 'result' } & Report)
+  /**
+   * Abre a **presença**: este socket não entra em sala nenhuma, só diz "esta
+   * conta está com o app aberto" e quem ela tem como amigo (ids do PocketBase).
+   * O relay só revela uma conta a outra quando as duas listas se contêm — ver
+   * `server.ts`.
+   */
+  | { t: 'presence'; token: string; friends: string[] }
+  /** Quem dos meus amigos está online, e onde. A lista vai junto: amigo novo vale na hora. */
+  | { t: 'who'; friends: string[] }
+  /** Chama um amigo para a sala `room`, que quem chama acabou de abrir. */
+  | { t: 'invite'; to: string; game: string; room: string };
+
+/**
+ * Um amigo online, na resposta ao `who`. `room` e `game` vazios: com o app
+ * aberto, fora de sala. `playing`: a mesa dele está cheia (partida rolando, dá
+ * para assistir); falso com `room` preenchido é sala esperando gente.
+ */
+export interface FriendStatus {
+  id: string;
+  game: string;
+  room: string;
+  playing: boolean;
+}
 
 /**
  * Uma sala na lista pública. É tudo o que o servidor conta sobre uma partida, e
@@ -173,6 +198,10 @@ export type ServerMessage =
    * para os dois jogadores e para quem assiste.
    */
   | { t: 'rated'; ratings: { seat: Seat; elo: number; delta: number }[] }
+  /** Resposta ao `presence` e a cada `who`: só os amigos mútuos com o app aberto. */
+  | { t: 'friends'; online: FriendStatus[] }
+  /** Um amigo chamou para a sala `room`. O nome e a foto o app já tem na lista dele. */
+  | { t: 'invited'; from: string; game: string; room: string }
   | { t: 'pong' }
   | { t: 'error'; reason: ErrorReason; detail: string };
 
@@ -226,6 +255,26 @@ export function cleanName(value: unknown): string {
     if (code >= 0x20 && code !== 0x7f) clean += character;
   }
   return clean.trim().slice(0, MAX_NAME_LENGTH);
+}
+
+/** O formato do id do PocketBase: 15 caracteres, minúsculas e dígitos. */
+export const ID_PATTERN = /^[a-z0-9]{15}$/;
+
+/**
+ * Teto da lista de amigos. A lista vem do cliente e é guardada por socket;
+ * duzentos ids são ~3 KB, bem abaixo do `maxPayload`.
+ */
+export const MAX_FRIENDS = 200;
+
+/** Ids de conta, só os de forma conhecida, sem repetir, até o teto. */
+export function cleanIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<string>();
+  for (const id of value) {
+    if (typeof id === 'string' && ID_PATTERN.test(id)) ids.add(id);
+    if (ids.size >= MAX_FRIENDS) break;
+  }
+  return [...ids];
 }
 
 /**
@@ -335,6 +384,19 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       const report = parseReport(record);
       return report === null ? null : { t: 'result', ...report };
     }
+    case 'presence': {
+      const token = cleanToken(record.token);
+      return token === '' ? null : { t: 'presence', token, friends: cleanIds(record.friends) };
+    }
+    case 'who':
+      return { t: 'who', friends: cleanIds(record.friends) };
+    case 'invite':
+      return typeof record.to === 'string' &&
+        ID_PATTERN.test(record.to) &&
+        typeof record.room === 'string' &&
+        isValidRoomCode(record.room.toUpperCase())
+        ? { t: 'invite', to: record.to, game: cleanGame(record.game), room: record.room.toUpperCase() }
+        : null;
     default:
       return null;
   }

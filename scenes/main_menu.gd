@@ -38,8 +38,8 @@ const FAV_HEIGHT := 132.0
 
 var _leaving := false
 var _sheet: GameSheet = null
-## O cartão de versão nova, enquanto está na tela.
-var _update: PanelContainer = null
+## A tela de versão nova obrigatória, enquanto está na tela.
+var _gate: UpdateGate = null
 
 
 func _ready() -> void:
@@ -53,6 +53,7 @@ func _ready() -> void:
 
 	%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	%AppBar.action_pressed.connect(_open_settings)
+	%AppBar.friends_pressed.connect(_open_friends)
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
@@ -69,11 +70,13 @@ func _ready() -> void:
 	_sheet = GameSheet.new()
 	add_child(_sheet)
 	_sheet.confirmed.connect(_launch)
+	_sheet.closed.connect(func() -> void: Friends.pending_invite = "")
 
 	_fill_games()
 	_offer_rejoin()
 	_greet()
 	_check_update()
+	_show_news()
 
 	# A folha volta aberta para quem chegou aqui saindo de uma partida ou da sala:
 	# quem voltou está escolhendo como jogar de novo, e não navegando do zero.
@@ -224,6 +227,8 @@ func _launch(mode: int) -> void:
 	if _leaving:
 		return
 	_leaving = true
+	if mode != Game.Mode.ONLINE:
+		Friends.pending_invite = ""
 	GameSheet.launch(get_tree(), mode)
 
 
@@ -250,6 +255,18 @@ func _go_tab(route: StringName) -> void:
 ## Antes disso, as camadas: com a folha do jogo aberta o gesto fecha **ela**, e com
 ## as boas-vindas abertas, elas.
 func go_back() -> void:
+	# A versão nova obrigatória não tem "voltar": a única saída é fechar o app.
+	if _gate != null:
+		get_tree().quit()
+		return
+	var news := _news()
+	if news != null:
+		news.close()
+		return
+	var drawer := _drawer()
+	if drawer != null:
+		drawer.close()
+		return
 	if _sheet_open():
 		_sheet.close()
 		return
@@ -258,6 +275,41 @@ func go_back() -> void:
 		welcome.finish()
 		return
 	get_tree().quit()
+
+
+func _drawer() -> FriendsDrawer:
+	for child in get_children():
+		if child is FriendsDrawer and not child.is_queued_for_deletion():
+			return child as FriendsDrawer
+	return null
+
+
+func _open_friends() -> void:
+	if _leaving or _drawer() != null:
+		return
+	Sound.play(Sound.Cue.TAP)
+	var drawer := FriendsDrawer.new()
+	drawer.watch_requested.connect(_watch_friend)
+	drawer.invite_requested.connect(_invite_friend)
+	add_child(drawer)
+
+
+## Pela tela de entrar, como a partida guardada: é ela que sabe esperar a sala
+## responder e dizer por que não deu.
+func _watch_friend(code: String) -> void:
+	if _leaving:
+		return
+	_leaving = true
+	Game.join_info = {"code": code, "watch": true}
+	get_tree().change_scene_to_file(JOIN_SCENE)
+
+
+## A folha do jogo já em Online, para escolher o ritmo; o convite sai quando a
+## sala abrir (`scenes/pairing.gd`). Fechar a folha desiste do convite.
+func _invite_friend(friend_id: String, game: StringName) -> void:
+	Friends.pending_invite = friend_id
+	Game.listed_room = false
+	_sheet.open(game, Game.Mode.ONLINE)
 
 
 func _welcome() -> WelcomePanel:
@@ -348,82 +400,83 @@ func _greet() -> void:
 # --- versão nova ---------------------------------------------------------------
 
 
-## Pergunta ao GitHub se saiu versão nova, no máximo uma vez por hora.
+## Versão nova obrigatória: a guardada de uma consulta anterior vale na hora, sem
+## rede; e o GitHub é consultado no máximo a cada dez minutos.
 ##
 ## Só em build exportado: pelo editor a versão é a do `project.godot`, que não
-## acompanha as releases, e o aviso apareceria em toda execução. Falha de rede,
-## de API ou de JSON é silêncio — e a hora não conta como consultada, então a
-## próxima volta ao menu tenta de novo.
+## acompanha as releases, e a tela apareceria em toda execução. Falha de rede, de
+## API ou de JSON é silêncio — e não conta como consultada, então a próxima volta
+## ao menu tenta de novo.
 func _check_update() -> void:
+	var pending := Prefs.pending_update()
+	if not pending.is_empty():
+		if AppVersion.compare(str(pending.get("version", "")), AppVersion.text()) > 0:
+			_show_gate(pending)
+		else:
+			# Instalou: a versão guardada foi alcançada.
+			Prefs.set_pending_update({})
 	var now := int(Time.get_unix_time_from_system())
 	if not OS.has_feature("template") or not UpdateCheck.due(now):
 		return
-	UpdateCheck.fetch(self, func(release: Dictionary) -> void:
-		if release.is_empty():
+	UpdateCheck.fetch(self, func(releases: Variant) -> void:
+		if releases == null:
 			return
 		Prefs.set_update_checked(now)
-		_offer_update(release)
+		_offer_update(releases)
 	)
 
 
-## O cartão da versão nova, a partir do JSON da release.
-##
-## Recebe a resposta pronta, e não a busca, para o teste de cena injetá-la sem
-## rede. Cartão no topo, e não o `Banner`: o banner some sozinho e deixa o toque
-## passar, e aqui há uma decisão a tomar com dois botões.
-##
-## Abaixo do cartão de voltar para a partida, se houver: lá tem gente esperando,
-## aqui não.
-func _offer_update(release: Dictionary) -> void:
-	var offer := UpdateCheck.offer(release, AppVersion.text(), Prefs.skipped_update())
-	if offer.is_empty() or _update != null:
+## A resposta do GitHub, já lida. Recebe a lista pronta, e não a busca, para o
+## teste de cena injetá-la sem rede. Sem versão nova (inclusive release apagada
+## depois de vista), a guardada e a tela saem.
+func _offer_update(releases: Array) -> void:
+	var offer := UpdateCheck.offer(releases, AppVersion.text())
+	Prefs.set_pending_update(offer)
+	if offer.is_empty():
+		if _gate != null:
+			_gate.queue_free()
+			_gate = null
 		return
-	_update = PanelContainer.new()
-	_update.theme_type_variation = &"Card"
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	_update.add_child(box)
+	_show_gate(offer)
 
-	var title := Label.new()
-	title.text = "Versão %s disponível" % offer["version"]
-	title.theme_type_variation = &"SectionHeader"
-	box.add_child(title)
-	var detail := Label.new()
-	detail.text = "Você está na %s. O APK baixa pelo navegador; abra o arquivo para instalar por cima." % AppVersion.text()
-	detail.theme_type_variation = &"Hint"
-	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(detail)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", AppTheme.SPACE_M)
-	box.add_child(row)
-	var later := Button.new()
-	later.name = "Later"
-	later.text = "Agora não"
-	later.theme_type_variation = &"GhostButton"
-	later.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	later.pressed.connect(func() -> void:
-		Sound.play(Sound.Cue.TAP)
-		Prefs.skip_update(offer["version"])
-		_update.queue_free()
-		_update = null
-	)
-	row.add_child(later)
-	# "Baixar" não fecha o cartão: se o download for cancelado ou falhar no
-	# navegador, o botão continua à mão.
-	var download := Button.new()
-	download.name = "Download"
-	download.text = "Baixar"
-	download.theme_type_variation = &"PrimaryButton"
-	download.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	download.pressed.connect(func() -> void:
-		Sound.play(Sound.Cue.TAP)
-		OS.shell_open(offer["url"])
-	)
-	row.add_child(download)
+## "Novidades da X" na primeira abertura de uma versão, do `CHANGELOG.md` do APK.
+##
+## Não na instalação nova: quem nunca usou o app está nas boas-vindas, e "o que
+## mudou" não muda nada para ele. App de antes desta marca (`seen` vazio, mas já
+## deu as boas-vindas) é atualização, e mostra. Com a tela de versão nova na
+## frente também não: as novidades que importam são as da próxima.
+func _show_news(installed := AppVersion.text()) -> void:
+	var seen := Prefs.seen_version()
+	Prefs.set_seen_version(installed)
+	if _gate != null or not Prefs.welcomed():
+		return
+	if not seen.is_empty() and AppVersion.compare(installed, seen) <= 0:
+		return
+	var items := Changelog.items_of(Changelog.bundled(), installed)
+	if items.is_empty():
+		return
+	var panel := ChangelogPanel.new()
+	panel.sections = [{"version": installed, "items": items}]
+	add_child(panel)
 
-	%Content.add_child(_update)
-	%Content.move_child(_update, %Favorites.get_index())
+
+func _news() -> ChangelogPanel:
+	for child in get_children():
+		if child is ChangelogPanel and not child.is_queued_for_deletion():
+			return child as ChangelogPanel
+	return null
+
+
+func _show_gate(offer: Dictionary) -> void:
+	if _gate != null:
+		if _gate.offer.get("version") == offer.get("version"):
+			return
+		_gate.queue_free()
+	_gate = UpdateGate.new()
+	_gate.offer = offer
+	# Por último, por cima da folha, das boas-vindas e do cartão de voltar.
+	add_child(_gate)
 
 
 ## Um QR lido numa execução anterior do processo. Se o Android recolheu o app
