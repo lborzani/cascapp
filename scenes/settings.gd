@@ -21,7 +21,6 @@ var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _friends: FriendsPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
-var _update_url := ""
 
 
 func _ready() -> void:
@@ -183,35 +182,32 @@ func go_back() -> void:
 # --- atualização ----------------------------------------------------------------
 
 
-## Procura versão nova na hora, sem a espera de uma hora do menu e sem o "Agora
-## não" que o jogador deu lá: quem toca aqui quer a resposta. Achou, o mesmo
-## botão vira "Baixar".
+## Procura versão nova na hora, sem a espera do menu: quem toca aqui quer a
+## resposta. Achou, é a mesma tela obrigatória do menu, por cima desta.
 func _check_updates() -> void:
 	Sound.play(Sound.Cue.TAP)
-	if not _update_url.is_empty():
-		OS.shell_open(_update_url)
-		return
 	%UpdateButton.disabled = true
 	%UpdateButton.text = "Procurando…"
 	UpdateCheck.fetch(self, _show_update)
 
 
-func _show_update(release: Dictionary) -> void:
+func _show_update(releases: Variant) -> void:
 	%UpdateButton.disabled = false
+	%UpdateButton.text = "Procurar atualização"
 	%UpdateResult.visible = true
-	var offer := UpdateCheck.offer(release, AppVersion.text(), "") if not release.is_empty() else {}
-	if release.is_empty():
+	if not releases is Array:
 		%UpdateResult.text = "Não deu para consultar agora. Confira a internet e tente de novo."
-		%UpdateButton.text = "Procurar atualização"
-	elif offer.is_empty():
-		Prefs.set_update_checked(int(Time.get_unix_time_from_system()))
+		return
+	Prefs.set_update_checked(int(Time.get_unix_time_from_system()))
+	var offer := UpdateCheck.offer(releases, AppVersion.text())
+	Prefs.set_pending_update(offer)
+	if offer.is_empty():
 		%UpdateResult.text = "Você já está na versão mais recente (%s)." % AppVersion.text()
-		%UpdateButton.text = "Procurar atualização"
-	else:
-		_update_url = offer["url"]
-		%UpdateResult.text = "Versão %s disponível. O APK baixa pelo navegador; abra o arquivo para instalar por cima." % offer["version"]
-		%UpdateButton.text = "Baixar a versão %s" % offer["version"]
-		%UpdateButton.theme_type_variation = &"PrimaryButton"
+		return
+	%UpdateResult.text = "Versão %s disponível." % offer["version"]
+	var gate := UpdateGate.new()
+	gate.offer = offer
+	add_child(gate)
 
 
 ## Por cima desta tela, e não uma cena: fechar volta para cá como estava.
