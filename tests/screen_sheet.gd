@@ -40,6 +40,7 @@ const SHOTS := [
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
+	["res://scenes/match.tscn", "24_assistindo"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -116,6 +117,8 @@ func _next() -> void:
 	# queda de uma partida de verdade poria o cartão de voltar em todo print de menu.
 	if shot != "01c_voltar":
 		Prefs.forget_rejoin()
+	# Só o print de quem assiste é espectador; os outros voltam a jogar.
+	Net.is_spectator = shot == "24_assistindo"
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
@@ -211,6 +214,15 @@ func _next() -> void:
 			# sete numeradas, e a bola da vez anunciada embaixo do placar.
 			Game.pool_format = PoolRules.Format.BRAZILIAN
 			Game.start_hotseat(Game.POOL)
+		"24_assistindo":
+			# Quem assiste xadrez, com a avaliação ao vivo: barra acima do
+			# tabuleiro e o selo do veredito na casa do último lance.
+			Game.start_hotseat(Game.CHESS)
+			Game.mode = Game.Mode.ONLINE
+			Game.time_control = 2
+			Net.connected = true
+			Net.white_seat = 0
+			Net.player_names = {0: "Ana", 1: "Bia"}
 	# A janela gira **antes** de a cena existir: é o `_ready` dela que escreve a
 	# base de 768x432, e escrevê-la numa janela em pé desenha a tela deitada
 	# espremida dentro dela.
@@ -272,6 +284,22 @@ func _next() -> void:
 	elif shot == "08_folha_ritmo" or shot == "19_folha_metropole" or shot == "19b_folha_uno":
 		_scene._open_sheet(Game.game_id)
 		_scene._sheet.select_mode(Game.Mode.ONLINE)
+	elif shot == "24_assistindo":
+		# Análise montada, e não o Stockfish: o print sai igual em toda máquina.
+		# Bg4 das pretas como erro, deixando as brancas com 62%.
+		var live: LiveReview = _scene._live
+		live._no_engine = true
+		var history := []
+		for step in OPENING:
+			history.append({"p": [_sq(step[0]), _sq(step[1])], "pr": 0})
+		_scene._apply_sync(history)
+		_scene._board.cancel_animation()
+		live._judged = live._history
+		live.entry = {
+			"side": Board.Side.BLACK, "score": 55.0, "after": 38.0,
+			"verdict": GameReview.Verdict.MISTAKE, "missed_mate": false,
+		}
+		live._paint()
 	elif shot == "09_revanche":
 		# Painel de fim de partida no estado mais cheio: convite de revanche
 		# recebido, com aceitar e recusar. É o caso que responde se três botões
