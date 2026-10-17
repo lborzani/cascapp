@@ -17,14 +17,26 @@ extends Node
 
 ## A lista ou quem está online mudou.
 signal changed
+## Um amigo chamou para a sala `code` de `game`.
+signal invited(from_id: String, game: StringName, code: String)
 
 const POLL_SECONDS := 5.0
 const RETRY_SECONDS := 10.0
+const JOIN_SCENE := "res://scenes/join.tscn"
+## Telas em que o convite aparece. Fora delas há uma partida, ou uma sala sendo
+## aberta, e o aviso no meio seria um convite para abandonar o que se está fazendo.
+const INVITE_SCENES: Array[String] = [
+	"res://scenes/main_menu.tscn", JOIN_SCENE, "res://scenes/settings.tscn",
+]
+## Quanto tempo o aviso fica na tela. A sala do outro não espera para sempre.
+const INVITE_SECONDS := 60.0
 
 ## Os amigos da conta, cada um com o perfil público (ver `Account.friends()`).
 var list: Array = []
 ## Id → `{"game", "room", "playing"}` de cada amigo online agora.
 var online := {}
+## O amigo a chamar quando a próxima sala abrir (ver `scenes/pairing.gd`).
+var pending_invite := ""
 ## A gaveta está aberta: perguntar ao relay de tempos em tempos.
 var watching := false:
 	set(value):
@@ -89,6 +101,34 @@ func sorted() -> Array:
 	var on := list.filter(func(friend: Dictionary) -> bool: return online.has(str(friend.get("id", ""))))
 	var off := list.filter(func(friend: Dictionary) -> bool: return not online.has(str(friend.get("id", ""))))
 	return on + off
+
+
+func name_of(id: String) -> String:
+	return str(profile_of(id).get("name", ""))
+
+
+func profile_of(id: String) -> Dictionary:
+	for friend: Dictionary in list:
+		if str(friend.get("id", "")) == id:
+			return friend
+	return {}
+
+
+func invite(to: String, game: StringName, code: String) -> void:
+	_send({"t": "invite", "to": to, "game": String(game), "room": code})
+
+
+## A sala de `code` abriu: chama o amigo guardado em [member pending_invite], uma
+## vez só. Devolve o nome dele, ou vazio quando não havia ninguém a chamar ou a
+## presença está fora.
+func send_pending_invite(game: StringName, code: String) -> String:
+	var to := pending_invite
+	pending_invite = ""
+	if to.is_empty() or not is_open():
+		return ""
+	invite(to, game, code)
+	var name := name_of(to)
+	return name if not name.is_empty() else "seu amigo"
 
 
 ## Busca a lista de novo no PocketBase e pergunta ao relay. A gaveta chama ao
@@ -180,6 +220,61 @@ func _handle(text: String) -> void:
 					now[str(entry.get("id", ""))] = entry
 			online = now
 			changed.emit()
+		"invited":
+			var from := str(message.get("from", ""))
+			var game := StringName(str(message.get("game", "")))
+			var code := str(message.get("room", ""))
+			if from.is_empty() or code.is_empty():
+				return
+			invited.emit(from, game, code)
+			if get_parent() == get_tree().root:
+				show_invite(from, game, code)
+
+
+# --- convite recebido ------------------------------------------------------------
+
+var _invite_layer: CanvasLayer = null
+
+
+## O aviso "Fulano te chamou", por cima da tela. Só nas telas fora de partida; um
+## segundo convite troca o primeiro.
+func show_invite(from: String, game: StringName, code: String) -> void:
+	var scene := get_tree().current_scene
+	if scene == null or not INVITE_SCENES.has(scene.scene_file_path):
+		return
+	dismiss_invite()
+	_invite_layer = CanvasLayer.new()
+	_invite_layer.layer = 50
+	add_child(_invite_layer)
+	var profile := profile_of(from)
+	var card := InviteCard.new()
+	card.friend_name = str(profile.get("name", "")) if not profile.is_empty() else "Um amigo"
+	card.photo = Account.avatar_of(from, str(profile.get("avatar", "")))
+	card.game_title = Game.game_title(game)
+	card.accepted.connect(func() -> void:
+		dismiss_invite()
+		Game.join_info = {"game": game, "code": code}
+		get_tree().change_scene_to_file(JOIN_SCENE)
+	)
+	card.declined.connect(dismiss_invite)
+	_invite_layer.add_child(card)
+	get_tree().create_timer(INVITE_SECONDS).timeout.connect(func() -> void:
+		if is_instance_valid(card):
+			dismiss_invite()
+	)
+	Sound.play(Sound.Cue.TAP)
+
+
+func invite_card() -> InviteCard:
+	if _invite_layer == null or not is_instance_valid(_invite_layer):
+		return null
+	return _invite_layer.get_child(0) as InviteCard if _invite_layer.get_child_count() > 0 else null
+
+
+func dismiss_invite() -> void:
+	if _invite_layer != null and is_instance_valid(_invite_layer):
+		_invite_layer.queue_free()
+	_invite_layer = null
 
 
 func _send(message: Dictionary) -> void:

@@ -68,6 +68,13 @@ func _run(url: String) -> void:
 	_check(not bool(Dictionary(ana.online.get(BIA, {})).get("playing", true)), "mesa sem o segundo jogador: não está jogando ainda")
 	table.close()
 
+	# A Ana chama a Bia: o convite chega com o jogo e o código.
+	var invites := []
+	bia.invited.connect(func(from: String, game: StringName, code: String) -> void: invites.append([from, game, code]))
+	ana.invite(BIA, &"chess", CODE)
+	_check(await _until(func() -> bool: return not invites.is_empty()), "o convite da Ana chega na Bia")
+	_check(invites.size() > 0 and invites[0] == [ANA, &"chess", CODE], "com quem chamou, o jogo e a sala")
+
 	# A Bia fecha o app: some do online da Ana.
 	bia.queue_free()
 	var gone := func() -> bool:

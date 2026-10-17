@@ -8,11 +8,19 @@ extends Control
 ## só desenha e redesenha quando eles mudam. Enquanto ela está aberta o `Friends`
 ## pergunta ao relay a cada poucos segundos — fechada, ninguém está olhando.
 ##
+## Amigo jogando xadrez ou damas tem "Assistir"; amigo online fora de sala tem
+## "Convidar", que pergunta o jogo aqui mesmo. A gaveta só pede: quem troca de
+## tela é a tela que a abriu (`watch_requested`, `invite_requested`).
+##
 ## Gerenciar amigos (código, QR, remover) continua no painel da aba Você: o
 ## "Adicionar amigo" daqui abre aquele painel por cima, e a lista volta
 ## atualizada quando ele fecha.
 
 signal closed
+## Assistir à sala `code` de um amigo.
+signal watch_requested(code: String)
+## Abrir uma sala de `game` e chamar o amigo `friend_id` para ela.
+signal invite_requested(friend_id: String, game: StringName)
 
 const SLIDE := 0.22
 const MAX_WIDTH := 340.0
@@ -24,6 +32,8 @@ var _slider: Control = null
 var _rows: VBoxContainer = null
 var _note: Label = null
 var _width := MAX_WIDTH
+## Id do amigo sendo convidado: a lista dá lugar à escolha do jogo.
+var _inviting := ""
 
 
 func _ready() -> void:
@@ -142,9 +152,50 @@ func _fill() -> void:
 	_note.text = note
 	_note.visible = not note.is_empty()
 
+	if not _inviting.is_empty():
+		_fill_games()
+		return
 	for friend: Dictionary in Friends.sorted():
 		_rows.add_child(_row(friend))
 
+
+## A escolha do jogo do convite, no lugar da lista. Só jogos que abrem sala pelo
+## relay: o Bomberman tem servidor próprio, e a presença não o enxerga.
+func _fill_games() -> void:
+	var prompt := _text("Chamar %s para…" % Friends.name_of(_inviting), &"Hint")
+	_rows.add_child(prompt)
+	for id in invite_games():
+		var button := Button.new()
+		button.text = Game.game_title(id)
+		button.custom_minimum_size = Vector2(0, 48)
+		button.set_meta(&"game", id)
+		button.pressed.connect(_invite.bind(id))
+		_rows.add_child(button)
+	var back := Button.new()
+	back.text = "Cancelar"
+	back.theme_type_variation = &"GhostButton"
+	back.custom_minimum_size = Vector2(0, 44)
+	back.pressed.connect(func() -> void:
+		_inviting = ""
+		_fill()
+	)
+	_rows.add_child(back)
+
+
+static func invite_games() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for id in Game.games_in():
+		if id != Game.BOMBERMAN and Game.mode_available(Game.Mode.ONLINE, id):
+			ids.append(id)
+	return ids
+
+
+func _invite(game: StringName) -> void:
+	Sound.play(Sound.Cue.TAP)
+	var friend := _inviting
+	_inviting = ""
+	invite_requested.emit(friend, game)
+	close()
 
 func _row(friend: Dictionary) -> Control:
 	var id := str(friend.get("id", ""))
@@ -191,7 +242,43 @@ func _row(friend: Dictionary) -> Control:
 		status_label.add_theme_color_override("font_color", AppTheme.SUCCESS)
 	words.add_child(status_label)
 	line.add_child(words)
+
+	var action := _action(id, status)
+	if action != null:
+		line.add_child(action)
 	return card
+
+
+## "Assistir" para quem está jogando algo que tem tela de espectador; "Convidar"
+## para quem está online e fora de sala; nada para o resto.
+func _action(id: String, status: Variant) -> Button:
+	if not status is Dictionary or not Net.relay_available():
+		return null
+	var room := str(status.get("room", ""))
+	var button := Button.new()
+	button.name = "Action"
+	button.custom_minimum_size = Vector2(0, 40)
+	button.size_flags_vertical = SIZE_SHRINK_CENTER
+	if room.is_empty():
+		button.text = "Convidar"
+		button.theme_type_variation = &"PrimaryButton"
+		button.pressed.connect(func() -> void:
+			Sound.play(Sound.Cue.TAP)
+			_inviting = id
+			_fill()
+		)
+		return button
+	if bool(status.get("playing", false)) and JoinPanel.WATCHABLE.has(StringName(str(status.get("game", "")))):
+		button.text = "Assistir"
+		button.theme_type_variation = &"GhostButton"
+		button.pressed.connect(func() -> void:
+			Sound.play(Sound.Cue.TAP)
+			watch_requested.emit(room)
+			close()
+		)
+		return button
+	button.free()
+	return null
 
 
 func _open_panel() -> void:

@@ -1879,16 +1879,54 @@ func _test_friends_drawer() -> bool:
 		"Offline",
 	], "status de cada amigo")
 	_equals(dots, [true, true, true, false], "bolinha só em quem está online")
+	var actions := drawer._rows.get_children().map(func(card: Node) -> String:
+		var action := card.find_child("Action", true, false) as Button
+		return action.text if action != null else ""
+	)
+	_equals(actions, ["Assistir", "", "Convidar", ""], "assistir quem joga, convidar quem está livre")
 
 	# O amigo que sai some da lista de online na hora em que o Friends avisa.
 	Friends.online.erase("biabiabiabia123")
 	Friends.changed.emit()
 	_equals(drawer._rows.get_child(drawer._rows.get_child_count() - 1).get_meta(&"friend_id"), "biabiabiabia123", "quem saiu vai para o fim")
 
+	# Convidar o Dan: a lista dá lugar aos jogos, e o escolhido abre a folha em Online.
+	var dan_card: Node = drawer._rows.get_children().filter(func(card: Node) -> bool:
+		return card.get_meta(&"friend_id") == "dandandandan123"
+	)[0]
+	(dan_card.find_child("Action", true, false) as Button).pressed.emit()
+	var games := drawer._rows.get_children().filter(func(node: Node) -> bool: return node.has_meta(&"game"))
+	var game_ids := games.map(func(node: Node) -> StringName: return node.get_meta(&"game"))
+	_check(game_ids.has(Game.CHESS) and not game_ids.has(Game.BOMBERMAN), "o convite oferece os jogos do relay, sem o Bomberman")
+	games[game_ids.find(Game.CHESS)].pressed.emit()
+	await get_tree().process_frame
+	_check(menu._drawer() == null, "escolher o jogo fecha a gaveta")
+	_check(menu._sheet_open() and menu._sheet.game_id == Game.CHESS and menu._sheet.mode == Game.Mode.ONLINE, "e abre a folha do xadrez em Online")
+	_equals(Friends.pending_invite, "dandandandan123", "o convite espera a sala abrir")
+	_check(not Game.listed_room, "sala de convite é privada")
+	menu.go_back()
+	_equals(Friends.pending_invite, "", "fechar a folha desiste do convite")
+
+	menu._open_friends()
+	await get_tree().process_frame
 	menu.go_back()
 	await get_tree().process_frame
 	_check(menu._drawer() == null, "voltar fecha a gaveta antes de sair do app")
 	_check(not Friends.watching, "fechada, o Friends para de perguntar")
+
+	# O convite recebido: fora das telas do menu (aqui, a cena de teste) não aparece.
+	Friends.show_invite("biabiabiabia123", Game.CHESS, "ABC234")
+	_check(Friends.invite_card() == null, "convite não interrompe o que não é menu")
+	var card := InviteCard.new()
+	card.friend_name = "Bia"
+	card.game_title = Game.game_title(Game.CHESS)
+	add_child(card)
+	_equals((card.find_child("Message", true, false) as Label).text, "Bia te chamou para Xadrez", "o aviso diz quem e para quê")
+	var declined := [false]
+	card.declined.connect(func() -> void: declined[0] = true)
+	(card.find_child("Agoranão", true, false) as Button).pressed.emit()
+	_check(declined[0], "Agora não recusa")
+	card.queue_free()
 	Friends.list = []
 	Friends.online = {}
 	menu.queue_free()

@@ -70,6 +70,7 @@ func _ready() -> void:
 	_sheet = GameSheet.new()
 	add_child(_sheet)
 	_sheet.confirmed.connect(_launch)
+	_sheet.closed.connect(func() -> void: Friends.pending_invite = "")
 
 	_fill_games()
 	_offer_rejoin()
@@ -225,6 +226,8 @@ func _launch(mode: int) -> void:
 	if _leaving:
 		return
 	_leaving = true
+	if mode != Game.Mode.ONLINE:
+		Friends.pending_invite = ""
 	GameSheet.launch(get_tree(), mode)
 
 
@@ -276,7 +279,28 @@ func _open_friends() -> void:
 	if _leaving or _drawer() != null:
 		return
 	Sound.play(Sound.Cue.TAP)
-	add_child(FriendsDrawer.new())
+	var drawer := FriendsDrawer.new()
+	drawer.watch_requested.connect(_watch_friend)
+	drawer.invite_requested.connect(_invite_friend)
+	add_child(drawer)
+
+
+## Pela tela de entrar, como a partida guardada: é ela que sabe esperar a sala
+## responder e dizer por que não deu.
+func _watch_friend(code: String) -> void:
+	if _leaving:
+		return
+	_leaving = true
+	Game.join_info = {"code": code, "watch": true}
+	get_tree().change_scene_to_file(JOIN_SCENE)
+
+
+## A folha do jogo já em Online, para escolher o ritmo; o convite sai quando a
+## sala abrir (`scenes/pairing.gd`). Fechar a folha desiste do convite.
+func _invite_friend(friend_id: String, game: StringName) -> void:
+	Friends.pending_invite = friend_id
+	Game.listed_room = false
+	_sheet.open(game, Game.Mode.ONLINE)
 
 
 func _welcome() -> WelcomePanel:
