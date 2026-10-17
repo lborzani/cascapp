@@ -30,6 +30,7 @@ func _ready() -> void:
 	await _test_checkers_capture_taps()
 	await _test_rematch()
 	await _test_review()
+	await _test_review_side()
 	await _test_puzzle()
 	await _test_match_history()
 	_test_verified_names()
@@ -614,6 +615,60 @@ func _test_review() -> void:
 	await get_tree().process_frame
 
 
+## Na revisão só a cor de quem jogou se mexe: o desafio sai dos erros dela, e
+## não dos do oponente — que abririam com a vez dele. A análise é injetada, para
+## o teste valer com ou sem Stockfish.
+func _test_review_side() -> void:
+	print("revisão: só a cor de quem jogou")
+	var history := []
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	for uci in ["f2f3", "e7e5", "g2g4", "d8h4"]:
+		var move := rules.move_from_uci(state, uci)
+		history.append(move.to_dict())
+		rules.apply_move(state, move)
+	var panel := ReviewPanel.new()
+	add_child(panel)
+	panel.open(history, Board.Side.WHITE)
+	await _settle(panel, "_thread")
+	_check(not panel._board.flipped, "de brancas, brancas embaixo")
+	var fake := func(side: int, verdict: int, best: String) -> Dictionary:
+		return {"san": "x", "side": side, "verdict": verdict, "missed_mate": false, "best": best}
+	panel._entries = [
+		fake.call(Board.Side.WHITE, GameReview.Verdict.GOOD, ""),
+		fake.call(Board.Side.BLACK, GameReview.Verdict.MISTAKE, "e7e6"),
+		fake.call(Board.Side.WHITE, GameReview.Verdict.BLUNDER, "e2e4"),
+		fake.call(Board.Side.BLACK, GameReview.Verdict.BEST, ""),
+	]
+
+	panel._show(2)
+	_check(not panel._retry.visible, "erro do oponente não vira desafio")
+	_equals(panel._detail.text, "Havia um lance melhor.", "mas a revisão ainda aponta o erro")
+	panel._show(3)
+	_check(panel._retry.visible, "erro de quem jogou vira desafio")
+	panel._retry.pressed.emit()
+	_equals(panel._puzzle_state.side_to_move, Board.Side.WHITE, "com a vez das brancas")
+	panel._on_tap(_square("e7"))
+	_equals(panel._pick, Board.NO_SQUARE, "peça preta não se ergue")
+	panel._on_tap(_square("e2"))
+	_equals(panel._pick, _square("e2"), "peça branca sim")
+	panel._retry.pressed.emit()
+
+	# No mesmo aparelho os dois lados eram de quem revisa.
+	panel._side = -1
+	panel._show(2)
+	_check(panel._retry.visible, "no mesmo aparelho o erro das pretas também vira desafio")
+	panel.close()
+	await get_tree().process_frame
+
+	panel = ReviewPanel.new()
+	add_child(panel)
+	panel.open(history, Board.Side.BLACK)
+	_check(panel._board.flipped, "de pretas, o tabuleiro vira")
+	panel.close()
+	await get_tree().process_frame
+
+
 ## 4.d3 deixa passar o Dxf7#: a revisão oferece o desafio, três erros trazem a
 ## dica, e o mate resolve. Sem Stockfish não há análise e nem desafio.
 func _test_puzzle() -> void:
@@ -727,6 +782,7 @@ func _test_match_history() -> void:
 	review_buttons[0].pressed.emit()
 	_check(is_instance_valid(panel._review), "Revisar abre a revisão da partida")
 	_equals(panel._review._moves.get_child_count(), 4, "com os lances dela")
+	_equals(panel._review._side, -1, "partida no mesmo aparelho revisa os dois lados")
 	settings.go_back()
 	await get_tree().process_frame
 	_check(not is_instance_valid(panel._review) and is_instance_valid(panel), "voltar fecha a revisão primeiro")
@@ -905,6 +961,29 @@ func _test_premove() -> void:
 	# sempre: cancelar o plano.
 	scene._on_square_tapped(_square("h5"))
 	_check(scene._premove.is_empty(), "tocar em outro lugar cancela o plano")
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("d4"))
+	# A peça continua desenhada em d2, e é lá que o dedo volta para desistir.
+	scene._on_square_tapped(_square("d2"))
+	_check(scene._premove.is_empty(), "tocar de novo na peça desfaz o plano")
+
+	# Tocar fora das casas desfaz tudo, inclusive a peça erguida. O evento passa
+	# pelo gesto de verdade: o topo do controle é moldura, não casa.
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("d4"))
+	scene._on_square_tapped(_square("d4"))
+	_equals(scene._premove_pick, _square("d4"), "o destino é erguido para o elo seguinte")
+	var outside := InputEventMouseButton.new()
+	outside.button_index = MOUSE_BUTTON_LEFT
+	outside.pressed = true
+	outside.position = Vector2(scene._board.size.x * 0.5, 1.0)
+	_equals(scene._board.square_at(outside.position), Board.NO_SQUARE, "o toque é mesmo fora das casas")
+	scene._board._gui_input(outside)
+	_check(
+		scene._premove.is_empty() and scene._premove_pick == Board.NO_SQUARE,
+		"tocar fora do tabuleiro desfaz o plano e baixa a peça"
+	)
+	_check(scene._board.premove.is_empty(), "e a marcação some")
 	scene._on_square_tapped(_square("d2"))
 	scene._on_square_tapped(_square("d4"))
 
@@ -1130,6 +1209,24 @@ func _test_premove_chain(scene: Node) -> void:
 	scene._on_square_tapped(_square("f3"))
 	scene._on_square_tapped(_square("g5"))
 	_equals(scene._premove.size(), 4, "e o elo volta com dois toques")
+
+	# O cavalo está desenhado em g1: tocar nele desfaz o plano dele inteiro, porque
+	# o segundo elo pressupunha o primeiro.
+	scene._on_square_tapped(_square("g1"))
+	_check(scene._premove.is_empty(), "tocar de novo na peça desfaz a corrente dela")
+	for square in ["g1", "f3", "f3", "g5"]:
+		scene._on_square_tapped(_square(square))
+	scene._on_outside_tapped()
+	_check(scene._premove.is_empty(), "tocar fora desfaz a corrente inteira")
+	for square in ["g1", "f3", "f3", "g5"]:
+		scene._on_square_tapped(_square(square))
+	_equals(scene._premove.size(), 4, "e a corrente volta")
+	# Com outra peça no terceiro elo, tocar nela corta só dali para a frente.
+	scene._on_square_tapped(_square("b1"))
+	scene._on_square_tapped(_square("c3"))
+	_equals(scene._premove.size(), 6, "terceiro elo, com o outro cavalo")
+	scene._on_square_tapped(_square("b1"))
+	_equals(scene._premove.size(), 4, "tocar nele desfaz só o elo dele")
 
 	# Sai um por vez: o primeiro agora, o segundo na vez seguinte.
 	#

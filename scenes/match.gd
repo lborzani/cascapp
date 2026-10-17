@@ -138,6 +138,7 @@ func _ready() -> void:
 
 	_board.ruleset = _ruleset
 	_board.square_tapped.connect(_on_square_tapped)
+	_board.outside_tapped.connect(_on_outside_tapped)
 	%Bar.leave_confirmed.connect(_exit)
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
@@ -530,6 +531,11 @@ func _on_premove_tapped(square: int) -> void:
 				)
 				return
 			_premove_pick = square
+		elif _premove_origin_link(square) >= 0:
+			# Tocar de novo na peça planejada — ela continua desenhada na origem —
+			# desfaz o plano **dela**: o elo e os que vieram depois, que foram
+			# escolhidos numa posição que pressupunha este.
+			_premove.resize(_premove_origin_link(square) * 2)
 		elif not _premove.is_empty():
 			# O toque que não continua a corrente **apaga o último elo**, e não a
 			# corrente inteira.
@@ -583,6 +589,24 @@ func _premove_owns(state: MatchState, square: int) -> bool:
 func _clear_premove() -> void:
 	_premove = PackedInt32Array()
 	_premove_pick = Board.NO_SQUARE
+
+
+## O primeiro elo que sai de `square`, ou -1.
+func _premove_origin_link(square: int) -> int:
+	for index in range(0, _premove.size(), 2):
+		if _premove[index] == square:
+			return index / 2
+	return -1
+
+
+## Tocar fora das casas desfaz o plano inteiro, de uma vez: é o gesto do Lichess
+## e do Chess.com. Num celular em pé sobra uma faixa vazia acima e abaixo da
+## grade, e antes ela não respondia — o plano parecia preso.
+func _on_outside_tapped() -> void:
+	if _premove.is_empty() and _premove_pick == Board.NO_SQUARE:
+		return
+	_clear_premove()
+	_refresh()
 
 
 ## Quantos elos a corrente tem.
@@ -840,7 +864,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 func _open_review() -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
-	_review.open(_state.history, _board.flipped)
+	_review.open(_state.history, Game.local_side if Game.mode != Game.Mode.HOTSEAT else -1)
 
 
 ## Conta ao relay como a partida acabou, para o Elo (`relay/src/ratings.ts`).
@@ -895,6 +919,8 @@ func _record_game(title: String, detail: String) -> void:
 		"moves": _state.history.duplicate(),
 		"against": against,
 		"side": Game.local_side if Game.mode != Game.Mode.HOTSEAT else Board.Side.WHITE,
+		# Para a revisão saber que os dois lados eram de quem revisa.
+		"hotseat": Game.mode == Game.Mode.HOTSEAT,
 		"title": title,
 		"detail": detail,
 	})
