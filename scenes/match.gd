@@ -76,6 +76,8 @@ var _reported := false
 ## O que o relay disse do Elo desta partida, para o painel; vazio até lá.
 var _rating_text := ""
 var _review: ReviewPanel = null
+## Avaliação ao vivo; só existe para quem assiste xadrez.
+var _live: LiveReview = null
 ## Um lance do bot foi pedido e ainda não foi jogado.
 var _bot_pending := false
 var _bot_wait := 0.0
@@ -123,6 +125,14 @@ func _ready() -> void:
 		# Orientação decidida pelo lado que se joga, e não por botão: em rede as
 		# pretas veem o tabuleiro do lado delas, e é o único arranjo certo.
 		_board.flipped = Game.local_side == Board.Side.BLACK
+		if Net.is_spectator and _ruleset is ChessRules:
+			_live = LiveReview.new()
+			_live.board = _board
+			add_child(_live)
+			# A barra vai logo abaixo do cartão de cima, antes do último lance.
+			var column := %TopLastMoveSlot.get_parent()
+			column.add_child(_live.bar)
+			column.move_child(_live.bar, %TopLastMoveSlot.get_index())
 	elif Game.mode == Game.Mode.SOLO:
 		# Contra o bot vale a mesma regra: quem escolheu jogar de pretas vê o
 		# tabuleiro do lado das pretas.
@@ -795,6 +805,8 @@ func _adopt_clocks(clocks: Array) -> void:
 func _recompute() -> void:
 	_legal = _ruleset.generate_moves(_state)
 	_outcome = _ruleset.outcome(_state)
+	if _live != null:
+		_live.follow(_state.history)
 	if _outcome != Ruleset.Outcome.ONGOING:
 		_show_result()
 	_refresh()

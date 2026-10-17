@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.32
+
+- Xadrez: quem assiste a uma partida vê, a cada lance, quem está na frente e se o lance foi o melhor, bom, imprecisão, erro ou erro grave.
+
 ## 1.31
 
 - Amigos online: o botão de amigos no menu abre uma barra lateral com quem está com o app aberto e o que está jogando.
