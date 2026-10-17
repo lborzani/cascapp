@@ -17,6 +17,9 @@ extends Control
 ## gesto que depende do jogo.
 
 signal square_tapped(square: int)
+## Toque no controle, mas fora das casas: a moldura e a faixa vazia que sobra
+## quando a área não é quadrada. É o "tocar fora" que desfaz uma escolha.
+signal outside_tapped
 
 ## Espessura da moldura, em frações de casa.
 const FRAME := 0.34
@@ -100,6 +103,9 @@ func _gui_input(event: InputEvent) -> void:
 	var position: Vector2 = parsed[2]
 	var square := square_at(position)
 	if square == Board.NO_SQUARE:
+		# Sem trava de ponteiro: o toque e a emulação de mouse do mesmo dedo
+		# chegam os dois aqui, e desfazer duas vezes é o mesmo que uma.
+		outside_tapped.emit()
 		return
 	accept_event()
 	_pointer = parsed[0]
