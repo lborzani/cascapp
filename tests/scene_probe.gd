@@ -49,6 +49,7 @@ func _ready() -> void:
 	await _test_welcome()
 	await _test_update_notice()
 	await _test_friends()
+	_check(await _test_friends_drawer() == true, "gaveta de amigos rodou até o fim")
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -1830,6 +1831,69 @@ static func _square(name: String) -> int:
 
 static func _put(state: MatchState, name: String, side: int, kind: int) -> void:
 	state.set_piece(_square(name), Board.piece(side, kind))
+
+
+## A gaveta de amigos: online primeiro, o status certo de cada um, a bolinha só
+## em quem está online, e o `Friends` só pergunta ao relay com ela aberta.
+func _test_friends_drawer() -> bool:
+	print("gaveta de amigos")
+	var friend := func(id: String, name: String) -> Dictionary:
+		return {"id": id, "name": name, "avatar": "", "elo_chess": 1200, "games_chess": 0}
+	Friends.list = [
+		friend.call("anaanaanaana123", "Ana"),
+		friend.call("biabiabiabia123", "Bia"),
+		friend.call("caicaicaicai123", "Cai"),
+		friend.call("dandandandan123", "Dan"),
+	]
+	Friends.online = {
+		"biabiabiabia123": {"id": "biabiabiabia123", "game": "chess", "room": "ABC234", "playing": true},
+		"caicaicaicai123": {"id": "caicaicaicai123", "game": "checkers", "room": "XYZ234", "playing": false},
+		"dandandandan123": {"id": "dandandandan123", "game": "", "room": "", "playing": false},
+	}
+	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	var button: IconButton = menu.find_child("FriendsButton", true, false)
+	_check(button != null, "a saudação do menu tem o botão de amigos")
+	if button != null:
+		button.pressed.emit()
+	await get_tree().process_frame
+	var drawer: FriendsDrawer = menu._drawer()
+	_check(drawer != null, "o botão abre a gaveta")
+	if drawer == null:
+		menu.queue_free()
+		return true
+	_check(Friends.watching, "aberta, o Friends pergunta ao relay")
+	var ids := []
+	var statuses := []
+	var dots := []
+	for card in drawer._rows.get_children():
+		ids.append(card.get_meta(&"friend_id"))
+		statuses.append((card.find_child("Status", true, false) as Label).text)
+		dots.append(card.find_child("OnlineDot", true, false) != null)
+	_equals(ids, ["biabiabiabia123", "caicaicaicai123", "dandandandan123", "anaanaanaana123"], "online primeiro, offline no fim")
+	_equals(statuses, [
+		"Jogando %s" % Game.game_title(Game.CHESS),
+		"Na sala de espera · %s" % Game.game_title(Game.CHECKERS),
+		"Online",
+		"Offline",
+	], "status de cada amigo")
+	_equals(dots, [true, true, true, false], "bolinha só em quem está online")
+
+	# O amigo que sai some da lista de online na hora em que o Friends avisa.
+	Friends.online.erase("biabiabiabia123")
+	Friends.changed.emit()
+	_equals(drawer._rows.get_child(drawer._rows.get_child_count() - 1).get_meta(&"friend_id"), "biabiabiabia123", "quem saiu vai para o fim")
+
+	menu.go_back()
+	await get_tree().process_frame
+	_check(menu._drawer() == null, "voltar fecha a gaveta antes de sair do app")
+	_check(not Friends.watching, "fechada, o Friends para de perguntar")
+	Friends.list = []
+	Friends.online = {}
+	menu.queue_free()
+	await get_tree().process_frame
+	return true
 
 
 func _check(condition: bool, label: String) -> void:

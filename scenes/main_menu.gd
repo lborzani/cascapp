@@ -53,6 +53,7 @@ func _ready() -> void:
 
 	%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	%AppBar.action_pressed.connect(_open_settings)
+	%AppBar.friends_pressed.connect(_open_friends)
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
@@ -250,6 +251,10 @@ func _go_tab(route: StringName) -> void:
 ## Antes disso, as camadas: com a folha do jogo aberta o gesto fecha **ela**, e com
 ## as boas-vindas abertas, elas.
 func go_back() -> void:
+	var drawer := _drawer()
+	if drawer != null:
+		drawer.close()
+		return
 	if _sheet_open():
 		_sheet.close()
 		return
@@ -258,6 +263,20 @@ func go_back() -> void:
 		welcome.finish()
 		return
 	get_tree().quit()
+
+
+func _drawer() -> FriendsDrawer:
+	for child in get_children():
+		if child is FriendsDrawer and not child.is_queued_for_deletion():
+			return child as FriendsDrawer
+	return null
+
+
+func _open_friends() -> void:
+	if _leaving or _drawer() != null:
+		return
+	Sound.play(Sound.Cue.TAP)
+	add_child(FriendsDrawer.new())
 
 
 func _welcome() -> WelcomePanel:
