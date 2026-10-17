@@ -29,3 +29,7 @@ relay/dist/
 # Ajustes locais do Claude Code: permissões deste aparelho, com caminhos
 # absolutos desta máquina. O que vale para o projeto inteiro mora em CLAUDE.md.
 .claude/settings.local.json
+
+# Renders de aprovação da sinuca 3D: saem de `art/pool/build_pool.py` a cada
+# execução, e são megas de PNG que não entram no jogo.
+/art/pool/renders/
