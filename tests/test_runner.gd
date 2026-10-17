@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test_app_version()
 	_test_version_compare()
 	_test_update_offer()
+	_test_changelog()
 	_test_prefs()
 	_test_avatar()
 	_test_history()
@@ -1046,35 +1047,60 @@ func _test_version_compare() -> void:
 	_check(AppVersion.compare("1.21", "1.20.9") > 0, "e o segundo antes do terceiro")
 
 
-## A decisão do aviso, sem rede: o JSON da release entra pronto.
+## O CHANGELOG.md: seções por versão, as linhas `- ` de cada uma, e o arquivo de
+## verdade do repo com a seção da versão deste build.
+func _test_changelog() -> void:
+	print("changelog")
+	var text := "\n".join(PackedStringArray([
+		"# Novidades", "", "Texto solto com `## 9.9` no meio.", "",
+		"## 1.31", "", "- Um", "- Dois", "",
+		"## 1.30", "", "- Antigo",
+	]))
+	var sections := Changelog.parse(text)
+	_equals(sections.map(func(section: Dictionary) -> String: return section["version"]), ["1.31", "1.30"], "seções na ordem do arquivo, sem o texto de cima")
+	_equals(Changelog.items_of(text, "1.31"), PackedStringArray(["Um", "Dois"]), "as novidades de uma versão")
+	_equals(Changelog.items_of(text, "v1.30"), PackedStringArray(["Antigo"]), "o v da tag não atrapalha")
+	_equals(Changelog.items_of(text, "1.29"), PackedStringArray(), "versão sem seção não tem novidades")
+	_equals(
+		Changelog.items("- Um\n- Dois\n---\n- origem do build"), PackedStringArray(["Um", "Dois"]),
+		"das notas da release, só o que vem antes do ---"
+	)
+	var bundled := Changelog.bundled()
+	_check(not bundled.is_empty(), "o CHANGELOG.md está em res://")
+	var newest: Dictionary = Changelog.parse(bundled)[0] if not Changelog.parse(bundled).is_empty() else {}
+	_check(AppVersion.compare(str(newest.get("version", "0")), AppVersion.text()) >= 0, "o changelog já tem a seção desta versão ou da próxima")
+
+
+## A versão obrigatória, sem rede: a lista da API entra pronta.
 func _test_update_offer() -> void:
-	print("aviso de versão nova")
-	var url := UpdateCheck.DOWNLOADS + "v1.21/cascapp-1.21.apk"
-	var release := {
-		"tag_name": "v1.21",
-		"assets": [
-			{"name": "notas.txt", "browser_download_url": UpdateCheck.DOWNLOADS + "v1.21/notas.txt"},
-			{"name": "cascapp-1.21.apk", "browser_download_url": url},
-		],
-	}
-	_equals(
-		UpdateCheck.offer(release, "1.20", ""), {"version": "1.21", "url": url},
-		"release mais nova é oferecida, com o link do APK"
-	)
-	_equals(UpdateCheck.offer(release, "1.21", ""), {}, "a mesma versão não")
-	_equals(UpdateCheck.offer(release, "1.30", ""), {}, "nem uma mais velha")
-	_equals(UpdateCheck.offer(release, "1.20", "1.21"), {}, "nem a que o jogador pulou")
-	_equals(
-		UpdateCheck.offer(release, "1.20", "1.20").get("version"), "1.21",
-		"pular uma versão não cala a seguinte"
-	)
-	_equals(UpdateCheck.offer({"tag_name": "v1.21", "assets": []}, "1.20", ""), {}, "sem APK, sem aviso")
-	var elsewhere := {
-		"tag_name": "v1.21",
-		"assets": [{"name": "x.apk", "browser_download_url": "https://exemplo.com/x.apk"}],
-	}
-	_equals(UpdateCheck.offer(elsewhere, "1.20", ""), {}, "link de fora do repositório não é aberto")
-	_equals(UpdateCheck.offer({"message": "Not Found"}, "1.20", ""), {}, "resposta de erro é silêncio")
+	print("versão nova obrigatória")
+	var release := func(tag: String, body := "", apk := true) -> Dictionary:
+		var assets := [{"name": "notas.txt", "browser_download_url": UpdateCheck.DOWNLOADS + tag + "/notas.txt"}]
+		if apk:
+			assets.append({"name": "cascapp.apk", "browser_download_url": UpdateCheck.DOWNLOADS + tag + "/cascapp.apk"})
+		return {"tag_name": tag, "body": body, "assets": assets}
+	var releases := [
+		release.call("v1.23", "- Ainda sem APK", false),
+		release.call("v1.22", "- Dois\n- Três\n\n---\n\nAPK assinado…"),
+		release.call("v1.21", "APK assinado da versão 1.21, de antes do changelog."),
+		release.call("v1.20", "- Velha"),
+	]
+	var offer := UpdateCheck.offer(releases, "1.20")
+	_equals(offer.get("version"), "1.22", "a mais nova com APK (a sem APK ainda não tranca o app)")
+	_equals(offer.get("url"), UpdateCheck.DOWNLOADS + "v1.22/cascapp.apk", "com o link do APK, não do outro anexo")
+	_equals(offer.get("changes"), [{"version": "1.22", "items": PackedStringArray(["Dois", "Três"])}],
+		"as novidades das versões puladas, sem as notas vazias nem a instalada")
+	_equals(UpdateCheck.offer(releases, "1.22"), {}, "na mais nova com APK: nada")
+	_equals(UpdateCheck.offer(releases, "1.30"), {}, "nem com a instalada mais nova")
+	var draft: Dictionary = release.call("v1.31")
+	draft["draft"] = true
+	_equals(UpdateCheck.offer([draft], "1.30"), {}, "rascunho não conta")
+	var pre: Dictionary = release.call("v1.31")
+	pre["prerelease"] = true
+	_equals(UpdateCheck.offer([pre], "1.30"), {}, "nem pré-release")
+	var elsewhere := {"tag_name": "v1.21", "assets": [{"name": "x.apk", "browser_download_url": "https://exemplo.com/x.apk"}]}
+	_equals(UpdateCheck.offer([elsewhere], "1.20"), {}, "link de fora do repositório não é aberto")
+	_equals(UpdateCheck.offer([{"message": "Not Found"}, 3], "1.20"), {}, "lixo na lista é ignorado")
 
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar

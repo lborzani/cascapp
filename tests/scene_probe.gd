@@ -49,6 +49,7 @@ func _ready() -> void:
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
+	_check(await _test_news() == true, "novidades rodou até o fim")
 	await _test_friends()
 
 	if _failures == 0:
@@ -1390,25 +1391,24 @@ func _test_bot() -> void:
 	Game.local_side = Board.Side.WHITE
 
 
-## O botão da tela Você procura na hora e responde ali mesmo — inclusive para
-## uma versão que o jogador tinha pulado no cartão do menu.
+## O botão da tela Você procura na hora e responde ali mesmo; versão nova abre a
+## mesma tela obrigatória do menu e fica guardada para ele.
 func _test_manual_update() -> void:
 	print("procurar atualização")
-	var saved_skipped := Prefs.skipped_update()
-	Prefs.skip_update("99.0")
+	var saved_pending := Prefs.pending_update()
 	var settings := preload("res://scenes/settings.tscn").instantiate()
 	add_child(settings)
 	await get_tree().process_frame
-	settings._show_update({})
+	settings._show_update(null)
 	_check(settings.get_node("%UpdateResult").text.begins_with("Não deu para consultar"), "sem resposta, diz que não deu")
-	settings._show_update(_github_release("v0.1"))
+	settings._show_update([_github_release("v0.1")])
 	_check(settings.get_node("%UpdateResult").text.begins_with("Você já está na versão mais recente"), "release velha: já está atualizado")
-	settings._show_update(_github_release("v99.0"))
-	_equals(settings.get_node("%UpdateButton").text, "Baixar a versão 99.0", "versão nova: o botão vira Baixar, mesmo a pulada no menu")
-	_check(settings._update_url.begins_with(UpdateCheck.DOWNLOADS), "com o link do APK da release")
+	settings._show_update([_github_release("v99.0")])
+	_check(settings.get_children().any(func(child: Node) -> bool: return child is UpdateGate), "versão nova: a tela obrigatória abre por cima")
+	_equals(Prefs.pending_update().get("version"), "99.0", "e fica guardada para o menu")
 	settings.queue_free()
 	await get_tree().process_frame
-	Prefs.skip_update(saved_skipped)
+	Prefs.set_pending_update(saved_pending)
 
 
 ## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
@@ -1677,52 +1677,148 @@ func _test_welcome() -> void:
 		Prefs.forget_welcome()
 
 
-## O aviso de versão nova no menu, com a resposta da API injetada: o teste não
+## A versão nova obrigatória no menu, com a resposta da API injetada: o teste não
 ## depende de rede, e no editor o menu nem pergunta (só build exportado pergunta).
 ##
-## Aparece para versão mais nova, some no "Agora não", e não volta para a mesma
-## versão — mas volta para a seguinte.
+## Tranca o menu com o changelog, continua trancando sem rede pela versão guardada,
+## e solta quando a release some ou quando a versão é instalada.
 func _test_update_notice() -> void:
-	print("aviso de versão nova")
-	var saved_skipped := Prefs.skipped_update()
+	print("versão nova obrigatória")
+	var saved_pending := Prefs.pending_update()
 	var saved_welcomed := Prefs.welcomed()
-	Prefs.skip_update("")
-	# Sem as boas-vindas por cima: o aviso é do menu, e não da primeira abertura.
+	Prefs.set_pending_update({})
 	Prefs.set_welcomed()
 
 	var menu := preload("res://scenes/main_menu.tscn").instantiate()
 	add_child(menu)
 	await get_tree().process_frame
-	_check(menu._update == null, "sem resposta, sem aviso")
+	_check(menu._gate == null, "sem resposta, sem tela")
 
-	menu._offer_update(_github_release("v0.1"))
-	_check(menu._update == null, "release mais velha que a instalada não avisa")
+	menu._offer_update([_github_release("v0.1")])
+	_check(menu._gate == null, "release mais velha que a instalada não tranca")
 
-	menu._offer_update(_github_release("v99.0"))
-	var card: Control = menu._update
-	_check(card != null and card.is_inside_tree(), "release mais nova põe o cartão no menu")
-	if card == null:
+	var newer := _github_release("v99.0")
+	newer["body"] = "- Novidade grande\n- Outra\n\n---\n\nAPK assinado"
+	menu._offer_update([newer, _github_release("v0.1")])
+	var gate: UpdateGate = menu._gate
+	_check(gate != null and gate.is_inside_tree(), "release mais nova tranca o menu")
+	if gate == null:
 		menu.queue_free()
 		return
-	_equals(card.get_index(), menu.get_node("%Favorites").get_index() - 1, "em cima do catálogo")
-	_check(card.find_child("Download", true, false) is Button, "com o botão de baixar")
+	_equals(gate.get_index(), menu.get_child_count() - 1, "por cima de tudo")
+	_equals(gate.mouse_filter, Control.MOUSE_FILTER_STOP, "e segura o toque")
+	_check(gate.find_child("Download", true, false) is Button, "com o botão de baixar")
+	_check(gate.find_child("Later", true, false) == null, "e sem \"Agora não\"")
+	var lines: Array = gate.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
+	_equals(lines, ["Novidades da 99.0", "•  Novidade grande", "•  Outra"], "com o changelog da versão")
+	_equals(Prefs.pending_update().get("version"), "99.0", "a versão fica guardada")
 
-	var later: Button = card.find_child("Later", true, false)
-	later.pressed.emit()
+	# Próxima abertura, sem rede: a guardada tranca de novo.
+	menu.queue_free()
 	await get_tree().process_frame
-	_check(not is_instance_valid(card), "\"Agora não\" tira o cartão")
-	_equals(Prefs.skipped_update(), "99.0", "e guarda a versão pulada")
+	menu = preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(menu._gate != null, "sem rede, a versão guardada continua trancando")
 
-	menu._offer_update(_github_release("v99.0"))
-	_check(menu._update == null, "a versão pulada não avisa de novo")
-	menu._offer_update(_github_release("v99.1"))
-	_check(menu._update != null, "a seguinte avisa")
+	# Release apagada: a consulta diz que não há nada, e a tela sai.
+	menu._offer_update([_github_release("v0.1")])
+	await get_tree().process_frame
+	_check(menu._gate == null and Prefs.pending_update().is_empty(), "sem versão nova na consulta, a tela e a guardada saem")
+
+	# Instalou: a guardada é a própria versão, e some.
+	Prefs.set_pending_update({"version": AppVersion.text(), "url": "", "changes": []})
+	menu.queue_free()
+	await get_tree().process_frame
+	menu = preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(menu._gate == null and Prefs.pending_update().is_empty(), "instalada a versão guardada, não tranca mais")
 
 	menu.queue_free()
 	await get_tree().process_frame
-	Prefs.skip_update(saved_skipped)
+	Prefs.set_pending_update(saved_pending)
 	if not saved_welcomed:
 		Prefs.forget_welcome()
+
+
+## "Novidades": uma vez por versão nova, nunca na instalação nova, nunca com a
+## tela de atualizar na frente; e o histórico inteiro na aba Você.
+##
+## A versão vem injetada (a do editor não acompanha o CHANGELOG), e as novidades
+## são as do arquivo de verdade: a 1.31 é a primeira que ele tem.
+func _test_news() -> bool:
+	print("novidades")
+	var saved_seen := Prefs.seen_version()
+	var saved_welcomed := Prefs.welcomed()
+	var saved_pending := Prefs.pending_update()
+	Prefs.set_pending_update({})
+	Prefs.set_welcomed()
+	var menu := preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("1.30")
+	menu._show_news("1.31")
+	var panel: ChangelogPanel = menu._news()
+	_check(panel != null, "versão nova: as novidades abrem")
+	if panel != null:
+		var lines: Array = panel.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
+		_equals(lines[0], "Novidades da 1.31", "com o número da versão")
+		_equals(lines.size(), 1 + Changelog.items_of(Changelog.bundled(), "1.31").size(), "uma linha por novidade do CHANGELOG")
+		menu.go_back()
+		await get_tree().process_frame
+		_check(menu._news() == null, "voltar fecha as novidades, e não o app")
+	_equals(Prefs.seen_version(), "1.31", "a versão fica marcada como vista")
+	menu._show_news("1.31")
+	_check(menu._news() == null, "a mesma versão não mostra de novo")
+
+	Prefs.set_seen_version("")
+	menu._show_news("1.31")
+	_check(menu._news() != null, "app de antes da marca, já usado: é atualização, mostra")
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("")
+	Prefs.forget_welcome()
+	menu._show_news("1.31")
+	_check(menu._news() == null, "instalação nova: nada de novidades por cima das boas-vindas")
+	Prefs.set_welcomed()
+
+	Prefs.set_seen_version("1.30")
+	menu._show_gate({"version": "99.0", "url": "", "changes": []})
+	menu._show_news("1.31")
+	_check(menu._news() == null, "com a tela de atualizar na frente, não")
+	menu.queue_free()
+	await get_tree().process_frame
+
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	settings.get_node("%NewsButton").pressed.emit()
+	await get_tree().process_frame
+	var history: ChangelogPanel = settings._news
+	_check(history != null and history.is_inside_tree(), "Você › Novidades abre o histórico")
+	if history != null:
+		var headers := history.find_child("Notes", true, false).get_children().filter(func(label: Label) -> bool:
+			return label.text.begins_with("Novidades da ")
+		)
+		_equals(headers.size(), Changelog.parse(Changelog.bundled()).size(), "com todas as versões do CHANGELOG")
+		settings.go_back()
+		await get_tree().process_frame
+		_check(not is_instance_valid(history) or history.is_queued_for_deletion(), "voltar fecha o histórico")
+	settings.queue_free()
+	await get_tree().process_frame
+
+	Prefs.set_seen_version(saved_seen)
+	Prefs.set_pending_update(saved_pending)
+	if not saved_welcomed:
+		Prefs.forget_welcome()
+	return true
 
 
 func _github_release(tag: String) -> Dictionary:
