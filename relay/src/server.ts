@@ -9,6 +9,7 @@ import {
   parseClientMessage,
   type ClientMessage,
   type ErrorReason,
+  type FriendStatus,
   type LiveSummary,
   type RoomSummary,
   type Seat,
@@ -119,6 +120,13 @@ interface Session {
   seat: Seat | null;
   /** Assiste à sala em `room`, sem assento. */
   watching: boolean;
+  /**
+   * Socket de presença (ver `presence` em `protocol.ts`): o id da conta, `''`
+   * enquanto o token é conferido, `null` num socket de sala.
+   */
+  presence: string | null;
+  /** Os amigos que esta presença declarou. */
+  friends: Set<string>;
   alive: boolean;
   helloTimer: NodeJS.Timeout;
   rateStart: number;
@@ -220,9 +228,11 @@ export function createRelay(options: RelayOptions = {}): Relay {
       room: null,
       seat: null,
       watching: false,
+      presence: null,
+      friends: new Set(),
       alive: true,
       helloTimer: setTimeout(() => {
-        if (session.room === null) {
+        if (session.room === null && session.presence === null) {
           fail(socket, 'hello_timeout', 'Nenhuma sala foi informada.');
         }
       }, config.helloTimeoutMs),
@@ -247,6 +257,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
 
     socket.on('close', () => {
       clearTimeout(session.helloTimer);
+      leavePresence(socket, session);
       releaseSeat(socket, session);
     });
 
@@ -254,8 +265,16 @@ export function createRelay(options: RelayOptions = {}): Relay {
   });
 
   function handle(socket: WebSocket, session: Session, message: ClientMessage): void {
+    if (session.presence !== null) {
+      // Conta ainda sendo conferida: o que chegar antes da resposta é ignorado.
+      if (session.presence !== '') handlePresence(socket, session, message);
+      return;
+    }
     if (session.room === null) {
       switch (message.t) {
+        case 'presence':
+          openPresence(socket, session, message.token, message.friends);
+          break;
         case 'host':
           claimSeat(socket, session, message.room, message.token, (code) =>
             registry.openRoom(
@@ -511,6 +530,118 @@ export function createRelay(options: RelayOptions = {}): Relay {
       }
       for (const watcher of watchersOf(room)) send(watcher, message);
     });
+  }
+
+  // --- presença dos amigos -----------------------------------------------------
+  //
+  // Um socket por app aberto, fora das salas: "esta conta está aqui". A lista de
+  // amigos vem do próprio app, e o relay não consulta o PocketBase para isso: uma
+  // conta só aparece para outra quando **as duas** se listam. Quem mente na
+  // própria lista não descobre nada — falta a outra metade.
+
+  /** Conta → os sockets de presença dela (um por aparelho com o app aberto). */
+  const online = new Map<string, Set<WebSocket>>();
+
+  function openPresence(socket: WebSocket, session: Session, token: string, friends: string[]): void {
+    clearTimeout(session.helloTimer);
+    session.presence = '';
+    session.friends = new Set(friends);
+    const verify = config.verifyToken;
+    if (verify === undefined) {
+      fail(socket, 'bad_token', 'Este servidor não confere contas.');
+      return;
+    }
+    void verify(token).then((account) => {
+      if (!isOpen(socket)) return;
+      if (account === null) {
+        fail(socket, 'bad_token', 'Conta não confirmada.');
+        return;
+      }
+      session.presence = account.id;
+      let sockets = online.get(account.id);
+      if (sockets === undefined) {
+        sockets = new Set();
+        online.set(account.id, sockets);
+      }
+      sockets.add(socket);
+      send(socket, { t: 'friends', online: friendsOf(account.id, session.friends) });
+    });
+  }
+
+  function handlePresence(socket: WebSocket, session: Session, message: ClientMessage): void {
+    const me = session.presence ?? '';
+    switch (message.t) {
+      case 'who':
+        session.friends = new Set(message.friends);
+        send(socket, { t: 'friends', online: friendsOf(me, session.friends) });
+        break;
+      case 'invite': {
+        if (!session.friends.has(message.to) || !lists(message.to, me)) break;
+        const invited: ServerMessage = { t: 'invited', from: me, game: message.game, room: message.room };
+        for (const target of online.get(message.to) ?? []) send(target, invited);
+        break;
+      }
+      case 'ping':
+        send(socket, { t: 'pong' });
+        break;
+      case 'leave':
+        socket.close(1000, 'leave');
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Algum aparelho de `id` com o app aberto tem `other` na lista. */
+  function lists(id: string, other: string): boolean {
+    for (const socket of online.get(id) ?? []) {
+      if (sessions.get(socket)?.friends.has(other)) return true;
+    }
+    return false;
+  }
+
+  function friendsOf(me: string, friends: Set<string>): FriendStatus[] {
+    const result: FriendStatus[] = [];
+    let seated: Map<string, Room<WebSocket>> | null = null;
+    for (const id of friends) {
+      if (!lists(id, me)) continue;
+      seated ??= seatedAccounts();
+      const room = seated.get(id);
+      result.push({
+        id,
+        game: room?.game ?? '',
+        room: room?.code ?? '',
+        playing: room !== undefined && occupied(room) >= room.capacity,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Conta → a sala em que ela está sentada agora, pela conta conferida de cada
+   * assento ocupado.
+   *
+   * ponytail: varre todas as salas a cada `who` com amigo online (≤ 1000 salas,
+   * o app pergunta a cada 5 s só com a lista aberta). Índice mantido em
+   * `confirmIdentity`/`releaseSeat` se isso aparecer no perfil do processo.
+   */
+  function seatedAccounts(): Map<string, Room<WebSocket>> {
+    const seated = new Map<string, Room<WebSocket>>();
+    for (const room of registry.all()) {
+      for (const [seat, account] of identitiesOf(room)) {
+        if (isOpen(room.seats[seat])) seated.set(account.id, room);
+      }
+    }
+    return seated;
+  }
+
+  function leavePresence(socket: WebSocket, session: Session): void {
+    const id = session.presence;
+    session.presence = null;
+    if (id === null || id === '') return;
+    const sockets = online.get(id);
+    sockets?.delete(socket);
+    if (sockets?.size === 0) online.delete(id);
   }
 
   function watch(socket: WebSocket, session: Session, rawCode: string): void {
