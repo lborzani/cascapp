@@ -35,6 +35,7 @@ func _ready() -> void:
 	await _test_match_history()
 	_test_verified_names()
 	await _test_spectator()
+	_check(await _test_live_review() == true, "avaliação ao vivo rodou até o fim")
 	await _test_rated_result()
 	await _test_premove()
 	await _test_premove_limit()
@@ -908,6 +909,106 @@ func _test_spectator() -> void:
 	Net.white_seat = 0
 	Net.player_names = {}
 	Game.mode = Game.Mode.HOTSEAT
+
+
+## Avaliação ao vivo de quem assiste xadrez: só o último lance é julgado, e um
+## histórico que muda no meio da busca descarta o resultado. Sem Stockfish, o
+## teste confere só que nada aparece e nada trava.
+func _test_live_review() -> bool:
+	print("avaliação ao vivo")
+	_check(not _has_live(Game.Mode.HOTSEAT, false, Game.CHESS), "no mesmo aparelho não há avaliação")
+	_check(not _has_live(Game.Mode.SOLO, false, Game.CHESS), "nem contra o bot")
+	_check(not _has_live(Game.Mode.ONLINE, false, Game.CHESS), "nem para quem joga online")
+	_check(not _has_live(Game.Mode.ONLINE, true, Game.CHECKERS), "nem para quem assiste damas")
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = true
+	Net.connected = true
+	Net.white_seat = 0
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var live: LiveReview = scene._live
+	_check(live != null, "quem assiste xadrez tem a avaliação")
+	var board: BoardView = scene._board
+	_check(live.bar.get_parent() == _node(scene, "%TopLastMoveSlot").get_parent(), "a barra está na coluna da partida")
+	_equals(live.bar.get_index(), _node(scene, "%TopLastMoveSlot").get_index() - 1, "logo acima da linha do último lance")
+	_check(not live.bar.visible, "e escondida antes do primeiro lance")
+
+	# Dois lances seguidos: o primeiro ainda está na busca quando o segundo chega.
+	var fools := [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]
+	for i in 2:
+		_remote(scene, fools[i], i)
+	await _settle_live(live)
+	if live._no_engine:
+		_check(live.entry.is_empty(), "sem motor, nenhum veredito")
+		_check(not live.bar.visible and board.badge_square == Board.NO_SQUARE, "nem barra, nem selo")
+	else:
+		_equals(live.entry.get("uci"), "e7e5", "o veredito é o do último lance")
+		_remote(scene, fools[2], 2)
+		_check(live.entry.is_empty(), "o lance novo apaga o veredito do anterior")
+		_equals(board.badge_square, Board.NO_SQUARE, "e o selo dele some na hora")
+		_check(live.bar.visible, "a barra fica com a nota anterior até a nova chegar")
+		await _settle_live(live)
+		_check(live.entry.get("verdict", -1) >= GameReview.Verdict.MISTAKE, "2.g4 é erro (%s)" % live.entry)
+		_equals(board.badge_square, _square("g4"), "o selo vai na casa de destino")
+		_check(board.badge_text.begins_with("?"), "com o símbolo do erro (%s)" % board.badge_text)
+		_equals(board.badge_color, AppTheme.DANGER, "na cor do erro")
+		_remote(scene, fools[3], 3)
+		await _settle_live(live)
+		_equals(live.entry.get("verdict"), GameReview.Verdict.BEST, "o mate é o melhor lance")
+		_equals(GameReview.white_curve([live.entry])[1], 0.0, "e a posição é das pretas")
+		_equals(board.badge_text, "!", "o selo do mate é o do melhor lance")
+		_equals(live.bar.white, 0.0, "e a barra dá a partida às pretas")
+
+		# Quem entra no meio recebe o histórico inteiro de uma vez.
+		var history := []
+		for i in 3:
+			history.append({"p": [_square(fools[i][0]), _square(fools[i][1])], "pr": 0})
+		scene._apply_sync(history)
+		await _settle_live(live)
+		_equals(live.entry.get("uci"), "g2g4", "entrando no meio, sai o veredito do último lance")
+
+	scene._apply_sync([])
+	await _settle_live(live)
+	_check(live.entry.is_empty(), "revanche: nada da partida anterior fica")
+	_check(not live.bar.visible and board.badge_square == Board.NO_SQUARE, "nem barra, nem selo")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Game.mode = Game.Mode.HOTSEAT
+	Game.game_id = Game.CHESS
+	return true
+
+
+func _has_live(mode: int, spectator: bool, game: StringName) -> bool:
+	Game.mode = mode
+	Game.game_id = game
+	Net.is_spectator = spectator
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	var live: bool = scene._live != null
+	scene.free()
+	Net.is_spectator = false
+	Game.mode = Game.Mode.HOTSEAT
+	Game.game_id = Game.CHESS
+	return live
+
+
+func _remote(scene: Node, step: Array, index: int) -> void:
+	var seat := 0 if index % 2 == 0 else 1
+	scene._on_remote_move({"p": [_square(step[0]), _square(step[1])], "pr": 0, "n": index, "seat": seat})
+
+
+## Espera a busca em andamento e as que ela encadear.
+func _settle_live(live: LiveReview) -> void:
+	for _i in 300:
+		if live._thread == null and (live._no_engine or live._history.is_empty() or live._history == live._judged):
+			return
+		await get_tree().process_frame
+		OS.delay_msec(20)
 
 
 ## Pré-movimento: o lance escolhido enquanto o oponente pensa, que sai sozinho no
