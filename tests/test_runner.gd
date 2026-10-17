@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test_app_version()
 	_test_version_compare()
 	_test_update_offer()
+	_test_changelog()
 	_test_prefs()
 	_test_avatar()
 	_test_history()
@@ -1044,6 +1045,44 @@ func _test_version_compare() -> void:
 	_equals(AppVersion.compare("1.2", "1.2.0"), 0, "segmento que falta vale zero")
 	_check(AppVersion.compare("2.0", "1.99") > 0, "o maior manda")
 	_check(AppVersion.compare("1.21", "1.20.9") > 0, "e o segundo antes do terceiro")
+
+
+## O CHANGELOG.md: seções por versão, as linhas `- ` de cada uma, e o arquivo de
+## verdade do repo com a seção da versão deste build.
+func _test_changelog() -> void:
+	print("changelog")
+	var text := "# Novidades
+
+Texto solto com `## 9.9` no meio.
+
+## 1.31
+
+- Um
+- Dois
+
+## 1.30
+
+- Antigo
+"
+	var sections := Changelog.parse(text)
+	_equals(sections.map(func(section: Dictionary) -> String: return section["version"]), ["1.31", "1.30"], "seções na ordem do arquivo, sem o texto de cima")
+	_equals(Changelog.items_of(text, "1.31"), PackedStringArray(["Um", "Dois"]), "as novidades de uma versão")
+	_equals(Changelog.items_of(text, "v1.30"), PackedStringArray(["Antigo"]), "o v da tag não atrapalha")
+	_equals(Changelog.items_of(text, "1.29"), PackedStringArray(), "versão sem seção não tem novidades")
+	_equals(
+		Changelog.items("- Um
+- Dois
+
+---
+
+- origem do build
+"), PackedStringArray(["Um", "Dois"]),
+		"das notas da release, só o que vem antes do ---"
+	)
+	var bundled := Changelog.bundled()
+	_check(not bundled.is_empty(), "o CHANGELOG.md está em res://")
+	var newest: Dictionary = Changelog.parse(bundled)[0] if not Changelog.parse(bundled).is_empty() else {}
+	_check(AppVersion.compare(str(newest.get("version", "0")), AppVersion.text()) >= 0, "o changelog já tem a seção desta versão ou da próxima")
 
 
 ## A decisão do aviso, sem rede: o JSON da release entra pronto.
