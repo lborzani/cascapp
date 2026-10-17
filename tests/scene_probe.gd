@@ -48,6 +48,7 @@ func _ready() -> void:
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
+	_check(await _test_news() == true, "novidades rodou até o fim")
 	await _test_friends()
 
 	if _failures == 0:
@@ -1621,6 +1622,85 @@ func _test_update_notice() -> void:
 	Prefs.set_pending_update(saved_pending)
 	if not saved_welcomed:
 		Prefs.forget_welcome()
+
+
+## "Novidades": uma vez por versão nova, nunca na instalação nova, nunca com a
+## tela de atualizar na frente; e o histórico inteiro na aba Você.
+##
+## A versão vem injetada (a do editor não acompanha o CHANGELOG), e as novidades
+## são as do arquivo de verdade: a 1.31 é a primeira que ele tem.
+func _test_news() -> bool:
+	print("novidades")
+	var saved_seen := Prefs.seen_version()
+	var saved_welcomed := Prefs.welcomed()
+	var saved_pending := Prefs.pending_update()
+	Prefs.set_pending_update({})
+	Prefs.set_welcomed()
+	var menu := preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("1.30")
+	menu._show_news("1.31")
+	var panel: ChangelogPanel = menu._news()
+	_check(panel != null, "versão nova: as novidades abrem")
+	if panel != null:
+		var lines: Array = panel.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
+		_equals(lines[0], "Novidades da 1.31", "com o número da versão")
+		_equals(lines.size(), 1 + Changelog.items_of(Changelog.bundled(), "1.31").size(), "uma linha por novidade do CHANGELOG")
+		menu.go_back()
+		await get_tree().process_frame
+		_check(menu._news() == null, "voltar fecha as novidades, e não o app")
+	_equals(Prefs.seen_version(), "1.31", "a versão fica marcada como vista")
+	menu._show_news("1.31")
+	_check(menu._news() == null, "a mesma versão não mostra de novo")
+
+	Prefs.set_seen_version("")
+	menu._show_news("1.31")
+	_check(menu._news() != null, "app de antes da marca, já usado: é atualização, mostra")
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("")
+	Prefs.forget_welcome()
+	menu._show_news("1.31")
+	_check(menu._news() == null, "instalação nova: nada de novidades por cima das boas-vindas")
+	Prefs.set_welcomed()
+
+	Prefs.set_seen_version("1.30")
+	menu._show_gate({"version": "99.0", "url": "", "changes": []})
+	menu._show_news("1.31")
+	_check(menu._news() == null, "com a tela de atualizar na frente, não")
+	menu.queue_free()
+	await get_tree().process_frame
+
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	settings.get_node("%NewsButton").pressed.emit()
+	await get_tree().process_frame
+	var history: ChangelogPanel = settings._news
+	_check(history != null and history.is_inside_tree(), "Você › Novidades abre o histórico")
+	if history != null:
+		var headers := history.find_child("Notes", true, false).get_children().filter(func(label: Label) -> bool:
+			return label.text.begins_with("Novidades da ")
+		)
+		_equals(headers.size(), Changelog.parse(Changelog.bundled()).size(), "com todas as versões do CHANGELOG")
+		settings.go_back()
+		await get_tree().process_frame
+		_check(not is_instance_valid(history) or history.is_queued_for_deletion(), "voltar fecha o histórico")
+	settings.queue_free()
+	await get_tree().process_frame
+
+	Prefs.set_seen_version(saved_seen)
+	Prefs.set_pending_update(saved_pending)
+	if not saved_welcomed:
+		Prefs.forget_welcome()
+	return true
 
 
 func _github_release(tag: String) -> Dictionary:

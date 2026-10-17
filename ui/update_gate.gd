@@ -47,18 +47,7 @@ func _ready() -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = SIZE_EXPAND_FILL
 	column.add_child(scroll)
-	var notes := VBoxContainer.new()
-	notes.name = "Notes"
-	notes.size_flags_horizontal = SIZE_EXPAND_FILL
-	notes.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	scroll.add_child(notes)
-	var changes: Array = offer.get("changes", [])
-	if changes.is_empty():
-		notes.add_child(_label("Melhorias e correções.", &"", ""))
-	for change: Dictionary in changes:
-		notes.add_child(_label("Novidades da %s" % change["version"], &"SectionHeader", ""))
-		for item in change["items"]:
-			notes.add_child(_label("•  %s" % item, &"", ""))
+	scroll.add_child(ChangelogPanel.notes(offer.get("changes", [])))
 
 	var download := Button.new()
 	download.name = "Download"

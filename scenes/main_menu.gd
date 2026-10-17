@@ -74,6 +74,7 @@ func _ready() -> void:
 	_offer_rejoin()
 	_greet()
 	_check_update()
+	_show_news()
 
 	# A folha volta aberta para quem chegou aqui saindo de uma partida ou da sala:
 	# quem voltou está escolhendo como jogar de novo, e não navegando do zero.
@@ -254,6 +255,10 @@ func go_back() -> void:
 	if _gate != null:
 		get_tree().quit()
 		return
+	var news := _news()
+	if news != null:
+		news.close()
+		return
 	if _sheet_open():
 		_sheet.close()
 		return
@@ -390,6 +395,34 @@ func _offer_update(releases: Array) -> void:
 			_gate = null
 		return
 	_show_gate(offer)
+
+
+## "Novidades da X" na primeira abertura de uma versão, do `CHANGELOG.md` do APK.
+##
+## Não na instalação nova: quem nunca usou o app está nas boas-vindas, e "o que
+## mudou" não muda nada para ele. App de antes desta marca (`seen` vazio, mas já
+## deu as boas-vindas) é atualização, e mostra. Com a tela de versão nova na
+## frente também não: as novidades que importam são as da próxima.
+func _show_news(installed := AppVersion.text()) -> void:
+	var seen := Prefs.seen_version()
+	Prefs.set_seen_version(installed)
+	if _gate != null or not Prefs.welcomed():
+		return
+	if not seen.is_empty() and AppVersion.compare(installed, seen) <= 0:
+		return
+	var items := Changelog.items_of(Changelog.bundled(), installed)
+	if items.is_empty():
+		return
+	var panel := ChangelogPanel.new()
+	panel.sections = [{"version": installed, "items": items}]
+	add_child(panel)
+
+
+func _news() -> ChangelogPanel:
+	for child in get_children():
+		if child is ChangelogPanel and not child.is_queued_for_deletion():
+			return child as ChangelogPanel
+	return null
 
 
 func _show_gate(offer: Dictionary) -> void:

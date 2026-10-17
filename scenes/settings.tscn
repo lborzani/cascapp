@@ -168,6 +168,13 @@ layout_mode = 2
 theme_type_variation = &"Hint"
 autowrap_mode = 3
 
+[node name="NewsButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Novidades"
+
 [node name="StockfishLicense" type="LinkButton" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2

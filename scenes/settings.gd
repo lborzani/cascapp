@@ -20,6 +20,7 @@ var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _friends: FriendsPanel = null
+var _news: ChangelogPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
@@ -64,6 +65,7 @@ func _ready() -> void:
 	%HistoryButton.pressed.connect(_open_history)
 	%FriendsButton.pressed.connect(_open_friends)
 	%UpdateButton.pressed.connect(_check_updates)
+	%NewsButton.pressed.connect(_open_news)
 	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)
@@ -176,6 +178,9 @@ func go_back() -> void:
 	if is_instance_valid(_friends):
 		_friends.close()
 		return
+	if is_instance_valid(_news) and not _news.is_queued_for_deletion():
+		_news.close()
+		return
 	_leave()
 
 
@@ -208,6 +213,14 @@ func _show_update(releases: Variant) -> void:
 	var gate := UpdateGate.new()
 	gate.offer = offer
 	add_child(gate)
+
+
+## Todas as versões do `CHANGELOG.md` que veio no APK, sem rede.
+func _open_news() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_news = ChangelogPanel.new()
+	_news.sections = Changelog.parse(Changelog.bundled())
+	add_child(_news)
 
 
 ## Por cima desta tela, e não uma cena: fechar volta para cá como estava.

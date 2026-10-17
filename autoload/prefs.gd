@@ -381,3 +381,14 @@ static func pending_update() -> Dictionary:
 static func set_pending_update(offer: Dictionary) -> void:
 	_file().set_value(UPDATE_SECTION, "pending", offer)
 	_file().save(PATH)
+
+
+## A última versão aberta neste aparelho, para "Novidades" aparecer uma vez por
+## versão. Vazio antes da primeira (instalação nova, ou app de antes disto).
+static func seen_version() -> String:
+	return str(_file().get_value(UPDATE_SECTION, "seen", ""))
+
+
+static func set_seen_version(version: String) -> void:
+	_file().set_value(UPDATE_SECTION, "seen", version)
+	_file().save(PATH)
