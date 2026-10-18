@@ -7,6 +7,13 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.33
+
+- Sinuca nova, em 3D: mesa, bolas e taco de verdade, com as bolas rolando e caindo na caçapa.
+- Sinuca: o taco já aparece na sua vez. Toque na mesa para mirar e puxe a barra da esquerda para dar força.
+- Sinuca: efeito na bola. Toque na bolinha branca à direita e escolha onde o taco bate, para a branca voltar, seguir ou abrir na tabela.
+- Sinuca: tacada mais forte, e o placar mostra as bolas que cada um já tirou da mesa.
+
 ## 1.32
 
 - Xadrez: quem assiste a uma partida vê, a cada lance, quem está na frente e se o lance foi o melhor, bom, imprecisão, erro ou erro grave.

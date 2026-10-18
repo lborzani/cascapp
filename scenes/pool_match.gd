@@ -2,19 +2,19 @@ extends Control
 
 ## Uma partida de sinuca: a mesa, a mira, e a tacada acontecendo.
 ##
-## É a tela mais simples do app depois do menu, e é de propósito. Em sinuca a
-## interface inteira é **um gesto** — puxar o taco — e tudo o que não é a mesa
-## rouba espaço de onde se mira. Então não há barra de ações: o que muda de uma
-## vez para a outra é o texto de uma linha e de quem é a faixa acesa.
+## Em cima, o placar "Jogador 1 VS Jogador 2" com as bolas que cada um já tirou;
+## embaixo, a mesa com a largura toda. Os controles (mira, barra de força e
+## seletor de efeito) moram em [PoolView], em volta da mesa: tudo o que não é a
+## mesa rouba espaço de onde se mira, e por isso não há barra de ações.
 ##
 ## ## O que viaja é a tacada, não a mesa
 ##
 ## Como em todos os outros jogos, o que sai pela rede é o `Move` — aqui, a
-## velocidade inicial da branca em dois inteiros. Os dois aparelhos rodam a mesma
-## simulação de [PoolRules] e chegam à mesma mesa, e repetir o histórico
-## reconstrói a partida. Mandar as posições finais seria mais curto e pediria
-## confiar no resultado que o outro lado calculou, que é uma porta que este app
-## não abre em jogo nenhum.
+## velocidade inicial da branca em dois inteiros e o ponto de batida em mais
+## dois. Os dois aparelhos rodam a mesma simulação de [PoolRules] e chegam à
+## mesma mesa, e repetir o histórico reconstrói a partida. Mandar as posições
+## finais seria mais curto e pediria confiar no resultado que o outro lado
+## calculou, que é uma porta que este app não abre em jogo nenhum.
 ##
 ## ## A tacada é assistida antes de ser resolvida
 ##
