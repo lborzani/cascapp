@@ -559,9 +559,11 @@ func _stage_pool(scene: Node) -> void:
 				continue
 			best = aim.length()
 			view._shooter = from
-			# O taco puxa para **trás**, então o dedo está do lado oposto da mira.
-			view._pull = -aim.normalized() * scene.size.x * 0.20
-	view._aiming = best >= 0.0
+			view._aim = aim.normalized()
+	# A barra meio puxada: é o que põe na foto o taco recuado e a barra acesa.
+	view._power = 0.55
+	view._sync_cue()
+	view._render()
 	view.queue_redraw()
 
 

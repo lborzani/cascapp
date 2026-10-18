@@ -2,19 +2,19 @@ extends Control
 
 ## Uma partida de sinuca: a mesa, a mira, e a tacada acontecendo.
 ##
-## É a tela mais simples do app depois do menu, e é de propósito. Em sinuca a
-## interface inteira é **um gesto** — puxar o taco — e tudo o que não é a mesa
-## rouba espaço de onde se mira. Então não há barra de ações: o que muda de uma
-## vez para a outra é o texto de uma linha e de quem é a faixa acesa.
+## Em cima, o placar "Jogador 1 VS Jogador 2" com as bolas que cada um já tirou;
+## embaixo, a mesa com a largura toda. Os controles (mira, barra de força e
+## seletor de efeito) moram em [PoolView], em volta da mesa: tudo o que não é a
+## mesa rouba espaço de onde se mira, e por isso não há barra de ações.
 ##
 ## ## O que viaja é a tacada, não a mesa
 ##
 ## Como em todos os outros jogos, o que sai pela rede é o `Move` — aqui, a
-## velocidade inicial da branca em dois inteiros. Os dois aparelhos rodam a mesma
-## simulação de [PoolRules] e chegam à mesma mesa, e repetir o histórico
-## reconstrói a partida. Mandar as posições finais seria mais curto e pediria
-## confiar no resultado que o outro lado calculou, que é uma porta que este app
-## não abre em jogo nenhum.
+## velocidade inicial da branca em dois inteiros e o ponto de batida em mais
+## dois. Os dois aparelhos rodam a mesma simulação de [PoolRules] e chegam à
+## mesma mesa, e repetir o histórico reconstrói a partida. Mandar as posições
+## finais seria mais curto e pediria confiar no resultado que o outro lado
+## calculou, que é uma porta que este app não abre em jogo nenhum.
 ##
 ## ## A tacada é assistida antes de ser resolvida
 ##
@@ -28,8 +28,11 @@ const AFTER_SHOT := 0.35
 ## Quanto o bot "pensa" antes de tacar. Ele não pensa — escolhe entre candidatos
 ## simulados —, mas sem a pausa a vez dele acontece entre dois quadros.
 const BOT_THINK := 0.7
-## Largura da coluna dos jogadores, na base deitada de 768.
-const COLUMN := 168.0
+## Largura da etiqueta de cada jogador no placar, na base deitada de 768.
+const TAG_WIDTH := 190.0
+## As bolinhas do placar: raio e passo, em pixels da base.
+const TROPHY_RADIUS := 9.0
+const TROPHY_STEP := 22.0
 
 var _rules := PoolRules.new()
 var _state: MatchState = null
@@ -45,6 +48,8 @@ var _banner: Banner = null
 var _hint: Label = null
 ## As duas etiquetas da coluna, uma por assento, com a cor das bolas de cada um.
 var _tags: Array[PlayerTag] = []
+## Ao lado de cada etiqueta, as bolas que aquele assento já tirou da mesa.
+var _trays: Array[Control] = []
 var _bar: MatchBar = null
 var _overlay: Control = null
 var _overlay_title: Label = null
@@ -133,33 +138,53 @@ func _build() -> void:
 	pad.add_theme_constant_override("margin_top", 8)
 	shell.add_child(pad)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	pad.add_child(row)
-
 	var column := VBoxContainer.new()
-	column.custom_minimum_size.x = COLUMN
 	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	row.add_child(column)
+	pad.add_child(column)
 
+	# O placar: "Jogador 1 VS Jogador 2", e junto de cada um as bolas que ele já
+	# tirou da mesa. Em cima e não numa coluna ao lado: a mesa é duas vezes mais
+	# larga que alta, e a largura toda da tela é dela.
+	var scoreboard := HBoxContainer.new()
+	scoreboard.alignment = BoxContainer.ALIGNMENT_CENTER
+	scoreboard.add_theme_constant_override("separation", 20)
+	column.add_child(scoreboard)
 	for seat in 2:
+		# Cada lado é a etiqueta e, logo embaixo, a fileira das bolas dele: o
+		# placar todo fica junto no meio, e não espalhado pelas duas pontas.
+		var side := VBoxContainer.new()
+		side.add_theme_constant_override("separation", 4)
 		var tag := PlayerTag.new()
 		tag.shape = PlayerTag.Shape.TAG
+		# Alta o bastante para a bolacha (mínimo de 40, a 78% da altura) caber
+		# dentro: na altura padrão da etiqueta deitada ela vazava pela borda.
+		tag.custom_minimum_size = Vector2(TAG_WIDTH, 52.0)
 		_tags.append(tag)
-		column.add_child(tag)
+		side.add_child(tag)
+		var tray := Control.new()
+		tray.custom_minimum_size = Vector2(TAG_WIDTH, TROPHY_RADIUS * 2.0 + 2.0)
+		tray.draw.connect(_draw_trophies.bind(tray, seat))
+		_trays.append(tray)
+		side.add_child(tray)
+		scoreboard.add_child(side)
+		if seat == 0:
+			var versus := Label.new()
+			versus.text = "VS"
+			versus.theme_type_variation = &"SectionHeader"
+			versus.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			scoreboard.add_child(versus)
 
-	# A instrução embaixo das etiquetas, e não num canto: ela responde "o que eu
-	# faço agora", e é logo depois de saber de quem é a vez que se pergunta isso.
+	# A instrução logo abaixo do placar: ela responde "o que eu faço agora", e é
+	# logo depois de saber de quem é a vez que se pergunta isso.
 	_hint = Label.new()
 	_hint.theme_type_variation = &"Hint"
-	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_hint.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	column.add_child(_hint)
 
 	var stage := Control.new()
-	stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	row.add_child(stage)
+	column.add_child(stage)
 
 	_view = PoolView.new()
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -258,10 +283,10 @@ func _drives_bots() -> bool:
 	return Game.mode != Game.Mode.ONLINE or Game.local_seat == 0
 
 
-func _on_shot_aimed(ball: int, direction: Vector2, power: float) -> void:
+func _on_shot_aimed(ball: int, direction: Vector2, power: float, spin := Vector2.ZERO) -> void:
 	if not _can_act():
 		return
-	_submit(PoolRules.shot(ball, direction, power))
+	_submit(PoolRules.shot(ball, direction, power, spin))
 
 
 func _on_ball_placed(spot: Vector2) -> void:
@@ -435,6 +460,39 @@ func _refresh_cards() -> void:
 		tag.active = seat == turn
 		tag.title = _seat_name(seat)
 		tag.subtitle = _seat_detail(seat)
+		_trays[seat].queue_redraw()
+
+
+## As bolas que o assento já tirou da mesa, encostadas na etiqueta dele: à
+## esquerda para o da esquerda, à direita para o da direita. Na brasileira com o
+## número, que é o que elas valem.
+func _draw_trophies(tray: Control, seat: int) -> void:
+	var taken := PoolRules.trophies(_state, seat)
+	var font := AppTheme.font(700)
+	var y := tray.size.y * 0.5
+	var slot := func(index: int) -> Vector2:
+		var offset := TROPHY_RADIUS + 1.0 + TROPHY_STEP * index
+		return Vector2(offset if seat == 0 else tray.size.x - offset, y)
+	# No mata-mata cabem exatamente cinco: as casas vazias dizem quanto falta sem
+	# ninguém ter de ler um número.
+	if not PoolRules.has_cue_ball(_state):
+		for index in PoolRules.KNOCKOUT_PER_GROUP:
+			tray.draw_arc(slot.call(index), TROPHY_RADIUS, 0.0, TAU, 20, Color(AppTheme.TEXT, 0.25), 1.5, true)
+	for index in taken.size():
+		var ball := taken[index]
+		var at: Vector2 = slot.call(index)
+		var tint := PoolRules.color_of_ball(_state, ball)
+		tray.draw_circle(at, TROPHY_RADIUS, tint)
+		tray.draw_arc(at, TROPHY_RADIUS, 0.0, TAU, 20, Color(0, 0, 0, 0.4), 1.0, true)
+		if PoolRules.has_cue_ball(_state):
+			var text := str(PoolRules.kind_of_ball(_state, ball))
+			var body := 11
+			var wide := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, body).x
+			tray.draw_circle(at, TROPHY_RADIUS * 0.58, Color(AppTheme.TEXT, 0.95))
+			tray.draw_string(
+				font, at + Vector2(-wide * 0.5, body * 0.36), text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, body, tint.darkened(0.45)
+			)
 
 
 ## A cor do assento: no mata-mata é a das bolas dele — e essa **é** a informação
