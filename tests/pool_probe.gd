@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test_brazilian()
 	_test_replay()
 	_test_spin()
+	_test_trophies()
 	_test_bot()
 
 	if _failures == 0:
@@ -173,8 +174,10 @@ func _test_deterministic() -> void:
 ## O resumo é o SHA-256 das posições e de quem está vivo depois de cada tacada.
 ## Se ele mudar de propósito (a física mudou), regrave rodando a suíte e copiando
 ## o valor impresso no FAIL.
-const REGRESSION_KNOCKOUT := "cd8621d7d296fd13cdf840cc1e0e3a911aee3dd8b6821fdaac118866bab792e9"
-const REGRESSION_BRAZILIAN := "a8d6b130c5e70d6e6c737cfb449af0ac28f2083a0dc13cbbbbb9f429e704e5a3"
+## Regravado quando `MAX_SPEED` foi de 6 para 8: a mesma força vira outra
+## velocidade, e a simulação em si não mudou.
+const REGRESSION_KNOCKOUT := "26c96a25c3121b68c70486a6e5339fdc8c2ba1be661806f6755fa5e971ad01a0"
+const REGRESSION_BRAZILIAN := "565e3ac8afad2a7d388435c89919a8d63dd56688402bfcbf58e57e49121ff1a1"
 
 
 func _test_regression() -> void:
@@ -267,6 +270,9 @@ func _test_brazilian() -> void:
 	_equals(PoolRules.score_of(clean, 0), 3, "a bola da vez vale o número dela")
 	_equals(PoolRules.turn_of(clean), 0, "e quem a encaçapou taca de novo")
 	_equals(PoolRules.winner_of(clean), 0, "mesa limpa, vence quem tem mais ponto")
+	_equals(PoolRules.trophies(clean, 0), PackedInt32Array([1]), "e a bola vai para o placar de quem encaçapou")
+	_equals(PoolRules.trophies(clean, 1), PackedInt32Array(), "e não para o do outro")
+	_equals(PoolRules.trophies(wrong, 1), PackedInt32Array(), "falta não dá bola a ninguém")
 
 	# A branca sempre volta: ela é o taco, não um alvo.
 	var suicide := _rig(rules, [Vector2(1.0, 0.25), Vector2(0.3, 0.80)], [0, 1])
@@ -398,6 +404,17 @@ func _test_spin() -> void:
 			"formato %d: repetir o histórico com efeito reconstrói a mesa" % wanted
 		)
 
+
+## O placar do mata-mata: cada um mostra as bolas do outro que já saíram.
+func _test_trophies() -> void:
+	print("placar")
+	var state := _rules(PoolRules.Format.KNOCKOUT).initial_state()
+	var live := PackedByteArray(state.meta[PoolRules.LIVE])
+	live[PoolRules.KNOCKOUT_PER_GROUP] = 0
+	live[0] = 0
+	state.meta[PoolRules.LIVE] = live
+	_equals(PoolRules.trophies(state, 0), PackedInt32Array([PoolRules.KNOCKOUT_PER_GROUP]), "o assento 0 mostra a do outro que saiu")
+	_equals(PoolRules.trophies(state, 1), PackedInt32Array([0]), "e o 1 a do 0")
 
 func _test_bot() -> void:
 	print("bot")

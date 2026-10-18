@@ -43,6 +43,7 @@ func _ready() -> void:
 	await _probe_pick()
 	await _probe_shot()
 	await _probe_aim()
+	await _probe_spin()
 	await _probe_hand()
 
 	_done = true
@@ -90,13 +91,15 @@ func _probe_pick() -> void:
 
 	# Tocar numa bola própria troca a escolha.
 	var wanted: int = mine[3]
-	view._begin(view._to_screen(PoolRules.position_of(scene._state, wanted)))
+	view._press(view._to_screen(PoolRules.position_of(scene._state, wanted)))
 	_equals(view._shooter_ball(), wanted, "tocar numa bola minha passa a tacada para ela")
-	_check(not view._aiming, "e não começa a mirar no mesmo toque")
+	_check(not view._steering, "e não começa a mirar no mesmo toque")
+	_check(view._cue.visible, "e o taco já está atrás dela")
 
 	# Tocar numa do adversário não escolhe nada: ela não é tacável.
 	var theirs := PoolRules.KNOCKOUT_PER_GROUP
-	view._begin(view._to_screen(PoolRules.position_of(scene._state, theirs)))
+	view._press(view._to_screen(PoolRules.position_of(scene._state, theirs)))
+	view._release(view._to_screen(PoolRules.position_of(scene._state, theirs)))
 	_equals(view._shooter_ball(), wanted, "tocar numa do adversário não troca a escolha")
 
 	# A escolhida que cai deixa de valer: a tela não pode apontar o taco para um
@@ -118,8 +121,8 @@ func _probe_shot() -> void:
 	var scene := await _open(PoolRules.Format.KNOCKOUT)
 	var view: PoolView = scene._view
 	var sent := []
-	view.shot_aimed.connect(func(ball: int, direction: Vector2, power: float) -> void:
-		sent.append([ball, direction, power])
+	view.shot_aimed.connect(func(ball: int, direction: Vector2, power: float, spin: Vector2) -> void:
+		sent.append([ball, direction, power, spin])
 	)
 
 	# Lido **antes** do arrasto: `_play` aplica o lance no mesmo quadro em que o
@@ -129,15 +132,27 @@ func _probe_shot() -> void:
 	var before := PoolRules.position_of(scene._state, shooter)
 
 	var cue := view._cue_screen()
-	view._begin(cue + Vector2(120.0, 0.0))
-	view._end(cue + Vector2(120.0, 0.0))
-	_equals(sent.size(), 1, "soltar o arrasto pede uma tacada")
+	_check(view._cue.visible, "na vez, o taco aparece sem ninguém tocar")
+	# Mirar: tocar na mesa à direita da bola aponta o taco para lá, e não taca. (À
+	# esquerda não: a bola nasce encostada na tabela, e ali ao lado está a barra.)
+	view._press(cue + Vector2(120.0, 0.0))
+	view._release(cue + Vector2(120.0, 0.0))
+	_equals(sent.size(), 0, "mirar sozinho não taca")
+	_check(view._aim.x > 0.9, "e o taco aponta para o dedo")
+	# Força: puxar a barra até embaixo e soltar.
+	var bar := view._bar_rect()
+	view._press(bar.position + Vector2(bar.size.x * 0.5, 2.0))
+	view._drag(bar.end - Vector2(bar.size.x * 0.5, 0.0))
+	_check(view._power > 0.95, "puxar a barra até embaixo é força cheia")
+	view._release(bar.end - Vector2(bar.size.x * 0.5, 0.0))
+	_equals(sent.size(), 1, "soltar a barra pede uma tacada")
 	if sent.is_empty():
 		scene.free()
 		return
 	_equals(sent[0][0], shooter, "e ela diz com qual bola")
 	var direction: Vector2 = sent[0][1]
-	_check(direction.x < -0.9, "puxando para a direita, a bola vai para a esquerda")
+	_check(direction.x > 0.9, "na direção que o taco apontava (%s)" % direction)
+	_check(float(sent[0][2]) > 0.95, "com a força da barra")
 	_check(
 		PoolRules.position_of(scene._state, shooter) != before,
 		"e a bola escolhida sai do lugar"
@@ -153,6 +168,21 @@ func _probe_shot() -> void:
 
 	await get_tree().create_timer(view.remaining_animation() + 0.6).timeout
 	_check(view.remaining_animation() == 0.0, "a mesa para sozinha")
+
+	# A mesa 3D termina onde a regra terminou: cada bola na posição do estado, e
+	# as que caíram fora da mesa. É a fita que move as bolas, e uma fita mal
+	# reproduzida deixaria o desenho num lugar e a partida noutro.
+	var apart := ""
+	for ball in PoolRules.ball_count(scene._state):
+		var node: MeshInstance3D = view._balls[ball]
+		var spot := PoolRules.position_of(scene._state, ball)
+		if node.visible != PoolRules.is_live(scene._state, ball):
+			apart = "bola %d visível=%s" % [ball, node.visible]
+		elif node.visible and node.position.distance_to(Vector3(spot.x, PoolRules.BALL_RADIUS, spot.y)) > 0.0001:
+			apart = "bola %d em %s" % [ball, node.position]
+	_check(apart.is_empty(), "a mesa 3D termina na mesa da regra (%s)" % [
+		"ok" if apart.is_empty() else apart
+	])
 	scene.free()
 
 
@@ -190,6 +220,52 @@ func _probe_aim() -> void:
 
 	scene.free()
 
+
+## O seletor de efeito: a bolinha abre a bola grande, o toque nela escolhe o
+## ponto, tocar fora fecha, e o ponto escolhido viaja no lance.
+func _probe_spin() -> void:
+	print("efeito")
+	var scene := await _open(PoolRules.Format.KNOCKOUT)
+	var view: PoolView = scene._view
+	var sent := []
+	view.shot_aimed.connect(func(_ball: int, _direction: Vector2, _power: float, spin: Vector2) -> void:
+		sent.append(spin)
+	)
+
+	_check(not view._spin_open, "a bola grande começa fechada")
+	view._press(view._spin_icon_center())
+	view._release(view._spin_icon_center())
+	_check(view._spin_open, "tocar na bolinha abre a bola grande")
+
+	# Embaixo do centro é draw: altura negativa.
+	var low := view._spin_center() + Vector2(0.0, view._spin_radius() * 0.8)
+	view._press(low)
+	view._release(low)
+	_check(view._spin.distance_to(Vector2(0.0, -0.8)) < 0.01, "tocar embaixo do centro é draw (%s)" % view._spin)
+	_check(view._spin_open, "e a bola grande continua aberta para corrigir")
+
+	# Fora do círculo o ponto para na borda.
+	view._press(view._spin_center() + Vector2(view._spin_radius() * 1.1, 0.0))
+	view._release(view._spin_center() + Vector2(view._spin_radius() * 1.1, 0.0))
+	_check(view._spin.length() <= PoolView.SPIN_EDGE + 0.0001, "o ponto nunca sai da bola")
+	_check(view._spin.x > 0.99, "e arrastar para fora deixa o ponto na borda, à direita")
+
+	view._press(Vector2(4.0, 4.0))
+	view._release(Vector2(4.0, 4.0))
+	_check(not view._spin_open, "tocar fora fecha a bola grande")
+	_check(view._spin.x > 0.99, "e o efeito escolhido fica")
+
+	var bar := view._bar_rect()
+	view._press(bar.position + Vector2(bar.size.x * 0.5, 2.0))
+	view._release(bar.end - Vector2(bar.size.x * 0.5, bar.size.y * 0.4))
+	_equals(sent.size(), 1, "soltar a barra taca")
+	if not sent.is_empty():
+		_check((sent[0] as Vector2).x > 0.99, "com o efeito escolhido")
+	var path := PackedInt32Array(scene._state.history[-1].get("p", []))
+	_check(path.size() == PoolRules.PATH_SIZE and path[PoolRules.SIDE_AT] > 990, "e o lance leva o efeito (%s)" % path)
+	_equals(view._spin, Vector2.ZERO, "e o efeito volta a zero para a próxima tacada")
+	await get_tree().create_timer(view.remaining_animation() + 0.6).timeout
+	scene.free()
 
 ## A branca na mão recusa lugar ocupado. É a única validação de posição do jogo, e
 ## sem ela dá para largar a branca dentro de outra bola — as duas explodem no

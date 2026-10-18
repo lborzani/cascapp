@@ -97,8 +97,10 @@ const POCKETS := [
 # --- a física -----------------------------------------------------------------
 
 ## Passo fixo da simulação. Pequeno o bastante para uma bola rápida não atravessar
-## outra entre dois passos: no teto de velocidade ela anda 0,025 por passo, menos
-## que um raio.
+## outra entre dois passos: no teto de velocidade ela anda 0,033 por passo, menos
+## que o diâmetro (0,054), então duas bolas não se cruzam sem se encostar num
+## passo. Só um raspão finíssimo pode escapar, e isso a mesa de verdade também
+## não distingue.
 const STEP := 1.0 / 240.0
 ## Quanto da velocidade sobra a cada passo. Atrito de pano, e o número saiu de
 ## quanto tempo uma tacada forte leva para parar: com isto, uns quatro segundos.
@@ -115,9 +117,10 @@ const BALL_KEEP := 0.96
 ## travar a partida dos dois lados para sempre.
 const MAX_STEPS := 3600
 
-## Velocidade máxima da tacada, em unidades por segundo. Uma tacada cheia
-## atravessa a mesa umas três vezes antes de parar.
-const MAX_SPEED := 6.0
+## Velocidade máxima da tacada, em unidades por segundo. Era 6; subiu para 8 a
+## pedido do Borzani (força cheia fraca demais). Acima de uns 13 o passo de
+## [constant STEP] passa do diâmetro e as bolas começam a se atravessar.
+const MAX_SPEED := 8.0
 ## O que a força mínima ainda faz. Abaixo disto a bola não chega na outra ponta, e
 ## uma tacada que não chega a lugar nenhum é um turno perdido sem decisão.
 const MIN_SPEED := 0.6
@@ -238,6 +241,10 @@ const HAND := "hd"
 ## "limpei o dele" de "ele limpou o meu" quando as duas coisas cabem no mesmo
 ## lance.
 const WINNER := "wn"
+## Quem encaçapou cada bola valendo ponto, na brasileira: um assento por bola, -1
+## para as que estão na mesa ou caíram numa falta. É só para o placar mostrar as
+## bolas de cada um; a regra conta pontos por [constant SCORE].
+const POTTED_BY := "pb"
 
 ## Cores das bolas, para a tela e para o nome. Moram aqui e não no desenho porque
 ## no mata-mata a cor **é** a regra: ela é o que diz de quem é a bola, e de quem é
@@ -331,6 +338,33 @@ static func group_of(seat: int) -> int:
 static func score_of(state: MatchState, seat: int) -> int:
 	var scores := PackedInt32Array(state.meta.get(SCORE, PackedInt32Array()))
 	return scores[seat] if seat >= 0 and seat < scores.size() else 0
+
+
+## As bolas que este assento já tirou da mesa, para o placar.
+##
+## No mata-mata são as do adversário que saíram, e saem do estado: lá não importa
+## quem matou, só que a bola do outro sumiu. Na brasileira são as que ele
+## encaçapou valendo ponto, de [constant POTTED_BY].
+static func trophies(state: MatchState, seat: int) -> PackedInt32Array:
+	var taken := PackedInt32Array()
+	if has_cue_ball(state):
+		var owners := _owners(state)
+		for ball in owners.size():
+			if owners[ball] == seat:
+				taken.append(ball)
+		return taken
+	for ball in ball_count(state):
+		if kind_of_ball(state, ball) == group_of(1 - seat) and not is_live(state, ball):
+			taken.append(ball)
+	return taken
+
+
+static func _owners(state: MatchState) -> PackedInt32Array:
+	var owners := PackedInt32Array(state.meta.get(POTTED_BY, PackedInt32Array()))
+	if owners.size() != ball_count(state):
+		owners.resize(ball_count(state))
+		owners.fill(-1)
+	return owners
 
 
 static func ball_in_hand(state: MatchState) -> bool:
@@ -729,11 +763,14 @@ static func _score_brazilian(
 	var scores := PackedInt32Array(state.meta.get(SCORE, PackedInt32Array([0, 0])))
 	var opponent := 1 - seat
 
+	var owners := _owners(state)
 	if foul:
 		scores[opponent] += FOUL_POINTS
 	else:
 		for ball in potted:
 			scores[seat] += kind_of_ball(state, ball)
+			owners[ball] = seat
+	state.meta[POTTED_BY] = owners
 	state.meta[SCORE] = scores
 
 	# Segue tacando quem encaçapou a bola da vez limpo. Encaçapar uma colorida por
