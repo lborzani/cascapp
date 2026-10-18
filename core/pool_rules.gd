@@ -46,9 +46,24 @@ extends Ruleset
 ## jogando, e o que viaja é o vetor já quantizado. Daí para frente a simulação usa
 ## só as cinco operações exatas, e as duas mesas são a mesma mesa.
 ##
-## Pelo mesmo motivo não há efeito (nem "inglês"): ele pediria rotação, atrito
-## lateral e uma integração bem mais sensível a erro — e a primeira coisa a
-## quebrar seria justamente a igualdade entre os dois aparelhos.
+## ## O efeito, e por que ele é uma aproximação
+##
+## Quem taca escolhe **onde** o taco bate na bola, como no 8 Ball Pool: um ponto
+## dentro do círculo dela, `(lado, altura)`. Rotação de verdade pediria atrito
+## lateral e uma integração bem mais sensível a erro, e a primeira coisa a
+## quebrar seria a igualdade entre os dois aparelhos. Então o efeito é um modelo
+## de três regras, todas com as mesmas cinco operações exatas:
+##
+## - **altura** (follow para cima, draw para baixo): guardada até a primeira
+##   batida da bola tacada; ali vira uma velocidade extra na direção em que ela
+##   vinha (para frente ou para trás), entregue aos poucos — e é esse "aos poucos"
+##   que faz a tacadeira curvar depois de um corte, como na mesa;
+## - **lado** (inglês): em cada tabela, empurra a saída para o lado do efeito,
+##   visto por quem tacou, e perde força a cada tabela;
+## - os dois gastam com o pano, passo a passo.
+##
+## Tacada sem efeito não passa por nenhuma dessas contas: a mesa dela é,
+## bit a bit, a de antes do efeito existir (`tests/pool_probe.gd` guarda isso).
 ##
 ## ## E não há acaso nenhum
 ##
@@ -82,8 +97,10 @@ const POCKETS := [
 # --- a física -----------------------------------------------------------------
 
 ## Passo fixo da simulação. Pequeno o bastante para uma bola rápida não atravessar
-## outra entre dois passos: no teto de velocidade ela anda 0,025 por passo, menos
-## que um raio.
+## outra entre dois passos: no teto de velocidade ela anda 0,033 por passo, menos
+## que o diâmetro (0,054), então duas bolas não se cruzam sem se encostar num
+## passo. Só um raspão finíssimo pode escapar, e isso a mesa de verdade também
+## não distingue.
 const STEP := 1.0 / 240.0
 ## Quanto da velocidade sobra a cada passo. Atrito de pano, e o número saiu de
 ## quanto tempo uma tacada forte leva para parar: com isto, uns quatro segundos.
@@ -100,15 +117,39 @@ const BALL_KEEP := 0.96
 ## travar a partida dos dois lados para sempre.
 const MAX_STEPS := 3600
 
-## Velocidade máxima da tacada, em unidades por segundo. Uma tacada cheia
-## atravessa a mesa umas três vezes antes de parar.
-const MAX_SPEED := 6.0
+## Velocidade máxima da tacada, em unidades por segundo. Era 6; subiu para 8 a
+## pedido do Borzani (força cheia fraca demais). Acima de uns 13 o passo de
+## [constant STEP] passa do diâmetro e as bolas começam a se atravessar.
+const MAX_SPEED := 8.0
 ## O que a força mínima ainda faz. Abaixo disto a bola não chega na outra ponta, e
 ## uma tacada que não chega a lugar nenhum é um turno perdido sem decisão.
 const MIN_SPEED := 0.6
 
 ## A velocidade viaja em milésimos de unidade por segundo. Ver o cabeçalho.
 const SPEED_SCALE := 1000.0
+
+# --- o efeito -----------------------------------------------------------------
+#
+# Os botões de ajuste fino do efeito. Mexer em qualquer um muda a física de toda
+# tacada **com** efeito; as sem efeito não passam por eles.
+
+## O ponto de batida viaja em milésimos do raio, dentro do círculo de raio 1000.
+const SPIN_SCALE := 1000.0
+## Quanto da velocidade de chegada o efeito de altura devolve depois da primeira
+## batida: com o draw cheio numa batida reta, a tacadeira volta com isto da
+## velocidade com que chegou.
+const FOLLOW_GAIN := 0.55
+## Fração do que falta entregar do follow/draw que entra a cada passo. Pequeno é
+## curva longa depois do corte; grande é a bola mudando de direção de uma vez.
+const SPIN_GRIP := 0.04
+## Empurrão lateral do inglês numa tabela, como fração da velocidade com que a
+## bola chegou nela.
+const SIDE_GAIN := 0.35
+## Quanto do inglês sobra depois de cada tabela.
+const CUSHION_SPIN_KEEP := 0.6
+## Quanto do efeito sobra a cada passo, só de rolar no pano: em um segundo
+## sobram uns 70%.
+const SPIN_KEEP := 0.9985
 
 ## De quantos em quantos passos a simulação guarda um retrato da mesa, ou 0 para
 ## não guardar nenhum.
@@ -127,7 +168,8 @@ const TRACE_EVERY := 4
 
 # --- espécies de lance --------------------------------------------------------
 
-## `path = [KIND, bola, a, b]`, sempre com quatro casas.
+## `path = [KIND, bola, a, b, lado, altura]`, sempre com seis casas (ou quatro,
+## no lance de antes do efeito — ver [constant LEGACY_PATH_SIZE]).
 ##
 ## Em `SHOOT`, `a` e `b` são a velocidade inicial em milésimos; em `PLACE`, a
 ## posição, na mesma escala. O campo da bola é o que o mata-mata trouxe: lá a
@@ -140,7 +182,15 @@ const PLACE := 1
 
 const KIND_AT := 0
 const BALL_AT := 1
-const PATH_SIZE := 4
+## Em `SHOOT`, as duas casas a mais são o ponto de batida: lado (positivo à
+## direita de quem taca) e altura (positivo em cima), em milésimos do raio. Em
+## `PLACE` vão zeradas.
+const SIDE_AT := 4
+const HEIGHT_AT := 5
+const PATH_SIZE := 6
+## O lance de antes do efeito, sem as duas casas. Continua valendo como tacada
+## sem efeito: é o que está no histórico das partidas que já existiam.
+const LEGACY_PATH_SIZE := 4
 
 # --- formatos -----------------------------------------------------------------
 
@@ -191,6 +241,10 @@ const HAND := "hd"
 ## "limpei o dele" de "ele limpou o meu" quando as duas coisas cabem no mesmo
 ## lance.
 const WINNER := "wn"
+## Quem encaçapou cada bola valendo ponto, na brasileira: um assento por bola, -1
+## para as que estão na mesa ou caíram numa falta. É só para o placar mostrar as
+## bolas de cada um; a regra conta pontos por [constant SCORE].
+const POTTED_BY := "pb"
 
 ## Cores das bolas, para a tela e para o nome. Moram aqui e não no desenho porque
 ## no mata-mata a cor **é** a regra: ela é o que diz de quem é a bola, e de quem é
@@ -284,6 +338,33 @@ static func group_of(seat: int) -> int:
 static func score_of(state: MatchState, seat: int) -> int:
 	var scores := PackedInt32Array(state.meta.get(SCORE, PackedInt32Array()))
 	return scores[seat] if seat >= 0 and seat < scores.size() else 0
+
+
+## As bolas que este assento já tirou da mesa, para o placar.
+##
+## No mata-mata são as do adversário que saíram, e saem do estado: lá não importa
+## quem matou, só que a bola do outro sumiu. Na brasileira são as que ele
+## encaçapou valendo ponto, de [constant POTTED_BY].
+static func trophies(state: MatchState, seat: int) -> PackedInt32Array:
+	var taken := PackedInt32Array()
+	if has_cue_ball(state):
+		var owners := _owners(state)
+		for ball in owners.size():
+			if owners[ball] == seat:
+				taken.append(ball)
+		return taken
+	for ball in ball_count(state):
+		if kind_of_ball(state, ball) == group_of(1 - seat) and not is_live(state, ball):
+			taken.append(ball)
+	return taken
+
+
+static func _owners(state: MatchState) -> PackedInt32Array:
+	var owners := PackedInt32Array(state.meta.get(POTTED_BY, PackedInt32Array()))
+	if owners.size() != ball_count(state):
+		owners.resize(ball_count(state))
+		owners.fill(-1)
+	return owners
 
 
 static func ball_in_hand(state: MatchState) -> bool:
@@ -432,19 +513,33 @@ static func spot_of(move: Move) -> Vector2:
 	return Vector2(float(move.path[2]), float(move.path[3])) / SPEED_SCALE
 
 
-## Monta a tacada a partir da bola, de uma direção e de uma fração de força.
+## O ponto de batida: `x` é o lado, `y` a altura, os dois entre -1 e 1. Zero no
+## lance de antes do efeito.
+static func spin_of(move: Move) -> Vector2:
+	if move.path.size() < PATH_SIZE:
+		return Vector2.ZERO
+	return Vector2(float(move.path[SIDE_AT]), float(move.path[HEIGHT_AT])) / SPIN_SCALE
+
+
+## Monta a tacada a partir da bola, de uma direção, de uma fração de força e do
+## ponto de batida (`x` lado, `y` altura; fora do círculo, volta para a borda).
 ##
 ## **Aqui é o único lugar em que trigonometria toca esta partida**, e ele roda só
 ## no aparelho de quem está mirando: o resultado sai quantizado em inteiros e é
 ## isso que viaja e que a simulação consome. Ver o cabeçalho.
-static func shot(ball: int, direction: Vector2, power: float) -> Move:
+static func shot(ball: int, direction: Vector2, power: float, spin := Vector2.ZERO) -> Move:
 	var speed := lerpf(MIN_SPEED, MAX_SPEED, clampf(power, 0.0, 1.0))
 	var velocity := direction.normalized() * speed
+	# Um pouco para dentro da borda: o arredondamento não pode jogar o ponto para
+	# fora do círculo que [method validate] confere.
+	spin = spin.limit_length(0.998)
 	var move := Move.new()
 	move.path = PackedInt32Array([
 		SHOOT, ball,
 		int(roundf(velocity.x * SPEED_SCALE)),
 		int(roundf(velocity.y * SPEED_SCALE)),
+		int(roundf(spin.x * SPIN_SCALE)),
+		int(roundf(spin.y * SPIN_SCALE)),
 	])
 	return move
 
@@ -452,7 +547,7 @@ static func shot(ball: int, direction: Vector2, power: float) -> Move:
 static func placement(spot: Vector2) -> Move:
 	var move := Move.new()
 	move.path = PackedInt32Array([
-		PLACE, 0, int(roundf(spot.x * SPEED_SCALE)), int(roundf(spot.y * SPEED_SCALE))
+		PLACE, 0, int(roundf(spot.x * SPEED_SCALE)), int(roundf(spot.y * SPEED_SCALE)), 0, 0,
 	])
 	return move
 
@@ -464,7 +559,7 @@ static func placement(spot: Vector2) -> Move:
 ## enumerá-las seria discretizar o jogo. Então a conferência é por **predicado**,
 ## e quem aplica um `Move` sem passar por aqui está pulando as regras.
 func validate(state: MatchState, path: PackedInt32Array) -> Move:
-	if path.size() != PATH_SIZE or winner_of(state) >= 0:
+	if (path.size() != PATH_SIZE and path.size() != LEGACY_PATH_SIZE) or winner_of(state) >= 0:
 		return null
 	var move := Move.new()
 	move.path = path.duplicate()
@@ -478,6 +573,12 @@ func validate(state: MatchState, path: PackedInt32Array) -> Move:
 		return null
 	if not can_shoot_with(state, turn_of(state), ball_of(move)):
 		return null
+	if path.size() == PATH_SIZE:
+		# O ponto de batida tem de cair na bola. Conta em inteiros, sem folga.
+		var side := path[SIDE_AT]
+		var height := path[HEIGHT_AT]
+		if side * side + height * height > int(SPIN_SCALE * SPIN_SCALE):
+			return null
 	var speed := velocity_of(move).length()
 	# A folga de meio milésimo é o arredondamento da quantização: uma tacada de
 	# força cheia sai com a velocidade máxima mais ou menos meio milésimo.
@@ -570,13 +671,13 @@ func apply_move(state: MatchState, move: Move) -> void:
 		_set_position(state, cue_ball(state), spot_of(move))
 		state.meta[HAND] = 0
 	else:
-		_resolve(state, ball_of(move), velocity_of(move))
+		_resolve(state, ball_of(move), velocity_of(move), spin_of(move))
 	state.ply += 1
 	state.history.append(move.to_dict())
 
 
 ## A tacada inteira: simula, lê o que aconteceu, e aplica a regra do formato.
-func _resolve(state: MatchState, from: int, velocity: Vector2) -> void:
+func _resolve(state: MatchState, from: int, velocity: Vector2, spin: Vector2) -> void:
 	var seat := turn_of(state)
 	# O alvo é o de **antes** da tacada, e é por isso que ele viaja como parâmetro.
 	# Perguntar de novo depois seria perguntar a uma mesa em que a bola da vez pode
@@ -584,7 +685,7 @@ func _resolve(state: MatchState, from: int, velocity: Vector2) -> void:
 	var target := target_ball(state)
 	trace_spots = []
 	trace_live = []
-	var report := simulate(state, from, velocity, trace_every, trace_spots, trace_live)
+	var report := simulate(state, from, velocity, spin, trace_every, trace_spots, trace_live)
 
 	var potted: PackedInt32Array = report["potted"]
 	var first: int = report["first"]
@@ -662,11 +763,14 @@ static func _score_brazilian(
 	var scores := PackedInt32Array(state.meta.get(SCORE, PackedInt32Array([0, 0])))
 	var opponent := 1 - seat
 
+	var owners := _owners(state)
 	if foul:
 		scores[opponent] += FOUL_POINTS
 	else:
 		for ball in potted:
 			scores[seat] += kind_of_ball(state, ball)
+			owners[ball] = seat
+	state.meta[POTTED_BY] = owners
 	state.meta[SCORE] = scores
 
 	# Segue tacando quem encaçapou a bola da vez limpo. Encaçapar uma colorida por
@@ -694,7 +798,7 @@ static func _score_brazilian(
 ## Só `+ - * /` e `sqrt` aqui dentro. Ver o cabeçalho: é essa disciplina que faz
 ## dois aparelhos chegarem à mesma mesa.
 static func simulate(
-	state: MatchState, from: int, velocity: Vector2, trace_every := 0,
+	state: MatchState, from: int, velocity: Vector2, spin := Vector2.ZERO, trace_every := 0,
 	trace_spots: Array[PackedFloat64Array] = [], trace_live: Array[PackedByteArray] = []
 ) -> Dictionary:
 	var count := ball_count(state)
@@ -709,10 +813,36 @@ static func simulate(
 	var potted := PackedInt32Array()
 	var first := -1
 
+	# O efeito da bola tacada. Ver o cabeçalho. Sem efeito, `spun` é falso e nada
+	# daqui em diante toca a física: a mesa sai igual à de antes, bit a bit.
+	var spun := spin != Vector2.ZERO and from >= 0 and from < count
+	var side := float(spin.x) if spun else 0.0
+	var height := float(spin.y) if spun else 0.0
+	# Follow/draw ainda por entregar, depois da primeira batida.
+	var owed_x := 0.0
+	var owed_y := 0.0
+
 	for step in MAX_STEPS:
 		if trace_every > 0 and step % trace_every == 0:
 			trace_spots.append(spots.duplicate())
 			trace_live.append(live.duplicate())
+		if spun:
+			if live[from] == 0:
+				spun = false
+				owed_x = 0.0
+				owed_y = 0.0
+			else:
+				side *= SPIN_KEEP
+				height *= SPIN_KEEP
+				var give_x := owed_x * SPIN_GRIP
+				var give_y := owed_y * SPIN_GRIP
+				speed[from * 2] += give_x
+				speed[from * 2 + 1] += give_y
+				owed_x -= give_x
+				owed_y -= give_y
+				if owed_x * owed_x + owed_y * owed_y < STOP_SPEED * STOP_SPEED * 0.01:
+					owed_x = 0.0
+					owed_y = 0.0
 		var moving := false
 		for ball in count:
 			if live[ball] == 0:
@@ -728,11 +858,28 @@ static func simulate(
 			spots[ball * 2 + 1] += vy * STEP
 			speed[ball * 2] = vx * ROLL_KEEP
 			speed[ball * 2 + 1] = vy * ROLL_KEEP
+		if owed_x != 0.0 or owed_y != 0.0:
+			moving = true
 		if not moving:
 			break
 
+		var in_x := speed[from * 2] if spun else 0.0
+		var in_y := speed[from * 2 + 1] if spun else 0.0
 		_bounce_cushions(spots, speed, live, count)
+		if spun and side != 0.0:
+			side = _english_kick(speed, from, in_x, in_y, side)
+
+		if spun and height != 0.0:
+			in_x = speed[from * 2]
+			in_y = speed[from * 2 + 1]
 		var hit := _collide_balls(spots, speed, live, count, from)
+		if spun and height != 0.0 and hit >= 0:
+			# A primeira batida: a altura vira velocidade na direção em que a bola
+			# vinha — para frente no follow, para trás no draw. `in` já tem o módulo
+			# da chegada, então não há raiz aqui.
+			owed_x = in_x * height * FOLLOW_GAIN
+			owed_y = in_y * height * FOLLOW_GAIN
+			height = 0.0
 		if first < 0 and hit >= 0:
 			first = hit
 		_sink(spots, speed, live, count, potted)
@@ -807,6 +954,34 @@ static func _bounce_cushions(
 		elif y > TABLE_HEIGHT - BALL_RADIUS:
 			spots[ball * 2 + 1] = TABLE_HEIGHT - BALL_RADIUS
 			speed[ball * 2 + 1] = -absf(speed[ball * 2 + 1]) * CUSHION_KEEP
+
+
+## O inglês numa tabela: se a bola tacada quicou neste passo, empurra a saída
+## para o lado do efeito e devolve o inglês que sobrou.
+##
+## A tabela é reconhecida pela componente que trocou de sinal, e o empurrão é
+## perpendicular à normal dela, proporcional à velocidade com que a bola chegou
+## nela. Com efeito à direita (`side` > 0) a bola gira no sentido anti-horário
+## visto de cima, e a tabela a joga para a direita de quem tacou de frente para
+## ela: numa tabela de normal `n` (apontando para dentro da mesa), o empurrão é
+## `(n.y, -n.x)` — o eixo y da mesa cresce para baixo.
+static func _english_kick(
+	speed: PackedFloat64Array, from: int, in_x: float, in_y: float, side: float
+) -> float:
+	var out_x := speed[from * 2]
+	var out_y := speed[from * 2 + 1]
+	var bounced := false
+	if (in_x < 0.0 and out_x > 0.0) or (in_x > 0.0 and out_x < 0.0):
+		# Tabela da esquerda (normal +x) ou da direita (normal -x).
+		var nx := 1.0 if out_x > 0.0 else -1.0
+		speed[from * 2 + 1] += -nx * side * SIDE_GAIN * absf(in_x)
+		bounced = true
+	if (in_y < 0.0 and out_y > 0.0) or (in_y > 0.0 and out_y < 0.0):
+		# Tabela de cima (normal +y) ou de baixo (normal -y).
+		var ny := 1.0 if out_y > 0.0 else -1.0
+		speed[from * 2] += ny * side * SIDE_GAIN * absf(in_y)
+		bounced = true
+	return side * CUSHION_SPIN_KEEP if bounced else side
 
 
 ## Resolve as batidas do passo e devolve a primeira bola em que **a tacadeira**
@@ -958,7 +1133,7 @@ func _score_shot(state: MatchState, move: Move) -> float:
 	var mine := group_of(seat)
 	var trial := state.clone()
 	var target := target_ball(trial)
-	var report := simulate(trial, ball_of(move), velocity_of(move))
+	var report := simulate(trial, ball_of(move), velocity_of(move), spin_of(move))
 	var potted: PackedInt32Array = report["potted"]
 	var first: int = report["first"]
 
