@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.34
+
+- Xadrez e damas: quem assiste pode pedir para jogar a próxima. Quem perde a partida dá o lugar ao primeiro da fila e passa a assistir.
+
 ## 1.33
 
 - Sinuca nova, em 3D: mesa, bolas e taco de verdade, com as bolas rolando e caindo na caçapa.

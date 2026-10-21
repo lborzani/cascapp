@@ -1379,6 +1379,35 @@ saber. A tela de quem assiste é a mesma `match.gd`, com as brancas embaixo, sem
 toque, sem pré-movimento, com o resultado contado pelas cores, e seguindo a
 revanche dos jogadores com as cores trocadas.
 
+### Jogar a próxima
+
+Quem assiste pode pedir para **jogar a próxima** ("Quero jogar a próxima"). O
+pedido entra numa fila por sala, por ordem de chegada, que todos veem na barra
+("Próximos: Ana, Beto"). No fim da partida, quem perdeu cede o lugar ao primeiro
+da fila depois de uma contagem de 5 s, e passa a assistir. No empate, os dois
+veem "Dar lugar", e cede quem tocar primeiro. A partida nova começa sozinha em
+todos os aparelhos, com as cores trocadas como numa revanche.
+
+O espectador continua mudo para a partida. A fila tem verbos próprios no relay,
+fora do envelope `msg`:
+
+- `{"t":"queue","on":true}` entra na fila (`on:false` sai). Só vale de quem assiste.
+- `{"t":"yield"}` cede o lugar. Só vale de quem está sentado, e só o próprio assento.
+
+A troca é feita pelo relay num passo só (`RoomRegistry.yieldSeat`): o primeiro
+da fila senta com chave nova, e quem cedeu vira espectador. O assento nunca
+fica livre, e ninguém recebe `peer_left`. Sair e entrar de novo deixaria o
+lugar livre por um instante, e numa sala listada um estranho da lista pública o
+pegaria. Todos recebem `{"t":"swap","seat","name","watchers"}`, e só a cópia de
+quem sentou leva `key`. A troca descarta os relatos de Elo pendentes, e depois
+dela a sala ignora outro `yield` por 3 s. Sem essa trava, num empate com dois na
+fila, os dois toques trocariam os dois assentos.
+
+Do lado do app, `Net._on_relay_swapped` troca os papéis mantendo as cores da
+partida que acabou. A `match.gd` começa a partida seguinte no lugar, sem
+recarregar a cena, e é ela que troca as cores. Quem cedeu esquece a chave do
+assento em disco, e quem sentou grava a nova. Mesa de dois só (xadrez e damas).
+
 ### Os três canais do código
 
 O anfitrião publica o mesmo payload nos três, e o convidado usa o que tiver à
