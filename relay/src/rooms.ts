@@ -12,6 +12,16 @@ import { isValidSeatCount, MAX_WATCHERS, MIN_SEATS, type Seat } from './protocol
  * "o outro lado" virou "os outros".
  */
 
+/**
+ * Depois de uma troca, a sala ignora outro `yield` por este tempo.
+ *
+ * No empate os dois jogadores veem "Dar lugar", e com dois na fila os dois toques
+ * trocariam os dois assentos: a partida seguinte sairia sem nenhum dos dois que
+ * jogavam. O segundo `yield` chega dentro da latência da rede, e uma partida nova
+ * não acaba em três segundos.
+ */
+export const SWAP_COOLDOWN_MS = 3_000;
+
 export interface OpenState {
   readonly readyState: number;
 }
@@ -52,6 +62,13 @@ export interface Room<S extends OpenState> {
    * conta na lotação e não segura a sala viva — `emptySince` só olha assentos.
    */
   readonly watchers: Set<S>;
+  /**
+   * Espectadores que pediram para jogar a próxima, por ordem de chegada. Todo
+   * socket aqui está em `watchers`: sair de lá tira daqui (`unwatch`).
+   */
+  readonly queue: QueueEntry<S>[];
+  /** Última troca pela fila, ou 0. Ver `SWAP_COOLDOWN_MS`. */
+  swappedAt: number;
   readonly createdAt: number;
   /**
    * Momento em que a sala ficou sem ninguém. `null` enquanto houver alguém.
@@ -59,6 +76,13 @@ export interface Room<S extends OpenState> {
    * juntos porque a rede caiu, e voltam com o mesmo código.
    */
   emptySince: number | null;
+}
+
+/** Um lugar na fila: o apelido que ela mostra e o token conferido quando ele sentar. */
+export interface QueueEntry<S extends OpenState> {
+  readonly socket: S;
+  readonly name: string;
+  readonly token: string;
 }
 
 export type SeatOutcome<S extends OpenState> =
@@ -183,6 +207,8 @@ export class RoomRegistry<S extends OpenState> {
       seats: new Array<S | null>(capacity).fill(null),
       keys: Array.from({ length: capacity }, () => this.newKey()),
       watchers: new Set<S>(),
+      queue: [],
+      swappedAt: 0,
       createdAt: this.now(),
       emptySince: null,
     };
@@ -246,7 +272,7 @@ export class RoomRegistry<S extends OpenState> {
       return { ok: false, reason: 'room_not_found' };
     }
     for (const watcher of room.watchers) {
-      if (!isOpen(watcher)) room.watchers.delete(watcher);
+      if (!isOpen(watcher)) this.unwatch(room, watcher);
     }
     if (room.watchers.size >= MAX_WATCHERS) {
       return { ok: false, reason: 'watch_full' };
@@ -255,8 +281,60 @@ export class RoomRegistry<S extends OpenState> {
     return { ok: true, room };
   }
 
-  unwatch(room: Room<S>, socket: S): void {
+  /** Para de assistir, e sai da fila junto. Verdadeiro se a fila mudou. */
+  unwatch(room: Room<S>, socket: S): boolean {
     room.watchers.delete(socket);
+    return this.dequeue(room, socket);
+  }
+
+  /**
+   * Põe o espectador no fim da fila. Só quem assiste entra, e uma vez só: pedir
+   * de novo não fura a fila. Verdadeiro se a fila mudou.
+   *
+   * O teto é o de espectadores, porque a fila é feita deles.
+   */
+  enqueue(room: Room<S>, socket: S, name: string, token: string): boolean {
+    if (!room.watchers.has(socket) || room.queue.some((entry) => entry.socket === socket)) {
+      return false;
+    }
+    room.queue.push({ socket, name, token });
+    return true;
+  }
+
+  dequeue(room: Room<S>, socket: S): boolean {
+    const at = room.queue.findIndex((entry) => entry.socket === socket);
+    if (at < 0) return false;
+    room.queue.splice(at, 1);
+    return true;
+  }
+
+  /**
+   * Quem está no assento cede o lugar ao primeiro da fila, num passo só: o
+   * desafiante senta, quem cedeu passa a assistir. O assento nunca fica livre —
+   * numa sala listada, um estranho da lista pública o pegaria no meio da troca —,
+   * e por isso ninguém ouve `peer_left`.
+   *
+   * Só o próprio assento: `socket` tem de ser quem está nele. Chave nova, porque
+   * o dono mudou (o mesmo raciocínio de `joinRoom`): a chave antiga, no disco de
+   * quem cedeu, não pode mais abrir esta cadeira.
+   *
+   * `null` quando não há troca: fila vazia (ou só de sockets mortos), ou quem
+   * pediu não está sentado ali.
+   */
+  yieldSeat(room: Room<S>, seat: Seat, socket: S): { next: QueueEntry<S>; key: string } | null {
+    if (room.seats[seat] !== socket) return null;
+    if (room.swappedAt > 0 && this.now() - room.swappedAt < SWAP_COOLDOWN_MS) return null;
+    let next = room.queue.shift();
+    while (next !== undefined && !(isOpen(next.socket) && room.watchers.has(next.socket))) {
+      next = room.queue.shift();
+    }
+    if (next === undefined) return null;
+    room.watchers.delete(next.socket);
+    room.watchers.add(socket);
+    room.seats[seat] = next.socket;
+    room.swappedAt = this.now();
+    room.keys[seat] = this.newKey();
+    return { next, key: room.keys[seat] ?? '' };
   }
 
   /**

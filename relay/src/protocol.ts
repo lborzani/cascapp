@@ -91,6 +91,16 @@ export type ClientMessage =
    * nem impede que ela expire quando os jogadores vão embora.
    */
   | { t: 'watch'; room: string }
+  /**
+   * Espectador entra (`on`) ou sai da fila de quem joga a próxima. `name` é o
+   * apelido que a fila mostra; `token` é conferido só quando ele senta.
+   */
+  | { t: 'queue'; on: boolean; name: string; token: string }
+  /**
+   * Jogador cede o próprio assento ao primeiro da fila e passa a assistir. Sem
+   * fila, não acontece nada. Ver `RoomRegistry.yieldSeat`.
+   */
+  | { t: 'yield' }
   | { t: 'msg'; d: unknown }
   | { t: 'ping' }
   | { t: 'leave' }
@@ -178,6 +188,18 @@ export type ServerMessage =
     }
   /** Para os jogadores: quantos espectadores há agora. Vai a cada entrada e saída. */
   | { t: 'watchers'; n: number }
+  /**
+   * A fila de quem joga a próxima, para todos na sala. `you` é a posição de quem
+   * recebe (0 é o próximo), ou -1 fora da fila. Vai a cada mudança.
+   */
+  | { t: 'queue'; names: string[]; you: number }
+  /**
+   * O assento `seat` trocou de dono: quem estava nele passou a assistir, e o
+   * primeiro da fila (`name`) sentou. Só a cópia de quem sentou leva `key`.
+   * `watchers` é o contador para quem acaba de virar jogador: espectador não o
+   * recebia.
+   */
+  | { t: 'swap'; seat: Seat; name: string; watchers: number; key?: string }
   | { t: 'peer'; seat: Seat }
   | { t: 'peer_left'; seat: Seat }
   /** `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir. */
@@ -374,6 +396,15 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         : null;
     case 'watch':
       return typeof record.room === 'string' ? { t: 'watch', room: record.room } : null;
+    case 'queue':
+      return {
+        t: 'queue',
+        on: record.on !== false,
+        name: cleanName(record.name),
+        token: cleanToken(record.token),
+      };
+    case 'yield':
+      return { t: 'yield' };
     case 'msg':
       return { t: 'msg', d: record.d };
     case 'ping':

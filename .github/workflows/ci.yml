@@ -197,6 +197,7 @@ jobs:
         run: |
           godot --headless --path . --script res://tests/relay_smoke.gd
           godot --headless --path . --script res://tests/spectate_smoke.gd
+          godot --headless --path . --script res://tests/next_up_smoke.gd
           godot --headless --path . --script res://tests/table_smoke.gd
           godot --headless --path . --script res://tests/ludo_net_smoke.gd
           godot --headless --path . --script res://tests/ludo_bots_smoke.gd

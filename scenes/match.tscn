@@ -141,6 +141,14 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_card")
 
+[node name="QueueButton" type="Button" parent="Safe/Shell/Pad/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Quero jogar a próxima"
+
 [node name="PromotionLayer" type="Control" parent="." unique_id=1213063222]
 unique_name_in_owner = true
 visible = false
@@ -251,6 +259,14 @@ theme_type_variation = &"Subtitle"
 horizontal_alignment = 1
 autowrap_mode = 3
 
+[node name="NextUpLabel" type="Label" parent="ResultLayer/Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"Hint"
+horizontal_alignment = 1
+autowrap_mode = 3
+
 [node name="Spacer" type="Control" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=2123722852]
 custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
@@ -269,6 +285,14 @@ custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "Agora não"
+
+[node name="NextUpButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_type_variation = &"GhostButton"
+text = "Quero jogar a próxima"
 
 [node name="ReviewButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox"]
 unique_name_in_owner = true

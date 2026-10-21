@@ -37,7 +37,12 @@ export class Client {
     const queued = this.inbox.shift();
     if (queued !== undefined) return Promise.resolve(queued);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('nenhuma mensagem chegou')), timeoutMs);
+      // Sem limpar `waiting`, a mensagem que chegasse depois do prazo iria para
+      // esta promessa já rejeitada e sumiria — e o `quiet` engoliria a próxima.
+      const timer = setTimeout(() => {
+        this.waiting = null;
+        reject(new Error('nenhuma mensagem chegou'));
+      }, timeoutMs);
       this.waiting = (message) => {
         clearTimeout(timer);
         resolve(message);

@@ -35,6 +35,7 @@ func _ready() -> void:
 	await _test_match_history()
 	_test_verified_names()
 	await _test_spectator()
+	_check(await _test_next_up() == true, "fila de quem joga a próxima rodou até o fim")
 	_check(await _test_live_review() == true, "avaliação ao vivo rodou até o fim")
 	await _test_rated_result()
 	await _test_premove()
@@ -909,6 +910,96 @@ func _test_spectator() -> void:
 	Net.white_seat = 0
 	Net.player_names = {}
 	Game.mode = Game.Mode.HOTSEAT
+
+
+## Fila de quem joga a próxima, do lado da tela: quem perdeu vê a contagem e
+## cede, vira espectador e a partida nova começa com as cores trocadas; depois,
+## como espectador, pede a vez e senta. Os sinais do `Net` são disparados à mão,
+## como o relay faria.
+func _test_next_up() -> bool:
+	print("fila de quem joga a próxima")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = false
+	Net.connected = true
+	Net.local_seat = 1
+	Net.local_side = Board.Side.BLACK
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var queue_button: Button = _node(scene, "%QueueButton")
+	var next_button: Button = _node(scene, "%NextUpButton")
+	var next_label: Label = _node(scene, "%NextUpLabel")
+	var rematch: Button = _node(scene, "%RematchButton")
+
+	_check(not queue_button.visible, "jogador não vê o botão de entrar na fila")
+	Net._on_relay_queue(PackedStringArray(["Caio", "Dani"]), -1)
+	var caption: Label = scene._match_status._queue
+	_check(caption.visible and caption.text == "Próximos: Caio, Dani", "a barra mostra a fila (%s)" % caption.text)
+
+	# Pretas (nós) perdem no tempo: quem perdeu cede.
+	scene._flag(Board.Side.BLACK)
+	_check(not rematch.visible, "com fila e vencedor, revanche some")
+	_check(next_button.visible and next_button.text == "Ceder agora (5)", "quem perdeu vê a contagem (%s)" % next_button.text)
+	_equals(next_label.text, "Caio joga a próxima. Você vai assistir.", "e quem senta")
+
+	# A fila esvazia (Caio e Dani saíram): a contagem para e a revanche volta.
+	Net._on_relay_queue(PackedStringArray(), -1)
+	_check(rematch.visible and not next_button.visible, "fila vazia devolve a revanche")
+	_check(not scene._counting, "e para a contagem")
+	Net._on_relay_queue(PackedStringArray(["Caio"]), -1)
+
+	# O relay trocou: cedemos o assento 1.
+	Net._on_relay_swapped(1, "Caio", "", 1)
+	_check(Net.is_spectator, "quem cedeu virou espectador")
+	_equals(Net.white_seat, 1, "a partida nova troca as cores (quem venceu de brancas joga de pretas)")
+	_equals(scene._state.ply, 0, "e começa do zero")
+	_check(not _node(scene, "%ResultLayer").visible, "sem o painel da anterior")
+	_equals(scene._board.flipped, false, "brancas embaixo, como quem assiste")
+	_check(scene._live != null, "com a avaliação ao vivo")
+	_equals(_node(scene, "%BottomTag").title, "Caio", "o cartão de brancas é de quem sentou")
+	_check(queue_button.visible and queue_button.text == "Quero jogar a próxima", "e o botão de pedir a vez aparece")
+
+	# Como espectador: pede a vez e, na próxima troca, senta no assento 0.
+	Net._on_relay_queue(PackedStringArray(["Bia"]), 0)
+	_equals(queue_button.text, "Sair da fila (você é o 1º)", "o botão diz a posição")
+	scene._flag(Board.Side.BLACK)
+	_check(next_button.visible and next_label.text == "Você joga a próxima.", "no fim, quem assiste vê que é o próximo")
+	Net._on_relay_swapped(0, "Bia", "chave", 2)
+	_check(not Net.is_spectator and Net.local_seat == 0, "quem pediu sentou no assento 0")
+	_equals(Game.local_side, Board.Side.WHITE, "e joga de brancas (o assento 0 jogava de pretas)")
+	_equals(scene._seat_of(Board.Side.WHITE), 0, "a conta das cores bate com o assento")
+	_check(scene._live == null, "a avaliação ao vivo sai de quem joga")
+	_check(not queue_button.visible, "e o botão de pedir a vez também")
+	_equals(scene._match_status.watchers, 2, "quem sentou passa a ver o contador")
+
+	# Vencedor com fila: não cede e não pede revanche.
+	Net._on_relay_queue(PackedStringArray(["Ana"]), -1)
+	scene._flag(Board.Side.BLACK)
+	_check(not rematch.visible and not next_button.visible, "quem venceu nem cede nem pede revanche")
+	_equals(next_label.text, "Ana joga a próxima contra você.", "e sabe quem vem")
+
+	# Empate com fila: os dois podem dar o lugar.
+	scene._winner = -1
+	scene._refresh_next_up()
+	_check(next_button.visible and next_button.text == "Dar lugar para Ana", "no empate, dar lugar (%s)" % next_button.text)
+	_check(rematch.visible, "ao lado da revanche")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Prefs.forget_rejoin()
+	Net.is_spectator = false
+	Net.local_seat = 0
+	Net.local_side = Board.Side.WHITE
+	Net.white_seat = 0
+	Net.watcher_count = 0
+	Net.queue_names = PackedStringArray()
+	Net.queue_position = -1
+	Net.player_names = {}
+	Net.verified_seats = {}
+	Game.mode = Game.Mode.HOTSEAT
+	return true
 
 
 ## Avaliação ao vivo de quem assiste xadrez: só o último lance é julgado, e um
