@@ -83,7 +83,16 @@ var watchers := 0:
 
 var _clock: Label = null
 var _rounds: Label = null
+## "Próximo: Ana", da fila de quem joga a próxima. Vazio esconde.
+var queue := "":
+	set(value):
+		if queue == value:
+			return
+		queue = value
+		_refresh_queue()
+
 var _watchers: Label = null
+var _queue: Label = null
 var _code: Button = null
 ## Segundo já escrito na tela. O relógio só reescreve o texto quando o segundo
 ## vira — a alternativa é um `Label` remontando o texto sessenta vezes por
@@ -100,6 +109,7 @@ func _ready() -> void:
 	_clock = _caption()
 	_rounds = _caption()
 	_watchers = _caption()
+	_queue = _caption()
 
 	_code = Button.new()
 	# Chapado: a faixa é contexto, e um botão com fundo ao lado de duas legendas
@@ -116,6 +126,7 @@ func _ready() -> void:
 
 	_refresh_rounds()
 	_refresh_watchers()
+	_refresh_queue()
 	_refresh_code()
 	set_process(true)
 
@@ -170,6 +181,13 @@ func _refresh_watchers() -> void:
 		return
 	_watchers.visible = watchers > 0
 	_watchers.text = "%d assistindo" % watchers
+
+
+func _refresh_queue() -> void:
+	if _queue == null:
+		return
+	_queue.visible = not queue.is_empty()
+	_queue.text = queue
 
 
 func _refresh_code() -> void:
