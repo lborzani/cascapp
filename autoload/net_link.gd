@@ -119,6 +119,14 @@ signal watchers_changed(count: int)
 ## partida a ele. A cena responde com [method send_watch_state], porque é ela, e
 ## não este arquivo, quem tem o histórico de lances.
 signal watcher_joined
+## A fila de quem joga a próxima mudou. Também em [member queue_names] e
+## [member queue_position].
+signal queue_changed
+## O assento `seat` trocou de dono pela fila, e os papéis já estão trocados aqui
+## quando isto sai: quem cedeu é espectador, quem sentou é jogador, com as cores
+## da partida que acabou. A cena começa a próxima como uma revanche — e é a
+## revanche que troca as cores.
+signal seat_swapped(seat: int)
 
 const HOST_SIDE := Board.Side.WHITE
 
@@ -186,6 +194,10 @@ var white_seat := 0
 var watcher_count := 0
 ## O espectador já recebeu a mesa ao menos uma vez nesta sala.
 var _watch_started := false
+## Apelidos na fila de quem joga a próxima, em ordem, e a nossa posição nela
+## (0 é o próximo; -1 fora da fila).
+var queue_names := PackedStringArray()
+var queue_position := -1
 
 ## Histórico que chegou antes de existir tela para recebê-lo. Ver o tratador de
 ## `sync` e [method claim_sync].
@@ -244,6 +256,8 @@ func leave() -> void:
 	_watch_started = false
 	white_seat = 0
 	watcher_count = 0
+	queue_names = PackedStringArray()
+	queue_position = -1
 
 
 ## `clocks` é `[brancas, pretas]` em segundos, ou vazio sem relógio.
@@ -274,6 +288,20 @@ func send_move(data: Dictionary, index: int, clocks: Array = []) -> void:
 ## reconstrói a partida repetindo lances em cima de uma posição conhecida.
 func send_fleet(cells: PackedInt32Array) -> void:
 	_send({"t": "fleet", "f": Array(cells)})
+
+
+## Espectador pede (ou desiste de) jogar a próxima. Vai direto ao relay: o
+## envelope do jogo continua mudo para quem assiste.
+func request_next(on: bool) -> void:
+	if is_spectator and _relay_bridge() != null:
+		_relay_bridge().request_next(on, player_name)
+
+
+## Jogador cede o assento ao primeiro da fila. A troca chega pelo
+## [signal seat_swapped], para os dois lados e para quem assiste.
+func yield_seat() -> void:
+	if not is_spectator and _relay_bridge() != null:
+		_relay_bridge().yield_seat()
 
 
 func send_rematch() -> void:
@@ -871,6 +899,8 @@ func watch_relay(code: String) -> void:
 	player_names = {}
 	verified_seats = {}
 	_expected_code = code
+	# Quem assiste também tem nome: é o que a fila mostra se ele pedir a vez.
+	_default_name()
 	_relay_bridge().watch_room(code)
 
 
@@ -919,6 +949,8 @@ func _wire_relay() -> bool:
 	_relay_bridge().watching.connect(_on_relay_watching)
 	_relay_bridge().watchers_changed.connect(_on_relay_watchers)
 	_relay_bridge().identity.connect(_on_relay_identity)
+	_relay_bridge().queue_changed.connect(_on_relay_queue)
+	_relay_bridge().swapped.connect(_on_relay_swapped)
 	_relay_bridge().rated.connect(func(ratings: Array): rated.emit(ratings))
 	return true
 
@@ -944,6 +976,47 @@ func _on_relay_watchers(count: int) -> void:
 	watchers_changed.emit(count)
 	if count > 0 and _session_started and not is_spectator and _greeter(-1) == local_seat:
 		watcher_joined.emit()
+
+
+func _on_relay_queue(names: PackedStringArray, position: int) -> void:
+	queue_names = PackedStringArray()
+	for raw in names:
+		var clean := _clean_name(raw)
+		queue_names.append(clean if not clean.is_empty() else "Alguém")
+	queue_position = position
+	queue_changed.emit()
+
+
+## O assento `seat` trocou de dono. Os papéis trocam aqui com as cores da partida
+## que acabou; a cena começa a próxima como revanche, e é ela que inverte as cores
+## — para os jogadores pelo `local_side`, para quem assiste pelo `white_seat`.
+##
+## Nenhum aperto de mão novo: a sessão continua a mesma, e quem sentou já tinha a
+## mesa (`_adopt_table`) desde que começou a assistir.
+func _on_relay_swapped(seat: int, raw_name: String, key: String, watchers: int) -> void:
+	if seats != 2 or seat < 0 or seat > 1:
+		return
+	if not key.is_empty() and is_spectator:
+		# Sentamos.
+		local_side = HOST_SIDE if white_seat == seat else Board.opponent(HOST_SIDE)
+		local_seat = seat
+		is_spectator = false
+		watcher_count = watchers
+		watchers_changed.emit(watchers)
+	elif key.is_empty() and not is_spectator and seat == local_seat:
+		# Cedemos.
+		white_seat = local_seat if local_side == HOST_SIDE else 1 - local_seat
+		is_spectator = true
+		is_host = false
+		local_seat = -1
+		_watch_started = true
+	# O nome de antes era de quem saiu; o confirmado pela conta chega depois, pelo
+	# `identity` de quem sentou.
+	verified_seats.erase(seat)
+	player_names.erase(seat)
+	_remember_name(seat, player_name if seat == local_seat else raw_name)
+	names_changed.emit()
+	seat_swapped.emit(seat)
 
 
 ## Nosso lugar, confirmado pelo servidor — inclusive depois de uma reconexão,

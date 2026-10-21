@@ -58,6 +58,13 @@ signal watching(game_id: String, capacity: int)
 ## Quantos espectadores a sala tem agora. Chega aos **jogadores**: a cada entrada
 ## ou saída de quem assiste, e no `joined` de quem volta de uma queda.
 signal watchers_changed(count: int)
+## A fila de quem joga a próxima: os apelidos, e a nossa posição nela (0 é o
+## próximo; -1 fora da fila). Chega a todos na sala a cada mudança.
+signal queue_changed(names: PackedStringArray, position: int)
+## O assento `seat` trocou de dono pela fila. `key` só vem preenchida para quem
+## sentou. A ponte já trocou o próprio papel (`join` ou `watch`) quando isto
+## sai, então a próxima reconexão volta para o lugar novo.
+signal swapped(seat: int, name: String, key: String, watchers: int)
 ## O servidor conferiu a conta de quem está em `seat`: o nome dela e o perfil
 ## público (`{"user", "avatar", "elo"}`, ver `Net.profile_of`).
 ## Ver `relay/src/accounts.ts`.
@@ -259,6 +266,27 @@ func join_room(code: String, key := "") -> void:
 ## reconexão só pede de novo para assistir à mesma sala.
 func watch_room(code: String) -> void:
 	_start("watch", code, "")
+
+
+## Espectador entra (`on`) ou sai da fila de quem joga a próxima. O token vai
+## para o relay conferir a conta quando chegar a vez.
+func request_next(on: bool, player_name: String) -> void:
+	if _role != "watch":
+		return
+	_send_control({"t": "queue", "on": on, "name": player_name, "token": _account_token()})
+
+
+## Jogador cede o assento ao primeiro da fila. Sem fila, o relay ignora.
+func yield_seat() -> void:
+	if _role == "watch":
+		return
+	_send_control({"t": "yield"})
+
+
+## Verbo do relay, fora do envelope `msg` do jogo.
+func _send_control(message: Dictionary) -> void:
+	if _socket != null and _socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		_socket.send_text(JSON.stringify(message))
 
 
 ## Endereço HTTP derivado do de WebSocket: os dois são o mesmo servidor, e ter
@@ -546,6 +574,28 @@ func _handle(message: Dictionary) -> void:
 				rated.emit(ratings)
 		"watchers":
 			watchers_changed.emit(int(message.get("n", 0)))
+		"queue":
+			var names := PackedStringArray()
+			var raw: Variant = message.get("names", [])
+			if raw is Array:
+				for entry in raw:
+					names.append(str(entry))
+			queue_changed.emit(names, int(message.get("you", -1)))
+		"swap":
+			var seat := int(message.get("seat", -1))
+			var key := str(message.get("key", ""))
+			if not key.is_empty():
+				# Sentamos: daqui em diante a reconexão é um `join` com esta chave.
+				_role = "join"
+				_seat = seat
+				_key = key
+			elif seat == _seat and _role != "watch":
+				# Cedemos: a reconexão volta a assistir, e a chave antiga não abre
+				# mais nada.
+				_role = "watch"
+				_seat = -1
+				_key = ""
+			swapped.emit(seat, str(message.get("name", "")), key, int(message.get("watchers", 0)))
 		"identity":
 			identity.emit(int(message.get("seat", -1)), str(message.get("name", "")), {
 				"user": str(message.get("user", "")),
