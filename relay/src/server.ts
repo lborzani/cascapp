@@ -331,6 +331,18 @@ export function createRelay(options: RelayOptions = {}): Relay {
         if (session.seat === null) break;
         receiveReport(session.room, session.seat, message);
         break;
+      case 'queue': {
+        if (!session.watching) break;
+        const changed = message.on
+          ? registry.enqueue(session.room, socket, message.name, message.token)
+          : registry.dequeue(session.room, socket);
+        if (changed) announceQueue(session.room);
+        break;
+      }
+      case 'yield':
+        if (session.seat === null) break;
+        swapSeat(socket, session, session.room, session.seat);
+        break;
       default:
         break;
     }
@@ -474,7 +486,72 @@ export function createRelay(options: RelayOptions = {}): Relay {
       send(watcher, { t: 'peer', seat: outcome.seat });
     }
     sendIdentities(socket, outcome.room);
+    sendQueue(socket, outcome.room);
     confirmIdentity(socket, session, outcome.room, outcome.seat, token);
+  }
+
+  // --- fila de quem joga a próxima -------------------------------------------
+
+  /** A fila como `socket` a vê: os apelidos e a posição dele nela. Fila vazia não manda nada. */
+  function sendQueue(socket: WebSocket, room: Room<WebSocket>): void {
+    if (room.queue.length === 0) return;
+    queueTo(socket, room);
+  }
+
+  function queueTo(socket: WebSocket, room: Room<WebSocket>): void {
+    send(socket, {
+      t: 'queue',
+      names: room.queue.map((entry) => entry.name),
+      you: room.queue.findIndex((entry) => entry.socket === socket),
+    });
+  }
+
+  /** Inteira para todos, inclusive vazia: é assim que o último a sair some da tela. */
+  function announceQueue(room: Room<WebSocket>): void {
+    for (const seated of room.seats) {
+      if (seated !== null) queueTo(seated, room);
+    }
+    for (const watcher of watchersOf(room)) queueTo(watcher, room);
+  }
+
+  /**
+   * O jogador cede o assento ao primeiro da fila (ver `RoomRegistry.yieldSeat`).
+   *
+   * Os relatos de Elo pendentes são descartados: o assento já é de outra conta, e
+   * um relato que esperasse pela confirmação dela gravaria a partida que acabou
+   * no nome de quem acabou de sentar. A partida decidida antes da troca já
+   * capturou as contas em `settle` e não é afetada.
+   */
+  function swapSeat(socket: WebSocket, session: Session, room: Room<WebSocket>, seat: Seat): void {
+    const outcome = registry.yieldSeat(room, seat, socket);
+    if (outcome === null) return;
+    const challenger = outcome.next.socket;
+    const other = sessions.get(challenger);
+    if (other === undefined) return;
+    session.seat = null;
+    session.watching = true;
+    other.seat = seat;
+    other.watching = false;
+
+    const rating = ratingOf(room);
+    rating.reports.clear();
+    if (rating.timer !== null) clearTimeout(rating.timer);
+    rating.timer = null;
+    rating.leftAt.delete(seat);
+
+    const swap: ServerMessage = {
+      t: 'swap',
+      seat,
+      name: outcome.next.name,
+      watchers: watchersOf(room).length,
+    };
+    for (const seated of room.seats) {
+      if (seated === null) continue;
+      send(seated, seated === challenger ? { ...swap, key: outcome.key } : swap);
+    }
+    for (const watcher of watchersOf(room)) send(watcher, swap);
+    announceQueue(room);
+    confirmIdentity(challenger, other, room, seat, outcome.next.token);
   }
 
   // --- nomes confirmados pela conta -----------------------------------------
@@ -673,6 +750,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
       watchers,
     });
     sendIdentities(socket, outcome.room);
+    sendQueue(socket, outcome.room);
     announceWatchers(outcome.room);
   }
 
@@ -688,7 +766,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     const { room, seat } = session;
     if (room !== null && session.watching) {
       session.room = null;
-      registry.unwatch(room, socket);
+      if (registry.unwatch(room, socket)) announceQueue(room);
       announceWatchers(room);
       return;
     }
