@@ -1102,6 +1102,39 @@ func _test_update_offer() -> void:
 	_equals(UpdateCheck.offer([elsewhere], "1.20"), {}, "link de fora do repositório não é aberto")
 	_equals(UpdateCheck.offer([{"message": "Not Found"}, 3], "1.20"), {}, "lixo na lista é ignorado")
 
+	# Pacote OTA: vai junto só quando roda sobre o APK instalado.
+	var ota := func(name := "cascapp-1.36-base1.35.pck", digest := "sha256:abc", url := "") -> Dictionary:
+		var with_pck: Dictionary = release.call("v1.36")
+		with_pck["assets"].append({
+			"name": name, "size": 2048, "digest": digest,
+			"browser_download_url": url if not url.is_empty() else UpdateCheck.DOWNLOADS + "v1.36/" + name,
+		})
+		return with_pck
+	_equals(UpdateCheck.offer([ota.call()], "1.35", "1.35").get("pck"),
+		{"url": UpdateCheck.DOWNLOADS + "v1.36/cascapp-1.36-base1.35.pck", "size": 2048, "sha256": "abc"},
+		"pacote sobre o APK da base")
+	_check(UpdateCheck.offer([ota.call()], "1.34", "1.40").has("pck"), "APK mais novo que a base também roda")
+	_check(not UpdateCheck.offer([ota.call()], "1.34", "1.34").has("pck"), "APK mais velho que a base: só o APK")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.36-base1.35.pck", "")], "1.35", "1.35").has("pck"),
+		"sem sha256 não há como conferir")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.36-base1.35.pck", "sha256:abc", "https://exemplo.com/x.pck")],
+		"1.35", "1.35").has("pck"), "pacote de fora do repositório não é baixado")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.35-base1.35.pck")], "1.35", "1.35").has("pck"),
+		"pacote de outra versão não vale")
+	_equals(UpdateCheck.offer([ota.call()], "1.35", "1.35").get("url"), UpdateCheck.DOWNLOADS + "v1.36/cascapp.apk",
+		"e o APK continua na oferta, para quando o pacote falhar")
+
+	var path := "user://update_check_verify.pck"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string("pacote")
+	file.close()
+	var pck := {"size": 6, "sha256": FileAccess.get_sha256(path)}
+	_check(UpdateCheck.verify(path, pck), "pacote conferido")
+	_check(not UpdateCheck.verify(path, {"size": 6, "sha256": "00"}), "sha256 diferente: recusado")
+	_check(not UpdateCheck.verify(path, {"size": 5, "sha256": pck["sha256"]}), "tamanho diferente: recusado")
+	DirAccess.remove_absolute(path)
+	_check(not UpdateCheck.verify(path, pck), "sem arquivo: recusado")
+
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar
 ## dele enquanto ninguém escolheu — que é o estado em que a maioria vai jogar.

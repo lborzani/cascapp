@@ -64,6 +64,7 @@ jobs:
           godot --headless --path . --script res://tests/test_runner.gd
           godot --headless --path . res://tests/scene_probe.tscn
           godot --headless --path . res://tests/pairing_probe.tscn
+          godot --headless --path . res://tests/ota_probe.tscn
           godot --headless --path . res://tests/ludo_probe.tscn
           godot --headless --path . --script res://tests/monopoly_probe.gd
           godot --headless --path . --script res://tests/bomber_probe.gd
@@ -74,7 +75,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Histórico inteiro, com as tags: a base do .pck sai da comparação entre
+      # elas (`tools/ota_base.sh`).
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       # A tag e a versão do preset têm de dizer a mesma coisa.
       #
@@ -192,6 +197,33 @@ jobs:
           # tem a assinatura velha do JAR.
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" assinatura.txt
 
+      # O pacote da atualização OTA: os mesmos scripts, cenas e assets do APK,
+      # sem a parte nativa (ver `autoload/patcher.gd`). O nome diz a versão e a
+      # base — o APK mais velho que sabe rodá-lo —, e é o nome que o app lê para
+      # escolher entre baixar o pacote e baixar o APK. Só por tag, porque a base
+      # é calculada entre tags.
+      - name: Exportar o pacote OTA
+        if: github.event_name == 'push'
+        run: |
+          base=$(tools/ota_base.sh "${{ github.ref_name }}")
+          pck="build/android/cascapp-${{ steps.versao.outputs.version }}-base$base.pck"
+          echo "pck=$pck" >> "$GITHUB_ENV"
+          # Mesmo laço do APK: o Godot em headless pode não encerrar sozinho.
+          godot --headless --path . --export-pack "Android" "$pck" > pack.log 2>&1 &
+          pid=$!
+          for _ in $(seq 1 120); do
+            grep -q "DONE.*savepack" pack.log && break
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 5
+          done
+          kill "$pid" 2>/dev/null || true
+          if [ ! -s "$pck" ] || ! grep -q "VersionStamp: v${{ steps.versao.outputs.version }}" pack.log; then
+            echo "::error::o pacote OTA não foi gerado com a versão certa"
+            tail -30 pack.log
+            exit 1
+          fi
+          ls -l "$pck"
+
       # Só por tag. Disparado à mão, `github.ref_name` é o nome da **branch**, e
       # uma release chamada "develop" é lixo que alguém precisa apagar depois —
       # o APK sai como artefato do trabalho, logo abaixo, que é o que quem
@@ -212,9 +244,9 @@ jobs:
           notas=$(printf '%s\n\n---\n\nAPK assinado da versão %s, gerado por `%s` a partir de `%s`.' \
             "$secao" "${{ steps.versao.outputs.version }}" "${{ github.workflow }}" "${{ github.sha }}")
           if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" "$apk" --clobber
+            gh release upload "${{ github.ref_name }}" "$apk" "$pck" --clobber
           else
-            gh release create "${{ github.ref_name }}" "$apk" \
+            gh release create "${{ github.ref_name }}" "$apk" "$pck" \
               --title "${{ github.ref_name }}" --notes "$notas" --verify-tag
           fi
 

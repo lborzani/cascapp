@@ -120,6 +120,9 @@ jobs:
       - name: Menu e pareamento
         run: godot --headless --path . res://tests/pairing_probe.tscn
 
+      - name: Atualização OTA
+        run: godot --headless --path . res://tests/ota_probe.tscn
+
       - name: Ludo
         run: godot --headless --path . res://tests/ludo_probe.tscn
 

@@ -21,6 +21,7 @@ config/icon="res://assets/icon/role.png"
 
 [autoload]
 
+Patcher="*res://autoload/patcher.gd"
 Game="*res://autoload/game_state.gd"
 Net="*res://autoload/net_link.gd"
 BomberNet="*res://autoload/bomber_net.gd"
