@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.35
+
+- Atualizações mais rápidas: da próxima versão em diante, a maioria delas baixa aqui dentro do app em poucos segundos, sem passar pelo navegador nem instalar o APK de novo. Depois do download, é só fechar e abrir o app.
+
 ## 1.34
 
 - Xadrez e damas: quem assiste pode pedir para jogar a próxima. Quem perde a partida dá o lugar ao primeiro da fila e passa a assistir.
