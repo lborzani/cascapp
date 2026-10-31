@@ -1905,6 +1905,27 @@ func _test_update_notice() -> void:
 	var lines: Array = gate.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
 	_equals(lines, ["Novidades da 99.0", "•  Novidade grande", "•  Outra"], "com o changelog da versão")
 	_equals(Prefs.pending_update().get("version"), "99.0", "a versão fica guardada")
+	var button: Button = gate.find_child("Download", true, false)
+	_equals(button.text, "Baixar a versão 99.0", "sem pacote OTA, o APK")
+
+	# Com pacote OTA: baixa aqui dentro, e baixado, pede para reabrir.
+	var ota := UpdateGate.new()
+	var pck := {"url": UpdateCheck.DOWNLOADS + "v99.0/cascapp-99.0-base0.1.pck", "size": 2621440, "sha256": "abc"}
+	ota.offer = {"version": "99.0", "url": "", "changes": [], "pck": pck}
+	add_child(ota)
+	button = ota.find_child("Download", true, false)
+	_equals(button.text, "Atualizar para a 99.0 (2,5 MB)", "com pacote, atualiza por dentro")
+	DirAccess.make_dir_recursive_absolute(Patcher.DIR)
+	var downloaded := FileAccess.open(Patcher.DIR + "99.0.pck", FileAccess.WRITE)
+	downloaded.close()
+	ota._refresh()
+	_equals(button.text, "Fechar o app", "baixado, só falta reabrir")
+	DirAccess.remove_absolute(Patcher.DIR + "99.0.pck")
+	ota._pck_failed = true
+	ota._refresh()
+	_equals(button.text, "Baixar a versão 99.0", "pacote que falhou: volta ao APK")
+	_check((ota.find_child("Hint", true, false) as Label).text.begins_with("Não deu"), "e diz por quê")
+	ota.queue_free()
 
 	# Próxima abertura, sem rede: a guardada tranca de novo.
 	menu.queue_free()

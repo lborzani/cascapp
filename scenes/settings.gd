@@ -204,7 +204,7 @@ func _show_update(releases: Variant) -> void:
 		%UpdateResult.text = "Não deu para consultar agora. Confira a internet e tente de novo."
 		return
 	Prefs.set_update_checked(int(Time.get_unix_time_from_system()))
-	var offer := UpdateCheck.offer(releases, AppVersion.text())
+	var offer := UpdateCheck.offer(releases, AppVersion.text(), Patcher.apk_version)
 	Prefs.set_pending_update(offer)
 	if offer.is_empty():
 		%UpdateResult.text = "Você já está na versão mais recente (%s)." % AppVersion.text()

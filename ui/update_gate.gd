@@ -9,11 +9,20 @@ extends Control
 ## no meio de uma partida com um amigo. O gesto de voltar fecha o app (é a tela
 ## inicial que a hospeda), que é a única saída honesta.
 ##
-## O APK baixa pelo navegador e instala por cima; a próxima abertura já é a versão
-## nova, e o menu não mostra mais esta tela.
+## Dois caminhos. Com pacote OTA (`offer.pck`), ele baixa aqui dentro, é
+## conferido pelo sha256 que a release anunciou, e espera em `user://ota/` a
+## próxima abertura (`Patcher`) — o Android não deixa o app se reiniciar, então a
+## tela pede para fechar e abrir. Sem pacote, ou se ele falhar, o APK baixa pelo
+## navegador e instala por cima. Nos dois, a próxima abertura já é a versão nova,
+## e o menu não mostra mais esta tela.
 
-## `{version, url, changes}` de `UpdateCheck.offer`.
+## `{version, url, changes}` e às vezes `pck`, de `UpdateCheck.offer`.
 var offer := {}
+
+var _download: Button = null
+var _hint: Label = null
+## O pacote não baixou ou não conferiu: daqui em diante, o APK.
+var _pck_failed := false
 
 
 func _ready() -> void:
@@ -49,21 +58,96 @@ func _ready() -> void:
 	column.add_child(scroll)
 	scroll.add_child(ChangelogPanel.notes(offer.get("changes", [])))
 
-	var download := Button.new()
-	download.name = "Download"
-	download.text = "Baixar a versão %s" % offer.get("version", "")
-	download.theme_type_variation = &"PrimaryButton"
-	download.custom_minimum_size = Vector2(0, 52)
+	_download = Button.new()
+	_download.name = "Download"
+	_download.theme_type_variation = &"PrimaryButton"
+	_download.custom_minimum_size = Vector2(0, 52)
 	# Não some depois do toque: download cancelado ou falho no navegador deixa o
 	# botão à mão.
-	download.pressed.connect(func() -> void:
-		Sound.play(Sound.Cue.TAP)
+	_download.pressed.connect(_on_download)
+	column.add_child(_download)
+	_hint = _label("", &"Hint", "Hint")
+	column.add_child(_hint)
+	_refresh()
+
+
+## O pacote, quando ele serve: não é o que já falhou ao abrir (`Patcher.failed`)
+## nem o que acabou de falhar aqui.
+func _pck() -> Dictionary:
+	var pck = offer.get("pck", {})
+	if _pck_failed or not pck is Dictionary or offer.get("version") == Patcher.failed \
+			or not str(pck.get("url", "")).begins_with(UpdateCheck.DOWNLOADS):
+		return {}
+	return pck
+
+
+func _pck_path() -> String:
+	return Patcher.DIR + "%s.pck" % offer.get("version", "")
+
+
+## Baixado numa vez anterior, só falta reabrir.
+func _downloaded() -> bool:
+	return not _pck().is_empty() and FileAccess.file_exists(_pck_path())
+
+
+func _refresh() -> void:
+	var version := str(offer.get("version", ""))
+	var pck := _pck()
+	if _downloaded():
+		_download.text = "Fechar o app"
+		_hint.text = "A versão %s já está baixada. Feche e abra o app de novo para usar." % version
+	elif not pck.is_empty():
+		_download.text = "Atualizar para a %s (%s MB)" % [
+			version, ("%.1f" % (int(pck.get("size", 0)) / 1048576.0)).replace(".", ",")
+		]
+		_hint.text = "Baixa aqui mesmo. Depois é só fechar e abrir o app."
+	else:
+		_download.text = "Baixar a versão %s" % version
+		_hint.text = "O APK baixa pelo navegador; abra o arquivo para instalar por cima."
+		if _pck_failed:
+			_hint.text = "Não deu para atualizar por aqui. " + _hint.text
+
+
+func _on_download() -> void:
+	Sound.play(Sound.Cue.TAP)
+	if _downloaded():
+		get_tree().quit()
+	elif not _pck().is_empty():
+		_fetch_pck()
+	else:
 		var url := str(offer.get("url", ""))
 		if url.begins_with(UpdateCheck.DOWNLOADS):
 			OS.shell_open(url)
+
+
+## Baixa para `.part` e só renomeia depois de conferir: o `Patcher` nunca vê um
+## pacote pela metade.
+func _fetch_pck() -> void:
+	var pck := _pck()
+	var part := _pck_path() + ".part"
+	DirAccess.make_dir_recursive_absolute(Patcher.DIR)
+	var http := HTTPRequest.new()
+	http.download_file = part
+	http.timeout = 120.0
+	add_child(http)
+	_download.disabled = true
+	_download.text = "Baixando…"
+	http.request_completed.connect(
+		func(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+			http.queue_free()
+			_download.disabled = false
+			if result == HTTPRequest.RESULT_SUCCESS and code == 200 and UpdateCheck.verify(part, pck):
+				DirAccess.rename_absolute(part, _pck_path())
+			else:
+				DirAccess.remove_absolute(part)
+				_pck_failed = true
+			_refresh()
 	)
-	column.add_child(download)
-	column.add_child(_label("O APK baixa pelo navegador; abra o arquivo para instalar por cima.", &"Hint", ""))
+	if http.request(str(pck.get("url", ""))) != OK:
+		http.queue_free()
+		_download.disabled = false
+		_pck_failed = true
+		_refresh()
 
 
 func _label(text: String, variation: StringName, node_name: String) -> Label:

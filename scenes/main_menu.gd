@@ -43,6 +43,8 @@ var _gate: UpdateGate = null
 
 
 func _ready() -> void:
+	# Chegou ao menu: a versão baixada por OTA, se houver, abre (`Patcher`).
+	Patcher.confirm()
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
 	modulate.a = 0.0
@@ -430,7 +432,7 @@ func _check_update() -> void:
 ## teste de cena injetá-la sem rede. Sem versão nova (inclusive release apagada
 ## depois de vista), a guardada e a tela saem.
 func _offer_update(releases: Array) -> void:
-	var offer := UpdateCheck.offer(releases, AppVersion.text())
+	var offer := UpdateCheck.offer(releases, AppVersion.text(), Patcher.apk_version)
 	Prefs.set_pending_update(offer)
 	if offer.is_empty():
 		if _gate != null:
