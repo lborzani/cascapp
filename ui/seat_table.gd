@@ -13,8 +13,8 @@ extends Control
 
 const SEAT := 54.0
 const LABEL_SIZE := 12
-## O raio da órbita das cadeiras, em relação à metade do menor lado.
-const ORBIT := 0.72
+## Altura reservada para a legenda de cada cadeira.
+const LABEL_HEIGHT := 16.0
 
 var capacity := 2
 var local_seat := 0
@@ -26,7 +26,7 @@ var _labels: Array[Label] = []
 
 
 func _init() -> void:
-	custom_minimum_size.y = 230.0
+	custom_minimum_size.y = 260.0
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(_place)
 
@@ -81,22 +81,35 @@ func refresh() -> void:
 	queue_redraw()
 
 
+## Raio da órbita das cadeiras: o que sobra da metade do menor lado depois da
+## cadeira e da legenda dela. Era uma fração fixa, e a legenda da cadeira de cima
+## caía em cima da mesa e a de baixo, em cima do texto seguinte.
+func _orbit() -> float:
+	return minf(size.x, size.y) * 0.5 - SEAT * 0.5 - AppTheme.SPACE_XS - LABEL_HEIGHT
+
+
+## A legenda vai **para fora** da mesa, no sentido da cadeira: em cima da de cima,
+## embaixo da de baixo, ao lado das laterais. Sempre embaixo, a de cima cobria o
+## tampo.
 func _place() -> void:
 	var center := size * 0.5
-	var radius := minf(size.x, size.y) * 0.5 * ORBIT
+	var radius := _orbit()
 	for seat in _coasters.size():
 		var angle := seat_angle(seat, capacity, local_seat)
-		var spot := center + Vector2(cos(angle), sin(angle)) * radius
+		var outward := Vector2(cos(angle), sin(angle))
+		var spot := center + outward * radius
 		_coasters[seat].position = spot - Vector2(SEAT, SEAT) * 0.5
-		_labels[seat].size.x = SEAT + 40.0
-		_labels[seat].position = Vector2(spot.x - (SEAT + 40.0) * 0.5, spot.y + SEAT * 0.55)
+		var label := _labels[seat]
+		label.size = Vector2(label.get_minimum_size().x, LABEL_HEIGHT)
+		var reach := absf(outward.x) * label.size.x * 0.5 + absf(outward.y) * LABEL_HEIGHT * 0.5
+		label.position = spot + outward * (SEAT * 0.5 + AppTheme.SPACE_XS + reach) - label.size * 0.5
 
 
 ## O tampo: um círculo escuro com o contorno de giz, como a bolacha grande que ele
 ## é. É o que dá às cadeiras um lugar de onde estar em volta.
 func _draw() -> void:
 	var center := size * 0.5
-	var radius := minf(size.x, size.y) * 0.5 * (ORBIT - 0.3)
+	var radius := _orbit() - SEAT * 0.5 - AppTheme.SPACE_M
 	if radius <= 0.0:
 		return
 	draw_circle(center, radius, AppTheme.COASTER)

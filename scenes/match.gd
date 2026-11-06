@@ -113,6 +113,10 @@ func _ready() -> void:
 	# Entrada curta: troca de tela sem corte seco.
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
+	var column: VBoxContainer = %Board.get_parent().get_parent()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	%Board.get_parent().size_flags_vertical = Control.SIZE_FILL
+	column.resized.connect(_fit_board)
 	_ruleset = Game.make_ruleset()
 	if Game.mode == Game.Mode.ONLINE:
 		# Quem assiste não tem cor: vê as brancas embaixo, como num tabuleiro de
@@ -1513,6 +1517,29 @@ func _refresh_last_move() -> void:
 	# de `VBoxContainer` deixa de contar altura, e é a altura que precisa sumir.
 	%TopLastMoveSlot.visible = _top_last_move.has_move()
 	%BottomLastMoveSlot.visible = _bottom_last_move.has_move()
+	_fit_board()
+
+
+## A área do tabuleiro do tamanho do tabuleiro, e a coluna inteira centrada.
+##
+## A área esticava até o fim da coluna e o tabuleiro ficava no meio dela: a sobra
+## virava dois vãos grandes em volta do tabuleiro, e a linha do último lance ficava
+## solta, grudada no cartão de cima. Com a área do tamanho do tabuleiro, cartão,
+## linha e tabuleiro ficam todos a um `separation` um do outro, e a sobra vai para
+## as pontas da tela.
+func _fit_board() -> void:
+	var area: Control = %Board.get_parent()
+	var column: VBoxContainer = area.get_parent()
+	var used := 0.0
+	var shown := 0
+	for child in column.get_children():
+		if child is Control and child.visible:
+			shown += 1
+			if child != area:
+				used += child.get_combined_minimum_size().y
+	used += column.get_theme_constant("separation") * (shown - 1)
+	var floor_height := 300.0
+	area.custom_minimum_size.y = clampf(column.size.x, floor_height, maxf(floor_height, column.size.y - used))
 
 
 ## Onde existe um "eu" — rede ou bot — o cartão de baixo é o meu. No mesmo

@@ -2,18 +2,22 @@ extends Node
 
 ## Um print da partida de Uno, para julgar a tela sem jogar.
 ##
-##   godot --path . --resolution 768x432 res://tests/uno_shot.tscn
+##   godot --path . res://tests/uno_shot.tscn
 ##
 ## Salva em user://uno_screen.png. A posição é escrita à mão e não sorteada: o que
 ## se quer ver é a mão grande, o curinga, o +4 e a carta apagada convivendo — e um
 ## baralho sorteado dá isso uma vez em muitas.
 
+const Stage := preload("res://tests/shot_stage.gd")
+
+
 func _ready() -> void:
 	Game.start_solo(Game.UNO)
 	Game.table_size = 6
 	Game.uno_sevens = true
+	var stage := Stage.make(self, Vector2i(768, 432))
 	var scene := preload("res://scenes/uno_match.tscn").instantiate()
-	add_child(scene)
+	stage.add_child(scene)
 	await get_tree().process_frame
 
 	var state: MatchState = scene._state
@@ -44,6 +48,6 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png("user://uno_screen.png")
+	Stage.save(stage, "user://uno_screen.png")
 	print("ok — user://uno_screen.png")
 	get_tree().quit()

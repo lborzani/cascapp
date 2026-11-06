@@ -148,7 +148,7 @@ func _ready() -> void:
 	add_child(margin)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
+	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	margin.add_child(column)
 
 	# O cabeçalho **quebra**, e não corta.
@@ -209,7 +209,7 @@ func _ready() -> void:
 	scroll.add_child(gutter)
 
 	_body = VBoxContainer.new()
-	_body.add_theme_constant_override("separation", 2)
+	_body.add_theme_constant_override("separation", AppTheme.SPACE_XS)
 	_body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gutter.add_child(_body)
 

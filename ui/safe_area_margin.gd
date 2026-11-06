@@ -10,8 +10,10 @@ extends MarginContainer
 ## apenas o que precisa ser lido e tocado, que é exatamente o que este container
 ## faz com os filhos.
 ##
-## Em desktop `get_display_safe_area()` devolve a tela inteira e as margens ficam
-## sendo só as do projeto, sem caso especial.
+## Só em celular. No desktop `get_display_safe_area()` vem em coordenadas
+## globais: num segundo monitor abaixo do primeiro ela começa em y=900, e isso
+## era lido como um notch de 900 px que empurrava a tela inteira para fora da
+## janela. Janela de desktop não tem notch.
 
 var _base := {}
 
@@ -43,6 +45,8 @@ func _apply() -> void:
 ## esquerda, `size` o recuo embaixo e à direita. A conversão importa porque o
 ## projeto usa `stretch/canvas_items`, então pixel de tela não é pixel de UI.
 func _safe_area_insets() -> Rect2:
+	if not OS.has_feature("mobile"):
+		return Rect2()
 	var window := DisplayServer.window_get_size()
 	if window.x <= 0 or window.y <= 0:
 		return Rect2()
