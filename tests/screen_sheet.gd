@@ -17,6 +17,7 @@ const SHOTS := [
 	["res://scenes/main_menu.tscn", "01b_folha"],
 	["res://scenes/main_menu.tscn", "01c_voltar"],
 	["res://scenes/main_menu.tscn", "01d_como_jogar"],
+	["res://scenes/main_menu.tscn", "01e_favoritos"],
 	["res://scenes/match.tscn", "02b_regras_mesa"],
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
@@ -124,6 +125,12 @@ func _next() -> void:
 	# queda de uma partida de verdade poria o cartão de voltar em todo print de menu.
 	if shot != "01c_voltar":
 		Prefs.forget_rejoin()
+	# Os favoritos também são do aparelho: só o print deles os tem, e sempre os
+	# mesmos quatro, um de cada categoria.
+	Prefs.forget_favorites()
+	if shot == "01e_favoritos":
+		for id in [Game.CHESS, Game.LUDO, Game.UNO, Game.POOL]:
+			Prefs.toggle_favorite(id)
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
