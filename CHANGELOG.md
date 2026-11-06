@@ -7,6 +7,14 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.37
+
+- Telas mais arrumadas: os espaços entre os blocos ficaram iguais em todo o app.
+- Xadrez e damas: tabuleiro e cartões dos jogadores alinhados no meio da tela, e as peças capturadas não cobrem mais o nome do jogador.
+- Criar partida: o nome de cada cadeira não fica mais por cima da mesa.
+- Escolher o ritmo do relógio: as opções aparecem em duas linhas cheias.
+- Favoritos: a peça não cobre mais o nome do jogo.
+
 ## 1.36
 
 - Atualizações mais rápidas: da próxima versão em diante, a maioria delas baixa aqui dentro do app em poucos segundos, sem passar pelo navegador nem instalar o APK de novo. Depois do download, é só fechar e abrir o app.
