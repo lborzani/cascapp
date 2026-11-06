@@ -159,32 +159,42 @@ func analyse(history: Array) -> Array:
 		var move := rules.move_from_uci(state, rules.uci(Move.from_dict(data)))
 		if move == null:
 			break
-		var entry := {
-			"san": rules.notation(state, move),
-			"uci": rules.uci(move),
-			"side": state.side_to_move,
-			"fen": rules.fen(state),
-			"best": seen["best"],
-			"best_san": "",
-			"score": seen["score"],
-			"mate": seen["mate"],
-		}
-		var best_move := rules.move_from_uci(state, str(seen["best"]))
-		if best_move != null:
-			entry["best_san"] = rules.notation(state, best_move)
-
-		rules.apply_move(state, move)
-		var after := look(engine, rules, state)
-		if after.is_empty():
+		var judged := judge(engine, rules, state, seen, move)
+		if judged.is_empty():
 			break
-		entry["after"] = 100.0 - float(after["score"])
-		entry["verdict"] = classify(entry["score"], entry["after"], entry["uci"] == entry["best"])
-		entry["missed_mate"] = missed_mate(entry["mate"], after["mate"], after["mated"])
-		out.append(entry)
-		seen = after
+		out.append(judged[0])
+		seen = judged[1]
 		progress += 1
 	engine.quit()
 	return out
+
+
+## Um lance: a entrada da revisão (formato de `analyse`) e o que o motor viu
+## depois dele, `[entry, after]`. `seen` é o `look` da posição de antes; o lance
+## é aplicado em `state`. Vazio quando o motor morreu no meio.
+static func judge(engine: Stockfish, rules: ChessRules, state: MatchState, seen: Dictionary, move: Move) -> Array:
+	var entry := {
+		"san": rules.notation(state, move),
+		"uci": rules.uci(move),
+		"side": state.side_to_move,
+		"fen": rules.fen(state),
+		"best": seen["best"],
+		"best_san": "",
+		"score": seen["score"],
+		"mate": seen["mate"],
+	}
+	var best_move := rules.move_from_uci(state, str(seen["best"]))
+	if best_move != null:
+		entry["best_san"] = rules.notation(state, best_move)
+
+	rules.apply_move(state, move)
+	var after := look(engine, rules, state)
+	if after.is_empty():
+		return []
+	entry["after"] = 100.0 - float(after["score"])
+	entry["verdict"] = classify(entry["score"], entry["after"], entry["uci"] == entry["best"])
+	entry["missed_mate"] = missed_mate(entry["mate"], after["mate"], after["mated"])
+	return [entry, after]
 
 
 ## Pede para parar no próximo lance. Quem chama ainda espera a thread — no

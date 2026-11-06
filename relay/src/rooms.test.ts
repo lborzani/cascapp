@@ -490,3 +490,112 @@ describe('protocolo', () => {
     assert.deepEqual(parsed, { t: 'msg', d: { t: 'move', p: [12, 28] } });
   });
 });
+
+describe('fila de quem joga a próxima', () => {
+  function watchedRoom() {
+    const rooms = registry();
+    const host = new FakeSocket();
+    const guest = new FakeSocket();
+    const opened = rooms.openRoom('NEXT01', 'chess', host);
+    assert.ok(opened.ok);
+    rooms.joinRoom('NEXT01', guest);
+    const ana = new FakeSocket();
+    const beto = new FakeSocket();
+    rooms.watchRoom('NEXT01', ana);
+    rooms.watchRoom('NEXT01', beto);
+    return { rooms, room: opened.room, host, guest, ana, beto };
+  }
+
+  it('entra por ordem de chegada, uma vez só, e só quem assiste', () => {
+    const { rooms, room, guest, ana, beto } = watchedRoom();
+    assert.equal(rooms.enqueue(room, beto, 'Beto', ''), true);
+    assert.equal(rooms.enqueue(room, ana, 'Ana', ''), true);
+    assert.equal(rooms.enqueue(room, beto, 'Beto', ''), false, 'pedir de novo não fura a fila');
+    assert.equal(rooms.enqueue(room, guest, 'Gil', ''), false, 'jogador não entra na fila');
+    assert.deepEqual(room.queue.map((entry) => entry.name), ['Beto', 'Ana']);
+
+    assert.equal(rooms.dequeue(room, beto), true);
+    assert.equal(rooms.dequeue(room, beto), false);
+    assert.equal(rooms.unwatch(room, ana), true, 'parar de assistir tira da fila');
+    assert.deepEqual(room.queue, []);
+  });
+
+  it('troca o jogador pelo primeiro da fila sem liberar o assento', () => {
+    const { rooms, room, guest, ana, beto } = watchedRoom();
+    rooms.enqueue(room, ana, 'Ana', 'tok');
+    rooms.enqueue(room, beto, 'Beto', '');
+    const oldKey = room.keys[1];
+
+    const swapped = rooms.yieldSeat(room, 1, guest);
+    assert.ok(swapped !== null);
+    assert.equal(swapped.next.socket, ana);
+    assert.equal(swapped.next.token, 'tok');
+    assert.equal(room.seats[1], ana);
+    assert.notEqual(swapped.key, oldKey, 'dono novo, chave nova');
+    assert.equal(room.keys[1], swapped.key);
+    assert.equal(occupied(room), 2);
+    assert.equal(room.watchers.has(guest), true, 'quem cedeu passa a assistir');
+    assert.equal(room.watchers.has(ana), false);
+    assert.deepEqual(room.queue.map((entry) => entry.name), ['Beto']);
+    assert.equal(rooms.joinRoom('NEXT01', new FakeSocket(), oldKey).ok, false, 'a chave antiga não abre mais');
+  });
+
+  it('não troca sem fila, nem por quem não está no assento, e pula quem caiu', () => {
+    const { rooms, room, host, guest, ana, beto } = watchedRoom();
+    assert.equal(rooms.yieldSeat(room, 1, guest), null, 'fila vazia');
+
+    rooms.enqueue(room, ana, 'Ana', '');
+    rooms.enqueue(room, beto, 'Beto', '');
+    assert.equal(rooms.yieldSeat(room, 1, host), null, 'só o próprio assento');
+    assert.equal(rooms.yieldSeat(room, 0, ana), null, 'espectador não cede nada');
+
+    ana.kill();
+    const swapped = rooms.yieldSeat(room, 1, guest);
+    assert.equal(swapped?.next.socket, beto, 'quem caiu sem fechar perde a vez');
+    assert.deepEqual(room.queue, []);
+  });
+});
+
+describe('parseClientMessage da fila', () => {
+  it('limpa o apelido e entende sair da fila', () => {
+    assert.deepEqual(parseClientMessage('{"t":"queue","name":"  Ana\\n","token":"x"}'), {
+      t: 'queue',
+      on: true,
+      name: 'Ana',
+      token: 'x',
+    });
+    assert.deepEqual(parseClientMessage('{"t":"queue","on":false}'), {
+      t: 'queue',
+      on: false,
+      name: '',
+      token: '',
+    });
+    assert.deepEqual(parseClientMessage('{"t":"yield","seat":0}'), { t: 'yield' });
+  });
+});
+
+describe('trava depois da troca', () => {
+  it('no empate, o segundo a ceder não troca o outro assento', () => {
+    let clock = 10_000;
+    const rooms = registry(() => clock);
+    const host = new FakeSocket();
+    const guest = new FakeSocket();
+    const opened = rooms.openRoom('NEXT02', 'chess', host);
+    assert.ok(opened.ok);
+    rooms.joinRoom('NEXT02', guest);
+    const room = opened.room;
+    const ana = new FakeSocket();
+    const beto = new FakeSocket();
+    for (const viewer of [ana, beto]) {
+      rooms.watchRoom('NEXT02', viewer);
+      rooms.enqueue(room, viewer, '', '');
+    }
+
+    assert.equal(rooms.yieldSeat(room, 1, guest)?.next.socket, ana);
+    assert.equal(rooms.yieldSeat(room, 0, host), null, 'o toque cruzado chega e é ignorado');
+    assert.equal(room.seats[0], host);
+
+    clock += 3_001;
+    assert.equal(rooms.yieldSeat(room, 0, host)?.next.socket, beto, 'na partida seguinte vale de novo');
+  });
+});

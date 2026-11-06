@@ -30,22 +30,30 @@ func _ready() -> void:
 	await _test_checkers_capture_taps()
 	await _test_rematch()
 	await _test_review()
+	await _test_review_side()
 	await _test_puzzle()
 	await _test_match_history()
 	_test_verified_names()
 	await _test_spectator()
+	_check(await _test_next_up() == true, "fila de quem joga a próxima rodou até o fim")
+	_check(await _test_live_review() == true, "avaliação ao vivo rodou até o fim")
+	await _test_rated_result()
 	await _test_premove()
 	await _test_premove_limit()
 	await _test_premove_captures()
 	await _test_bot()
 	await _test_battleship()
 	_test_back_navigation()
+	await _test_scroll_drag()
 	_test_stockfish_license()
 	await _test_manual_update()
 	await _test_match_bar()
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
+	_check(await _test_news() == true, "novidades rodou até o fim")
+	await _test_friends()
+	_check(await _test_friends_drawer() == true, "gaveta de amigos rodou até o fim")
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -444,6 +452,46 @@ func _test_checkers_capture_taps() -> void:
 	await get_tree().process_frame
 
 
+## Elo: o desfecho vai ao relay uma vez, o hash dos lances é o mesmo nos dois
+## aparelhos, e o Elo que o relay devolve fica no painel mesmo quando ele reabre.
+func _test_rated_result() -> void:
+	var MatchScript: GDScript = preload("res://scenes/match.gd")
+	print("Elo da partida online")
+	_equals(
+		MatchScript.moves_hash([{"p": PackedInt32Array([12, 28]), "pr": 0}]),
+		MatchScript.moves_hash([{"p": [12.0, 28.0], "pr": 0.0}]),
+		"lance jogado aqui e lance vindo de JSON dão o mesmo hash"
+	)
+	_check(
+		MatchScript.moves_hash([{"p": [12, 28]}]) != MatchScript.moves_hash([{"p": [12, 20]}]),
+		"lances diferentes, hash diferente"
+	)
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+
+	scene._on_opponent_left()
+	_check(scene._reported, "o abandono do outro vai para o relay")
+	scene._show_overlay("O oponente saiu", "A partida foi encerrada no lance 0.", false)
+	Net.rated.emit([{"seat": 1, "elo": 1180, "delta": -20}, {"seat": 0, "elo": 1220, "delta": 20}])
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "o painel mostra o nosso Elo novo")
+	_equals(Account.elo, 1220, "e a conta fica com ele")
+	scene._show_overlay("O oponente saiu", "De novo.", false)
+	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "e ele continua lá quando o painel reabre")
+
+	scene._new_game()
+	_check(not scene._reported and scene._rating_text.is_empty(), "a revanche começa sem relato nem Elo")
+	Account.elo = 0
+	scene.queue_free()
+	await get_tree().process_frame
+
+
 ## Revanche em rede é convite: quem pede espera, quem recebe decide, e as cores
 ## trocam. Antes um toque reiniciava os dois lados na hora — o outro jogador era
 ## arrastado para um tabuleiro novo sem ter sido consultado, e quem começou de
@@ -571,6 +619,60 @@ func _test_review() -> void:
 	await get_tree().process_frame
 
 
+## Na revisão só a cor de quem jogou se mexe: o desafio sai dos erros dela, e
+## não dos do oponente — que abririam com a vez dele. A análise é injetada, para
+## o teste valer com ou sem Stockfish.
+func _test_review_side() -> void:
+	print("revisão: só a cor de quem jogou")
+	var history := []
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	for uci in ["f2f3", "e7e5", "g2g4", "d8h4"]:
+		var move := rules.move_from_uci(state, uci)
+		history.append(move.to_dict())
+		rules.apply_move(state, move)
+	var panel := ReviewPanel.new()
+	add_child(panel)
+	panel.open(history, Board.Side.WHITE)
+	await _settle(panel, "_thread")
+	_check(not panel._board.flipped, "de brancas, brancas embaixo")
+	var fake := func(side: int, verdict: int, best: String) -> Dictionary:
+		return {"san": "x", "side": side, "verdict": verdict, "missed_mate": false, "best": best}
+	panel._entries = [
+		fake.call(Board.Side.WHITE, GameReview.Verdict.GOOD, ""),
+		fake.call(Board.Side.BLACK, GameReview.Verdict.MISTAKE, "e7e6"),
+		fake.call(Board.Side.WHITE, GameReview.Verdict.BLUNDER, "e2e4"),
+		fake.call(Board.Side.BLACK, GameReview.Verdict.BEST, ""),
+	]
+
+	panel._show(2)
+	_check(not panel._retry.visible, "erro do oponente não vira desafio")
+	_equals(panel._detail.text, "Havia um lance melhor.", "mas a revisão ainda aponta o erro")
+	panel._show(3)
+	_check(panel._retry.visible, "erro de quem jogou vira desafio")
+	panel._retry.pressed.emit()
+	_equals(panel._puzzle_state.side_to_move, Board.Side.WHITE, "com a vez das brancas")
+	panel._on_tap(_square("e7"))
+	_equals(panel._pick, Board.NO_SQUARE, "peça preta não se ergue")
+	panel._on_tap(_square("e2"))
+	_equals(panel._pick, _square("e2"), "peça branca sim")
+	panel._retry.pressed.emit()
+
+	# No mesmo aparelho os dois lados eram de quem revisa.
+	panel._side = -1
+	panel._show(2)
+	_check(panel._retry.visible, "no mesmo aparelho o erro das pretas também vira desafio")
+	panel.close()
+	await get_tree().process_frame
+
+	panel = ReviewPanel.new()
+	add_child(panel)
+	panel.open(history, Board.Side.BLACK)
+	_check(panel._board.flipped, "de pretas, o tabuleiro vira")
+	panel.close()
+	await get_tree().process_frame
+
+
 ## 4.d3 deixa passar o Dxf7#: a revisão oferece o desafio, três erros trazem a
 ## dica, e o mate resolve. Sem Stockfish não há análise e nem desafio.
 func _test_puzzle() -> void:
@@ -684,6 +786,7 @@ func _test_match_history() -> void:
 	review_buttons[0].pressed.emit()
 	_check(is_instance_valid(panel._review), "Revisar abre a revisão da partida")
 	_equals(panel._review._moves.get_child_count(), 4, "com os lances dela")
+	_equals(panel._review._side, -1, "partida no mesmo aparelho revisa os dois lados")
 	settings.go_back()
 	await get_tree().process_frame
 	_check(not is_instance_valid(panel._review) and is_instance_valid(panel), "voltar fecha a revisão primeiro")
@@ -710,6 +813,10 @@ func _test_verified_names() -> void:
 	Net._on_relay_peer_arrived(1)
 	Net._remember_name(1, "Outra pessoa")
 	_equals(Net.name_of(1), "Outra pessoa", "assento com dono novo volta a aceitar apelido")
+	Net._on_relay_identity(1, "Ana", {"user": "anaanaanaana123", "avatar": "a.webp", "elo": 1350})
+	_equals(Net.profile_of(1).get("elo"), 1350, "o perfil confirmado fica com o assento")
+	Net._on_relay_peer_arrived(1)
+	_equals(Net.profile_of(1), {}, "e sai com o dono do assento")
 	Net.player_names = {}
 	Net.verified_seats = {}
 
@@ -748,6 +855,18 @@ func _test_spectator() -> void:
 	)
 	_equals(_node(scene, "%BottomTag").title, "Bia", "o cartão de baixo é de quem joga de brancas")
 	_equals(_node(scene, "%TopTag").title, "Ana", "e o de cima, de quem joga de pretas")
+
+	# Perfil confirmado pelo relay: Elo no subtítulo, foto na bolacha.
+	var photo := ImageTexture.create_from_image(Image.create(8, 8, false, Image.FORMAT_RGB8))
+	Account._remote["bia.webp"] = photo
+	Net._on_relay_identity(0, "Ana", {"user": "anaanaanaana123", "avatar": "", "elo": 1350})
+	Net._on_relay_identity(1, "Bia", {"user": "biabiabiabia123", "avatar": "bia.webp", "elo": 0})
+	_equals(_node(scene, "%TopTag").subtitle, "Pretas · 1350", "Elo confirmado aparece ao lado do lado")
+	_check(_node(scene, "%TopTag").photo == null, "conta sem foto fica com a peça")
+	_equals(_node(scene, "%BottomTag").photo, photo, "conta com foto mostra a foto")
+	_equals(_node(scene, "%BottomTag").subtitle, "Brancas", "e sem Elo, nada de número")
+	Account._remote.erase("bia.webp")
+	Net.verified_seats = {}
 
 	var e4 := {"p": [_square("e2"), _square("e4")], "pr": 0, "n": 0}
 	scene._on_remote_move(e4.merged({"seat": 0}))
@@ -791,6 +910,196 @@ func _test_spectator() -> void:
 	Net.white_seat = 0
 	Net.player_names = {}
 	Game.mode = Game.Mode.HOTSEAT
+
+
+## Fila de quem joga a próxima, do lado da tela: quem perdeu vê a contagem e
+## cede, vira espectador e a partida nova começa com as cores trocadas; depois,
+## como espectador, pede a vez e senta. Os sinais do `Net` são disparados à mão,
+## como o relay faria.
+func _test_next_up() -> bool:
+	print("fila de quem joga a próxima")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = false
+	Net.connected = true
+	Net.local_seat = 1
+	Net.local_side = Board.Side.BLACK
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var queue_button: Button = _node(scene, "%QueueButton")
+	var next_button: Button = _node(scene, "%NextUpButton")
+	var next_label: Label = _node(scene, "%NextUpLabel")
+	var rematch: Button = _node(scene, "%RematchButton")
+
+	_check(not queue_button.visible, "jogador não vê o botão de entrar na fila")
+	Net._on_relay_queue(PackedStringArray(["Caio", "Dani"]), -1)
+	var caption: Label = scene._match_status._queue
+	_check(caption.visible and caption.text == "Próximos: Caio, Dani", "a barra mostra a fila (%s)" % caption.text)
+
+	# Pretas (nós) perdem no tempo: quem perdeu cede.
+	scene._flag(Board.Side.BLACK)
+	_check(not rematch.visible, "com fila e vencedor, revanche some")
+	_check(next_button.visible and next_button.text == "Ceder agora (5)", "quem perdeu vê a contagem (%s)" % next_button.text)
+	_equals(next_label.text, "Caio joga a próxima. Você vai assistir.", "e quem senta")
+
+	# A fila esvazia (Caio e Dani saíram): a contagem para e a revanche volta.
+	Net._on_relay_queue(PackedStringArray(), -1)
+	_check(rematch.visible and not next_button.visible, "fila vazia devolve a revanche")
+	_check(not scene._counting, "e para a contagem")
+	Net._on_relay_queue(PackedStringArray(["Caio"]), -1)
+
+	# O relay trocou: cedemos o assento 1.
+	Net._on_relay_swapped(1, "Caio", "", 1)
+	_check(Net.is_spectator, "quem cedeu virou espectador")
+	_equals(Net.white_seat, 1, "a partida nova troca as cores (quem venceu de brancas joga de pretas)")
+	_equals(scene._state.ply, 0, "e começa do zero")
+	_check(not _node(scene, "%ResultLayer").visible, "sem o painel da anterior")
+	_equals(scene._board.flipped, false, "brancas embaixo, como quem assiste")
+	_check(scene._live != null, "com a avaliação ao vivo")
+	_equals(_node(scene, "%BottomTag").title, "Caio", "o cartão de brancas é de quem sentou")
+	_check(queue_button.visible and queue_button.text == "Quero jogar a próxima", "e o botão de pedir a vez aparece")
+
+	# Como espectador: pede a vez e, na próxima troca, senta no assento 0.
+	Net._on_relay_queue(PackedStringArray(["Bia"]), 0)
+	_equals(queue_button.text, "Sair da fila (você é o 1º)", "o botão diz a posição")
+	scene._flag(Board.Side.BLACK)
+	_check(next_button.visible and next_label.text == "Você joga a próxima.", "no fim, quem assiste vê que é o próximo")
+	Net._on_relay_swapped(0, "Bia", "chave", 2)
+	_check(not Net.is_spectator and Net.local_seat == 0, "quem pediu sentou no assento 0")
+	_equals(Game.local_side, Board.Side.WHITE, "e joga de brancas (o assento 0 jogava de pretas)")
+	_equals(scene._seat_of(Board.Side.WHITE), 0, "a conta das cores bate com o assento")
+	_check(scene._live == null, "a avaliação ao vivo sai de quem joga")
+	_check(not queue_button.visible, "e o botão de pedir a vez também")
+	_equals(scene._match_status.watchers, 2, "quem sentou passa a ver o contador")
+
+	# Vencedor com fila: não cede e não pede revanche.
+	Net._on_relay_queue(PackedStringArray(["Ana"]), -1)
+	scene._flag(Board.Side.BLACK)
+	_check(not rematch.visible and not next_button.visible, "quem venceu nem cede nem pede revanche")
+	_equals(next_label.text, "Ana joga a próxima contra você.", "e sabe quem vem")
+
+	# Empate com fila: os dois podem dar o lugar.
+	scene._winner = -1
+	scene._refresh_next_up()
+	_check(next_button.visible and next_button.text == "Dar lugar para Ana", "no empate, dar lugar (%s)" % next_button.text)
+	_check(rematch.visible, "ao lado da revanche")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Prefs.forget_rejoin()
+	Net.is_spectator = false
+	Net.local_seat = 0
+	Net.local_side = Board.Side.WHITE
+	Net.white_seat = 0
+	Net.watcher_count = 0
+	Net.queue_names = PackedStringArray()
+	Net.queue_position = -1
+	Net.player_names = {}
+	Net.verified_seats = {}
+	Game.mode = Game.Mode.HOTSEAT
+	return true
+
+
+## Avaliação ao vivo de quem assiste xadrez: só o último lance é julgado, e um
+## histórico que muda no meio da busca descarta o resultado. Sem Stockfish, o
+## teste confere só que nada aparece e nada trava.
+func _test_live_review() -> bool:
+	print("avaliação ao vivo")
+	_check(not _has_live(Game.Mode.HOTSEAT, false, Game.CHESS), "no mesmo aparelho não há avaliação")
+	_check(not _has_live(Game.Mode.SOLO, false, Game.CHESS), "nem contra o bot")
+	_check(not _has_live(Game.Mode.ONLINE, false, Game.CHESS), "nem para quem joga online")
+	_check(not _has_live(Game.Mode.ONLINE, true, Game.CHECKERS), "nem para quem assiste damas")
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net.is_spectator = true
+	Net.connected = true
+	Net.white_seat = 0
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var live: LiveReview = scene._live
+	_check(live != null, "quem assiste xadrez tem a avaliação")
+	var board: BoardView = scene._board
+	_check(live.bar.get_parent() == _node(scene, "%TopLastMoveSlot").get_parent(), "a barra está na coluna da partida")
+	_equals(live.bar.get_index(), _node(scene, "%TopLastMoveSlot").get_index() - 1, "logo acima da linha do último lance")
+	_check(not live.bar.visible, "e escondida antes do primeiro lance")
+
+	# Dois lances seguidos: o primeiro ainda está na busca quando o segundo chega.
+	var fools := [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]
+	for i in 2:
+		_remote(scene, fools[i], i)
+	await _settle_live(live)
+	if live._no_engine:
+		_check(live.entry.is_empty(), "sem motor, nenhum veredito")
+		_check(not live.bar.visible and board.badge_square == Board.NO_SQUARE, "nem barra, nem selo")
+	else:
+		_equals(live.entry.get("uci"), "e7e5", "o veredito é o do último lance")
+		_remote(scene, fools[2], 2)
+		_check(live.entry.is_empty(), "o lance novo apaga o veredito do anterior")
+		_equals(board.badge_square, Board.NO_SQUARE, "e o selo dele some na hora")
+		_check(live.bar.visible, "a barra fica com a nota anterior até a nova chegar")
+		await _settle_live(live)
+		_check(live.entry.get("verdict", -1) >= GameReview.Verdict.MISTAKE, "2.g4 é erro (%s)" % live.entry)
+		_equals(board.badge_square, _square("g4"), "o selo vai na casa de destino")
+		_check(board.badge_text.begins_with("?"), "com o símbolo do erro (%s)" % board.badge_text)
+		_equals(board.badge_color, AppTheme.DANGER, "na cor do erro")
+		_remote(scene, fools[3], 3)
+		await _settle_live(live)
+		_equals(live.entry.get("verdict"), GameReview.Verdict.BEST, "o mate é o melhor lance")
+		_equals(GameReview.white_curve([live.entry])[1], 0.0, "e a posição é das pretas")
+		_equals(board.badge_text, "!", "o selo do mate é o do melhor lance")
+		_equals(live.bar.white, 0.0, "e a barra dá a partida às pretas")
+
+		# Quem entra no meio recebe o histórico inteiro de uma vez.
+		var history := []
+		for i in 3:
+			history.append({"p": [_square(fools[i][0]), _square(fools[i][1])], "pr": 0})
+		scene._apply_sync(history)
+		await _settle_live(live)
+		_equals(live.entry.get("uci"), "g2g4", "entrando no meio, sai o veredito do último lance")
+
+	scene._apply_sync([])
+	await _settle_live(live)
+	_check(live.entry.is_empty(), "revanche: nada da partida anterior fica")
+	_check(not live.bar.visible and board.badge_square == Board.NO_SQUARE, "nem barra, nem selo")
+
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Game.mode = Game.Mode.HOTSEAT
+	Game.game_id = Game.CHESS
+	return true
+
+
+func _has_live(mode: int, spectator: bool, game: StringName) -> bool:
+	Game.mode = mode
+	Game.game_id = game
+	Net.is_spectator = spectator
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	var live: bool = scene._live != null
+	scene.free()
+	Net.is_spectator = false
+	Game.mode = Game.Mode.HOTSEAT
+	Game.game_id = Game.CHESS
+	return live
+
+
+func _remote(scene: Node, step: Array, index: int) -> void:
+	var seat := 0 if index % 2 == 0 else 1
+	scene._on_remote_move({"p": [_square(step[0]), _square(step[1])], "pr": 0, "n": index, "seat": seat})
+
+
+## Espera a busca em andamento e as que ela encadear.
+func _settle_live(live: LiveReview) -> void:
+	for _i in 300:
+		if live._thread == null and (live._no_engine or live._history.is_empty() or live._history == live._judged):
+			return
+		await get_tree().process_frame
+		OS.delay_msec(20)
 
 
 ## Pré-movimento: o lance escolhido enquanto o oponente pensa, que sai sozinho no
@@ -846,6 +1155,29 @@ func _test_premove() -> void:
 	# sempre: cancelar o plano.
 	scene._on_square_tapped(_square("h5"))
 	_check(scene._premove.is_empty(), "tocar em outro lugar cancela o plano")
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("d4"))
+	# A peça continua desenhada em d2, e é lá que o dedo volta para desistir.
+	scene._on_square_tapped(_square("d2"))
+	_check(scene._premove.is_empty(), "tocar de novo na peça desfaz o plano")
+
+	# Tocar fora das casas desfaz tudo, inclusive a peça erguida. O evento passa
+	# pelo gesto de verdade: o topo do controle é moldura, não casa.
+	scene._on_square_tapped(_square("d2"))
+	scene._on_square_tapped(_square("d4"))
+	scene._on_square_tapped(_square("d4"))
+	_equals(scene._premove_pick, _square("d4"), "o destino é erguido para o elo seguinte")
+	var outside := InputEventMouseButton.new()
+	outside.button_index = MOUSE_BUTTON_LEFT
+	outside.pressed = true
+	outside.position = Vector2(scene._board.size.x * 0.5, 1.0)
+	_equals(scene._board.square_at(outside.position), Board.NO_SQUARE, "o toque é mesmo fora das casas")
+	scene._board._gui_input(outside)
+	_check(
+		scene._premove.is_empty() and scene._premove_pick == Board.NO_SQUARE,
+		"tocar fora do tabuleiro desfaz o plano e baixa a peça"
+	)
+	_check(scene._board.premove.is_empty(), "e a marcação some")
 	scene._on_square_tapped(_square("d2"))
 	scene._on_square_tapped(_square("d4"))
 
@@ -1016,6 +1348,27 @@ func _test_premove_captures() -> void:
 	await get_tree().process_frame
 	_equals(scene._state.ply, 2, "e sai quando ele volta")
 
+	# Peça erguida para planejar, e o oponente captura justo nela. A marca ficava
+	# na casa, agora com o bispo dele: o tabuleiro acendia os destinos da peça
+	# inimiga até o jogador erguer outra peça dele na vez seguinte do oponente.
+	_premove_position(scene, [
+		["g1", W, K.KING], ["f3", W, K.KNIGHT], ["a2", W, K.PAWN],
+		["e8", B, K.KING], ["g4", B, K.BISHOP],
+	])
+	scene._on_square_tapped(_square("f3"))
+	_equals(scene._premove_pick, _square("f3"), "o cavalo é erguido para o plano")
+	scene._on_remote_move({"p": [_square("g4"), _square("f3")], "pr": 0, "n": 0, "seat": 1})
+	_equals(scene._premove_pick, Board.NO_SQUARE, "o lance do oponente baixa a peça erguida")
+	_check(
+		scene._board.targets.is_empty() and scene._board.capture_targets.is_empty(),
+		"e nenhum destino da peça inimiga fica aceso"
+	)
+	scene._on_square_tapped(_square("f3"))
+	_check(scene._selection.is_empty(), "o bispo inimigo não se seleciona")
+	scene._on_square_tapped(_square("g1"))
+	_equals(scene._selection, PackedInt32Array([_square("g1")]), "e o rei se seleciona normalmente")
+	scene._board.cancel_animation()
+
 	scene.queue_free()
 	await get_tree().process_frame
 	Game.time_control = time_control
@@ -1071,6 +1424,24 @@ func _test_premove_chain(scene: Node) -> void:
 	scene._on_square_tapped(_square("f3"))
 	scene._on_square_tapped(_square("g5"))
 	_equals(scene._premove.size(), 4, "e o elo volta com dois toques")
+
+	# O cavalo está desenhado em g1: tocar nele desfaz o plano dele inteiro, porque
+	# o segundo elo pressupunha o primeiro.
+	scene._on_square_tapped(_square("g1"))
+	_check(scene._premove.is_empty(), "tocar de novo na peça desfaz a corrente dela")
+	for square in ["g1", "f3", "f3", "g5"]:
+		scene._on_square_tapped(_square(square))
+	scene._on_outside_tapped()
+	_check(scene._premove.is_empty(), "tocar fora desfaz a corrente inteira")
+	for square in ["g1", "f3", "f3", "g5"]:
+		scene._on_square_tapped(_square(square))
+	_equals(scene._premove.size(), 4, "e a corrente volta")
+	# Com outra peça no terceiro elo, tocar nela corta só dali para a frente.
+	scene._on_square_tapped(_square("b1"))
+	scene._on_square_tapped(_square("c3"))
+	_equals(scene._premove.size(), 6, "terceiro elo, com o outro cavalo")
+	scene._on_square_tapped(_square("b1"))
+	_equals(scene._premove.size(), 4, "tocar nele desfaz só o elo dele")
 
 	# Sai um por vez: o primeiro agora, o segundo na vez seguinte.
 	#
@@ -1213,25 +1584,24 @@ func _test_bot() -> void:
 	Game.local_side = Board.Side.WHITE
 
 
-## O botão da tela Você procura na hora e responde ali mesmo — inclusive para
-## uma versão que o jogador tinha pulado no cartão do menu.
+## O botão da tela Você procura na hora e responde ali mesmo; versão nova abre a
+## mesma tela obrigatória do menu e fica guardada para ele.
 func _test_manual_update() -> void:
 	print("procurar atualização")
-	var saved_skipped := Prefs.skipped_update()
-	Prefs.skip_update("99.0")
+	var saved_pending := Prefs.pending_update()
 	var settings := preload("res://scenes/settings.tscn").instantiate()
 	add_child(settings)
 	await get_tree().process_frame
-	settings._show_update({})
+	settings._show_update(null)
 	_check(settings.get_node("%UpdateResult").text.begins_with("Não deu para consultar"), "sem resposta, diz que não deu")
-	settings._show_update(_github_release("v0.1"))
+	settings._show_update([_github_release("v0.1")])
 	_check(settings.get_node("%UpdateResult").text.begins_with("Você já está na versão mais recente"), "release velha: já está atualizado")
-	settings._show_update(_github_release("v99.0"))
-	_equals(settings.get_node("%UpdateButton").text, "Baixar a versão 99.0", "versão nova: o botão vira Baixar, mesmo a pulada no menu")
-	_check(settings._update_url.begins_with(UpdateCheck.DOWNLOADS), "com o link do APK da release")
+	settings._show_update([_github_release("v99.0")])
+	_check(settings.get_children().any(func(child: Node) -> bool: return child is UpdateGate), "versão nova: a tela obrigatória abre por cima")
+	_equals(Prefs.pending_update().get("version"), "99.0", "e fica guardada para o menu")
 	settings.queue_free()
 	await get_tree().process_frame
-	Prefs.skip_update(saved_skipped)
+	Prefs.set_pending_update(saved_pending)
 
 
 ## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
@@ -1260,6 +1630,40 @@ func _test_stockfish_license() -> void:
 ## Varre o diretório em vez de conferir uma lista escrita aqui: uma lista é uma
 ## segunda coisa a lembrar de atualizar quando uma tela nova nascer, e esquecer
 ## dela é exatamente o esquecimento que o teste deveria pegar.
+## Botão dentro de lista que rola deixa o arrasto passar (`Nav`): com o `STOP`
+## padrão, arrastar começando em cima de um item não rolava a lista. Que o
+## `PASS` rola e não aperta sem querer foi conferido com janela; sem janela o
+## Godot não entrega toque, então aqui fica a parte que é nossa: quem recebe.
+func _test_scroll_drag() -> void:
+	print("arrasto em lista")
+	var scroll := ScrollContainer.new()
+	var column := VBoxContainer.new()
+	var inside := Button.new()
+	var quiet := Button.new()
+	quiet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(inside)
+	column.add_child(quiet)
+	scroll.add_child(column)
+	var outside := Button.new()
+	add_child(outside)
+	add_child(scroll)
+	_equals(inside.mouse_filter, Control.MOUSE_FILTER_PASS, "botão dentro da lista deixa o arrasto passar")
+	_equals(quiet.mouse_filter, Control.MOUSE_FILTER_IGNORE, "botão que já ignorava o toque fica como estava")
+	_equals(outside.mouse_filter, Control.MOUSE_FILTER_STOP, "botão fora de lista fica com o toque")
+	var late := Button.new()
+	column.add_child(late)
+	_equals(late.mouse_filter, Control.MOUSE_FILTER_PASS, "e vale para item que entra depois")
+	_equals(scroll.scroll_deadzone, Nav.SCROLL_DEADZONE, "e a lista dá folga para o toque tremido não virar arrasto")
+	scroll.queue_free()
+	outside.queue_free()
+	var screen: Node = load("res://scenes/settings.tscn").instantiate()
+	add_child(screen)
+	await get_tree().process_frame
+	_equals(screen.get_node("%HistoryButton").mouse_filter, Control.MOUSE_FILTER_PASS, "e nas telas de verdade (Você)")
+	screen.queue_free()
+	await get_tree().process_frame
+
+
 func _test_back_navigation() -> void:
 	print("botão de voltar do sistema")
 	var files := DirAccess.get_files_at("res://scenes")
@@ -1466,52 +1870,169 @@ func _test_welcome() -> void:
 		Prefs.forget_welcome()
 
 
-## O aviso de versão nova no menu, com a resposta da API injetada: o teste não
+## A versão nova obrigatória no menu, com a resposta da API injetada: o teste não
 ## depende de rede, e no editor o menu nem pergunta (só build exportado pergunta).
 ##
-## Aparece para versão mais nova, some no "Agora não", e não volta para a mesma
-## versão — mas volta para a seguinte.
+## Tranca o menu com o changelog, continua trancando sem rede pela versão guardada,
+## e solta quando a release some ou quando a versão é instalada.
 func _test_update_notice() -> void:
-	print("aviso de versão nova")
-	var saved_skipped := Prefs.skipped_update()
+	print("versão nova obrigatória")
+	var saved_pending := Prefs.pending_update()
 	var saved_welcomed := Prefs.welcomed()
-	Prefs.skip_update("")
-	# Sem as boas-vindas por cima: o aviso é do menu, e não da primeira abertura.
+	Prefs.set_pending_update({})
 	Prefs.set_welcomed()
 
 	var menu := preload("res://scenes/main_menu.tscn").instantiate()
 	add_child(menu)
 	await get_tree().process_frame
-	_check(menu._update == null, "sem resposta, sem aviso")
+	_check(menu._gate == null, "sem resposta, sem tela")
 
-	menu._offer_update(_github_release("v0.1"))
-	_check(menu._update == null, "release mais velha que a instalada não avisa")
+	menu._offer_update([_github_release("v0.1")])
+	_check(menu._gate == null, "release mais velha que a instalada não tranca")
 
-	menu._offer_update(_github_release("v99.0"))
-	var card: Control = menu._update
-	_check(card != null and card.is_inside_tree(), "release mais nova põe o cartão no menu")
-	if card == null:
+	var newer := _github_release("v99.0")
+	newer["body"] = "- Novidade grande\n- Outra\n\n---\n\nAPK assinado"
+	menu._offer_update([newer, _github_release("v0.1")])
+	var gate: UpdateGate = menu._gate
+	_check(gate != null and gate.is_inside_tree(), "release mais nova tranca o menu")
+	if gate == null:
 		menu.queue_free()
 		return
-	_equals(card.get_index(), menu.get_node("%Favorites").get_index() - 1, "em cima do catálogo")
-	_check(card.find_child("Download", true, false) is Button, "com o botão de baixar")
+	_equals(gate.get_index(), menu.get_child_count() - 1, "por cima de tudo")
+	_equals(gate.mouse_filter, Control.MOUSE_FILTER_STOP, "e segura o toque")
+	_check(gate.find_child("Download", true, false) is Button, "com o botão de baixar")
+	_check(gate.find_child("Later", true, false) == null, "e sem \"Agora não\"")
+	var lines: Array = gate.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
+	_equals(lines, ["Novidades da 99.0", "•  Novidade grande", "•  Outra"], "com o changelog da versão")
+	_equals(Prefs.pending_update().get("version"), "99.0", "a versão fica guardada")
+	var button: Button = gate.find_child("Download", true, false)
+	_equals(button.text, "Baixar a versão 99.0", "sem pacote OTA, o APK")
 
-	var later: Button = card.find_child("Later", true, false)
-	later.pressed.emit()
+	# Com pacote OTA: baixa aqui dentro, e baixado, pede para reabrir.
+	var ota := UpdateGate.new()
+	var pck := {"url": UpdateCheck.DOWNLOADS + "v99.0/cascapp-99.0-base0.1.pck", "size": 2621440, "sha256": "abc"}
+	ota.offer = {"version": "99.0", "url": "", "changes": [], "pck": pck}
+	add_child(ota)
+	button = ota.find_child("Download", true, false)
+	_equals(button.text, "Atualizar para a 99.0 (2,5 MB)", "com pacote, atualiza por dentro")
+	DirAccess.make_dir_recursive_absolute(Patcher.DIR)
+	var downloaded := FileAccess.open(Patcher.DIR + "99.0.pck", FileAccess.WRITE)
+	downloaded.close()
+	ota._refresh()
+	_equals(button.text, "Fechar o app", "baixado, só falta reabrir")
+	DirAccess.remove_absolute(Patcher.DIR + "99.0.pck")
+	ota._pck_failed = true
+	ota._refresh()
+	_equals(button.text, "Baixar a versão 99.0", "pacote que falhou: volta ao APK")
+	_check((ota.find_child("Hint", true, false) as Label).text.begins_with("Não deu"), "e diz por quê")
+	ota.queue_free()
+
+	# Próxima abertura, sem rede: a guardada tranca de novo.
+	menu.queue_free()
 	await get_tree().process_frame
-	_check(not is_instance_valid(card), "\"Agora não\" tira o cartão")
-	_equals(Prefs.skipped_update(), "99.0", "e guarda a versão pulada")
+	menu = preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(menu._gate != null, "sem rede, a versão guardada continua trancando")
 
-	menu._offer_update(_github_release("v99.0"))
-	_check(menu._update == null, "a versão pulada não avisa de novo")
-	menu._offer_update(_github_release("v99.1"))
-	_check(menu._update != null, "a seguinte avisa")
+	# Release apagada: a consulta diz que não há nada, e a tela sai.
+	menu._offer_update([_github_release("v0.1")])
+	await get_tree().process_frame
+	_check(menu._gate == null and Prefs.pending_update().is_empty(), "sem versão nova na consulta, a tela e a guardada saem")
+
+	# Instalou: a guardada é a própria versão, e some.
+	Prefs.set_pending_update({"version": AppVersion.text(), "url": "", "changes": []})
+	menu.queue_free()
+	await get_tree().process_frame
+	menu = preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(menu._gate == null and Prefs.pending_update().is_empty(), "instalada a versão guardada, não tranca mais")
 
 	menu.queue_free()
 	await get_tree().process_frame
-	Prefs.skip_update(saved_skipped)
+	Prefs.set_pending_update(saved_pending)
 	if not saved_welcomed:
 		Prefs.forget_welcome()
+
+
+## "Novidades": uma vez por versão nova, nunca na instalação nova, nunca com a
+## tela de atualizar na frente; e o histórico inteiro na aba Você.
+##
+## A versão vem injetada (a do editor não acompanha o CHANGELOG), e as novidades
+## são as do arquivo de verdade: a 1.31 é a primeira que ele tem.
+func _test_news() -> bool:
+	print("novidades")
+	var saved_seen := Prefs.seen_version()
+	var saved_welcomed := Prefs.welcomed()
+	var saved_pending := Prefs.pending_update()
+	Prefs.set_pending_update({})
+	Prefs.set_welcomed()
+	var menu := preload("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("1.30")
+	menu._show_news("1.31")
+	var panel: ChangelogPanel = menu._news()
+	_check(panel != null, "versão nova: as novidades abrem")
+	if panel != null:
+		var lines: Array = panel.find_child("Notes", true, false).get_children().map(func(label: Label) -> String: return label.text)
+		_equals(lines[0], "Novidades da 1.31", "com o número da versão")
+		_equals(lines.size(), 1 + Changelog.items_of(Changelog.bundled(), "1.31").size(), "uma linha por novidade do CHANGELOG")
+		menu.go_back()
+		await get_tree().process_frame
+		_check(menu._news() == null, "voltar fecha as novidades, e não o app")
+	_equals(Prefs.seen_version(), "1.31", "a versão fica marcada como vista")
+	menu._show_news("1.31")
+	_check(menu._news() == null, "a mesma versão não mostra de novo")
+
+	Prefs.set_seen_version("")
+	menu._show_news("1.31")
+	_check(menu._news() != null, "app de antes da marca, já usado: é atualização, mostra")
+	if menu._news() != null:
+		menu._news().close()
+		await get_tree().process_frame
+
+	Prefs.set_seen_version("")
+	Prefs.forget_welcome()
+	menu._show_news("1.31")
+	_check(menu._news() == null, "instalação nova: nada de novidades por cima das boas-vindas")
+	Prefs.set_welcomed()
+
+	Prefs.set_seen_version("1.30")
+	menu._show_gate({"version": "99.0", "url": "", "changes": []})
+	menu._show_news("1.31")
+	_check(menu._news() == null, "com a tela de atualizar na frente, não")
+	menu.queue_free()
+	await get_tree().process_frame
+
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	settings.get_node("%NewsButton").pressed.emit()
+	await get_tree().process_frame
+	var history: ChangelogPanel = settings._news
+	_check(history != null and history.is_inside_tree(), "Você › Novidades abre o histórico")
+	if history != null:
+		var headers := history.find_child("Notes", true, false).get_children().filter(func(label: Label) -> bool:
+			return label.text.begins_with("Novidades da ")
+		)
+		_equals(headers.size(), Changelog.parse(Changelog.bundled()).size(), "com todas as versões do CHANGELOG")
+		settings.go_back()
+		await get_tree().process_frame
+		_check(not is_instance_valid(history) or history.is_queued_for_deletion(), "voltar fecha o histórico")
+	settings.queue_free()
+	await get_tree().process_frame
+
+	Prefs.set_seen_version(saved_seen)
+	Prefs.set_pending_update(saved_pending)
+	if not saved_welcomed:
+		Prefs.forget_welcome()
+	return true
 
 
 func _github_release(tag: String) -> Dictionary:
@@ -1611,6 +2132,33 @@ func _time_control_with_increment() -> int:
 ## Um nó que sumiu da cena tem de virar falha, não um `null` que aborta a função
 ## e leva junto todas as asserções que viriam depois — foi assim que este arquivo
 ## passou a reportar sucesso sem testar nada.
+## Amigos: o QR de amigo não se confunde com o de sala, a tela abre sem conta
+## dizendo o porquê, e a saudação do menu mostra a foto da conta.
+func _test_friends() -> void:
+	print("amigos")
+	_equals(FriendsPanel.code_from_qr("XDMF|abc234"), "ABC234", "QR de amigo dá o código")
+	_equals(FriendsPanel.code_from_qr(Pairing.build_payload(Game.CHESS, "ABC234")), "", "QR de sala não é de amigo")
+	_equals(FriendsPanel.code_from_qr("XDMF|AB"), "", "código curto é recusado")
+	_check(Pairing.parse_payload("XDMF|ABC234").is_empty(), "e o de amigo não abre sala")
+	Account.sign_out()
+	var panel := FriendsPanel.new()
+	add_child(panel)
+	await get_tree().process_frame
+	var texts := panel.find_children("", "Label", true, false).map(func(label: Label) -> String: return label.text)
+	_check(texts.any(func(text: String) -> bool: return text.begins_with("Sem conexão")), "sem conta, a tela diz por quê")
+	panel.close()
+
+	var bar := AppBar.new()
+	add_child(bar)
+	var photo := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGB8))
+	bar.greet("Ana", photo)
+	_equals(bar._avatar.photo, photo, "a saudação do menu mostra a foto da conta")
+	bar.greet("Ana")
+	_check(bar._avatar.photo == null, "e sem foto volta para a inicial")
+	bar.queue_free()
+	await get_tree().process_frame
+
+
 func _node(match_scene: Node, path: String) -> Node:
 	var found := match_scene.get_node_or_null(path)
 	if found == null:
@@ -1710,6 +2258,107 @@ static func _square(name: String) -> int:
 
 static func _put(state: MatchState, name: String, side: int, kind: int) -> void:
 	state.set_piece(_square(name), Board.piece(side, kind))
+
+
+## A gaveta de amigos: online primeiro, o status certo de cada um, a bolinha só
+## em quem está online, e o `Friends` só pergunta ao relay com ela aberta.
+func _test_friends_drawer() -> bool:
+	print("gaveta de amigos")
+	var friend := func(id: String, name: String) -> Dictionary:
+		return {"id": id, "name": name, "avatar": "", "elo_chess": 1200, "games_chess": 0}
+	Friends.list = [
+		friend.call("anaanaanaana123", "Ana"),
+		friend.call("biabiabiabia123", "Bia"),
+		friend.call("caicaicaicai123", "Cai"),
+		friend.call("dandandandan123", "Dan"),
+	]
+	Friends.online = {
+		"biabiabiabia123": {"id": "biabiabiabia123", "game": "chess", "room": "ABC234", "playing": true},
+		"caicaicaicai123": {"id": "caicaicaicai123", "game": "checkers", "room": "XYZ234", "playing": false},
+		"dandandandan123": {"id": "dandandandan123", "game": "", "room": "", "playing": false},
+	}
+	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	var button: IconButton = menu.find_child("FriendsButton", true, false)
+	_check(button != null, "a saudação do menu tem o botão de amigos")
+	if button != null:
+		button.pressed.emit()
+	await get_tree().process_frame
+	var drawer: FriendsDrawer = menu._drawer()
+	_check(drawer != null, "o botão abre a gaveta")
+	if drawer == null:
+		menu.queue_free()
+		return true
+	_check(Friends.watching, "aberta, o Friends pergunta ao relay")
+	var ids := []
+	var statuses := []
+	var dots := []
+	for card in drawer._rows.get_children():
+		ids.append(card.get_meta(&"friend_id"))
+		statuses.append((card.find_child("Status", true, false) as Label).text)
+		dots.append(card.find_child("OnlineDot", true, false) != null)
+	_equals(ids, ["biabiabiabia123", "caicaicaicai123", "dandandandan123", "anaanaanaana123"], "online primeiro, offline no fim")
+	_equals(statuses, [
+		"Jogando %s" % Game.game_title(Game.CHESS),
+		"Na sala de espera · %s" % Game.game_title(Game.CHECKERS),
+		"Online",
+		"Offline",
+	], "status de cada amigo")
+	_equals(dots, [true, true, true, false], "bolinha só em quem está online")
+	var actions := drawer._rows.get_children().map(func(card: Node) -> String:
+		var action := card.find_child("Action", true, false) as Button
+		return action.text if action != null else ""
+	)
+	_equals(actions, ["Assistir", "", "Convidar", ""], "assistir quem joga, convidar quem está livre")
+
+	# O amigo que sai some da lista de online na hora em que o Friends avisa.
+	Friends.online.erase("biabiabiabia123")
+	Friends.changed.emit()
+	_equals(drawer._rows.get_child(drawer._rows.get_child_count() - 1).get_meta(&"friend_id"), "biabiabiabia123", "quem saiu vai para o fim")
+
+	# Convidar o Dan: a lista dá lugar aos jogos, e o escolhido abre a folha em Online.
+	var dan_card: Node = drawer._rows.get_children().filter(func(card: Node) -> bool:
+		return card.get_meta(&"friend_id") == "dandandandan123"
+	)[0]
+	(dan_card.find_child("Action", true, false) as Button).pressed.emit()
+	var games := drawer._rows.get_children().filter(func(node: Node) -> bool: return node.has_meta(&"game"))
+	var game_ids := games.map(func(node: Node) -> StringName: return node.get_meta(&"game"))
+	_check(game_ids.has(Game.CHESS) and not game_ids.has(Game.BOMBERMAN), "o convite oferece os jogos do relay, sem o Bomberman")
+	games[game_ids.find(Game.CHESS)].pressed.emit()
+	await get_tree().process_frame
+	_check(menu._drawer() == null, "escolher o jogo fecha a gaveta")
+	_check(menu._sheet_open() and menu._sheet.game_id == Game.CHESS and menu._sheet.mode == Game.Mode.ONLINE, "e abre a folha do xadrez em Online")
+	_equals(Friends.pending_invite, "dandandandan123", "o convite espera a sala abrir")
+	_check(not Game.listed_room, "sala de convite é privada")
+	menu.go_back()
+	_equals(Friends.pending_invite, "", "fechar a folha desiste do convite")
+
+	menu._open_friends()
+	await get_tree().process_frame
+	menu.go_back()
+	await get_tree().process_frame
+	_check(menu._drawer() == null, "voltar fecha a gaveta antes de sair do app")
+	_check(not Friends.watching, "fechada, o Friends para de perguntar")
+
+	# O convite recebido: fora das telas do menu (aqui, a cena de teste) não aparece.
+	Friends.show_invite("biabiabiabia123", Game.CHESS, "ABC234")
+	_check(Friends.invite_card() == null, "convite não interrompe o que não é menu")
+	var card := InviteCard.new()
+	card.friend_name = "Bia"
+	card.game_title = Game.game_title(Game.CHESS)
+	add_child(card)
+	_equals((card.find_child("Message", true, false) as Label).text, "Bia te chamou para Xadrez", "o aviso diz quem e para quê")
+	var declined := [false]
+	card.declined.connect(func() -> void: declined[0] = true)
+	(card.find_child("Agoranão", true, false) as Button).pressed.emit()
+	_check(declined[0], "Agora não recusa")
+	card.queue_free()
+	Friends.list = []
+	Friends.online = {}
+	menu.queue_free()
+	await get_tree().process_frame
+	return true
 
 
 func _check(condition: bool, label: String) -> void:

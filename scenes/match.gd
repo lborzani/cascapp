@@ -71,7 +71,13 @@ var _bot := Bot.new()
 ## A partida que acabou já foi para o histórico. O painel de resultado reabre
 ## por convite de revanche e por oponente que sai, e cada abertura gravaria de novo.
 var _recorded := false
+## O desfecho desta partida já foi contado ao relay, para o Elo.
+var _reported := false
+## O que o relay disse do Elo desta partida, para o painel; vazio até lá.
+var _rating_text := ""
 var _review: ReviewPanel = null
+## Avaliação ao vivo; só existe para quem assiste xadrez.
+var _live: LiveReview = null
 ## Um lance do bot foi pedido e ainda não foi jogado.
 var _bot_pending := false
 var _bot_wait := 0.0
@@ -80,6 +86,19 @@ var _bot_wait := 0.0
 ## oponente pediu e a resposta é nossa.
 enum Rematch { IDLE, ASKED, INVITED }
 var _rematch := Rematch.IDLE
+
+## Quem perdeu cede o lugar ao primeiro da fila depois desta contagem: tempo de
+## ver o resultado, curto o bastante para a mesa não esfriar.
+const YIELD_SECONDS := 5
+## Partida encerrada sem desfecho de tabuleiro: em andamento, ou alguém saiu.
+const NO_RESULT := -2
+## Lado que venceu a partida que acabou; -1 é empate. Decide quem cede o lugar.
+var _winner := NO_RESULT
+## Invalida a contagem em curso: troca, fila que esvaziou, partida nova.
+var _yield_token := 0
+var _counting := false
+## Este aparelho tinha assento antes da última troca pela fila.
+var _seated := true
 
 @onready var _board: BoardView = %Board
 var _match_status: MatchStatus = null
@@ -107,6 +126,7 @@ func _ready() -> void:
 		Net.watchers_changed.connect(func(count: int) -> void: _match_status.watchers = count)
 		Net.move_received.connect(_on_remote_move)
 		Net.opponent_left.connect(_on_opponent_left)
+		Net.rated.connect(_on_rated)
 		Net.rematch_requested.connect(_on_rematch_requested)
 		Net.rematch_accepted.connect(_on_rematch_accepted)
 		Net.rematch_declined.connect(_on_rematch_declined)
@@ -117,9 +137,15 @@ func _ready() -> void:
 		# quem volta no `resumed`, e os dois caem no meio de uma partida já
 		# desenhada. Sem isto o cartão só se corrigia no lance seguinte.
 		Net.names_changed.connect(_refresh)
+		Net.queue_changed.connect(_refresh_next_up)
+		Net.seat_swapped.connect(_on_seat_swapped)
+		# A foto do outro chega depois do nome: é um download à parte.
+		Account.remote_avatar_loaded.connect(_refresh)
 		# Orientação decidida pelo lado que se joga, e não por botão: em rede as
 		# pretas veem o tabuleiro do lado delas, e é o único arranjo certo.
 		_board.flipped = Game.local_side == Board.Side.BLACK
+		_seated = not Net.is_spectator
+		_attach_live()
 	elif Game.mode == Game.Mode.SOLO:
 		# Contra o bot vale a mesma regra: quem escolheu jogar de pretas vê o
 		# tabuleiro do lado das pretas.
@@ -135,11 +161,14 @@ func _ready() -> void:
 
 	_board.ruleset = _ruleset
 	_board.square_tapped.connect(_on_square_tapped)
+	_board.outside_tapped.connect(_on_outside_tapped)
 	%Bar.leave_confirmed.connect(_exit)
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
 	%ResultExitButton.pressed.connect(_exit)
 	%ReviewButton.pressed.connect(_open_review)
+	%QueueButton.pressed.connect(_on_next_up_pressed)
+	%NextUpButton.pressed.connect(_on_next_up_pressed)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
 
@@ -163,6 +192,8 @@ func _new_game() -> void:
 	_bot.abandon()
 	_bot_pending = false
 	_recorded = false
+	_reported = false
+	_rating_text = ""
 	_state = _ruleset.initial_state()
 	_selection.clear()
 	_hint = ""
@@ -180,9 +211,12 @@ func _new_game() -> void:
 	_clear_premove()
 	_rematch = Rematch.IDLE
 	_refresh_rematch()
+	_winner = NO_RESULT
+	_cancel_yield()
 	set_process(Game.has_clock() or Game.mode == Game.Mode.SOLO)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
+	_refresh_next_up()
 	_banner.hide_message()
 	_recompute()
 
@@ -260,6 +294,8 @@ func _flag(side: int) -> void:
 	if _ruleset is ChessRules and not (_ruleset as ChessRules).has_mating_material(_state, winner):
 		title = "Empate"
 		detail = "Tempo esgotado, mas o outro lado não tem material para dar mate."
+		winner = -1
+	_report_result(winner)
 	_show_overlay(title, detail, true)
 	_refresh()
 
@@ -523,6 +559,11 @@ func _on_premove_tapped(square: int) -> void:
 				)
 				return
 			_premove_pick = square
+		elif _premove_origin_link(square) >= 0:
+			# Tocar de novo na peça planejada — ela continua desenhada na origem —
+			# desfaz o plano **dela**: o elo e os que vieram depois, que foram
+			# escolhidos numa posição que pressupunha este.
+			_premove.resize(_premove_origin_link(square) * 2)
 		elif not _premove.is_empty():
 			# O toque que não continua a corrente **apaga o último elo**, e não a
 			# corrente inteira.
@@ -576,6 +617,24 @@ func _premove_owns(state: MatchState, square: int) -> bool:
 func _clear_premove() -> void:
 	_premove = PackedInt32Array()
 	_premove_pick = Board.NO_SQUARE
+
+
+## O primeiro elo que sai de `square`, ou -1.
+func _premove_origin_link(square: int) -> int:
+	for index in range(0, _premove.size(), 2):
+		if _premove[index] == square:
+			return index / 2
+	return -1
+
+
+## Tocar fora das casas desfaz o plano inteiro, de uma vez: é o gesto do Lichess
+## e do Chess.com. Num celular em pé sobra uma faixa vazia acima e abaixo da
+## grade, e antes ela não respondia — o plano parecia preso.
+func _on_outside_tapped() -> void:
+	if _premove.is_empty() and _premove_pick == Board.NO_SQUARE:
+		return
+	_clear_premove()
+	_refresh()
 
 
 ## Quantos elos a corrente tem.
@@ -727,6 +786,11 @@ func _play(move: Move, broadcast: bool) -> void:
 	_board.last_move = move.path.duplicate()
 	_board.play_move(move.path, taken)
 	_selection.clear()
+	# A peça erguida para o plano era da posição de antes. Sobrevivendo ao lance
+	# do oponente, a marca ficava na casa mesmo com ele capturando ali — e o
+	# tabuleiro acendia os destinos da peça **dele**. A corrente já armada fica:
+	# ela é revalidada elo a elo quando sai.
+	_premove_pick = Board.NO_SQUARE
 	_hint = ""
 	# O incremento entra depois do lance, para quem jogou. É o que torna partida
 	# curta jogável num celular: sem ele os últimos lances viram corrida de toque.
@@ -759,6 +823,8 @@ func _adopt_clocks(clocks: Array) -> void:
 func _recompute() -> void:
 	_legal = _ruleset.generate_moves(_state)
 	_outcome = _ruleset.outcome(_state)
+	if _live != null:
+		_live.follow(_state.history)
 	if _outcome != Ruleset.Outcome.ONGOING:
 		_show_result()
 	_refresh()
@@ -769,6 +835,15 @@ func _recompute() -> void:
 ## decide a partida é o que o jogador mais quer ver, e é justamente o que um
 ## painel imediato esconderia.
 func _show_result() -> void:
+	# Na hora, e não depois da animação: quem fecha o app no lance do mate não
+	# pode levar o relato junto.
+	match _outcome:
+		Ruleset.Outcome.WHITE_WINS:
+			_report_result(Board.Side.WHITE)
+		Ruleset.Outcome.BLACK_WINS:
+			_report_result(Board.Side.BLACK)
+		Ruleset.Outcome.DRAW:
+			_report_result(-1)
 	var wait := _board.remaining_animation()
 	if wait > 0.0:
 		var expected := _state.ply
@@ -783,7 +858,9 @@ func _show_result() -> void:
 ## ficou precisa saber por que o tabuleiro parou de responder.
 func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
-	%ResultDetail.text = detail
+	# O painel reabre (convite de revanche, oponente que sai); o Elo que já
+	# chegou não pode sumir dele.
+	%ResultDetail.text = detail if _rating_text.is_empty() else "%s\n%s" % [detail, _rating_text]
 	_record_game(title, detail)
 	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
 	allow_rematch = allow_rematch and not Net.is_spectator
@@ -805,6 +882,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	# rodava já mudou o estado, e é ele que manda no rótulo do botão.
 	if allow_rematch:
 		_refresh_rematch()
+	_refresh_next_up()
 
 	var panel: Control = %ResultLayer.get_node("Center/Panel")
 	%ResultLayer.modulate.a = 0.0
@@ -822,7 +900,46 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 func _open_review() -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
-	_review.open(_state.history, _board.flipped)
+	_review.open(_state.history, Game.local_side if Game.mode != Game.Mode.HOTSEAT else -1)
+
+
+## Conta ao relay como a partida acabou, para o Elo (`relay/src/ratings.ts`).
+## `winner_side` -1 é empate. Só xadrez online e só de quem joga; uma vez por
+## partida. O relay só aceita quando o outro aparelho conta a mesma coisa.
+func _report_result(winner_side: int) -> void:
+	# Antes das guardas: quem cede o lugar à fila sai daqui também fora do Elo.
+	_winner = winner_side
+	if _reported or Game.mode != Game.Mode.ONLINE or Net.is_spectator or not _ruleset is ChessRules:
+		return
+	_reported = true
+	var winner_seat := -1 if winner_side < 0 else _seat_of(winner_side)
+	Net.send_result(winner_seat, _seat_of(Board.Side.WHITE), _state.ply, moves_hash(_state.history))
+
+
+## A mesma em dois aparelhos que jogaram os mesmos lances. Só inteiros entram: o
+## lance que chegou pela rede veio de JSON, e `str()` de um float ("12.0") não
+## bateria com o do lance jogado aqui ("12").
+static func moves_hash(history: Array) -> String:
+	var text := PackedStringArray()
+	for move: Dictionary in history:
+		var squares := PackedStringArray()
+		for square in move.get("p", []):
+			squares.append(str(int(square)))
+		text.append("%s=%d" % ["-".join(squares), int(move.get("pr", 0))])
+	return " ".join(text).sha256_text()
+
+
+## O relay gravou o Elo: o painel de resultado ganha a linha do nosso.
+func _on_rated(ratings: Array) -> void:
+	if Net.is_spectator:
+		return
+	for entry in ratings:
+		if entry is Dictionary and int(entry.get("seat", -1)) == Net.local_seat:
+			var elo := int(entry.get("elo", 0))
+			var delta := int(entry.get("delta", 0))
+			Account.elo = elo
+			_rating_text = "Elo %d (%s%d)" % [elo, "+" if delta >= 0 else "", delta]
+			%ResultDetail.text = "%s\n%s" % [%ResultDetail.text, _rating_text]
 
 
 ## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
@@ -840,6 +957,8 @@ func _record_game(title: String, detail: String) -> void:
 		"moves": _state.history.duplicate(),
 		"against": against,
 		"side": Game.local_side if Game.mode != Game.Mode.HOTSEAT else Board.Side.WHITE,
+		# Para a revisão saber que os dois lados eram de quem revisa.
+		"hotseat": Game.mode == Game.Mode.HOTSEAT,
 		"title": title,
 		"detail": detail,
 	})
@@ -1000,6 +1119,9 @@ func _show_desync(at_ply: int) -> void:
 
 
 func _on_opponent_left() -> void:
+	# Saiu com a partida em curso: é abandono, e quem ficou venceu.
+	if _outcome == Ruleset.Outcome.ONGOING and _flagged < 0:
+		_report_result(Game.local_side)
 	_abandoned = true
 	_board.cancel_animation()
 	_show_overlay(
@@ -1131,6 +1253,150 @@ func _refresh_rematch() -> void:
 			%RematchButton.disabled = false
 
 
+# --- fila de quem joga a próxima ----------------------------------------------
+
+
+## A barra da avaliação ao vivo, só para quem assiste xadrez. Também na troca
+## pela fila: quem cedeu o lugar passa a ver a avaliação, quem sentou deixa de ver.
+func _attach_live() -> void:
+	if _live != null or not Net.is_spectator or _ruleset is not ChessRules:
+		return
+	_live = LiveReview.new()
+	_live.board = _board
+	add_child(_live)
+	# A barra vai logo abaixo do cartão de cima, antes do último lance.
+	var column := %TopLastMoveSlot.get_parent()
+	column.add_child(_live.bar)
+	column.move_child(_live.bar, %TopLastMoveSlot.get_index())
+
+
+func _detach_live() -> void:
+	if _live == null:
+		return
+	_live.bar.queue_free()
+	_live.queue_free()
+	_live = null
+
+
+## A fila na tela: o botão de quem assiste, a legenda da barra e, com a partida
+## encerrada, quem cede o lugar. Quem perdeu cede (com a contagem); no empate os
+## dois podem ceder, e cede quem tocar primeiro.
+func _refresh_next_up() -> void:
+	if Game.mode != Game.Mode.ONLINE or _match_status == null:
+		return
+	var names := Net.queue_names
+	var next := names[0] if not names.is_empty() else ""
+	_match_status.queue = (
+		"" if names.is_empty()
+		else ("Próximo: %s" if names.size() == 1 else "Próximos: %s") % ", ".join(names)
+	)
+	var label := (
+		"Quero jogar a próxima" if Net.queue_position < 0
+		else "Sair da fila (você é o %dº)" % (Net.queue_position + 1)
+	)
+	%QueueButton.visible = Net.is_spectator
+	%QueueButton.text = label
+
+	var finished: bool = %ResultLayer.visible and _winner != NO_RESULT and not _abandoned
+	var playing := finished and not Net.is_spectator
+	var lost := playing and _winner >= 0 and _winner != Game.local_side
+	var draw := playing and _winner == -1
+	%NextUpLabel.visible = finished and not next.is_empty()
+	%NextUpButton.visible = finished and (Net.is_spectator or ((lost or draw) and not next.is_empty()))
+	if Net.is_spectator:
+		%NextUpButton.text = label
+		%NextUpLabel.text = "Você joga a próxima." if Net.queue_position == 0 else "%s joga a próxima." % next
+		return
+	if not playing:
+		return
+	if next.is_empty():
+		# A fila esvaziou (quem ia jogar saiu): volta a revanche de sempre.
+		_cancel_yield()
+		%RematchButton.visible = true
+		_refresh_rematch()
+		return
+	if draw:
+		%RematchButton.visible = true
+		%NextUpLabel.text = "%s quer jogar a próxima." % next
+		if not %NextUpButton.disabled:
+			%NextUpButton.text = "Dar lugar para %s" % next
+		return
+	# Com vencedor, a próxima é dele contra o primeiro da fila: revanche não cabe.
+	%RematchButton.visible = false
+	%RematchDeclineButton.visible = false
+	if lost:
+		%NextUpLabel.text = "%s joga a próxima. Você vai assistir." % next
+		_count_down_yield()
+	else:
+		%NextUpLabel.text = "%s joga a próxima contra você." % next
+
+
+func _on_next_up_pressed() -> void:
+	if Net.is_spectator:
+		Net.request_next(Net.queue_position < 0)
+		return
+	_yield_now()
+
+
+func _count_down_yield() -> void:
+	if _counting:
+		return
+	_counting = true
+	var token := _yield_token
+	for left in range(YIELD_SECONDS, 0, -1):
+		%NextUpButton.text = "Ceder agora (%d)" % left
+		await get_tree().create_timer(1.0).timeout
+		if token != _yield_token:
+			return
+	_yield_now()
+
+
+func _yield_now() -> void:
+	_cancel_yield()
+	%NextUpButton.text = "Cedendo o lugar…"
+	%NextUpButton.disabled = true
+	Net.yield_seat()
+
+
+func _cancel_yield() -> void:
+	_yield_token += 1
+	_counting = false
+
+
+## O assento trocou de dono pela fila. `Net` já trocou os papéis com as cores da
+## partida que acabou; aqui a próxima começa como uma revanche, com as cores
+## trocadas — para os jogadores pelo `local_side`, para quem assiste pelo
+## `white_seat`.
+##
+## Em todos os aparelhos da sala, e não só nos dois que trocaram: quem venceu e
+## quem só assistia também começam a partida nova.
+func _on_seat_swapped(_seat: int) -> void:
+	_cancel_yield()
+	%NextUpButton.disabled = false
+	var was_seated := _seated
+	_seated = not Net.is_spectator
+	if Net.is_spectator:
+		# A chave em disco era do assento que foi cedido: um app reaberto com ela
+		# sentaria no primeiro assento livre de uma partida que não é mais dele.
+		if was_seated:
+			Prefs.forget_rejoin()
+		Game.local_side = Board.Side.WHITE
+		_board.flipped = false
+		_attach_live()
+		Net.white_seat = 1 - Net.white_seat
+		Game.restart_match()
+		_match_status.started_at = Game.match_started_at
+		_new_game()
+		return
+	_detach_live()
+	if not was_seated:
+		Game.local_side = Net.local_side
+		Prefs.remember_rejoin(
+			Net.room_code(), Game.game_id, Net.seat_key(), int(Time.get_unix_time_from_system())
+		)
+	_start_rematch()
+
+
 ## O gesto de voltar é o botão "Sair" da barra — e, sendo o mesmo botão, faz a
 ## mesma pergunta. Sair de uma partida em andamento é o toque mais caro da tela, e
 ## um gesto de borda é o mais fácil de disparar sem querer: era a única porta do
@@ -1150,6 +1416,9 @@ func go_back() -> void:
 
 
 func _exit() -> void:
+	# Sair no meio é desistir. O relato vai antes do `bye`, pelo mesmo socket.
+	if _outcome == Ruleset.Outcome.ONGOING and _flagged < 0 and not _abandoned:
+		_report_result(Board.opponent(Game.local_side))
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
 
@@ -1314,6 +1583,27 @@ func _refresh_cards() -> void:
 				if Game.mode == Game.Mode.SOLO else _opponent_name()
 			view.title = Prefs.player_name() if card_side == Game.local_side else them
 			view.subtitle = side_names[card_side]
+		_apply_profile(view, card_side)
+
+
+## Foto e Elo de quem tem conta, nas partidas em rede. Os nossos vêm da própria
+## conta; os do outro, do que o relay confirmou para o assento dele. Sem conta
+## confirmada, a etiqueta fica como sempre foi.
+func _apply_profile(view: PlayerTag, side: int) -> void:
+	view.photo = null
+	if Game.mode != Game.Mode.ONLINE:
+		return
+	var elo := 0
+	if side == Game.local_side and not Net.is_spectator:
+		view.photo = Account.local_avatar()
+		elo = Account.elo if Account.signed_in() else 0
+	else:
+		var profile := Net.profile_of(_seat_of(side))
+		view.photo = Account.avatar_of(str(profile.get("user", "")), str(profile.get("avatar", "")))
+		elo = int(profile.get("elo", 0))
+	# O Elo é do xadrez: nas damas ele não diria nada.
+	if _ruleset is ChessRules and elo > 0:
+		view.subtitle = "%s · %d" % [view.subtitle, elo]
 
 
 ## Como o outro se chama, ou "Oponente" enquanto ele não se apresentou.

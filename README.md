@@ -1039,9 +1039,26 @@ a mesma tacada tem de parar as nove bolas no mesmo lugar, e uma mira um milésim
 diferente tem de dar uma mesa diferente — se não desse, a quantização estaria
 grossa demais para o jogo ter mira.
 
-Pelo mesmo motivo **não há efeito** (nem "inglês"): ele pediria rotação, atrito
-lateral e uma integração bem mais sensível a erro, e a primeira coisa a quebrar
-seria justamente a igualdade entre os dois aparelhos.
+#### O efeito é um modelo de três regras, com as mesmas contas exatas
+
+O lance carrega mais dois inteiros: **onde o taco bate na bola**, `(lado, altura)`
+em milésimos do raio, dentro do círculo. Rotação de verdade pediria atrito
+lateral e uma integração sensível a erro, e a primeira coisa a quebrar seria a
+igualdade entre os dois aparelhos. Então o efeito é aproximado, e só com `+ - * /`:
+
+- **altura** (follow em cima, draw embaixo): guardada até a primeira batida da
+  bola tacada; ali vira uma velocidade extra na direção em que ela vinha, para
+  frente ou para trás, entregue aos poucos — e é o "aos poucos" que faz a branca
+  curvar depois de um corte;
+- **lado** (inglês): em cada tabela, empurra a saída para o lado do efeito, visto
+  por quem tacou, e perde força a cada tabela;
+- os dois gastam com o pano, passo a passo.
+
+Tacada sem efeito não passa por nenhuma dessas contas, e `tests/pool_probe.gd`
+guarda isso: um resumo SHA-256 das posições depois de doze tacadas em cada
+formato, gravado antes do efeito existir. O lance antigo, de quatro casas,
+continua valendo como tacada sem efeito. Os botões de ajuste (`FOLLOW_GAIN`,
+`SIDE_GAIN`, `SPIN_GRIP`) ficam no topo de `core/pool_rules.gd`.
 
 #### E não há acaso nenhum
 
@@ -1056,25 +1073,39 @@ passos e a tela os reproduz em ordem, no mesmo ritmo em que foram gravados. Uma
 segunda física no desenho seria a forma clássica de a partida animada divergir da
 partida jogada — a bola entrando na tela e não entrando na regra, ou o contrário.
 
-#### A mira é um arrasto, e ele é ao contrário
+#### A mesa é 3D, a física não
 
-No mata-mata, o toque numa bola própria **escolhe** com qual se taca; em qualquer
-outro lugar da mesa, ele começa a mira da que já está escolhida. Um botão
-separado para trocar de bola seria um toque a mais para uma decisão que o dedo já
-sabe apontar.
+Mesa, bolas e taco são modelos do Blender, gerados do zero por
+`art/pool/build_pool.py` (`blender --background --python art/pool/build_pool.py`)
+e exportados em `.glb` para `assets/pool/`, na escala de `core/pool_rules.gd`.
+`.glb` e não `.blend` direto: importar `.blend` exige o Blender em quem importa,
+e a esteira do GitHub não tem. `art/` tem um `.gdignore` para a Godot não
+importar a fonte nem os renders.
 
-O dedo puxa **para trás** da bola, como se puxa um taco: a direção é do dedo para
-a bola, e a distância é a força. Puxar para frente pareceria empurrar a bola
-com o dedo, e num celular o dedo estaria justamente em cima do que ele precisa
-ver.
+`ui/pool_view.gd` renderiza a cena numa `SubViewport` e desenha a mira em 2D por
+cima. A câmera olha **reto para baixo**, e é isso que mantém as duas camadas
+juntas: vista de cima, a altura do centro das bolas é um plano paralelo à tela, e
+a conta tela↔mesa continua uma escala e um deslocamento. A física continua 2D em
+`core/` — a física 3D da Godot não dá o mesmo resultado bit a bit em dois
+aparelhos. O giro das bolas sai do caminho entre dois retratos, e a bola
+capturada desliza até a boca (recuada na madeira, como no 8 Ball Pool) e cai.
+Parada, a `SubViewport` não redesenha: a mesa de quem espera a vez do outro não
+gasta bateria.
 
-**O taco é a barra de força.** Ele aparece atrás da branca enquanto o dedo está
-na tela e recua conforme o arrasto cresce — quanta pancada vem se lê no recuo,
-sem nenhum número, que é como se lê força numa mesa de verdade. Só enquanto o
-dedo está na tela: um taco parado atrás da bola pediria uma direção que ninguém
-escolheu ainda, e apontá-lo para um lado qualquer seria a tela inventando a mira.
+#### Mira, força e efeito são três controles, como no 8 Ball Pool
 
-Três traços saem do gesto, e cada um responde uma pergunta diferente:
+Na vez de quem joga, o taco já está atrás da bola, apontado para um alvo que faz
+sentido (a bola da vez, ou a do adversário mais perto). **Tocar ou arrastar na
+mesa** aponta o taco para o dedo; no mata-mata, tocar numa bola própria a
+**escolhe**. A **força** é a barra à esquerda da mesa: puxar para baixo recua o
+taco, soltar taca, voltar ao topo antes de soltar desiste. O **efeito** é a
+bolinha branca à direita: ela abre uma bola grande onde se toca o ponto em que o
+taco bate, e o efeito volta a zero depois de cada tacada.
+
+Separar mira e força é o que deixa mirar com calma: no arrasto único de antes, a
+direção e a força saíam do mesmo dedo, e corrigir uma estragava a outra.
+
+Três traços acompanham a mira, e cada um responde uma pergunta diferente:
 
 1. **a linha da branca**, em latão, até onde ela para — na primeira bola do
    caminho ou na tabela. Uma linha que atravessasse a mesa inteira prometeria uma
@@ -1347,6 +1378,35 @@ Os jogadores veem **"N assistindo"** na barra da partida: ninguém é assistido 
 saber. A tela de quem assiste é a mesma `match.gd`, com as brancas embaixo, sem
 toque, sem pré-movimento, com o resultado contado pelas cores, e seguindo a
 revanche dos jogadores com as cores trocadas.
+
+### Jogar a próxima
+
+Quem assiste pode pedir para **jogar a próxima** ("Quero jogar a próxima"). O
+pedido entra numa fila por sala, por ordem de chegada, que todos veem na barra
+("Próximos: Ana, Beto"). No fim da partida, quem perdeu cede o lugar ao primeiro
+da fila depois de uma contagem de 5 s, e passa a assistir. No empate, os dois
+veem "Dar lugar", e cede quem tocar primeiro. A partida nova começa sozinha em
+todos os aparelhos, com as cores trocadas como numa revanche.
+
+O espectador continua mudo para a partida. A fila tem verbos próprios no relay,
+fora do envelope `msg`:
+
+- `{"t":"queue","on":true}` entra na fila (`on:false` sai). Só vale de quem assiste.
+- `{"t":"yield"}` cede o lugar. Só vale de quem está sentado, e só o próprio assento.
+
+A troca é feita pelo relay num passo só (`RoomRegistry.yieldSeat`): o primeiro
+da fila senta com chave nova, e quem cedeu vira espectador. O assento nunca
+fica livre, e ninguém recebe `peer_left`. Sair e entrar de novo deixaria o
+lugar livre por um instante, e numa sala listada um estranho da lista pública o
+pegaria. Todos recebem `{"t":"swap","seat","name","watchers"}`, e só a cópia de
+quem sentou leva `key`. A troca descarta os relatos de Elo pendentes, e depois
+dela a sala ignora outro `yield` por 3 s. Sem essa trava, num empate com dois na
+fila, os dois toques trocariam os dois assentos.
+
+Do lado do app, `Net._on_relay_swapped` troca os papéis mantendo as cores da
+partida que acabou. A `match.gd` começa a partida seguinte no lugar, sem
+recarregar a cena, e é ela que troca as cores. Quem cedeu esquece a chave do
+assento em disco, e quem sentou grava a nova. Mesa de dois só (xadrez e damas).
 
 ### Os três canais do código
 
@@ -3425,7 +3485,6 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
    mesa **no mesmo binário**; o que nunca foi exercitado é um ARM e um x86
    chegando ao mesmo resultado, que é exatamente o que a quantização da tacada
    existe para garantir.
-9. Efeito na sinuca, se ele um dia valer o preço. Ele pede rotação, atrito lateral
-   e uma integração mais sensível a erro — e a primeira coisa a quebrar seria a
-   igualdade entre os dois aparelhos, que é a propriedade em que a rede do jogo
-   inteiro se apoia.
+9. O efeito da sinuca no limite do modelo. Ele é aproximado de propósito (ver a
+   seção da sinuca) e não tem desvio no contato com bola (throw), squirt nem
+   massé. Se faltar, os três entram em `simulate` com as mesmas contas exatas.

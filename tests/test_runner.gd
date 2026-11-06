@@ -36,7 +36,9 @@ func _initialize() -> void:
 	_test_app_version()
 	_test_version_compare()
 	_test_update_offer()
+	_test_changelog()
 	_test_prefs()
+	_test_avatar()
 	_test_history()
 	_test_rounds_played()
 	_test_match_clock()
@@ -1045,35 +1047,93 @@ func _test_version_compare() -> void:
 	_check(AppVersion.compare("1.21", "1.20.9") > 0, "e o segundo antes do terceiro")
 
 
-## A decisão do aviso, sem rede: o JSON da release entra pronto.
+## O CHANGELOG.md: seções por versão, as linhas `- ` de cada uma, e o arquivo de
+## verdade do repo com a seção da versão deste build.
+func _test_changelog() -> void:
+	print("changelog")
+	var text := "\n".join(PackedStringArray([
+		"# Novidades", "", "Texto solto com `## 9.9` no meio.", "",
+		"## 1.31", "", "- Um", "- Dois", "",
+		"## 1.30", "", "- Antigo",
+	]))
+	var sections := Changelog.parse(text)
+	_equals(sections.map(func(section: Dictionary) -> String: return section["version"]), ["1.31", "1.30"], "seções na ordem do arquivo, sem o texto de cima")
+	_equals(Changelog.items_of(text, "1.31"), PackedStringArray(["Um", "Dois"]), "as novidades de uma versão")
+	_equals(Changelog.items_of(text, "v1.30"), PackedStringArray(["Antigo"]), "o v da tag não atrapalha")
+	_equals(Changelog.items_of(text, "1.29"), PackedStringArray(), "versão sem seção não tem novidades")
+	_equals(
+		Changelog.items("- Um\n- Dois\n---\n- origem do build"), PackedStringArray(["Um", "Dois"]),
+		"das notas da release, só o que vem antes do ---"
+	)
+	var bundled := Changelog.bundled()
+	_check(not bundled.is_empty(), "o CHANGELOG.md está em res://")
+	var newest: Dictionary = Changelog.parse(bundled)[0] if not Changelog.parse(bundled).is_empty() else {}
+	_check(AppVersion.compare(str(newest.get("version", "0")), AppVersion.text()) >= 0, "o changelog já tem a seção desta versão ou da próxima")
+
+
+## A versão obrigatória, sem rede: a lista da API entra pronta.
 func _test_update_offer() -> void:
-	print("aviso de versão nova")
-	var url := UpdateCheck.DOWNLOADS + "v1.21/cascapp-1.21.apk"
-	var release := {
-		"tag_name": "v1.21",
-		"assets": [
-			{"name": "notas.txt", "browser_download_url": UpdateCheck.DOWNLOADS + "v1.21/notas.txt"},
-			{"name": "cascapp-1.21.apk", "browser_download_url": url},
-		],
-	}
-	_equals(
-		UpdateCheck.offer(release, "1.20", ""), {"version": "1.21", "url": url},
-		"release mais nova é oferecida, com o link do APK"
-	)
-	_equals(UpdateCheck.offer(release, "1.21", ""), {}, "a mesma versão não")
-	_equals(UpdateCheck.offer(release, "1.30", ""), {}, "nem uma mais velha")
-	_equals(UpdateCheck.offer(release, "1.20", "1.21"), {}, "nem a que o jogador pulou")
-	_equals(
-		UpdateCheck.offer(release, "1.20", "1.20").get("version"), "1.21",
-		"pular uma versão não cala a seguinte"
-	)
-	_equals(UpdateCheck.offer({"tag_name": "v1.21", "assets": []}, "1.20", ""), {}, "sem APK, sem aviso")
-	var elsewhere := {
-		"tag_name": "v1.21",
-		"assets": [{"name": "x.apk", "browser_download_url": "https://exemplo.com/x.apk"}],
-	}
-	_equals(UpdateCheck.offer(elsewhere, "1.20", ""), {}, "link de fora do repositório não é aberto")
-	_equals(UpdateCheck.offer({"message": "Not Found"}, "1.20", ""), {}, "resposta de erro é silêncio")
+	print("versão nova obrigatória")
+	var release := func(tag: String, body := "", apk := true) -> Dictionary:
+		var assets := [{"name": "notas.txt", "browser_download_url": UpdateCheck.DOWNLOADS + tag + "/notas.txt"}]
+		if apk:
+			assets.append({"name": "cascapp.apk", "browser_download_url": UpdateCheck.DOWNLOADS + tag + "/cascapp.apk"})
+		return {"tag_name": tag, "body": body, "assets": assets}
+	var releases := [
+		release.call("v1.23", "- Ainda sem APK", false),
+		release.call("v1.22", "- Dois\n- Três\n\n---\n\nAPK assinado…"),
+		release.call("v1.21", "APK assinado da versão 1.21, de antes do changelog."),
+		release.call("v1.20", "- Velha"),
+	]
+	var offer := UpdateCheck.offer(releases, "1.20")
+	_equals(offer.get("version"), "1.22", "a mais nova com APK (a sem APK ainda não tranca o app)")
+	_equals(offer.get("url"), UpdateCheck.DOWNLOADS + "v1.22/cascapp.apk", "com o link do APK, não do outro anexo")
+	_equals(offer.get("changes"), [{"version": "1.22", "items": PackedStringArray(["Dois", "Três"])}],
+		"as novidades das versões puladas, sem as notas vazias nem a instalada")
+	_equals(UpdateCheck.offer(releases, "1.22"), {}, "na mais nova com APK: nada")
+	_equals(UpdateCheck.offer(releases, "1.30"), {}, "nem com a instalada mais nova")
+	var draft: Dictionary = release.call("v1.31")
+	draft["draft"] = true
+	_equals(UpdateCheck.offer([draft], "1.30"), {}, "rascunho não conta")
+	var pre: Dictionary = release.call("v1.31")
+	pre["prerelease"] = true
+	_equals(UpdateCheck.offer([pre], "1.30"), {}, "nem pré-release")
+	var elsewhere := {"tag_name": "v1.21", "assets": [{"name": "x.apk", "browser_download_url": "https://exemplo.com/x.apk"}]}
+	_equals(UpdateCheck.offer([elsewhere], "1.20"), {}, "link de fora do repositório não é aberto")
+	_equals(UpdateCheck.offer([{"message": "Not Found"}, 3], "1.20"), {}, "lixo na lista é ignorado")
+
+	# Pacote OTA: vai junto só quando roda sobre o APK instalado.
+	var ota := func(name := "cascapp-1.36-base1.35.pck", digest := "sha256:abc", url := "") -> Dictionary:
+		var with_pck: Dictionary = release.call("v1.36")
+		with_pck["assets"].append({
+			"name": name, "size": 2048, "digest": digest,
+			"browser_download_url": url if not url.is_empty() else UpdateCheck.DOWNLOADS + "v1.36/" + name,
+		})
+		return with_pck
+	_equals(UpdateCheck.offer([ota.call()], "1.35", "1.35").get("pck"),
+		{"url": UpdateCheck.DOWNLOADS + "v1.36/cascapp-1.36-base1.35.pck", "size": 2048, "sha256": "abc"},
+		"pacote sobre o APK da base")
+	_check(UpdateCheck.offer([ota.call()], "1.34", "1.40").has("pck"), "APK mais novo que a base também roda")
+	_check(not UpdateCheck.offer([ota.call()], "1.34", "1.34").has("pck"), "APK mais velho que a base: só o APK")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.36-base1.35.pck", "")], "1.35", "1.35").has("pck"),
+		"sem sha256 não há como conferir")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.36-base1.35.pck", "sha256:abc", "https://exemplo.com/x.pck")],
+		"1.35", "1.35").has("pck"), "pacote de fora do repositório não é baixado")
+	_check(not UpdateCheck.offer([ota.call("cascapp-1.35-base1.35.pck")], "1.35", "1.35").has("pck"),
+		"pacote de outra versão não vale")
+	_equals(UpdateCheck.offer([ota.call()], "1.35", "1.35").get("url"), UpdateCheck.DOWNLOADS + "v1.36/cascapp.apk",
+		"e o APK continua na oferta, para quando o pacote falhar")
+
+	var path := "user://update_check_verify.pck"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string("pacote")
+	file.close()
+	var pck := {"size": 6, "sha256": FileAccess.get_sha256(path)}
+	_check(UpdateCheck.verify(path, pck), "pacote conferido")
+	_check(not UpdateCheck.verify(path, {"size": 6, "sha256": "00"}), "sha256 diferente: recusado")
+	_check(not UpdateCheck.verify(path, {"size": 5, "sha256": pck["sha256"]}), "tamanho diferente: recusado")
+	DirAccess.remove_absolute(path)
+	_check(not UpdateCheck.verify(path, pck), "sem arquivo: recusado")
 
 
 ## O nome do jogador sobrevive ao fechamento do app, e o padrão preenche o lugar
@@ -1128,3 +1188,45 @@ func _write(path: String, contents: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	file.store_string(contents)
 	file.close()
+
+
+## A foto vira o avatar no aparelho: quadrado do centro, `Avatar.SIZE`, WebP
+## abaixo do teto do servidor — e de pé, quando a câmera anotou o giro no EXIF.
+func _test_avatar() -> void:
+	print("avatar")
+	# Ruído é o pior caso da compressão: nada se repete.
+	var noise := Image.create_from_data(
+		4000, 3000, false, Image.FORMAT_RGB8, Crypto.new().generate_random_bytes(4000 * 3000 * 3)
+	)
+	var out := Avatar.compress(noise.save_jpg_to_buffer(0.9))
+	var back := Avatar.decode(out)
+	_check(back != null, "foto grande vira avatar")
+	if back != null:
+		_equals(back.get_size(), Vector2i(Avatar.SIZE, Avatar.SIZE), "no tamanho do avatar")
+	_check(out.size() <= Avatar.MAX_BYTES, "abaixo do teto do servidor (%d bytes)" % out.size())
+	_equals(out.slice(8, 12).get_string_from_ascii(), "WEBP", "em WebP")
+
+	# Em pé: o quadrado é o do meio, e a faixa de cima e a de baixo saem.
+	var tall := Image.create(300, 900, false, Image.FORMAT_RGB8)
+	tall.fill(Color.RED)
+	tall.fill_rect(Rect2i(0, 300, 300, 300), Color.BLUE)
+	back = Avatar.decode(Avatar.compress(tall.save_png_to_buffer()))
+	_check(back != null and back.get_pixel(128, 128).b > 0.8, "foto em pé fica com o quadrado do meio")
+
+	# Deitada com EXIF 6 ("girar 90° no horário"): vermelho à esquerda vira em cima.
+	var wide := Image.create(200, 100, false, Image.FORMAT_RGB8)
+	wide.fill(Color.BLUE)
+	wide.fill_rect(Rect2i(0, 0, 100, 100), Color.RED)
+	var jpeg := wide.save_jpg_to_buffer(0.95)
+	var tiff := PackedByteArray([0x4D, 0x4D, 0, 0x2A, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0])
+	var app1 := PackedByteArray([0xFF, 0xE1, 0, 2 + 6 + tiff.size(), 0x45, 0x78, 0x69, 0x66, 0, 0]) + tiff
+	jpeg = jpeg.slice(0, 2) + app1 + jpeg.slice(2)
+	_equals(Avatar.jpeg_orientation(jpeg), 6, "lê a orientação do EXIF")
+	back = Avatar.decode(Avatar.compress(jpeg))
+	_check(
+		back != null and back.get_pixel(128, 20).r > 0.8 and back.get_pixel(128, 236).b > 0.8,
+		"e põe a foto de pé"
+	)
+	_equals(Avatar.jpeg_orientation(wide.save_jpg_to_buffer()), 1, "JPEG sem EXIF não gira")
+
+	_equals(Avatar.compress("não é imagem".to_utf8_buffer()), PackedByteArray(), "o que não é imagem não vira avatar")

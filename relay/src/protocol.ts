@@ -31,6 +31,8 @@
  * código —, ela só responde "qual assento era o meu".
  */
 
+import { parseReport, type Report } from './ratings.js';
+
 /** Motivos de recusa. O cliente escolhe a mensagem que mostra a partir daqui. */
 export type ErrorReason =
   | 'bad_code'
@@ -42,7 +44,9 @@ export type ErrorReason =
   | 'hello_timeout'
   | 'rate_limited'
   | 'not_in_room'
-  | 'watch_full';
+  | 'watch_full'
+  /** A presença pede conta: token que o PocketBase não confirmou. */
+  | 'bad_token';
 
 /** Índice do assento na sala. 0 é quem abriu. */
 export type Seat = number;
@@ -87,9 +91,44 @@ export type ClientMessage =
    * nem impede que ela expire quando os jogadores vão embora.
    */
   | { t: 'watch'; room: string }
+  /**
+   * Espectador entra (`on`) ou sai da fila de quem joga a próxima. `name` é o
+   * apelido que a fila mostra; `token` é conferido só quando ele senta.
+   */
+  | { t: 'queue'; on: boolean; name: string; token: string }
+  /**
+   * Jogador cede o próprio assento ao primeiro da fila e passa a assistir. Sem
+   * fila, não acontece nada. Ver `RoomRegistry.yieldSeat`.
+   */
+  | { t: 'yield' }
   | { t: 'msg'; d: unknown }
   | { t: 'ping' }
-  | { t: 'leave' };
+  | { t: 'leave' }
+  /** Como a partida de xadrez acabou, do ponto de vista deste aparelho. Ver `ratings.ts`. */
+  | ({ t: 'result' } & Report)
+  /**
+   * Abre a **presença**: este socket não entra em sala nenhuma, só diz "esta
+   * conta está com o app aberto" e quem ela tem como amigo (ids do PocketBase).
+   * O relay só revela uma conta a outra quando as duas listas se contêm — ver
+   * `server.ts`.
+   */
+  | { t: 'presence'; token: string; friends: string[] }
+  /** Quem dos meus amigos está online, e onde. A lista vai junto: amigo novo vale na hora. */
+  | { t: 'who'; friends: string[] }
+  /** Chama um amigo para a sala `room`, que quem chama acabou de abrir. */
+  | { t: 'invite'; to: string; game: string; room: string };
+
+/**
+ * Um amigo online, na resposta ao `who`. `room` e `game` vazios: com o app
+ * aberto, fora de sala. `playing`: a mesa dele está cheia (partida rolando, dá
+ * para assistir); falso com `room` preenchido é sala esperando gente.
+ */
+export interface FriendStatus {
+  id: string;
+  game: string;
+  room: string;
+  playing: boolean;
+}
 
 /**
  * Uma sala na lista pública. É tudo o que o servidor conta sobre uma partida, e
@@ -149,6 +188,18 @@ export type ServerMessage =
     }
   /** Para os jogadores: quantos espectadores há agora. Vai a cada entrada e saída. */
   | { t: 'watchers'; n: number }
+  /**
+   * A fila de quem joga a próxima, para todos na sala. `you` é a posição de quem
+   * recebe (0 é o próximo), ou -1 fora da fila. Vai a cada mudança.
+   */
+  | { t: 'queue'; names: string[]; you: number }
+  /**
+   * O assento `seat` trocou de dono: quem estava nele passou a assistir, e o
+   * primeiro da fila (`name`) sentou. Só a cópia de quem sentou leva `key`.
+   * `watchers` é o contador para quem acaba de virar jogador: espectador não o
+   * recebia.
+   */
+  | { t: 'swap'; seat: Seat; name: string; watchers: number; key?: string }
   | { t: 'peer'; seat: Seat }
   | { t: 'peer_left'; seat: Seat }
   /** `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir. */
@@ -158,8 +209,21 @@ export type ServerMessage =
    * depois do `joined`/`peer` (a conferência não atrasa a entrada), e para quem
    * entra depois vem logo após o `joined`/`watching`. Assento sem `identity` é
    * jogador sem conta confirmada: vale o apelido que o próprio aparelho mandar.
+   *
+   * `user` é o id da conta, `avatar` o nome do arquivo da foto nela (`''` sem
+   * foto; o app monta o endereço) e `elo` o Elo do xadrez (0 sem Elo). App de
+   * antes do perfil lê só o nome e ignora o resto.
    */
-  | { t: 'identity'; seat: Seat; name: string }
+  | { t: 'identity'; seat: Seat; name: string; user: string; avatar: string; elo: number }
+  /**
+   * A partida contou para o Elo: o Elo novo e a mudança de cada assento. Vai
+   * para os dois jogadores e para quem assiste.
+   */
+  | { t: 'rated'; ratings: { seat: Seat; elo: number; delta: number }[] }
+  /** Resposta ao `presence` e a cada `who`: só os amigos mútuos com o app aberto. */
+  | { t: 'friends'; online: FriendStatus[] }
+  /** Um amigo chamou para a sala `room`. O nome e a foto o app já tem na lista dele. */
+  | { t: 'invited'; from: string; game: string; room: string }
   | { t: 'pong' }
   | { t: 'error'; reason: ErrorReason; detail: string };
 
@@ -213,6 +277,26 @@ export function cleanName(value: unknown): string {
     if (code >= 0x20 && code !== 0x7f) clean += character;
   }
   return clean.trim().slice(0, MAX_NAME_LENGTH);
+}
+
+/** O formato do id do PocketBase: 15 caracteres, minúsculas e dígitos. */
+export const ID_PATTERN = /^[a-z0-9]{15}$/;
+
+/**
+ * Teto da lista de amigos. A lista vem do cliente e é guardada por socket;
+ * duzentos ids são ~3 KB, bem abaixo do `maxPayload`.
+ */
+export const MAX_FRIENDS = 200;
+
+/** Ids de conta, só os de forma conhecida, sem repetir, até o teto. */
+export function cleanIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<string>();
+  for (const id of value) {
+    if (typeof id === 'string' && ID_PATTERN.test(id)) ids.add(id);
+    if (ids.size >= MAX_FRIENDS) break;
+  }
+  return [...ids];
 }
 
 /**
@@ -312,12 +396,38 @@ export function parseClientMessage(raw: string): ClientMessage | null {
         : null;
     case 'watch':
       return typeof record.room === 'string' ? { t: 'watch', room: record.room } : null;
+    case 'queue':
+      return {
+        t: 'queue',
+        on: record.on !== false,
+        name: cleanName(record.name),
+        token: cleanToken(record.token),
+      };
+    case 'yield':
+      return { t: 'yield' };
     case 'msg':
       return { t: 'msg', d: record.d };
     case 'ping':
       return { t: 'ping' };
     case 'leave':
       return { t: 'leave' };
+    case 'result': {
+      const report = parseReport(record);
+      return report === null ? null : { t: 'result', ...report };
+    }
+    case 'presence': {
+      const token = cleanToken(record.token);
+      return token === '' ? null : { t: 'presence', token, friends: cleanIds(record.friends) };
+    }
+    case 'who':
+      return { t: 'who', friends: cleanIds(record.friends) };
+    case 'invite':
+      return typeof record.to === 'string' &&
+        ID_PATTERN.test(record.to) &&
+        typeof record.room === 'string' &&
+        isValidRoomCode(record.room.toUpperCase())
+        ? { t: 'invite', to: record.to, game: cleanGame(record.game), room: record.room.toUpperCase() }
+        : null;
     default:
       return null;
   }

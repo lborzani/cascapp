@@ -56,7 +56,16 @@ const CAPTURED_Y := 13.0
 	set(value):
 		piece = value
 		if _coaster != null:
-			_coaster.piece = value
+			_coaster.piece = value if photo == null else 0
+
+## A foto da conta do jogador. Com ela a bolacha mostra a foto no lugar da peça
+## e da inicial — o lado continua escrito no subtítulo.
+var photo: Texture2D = null:
+	set(value):
+		photo = value
+		if _coaster != null:
+			_coaster.photo = value
+			_coaster.piece = piece if value == null else 0
 
 ## A cor do assento — a do jogador no Uno, a do canto no Ludo. Fora desses jogos
 ## a bolacha é escura como as outras.

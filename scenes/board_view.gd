@@ -36,6 +36,13 @@ var preview_to := Board.NO_SQUARE
 var premove := PackedInt32Array()
 var premove_pick := Board.NO_SQUARE
 
+## Selo do veredito de um lance, no canto de cima à direita da casa — o
+## oposto do número do premove. Símbolo vazio (lance bom) vira um visto.
+## Só quem assiste xadrez usa; ver `ui/live_review.gd`.
+var badge_square := Board.NO_SQUARE
+var badge_color := Color.WHITE
+var badge_text := ""
+
 var check_square := Board.NO_SQUARE:
 	set(value):
 		check_square = value
@@ -167,6 +174,7 @@ func _draw() -> void:
 		)
 
 	_draw_targets()
+	_draw_badge()
 	if travelling:
 		_draw_travelling(arriving)
 	_draw_drag()
@@ -326,6 +334,32 @@ func _draw_premove_order(square: int, order: int) -> void:
 	draw_string(
 		font, center + Vector2(-wide * 0.5, size * 0.35), text,
 		HORIZONTAL_ALIGNMENT_CENTER, wide, size, AppTheme.TEXT
+	)
+
+
+## Por cima da peça, com um aro da cor do fundo para descolar da madeira e da
+## peça embaixo.
+func _draw_badge() -> void:
+	if badge_square == Board.NO_SQUARE:
+		return
+	var rect := rect_of(badge_square)
+	var radius := maxf(8.0, _cell * 0.19)
+	var center := rect.position + Vector2(rect.size.x - radius * 0.9, radius * 0.9)
+	draw_circle(center, radius + maxf(1.5, _cell * 0.025), AppTheme.BACKGROUND)
+	draw_circle(center, radius, badge_color)
+	if badge_text.is_empty():
+		draw_polyline(PackedVector2Array([
+			center + Vector2(-0.45, 0.02) * radius,
+			center + Vector2(-0.12, 0.35) * radius,
+			center + Vector2(0.45, -0.3) * radius,
+		]), AppTheme.BACKGROUND, maxf(1.5, radius * 0.26), true)
+		return
+	var font := AppTheme.font(800)
+	var size := int(radius * (1.15 if badge_text.length() == 1 else 0.95))
+	var wide := font.get_string_size(badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(
+		font, center + Vector2(-wide * 0.5, size * 0.36), badge_text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, size, AppTheme.BACKGROUND
 	)
 
 

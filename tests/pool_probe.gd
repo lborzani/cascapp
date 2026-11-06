@@ -29,10 +29,13 @@ func _initialize() -> void:
 	_test_settles()
 	_test_stays_on_cloth()
 	_test_deterministic()
+	_test_regression()
 	_test_pocket()
 	_test_knockout()
 	_test_brazilian()
 	_test_replay()
+	_test_spin()
+	_test_trophies()
 	_test_bot()
 
 	if _failures == 0:
@@ -164,6 +167,42 @@ func _test_deterministic() -> void:
 	_check(differs, "e uma mira diferente dá uma mesa diferente")
 
 
+## A física de antes do efeito, gravada bit a bit. Uma tacada sem efeito tem de
+## dar exatamente a mesma mesa de sempre: é o que garante que o efeito entrou sem
+## mexer em nenhuma partida que não o usa.
+##
+## O resumo é o SHA-256 das posições e de quem está vivo depois de cada tacada.
+## Se ele mudar de propósito (a física mudou), regrave rodando a suíte e copiando
+## o valor impresso no FAIL.
+## Regravado quando `MAX_SPEED` foi de 6 para 8: a mesma força vira outra
+## velocidade, e a simulação em si não mudou.
+const REGRESSION_KNOCKOUT := "26c96a25c3121b68c70486a6e5339fdc8c2ba1be661806f6755fa5e971ad01a0"
+const REGRESSION_BRAZILIAN := "565e3ac8afad2a7d388435c89919a8d63dd56688402bfcbf58e57e49121ff1a1"
+
+
+func _test_regression() -> void:
+	print("tacada sem efeito dá a mesa de antes")
+	for format: int in [PoolRules.Format.KNOCKOUT, PoolRules.Format.BRAZILIAN]:
+		var rules := _rules(format)
+		var state := rules.initial_state()
+		var trail := PackedByteArray()
+		for angle in 12:
+			if PoolRules.winner_of(state) >= 0:
+				break
+			var moves := rules.generate_moves(state)
+			if PoolRules.ball_in_hand(state):
+				rules.apply_move(state, moves[0])
+			else:
+				var mine := PoolRules.shootable(state)
+				# Sem cos e sin: a CI roda em outra libm, e o resumo tem de bater lá também.
+				var direction := Vector2(float(3 - angle % 7) + 0.25, float(angle % 5 - 2) + 0.5)
+				rules.apply_move(state, PoolRules.shot(mine[angle % mine.size()], direction, 0.4 + 0.05 * float(angle)))
+			trail.append_array(PackedFloat64Array(state.meta[PoolRules.POS]).to_byte_array())
+			trail.append_array(PackedByteArray(state.meta[PoolRules.LIVE]))
+		var digest := trail.hex_encode().sha256_text()
+		var wanted := REGRESSION_KNOCKOUT if format == PoolRules.Format.KNOCKOUT else REGRESSION_BRAZILIAN
+		_equals(digest, wanted, "formato %d igual ao gravado" % format)
+
 func _test_pocket() -> void:
 	print("caçapa")
 	var rules := _rules(PoolRules.Format.KNOCKOUT)
@@ -231,6 +270,9 @@ func _test_brazilian() -> void:
 	_equals(PoolRules.score_of(clean, 0), 3, "a bola da vez vale o número dela")
 	_equals(PoolRules.turn_of(clean), 0, "e quem a encaçapou taca de novo")
 	_equals(PoolRules.winner_of(clean), 0, "mesa limpa, vence quem tem mais ponto")
+	_equals(PoolRules.trophies(clean, 0), PackedInt32Array([1]), "e a bola vai para o placar de quem encaçapou")
+	_equals(PoolRules.trophies(clean, 1), PackedInt32Array(), "e não para o do outro")
+	_equals(PoolRules.trophies(wrong, 1), PackedInt32Array(), "falta não dá bola a ninguém")
 
 	# A branca sempre volta: ela é o taco, não um alvo.
 	var suicide := _rig(rules, [Vector2(1.0, 0.25), Vector2(0.3, 0.80)], [0, 1])
@@ -274,6 +316,105 @@ func _test_replay() -> void:
 		_check(same, "e a mesa reconstruída é a mesma, bola por bola")
 		_equals(PoolRules.turn_of(rebuilt), PoolRules.turn_of(played), "com a mesma vez")
 
+
+## O efeito faz o que o nome diz, e continua determinístico.
+func _test_spin() -> void:
+	print("efeito")
+	var rules := _rules(PoolRules.Format.BRAZILIAN)
+
+	# Batida reta e cheia: a branca em (0,5; 0,5), a vermelha um palmo à frente.
+	# Sem efeito a branca para quase no ponto de contato; com draw ela volta, com
+	# follow ela segue.
+	var straight := func(spin: Vector2) -> float:
+		var state := _rig(rules, [Vector2(0.5, 0.5), Vector2(1.0, 0.5)], [0, 1])
+		PoolRules.simulate(state, 0, Vector2(3.0, 0.0), spin)
+		return PoolRules.position_of(state, 0).x
+	var contact := 1.0 - PoolRules.BALL_RADIUS * 2.0
+	var stun: float = straight.call(Vector2.ZERO)
+	var draw: float = straight.call(Vector2(0.0, -1.0))
+	var follow: float = straight.call(Vector2(0.0, 1.0))
+	# "Quase": a batida guarda 4% (BALL_KEEP), e a branca ainda anda uns centímetros.
+	_check(absf(stun - contact) < 0.1, "sem efeito a branca para perto do contato (%.3f)" % stun)
+	_check(draw < contact - 0.15, "draw: a branca volta (%.3f)" % draw)
+	_check(follow > contact + 0.15, "follow: a branca segue (%.3f)" % follow)
+
+	# Inglês: a branca sozinha, de frente para a tabela da direita. Efeito à
+	# direita de quem taca para a direita é para baixo (y cresce para baixo); à
+	# esquerda, para cima — e os dois são o espelho um do outro.
+	var english := func(side: float) -> float:
+		var state := _rig(rules, [Vector2(1.6, 0.5)], [0])
+		PoolRules.simulate(state, 0, Vector2(2.0, 0.0), Vector2(side, 0.0))
+		return PoolRules.position_of(state, 0).y
+	var right: float = english.call(1.0)
+	var left: float = english.call(-1.0)
+	_check(right > 0.55, "inglês à direita sai para a direita de quem tacou (%.3f)" % right)
+	_check(left < 0.45, "à esquerda, para a esquerda (%.3f)" % left)
+	_check(absf((right - 0.5) - (0.5 - left)) < 0.000001, "e um é o espelho do outro")
+	_check(absf(english.call(0.0) - 0.5) < 0.000001, "sem inglês volta reto")
+
+	# O lance: seis casas, o de quatro ainda vale, e o ponto tem de cair na bola.
+	var table := rules.initial_state()
+	var spun := PoolRules.shot(0, Vector2.RIGHT, 0.8, Vector2(0.3, -0.6))
+	_equals(spun.path.size(), PoolRules.PATH_SIZE, "a tacada tem seis casas")
+	_check(rules.validate(table, spun.path) != null, "e com efeito é legal")
+	_check(PoolRules.spin_of(spun).distance_to(Vector2(0.3, -0.6)) < 0.001, "e leva o ponto escolhido")
+	var legacy := spun.path.slice(0, PoolRules.LEGACY_PATH_SIZE)
+	_check(rules.validate(table, legacy) != null, "o lance de quatro casas ainda vale")
+	_equals(PoolRules.spin_of(rules.validate(table, legacy)), Vector2.ZERO, "como tacada sem efeito")
+	var outside := spun.path.duplicate()
+	outside[PoolRules.SIDE_AT] = 900
+	outside[PoolRules.HEIGHT_AT] = 900
+	_check(rules.validate(table, outside) == null, "ponto fora da bola é recusado")
+	var edge := PoolRules.shot(0, Vector2.RIGHT, 0.8, Vector2(2.0, 2.0))
+	_check(rules.validate(table, edge.path) != null, "e um ponto pedido fora volta para a borda")
+
+	# Determinismo e replay com efeito, nos dois formatos.
+	for wanted: int in [PoolRules.Format.KNOCKOUT, PoolRules.Format.BRAZILIAN]:
+		var format_rules := _rules(wanted)
+		var played := format_rules.initial_state()
+		var twin := format_rules.initial_state()
+		for turn in 6:
+			if PoolRules.winner_of(played) >= 0:
+				break
+			var move: Move
+			if PoolRules.ball_in_hand(played):
+				move = format_rules.generate_moves(played)[0]
+			else:
+				var mine := PoolRules.shootable(played)
+				move = PoolRules.shot(
+					mine[turn % mine.size()], Vector2(1.0, float(turn % 3) - 1.0), 0.9,
+					Vector2(float(turn % 3 - 1) * 0.7, float(turn % 2) * 1.4 - 0.7)
+				)
+			format_rules.apply_move(played, move)
+			format_rules.apply_move(twin, move)
+		_check(
+			PackedFloat64Array(played.meta[PoolRules.POS]) == PackedFloat64Array(twin.meta[PoolRules.POS]),
+			"formato %d: a mesma tacada com efeito dá a mesma mesa" % wanted
+		)
+		var rebuilt := format_rules.initial_state()
+		var ok := true
+		for entry: Dictionary in played.history:
+			var move := format_rules.validate(rebuilt, PackedInt32Array(entry.get("p", [])))
+			if move == null:
+				ok = false
+				break
+			format_rules.apply_move(rebuilt, move)
+		_check(
+			ok and PackedFloat64Array(rebuilt.meta[PoolRules.POS]) == PackedFloat64Array(played.meta[PoolRules.POS]),
+			"formato %d: repetir o histórico com efeito reconstrói a mesa" % wanted
+		)
+
+
+## O placar do mata-mata: cada um mostra as bolas do outro que já saíram.
+func _test_trophies() -> void:
+	print("placar")
+	var state := _rules(PoolRules.Format.KNOCKOUT).initial_state()
+	var live := PackedByteArray(state.meta[PoolRules.LIVE])
+	live[PoolRules.KNOCKOUT_PER_GROUP] = 0
+	live[0] = 0
+	state.meta[PoolRules.LIVE] = live
+	_equals(PoolRules.trophies(state, 0), PackedInt32Array([PoolRules.KNOCKOUT_PER_GROUP]), "o assento 0 mostra a do outro que saiu")
+	_equals(PoolRules.trophies(state, 1), PackedInt32Array([0]), "e o 1 a do 0")
 
 func _test_bot() -> void:
 	print("bot")

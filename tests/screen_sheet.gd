@@ -45,6 +45,7 @@ const SHOTS := [
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
+	["res://scenes/match.tscn", "24_assistindo"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -131,6 +132,8 @@ func _next() -> void:
 	if shot == "01e_favoritos":
 		for id in [Game.CHESS, Game.LUDO, Game.UNO, Game.POOL]:
 			Prefs.toggle_favorite(id)
+	# Só o print de quem assiste é espectador; os outros voltam a jogar.
+	Net.is_spectator = shot == "24_assistindo"
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
@@ -226,6 +229,15 @@ func _next() -> void:
 			# sete numeradas, e a bola da vez anunciada embaixo do placar.
 			Game.pool_format = PoolRules.Format.BRAZILIAN
 			Game.start_hotseat(Game.POOL)
+		"24_assistindo":
+			# Quem assiste xadrez, com a avaliação ao vivo: barra acima do
+			# tabuleiro e o selo do veredito na casa do último lance.
+			Game.start_hotseat(Game.CHESS)
+			Game.mode = Game.Mode.ONLINE
+			Game.time_control = 2
+			Net.connected = true
+			Net.white_seat = 0
+			Net.player_names = {0: "Ana", 1: "Bia"}
 	# O palco gira **antes** de a cena existir: a cena deitada se mede no
 	# `_ready`, e medida num palco em pé ela sai espremida.
 	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW)
@@ -287,6 +299,22 @@ func _next() -> void:
 	elif shot == "08_folha_ritmo" or shot == "19_folha_metropole" or shot == "19b_folha_uno":
 		_scene._open_sheet(Game.game_id)
 		_scene._sheet.select_mode(Game.Mode.ONLINE)
+	elif shot == "24_assistindo":
+		# Análise montada, e não o Stockfish: o print sai igual em toda máquina.
+		# Bg4 das pretas como erro, deixando as brancas com 62%.
+		var live: LiveReview = _scene._live
+		live._no_engine = true
+		var history := []
+		for step in OPENING:
+			history.append({"p": [_sq(step[0]), _sq(step[1])], "pr": 0})
+		_scene._apply_sync(history)
+		_scene._board.cancel_animation()
+		live._judged = live._history
+		live.entry = {
+			"side": Board.Side.BLACK, "score": 55.0, "after": 38.0,
+			"verdict": GameReview.Verdict.MISTAKE, "missed_mate": false,
+		}
+		live._paint()
 	elif shot == "09_revanche":
 		# Painel de fim de partida no estado mais cheio: convite de revanche
 		# recebido, com aceitar e recusar. É o caso que responde se três botões
@@ -545,9 +573,11 @@ func _stage_pool(scene: Node) -> void:
 				continue
 			best = aim.length()
 			view._shooter = from
-			# O taco puxa para **trás**, então o dedo está do lado oposto da mira.
-			view._pull = -aim.normalized() * scene.size.x * 0.20
-	view._aiming = best >= 0.0
+			view._aim = aim.normalized()
+	# A barra meio puxada: é o que põe na foto o taco recuado e a barra acesa.
+	view._power = 0.55
+	view._sync_cue()
+	view._render()
 	view.queue_redraw()
 
 

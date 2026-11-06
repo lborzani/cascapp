@@ -39,6 +39,10 @@ if [ "$nova" = "$atual" ] || [ "$(printf '%s\n%s\n' "$atual" "$nova" | sort -V |
 fi
 ((code > code_atual)) || falha "o code $code não é maior que o atual ($code_atual)"
 git rev-parse -q --verify "refs/tags/v$nova" >/dev/null && falha "a tag v$nova já existe"
+# O changelog vai para o app e para as notas da release (`release.yml`), e sai do
+# arquivo **commitado**: a tag aponta para o commit, e a esteira lê de lá.
+git show HEAD:CHANGELOG.md 2>/dev/null | grep -qx "## $nova" ||
+	falha "falta a seção '## $nova' no CHANGELOG.md commitado — escreva o que muda para quem joga e commite antes"
 # Mudança local no preset iria junto no commit da versão sem ninguém ver.
 git diff --quiet HEAD -- "$preset" || falha "$preset tem mudanças não commitadas"
 

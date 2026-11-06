@@ -296,6 +296,16 @@ static func set_account_seed(seed: String) -> void:
 	_file().save(PATH)
 
 
+## Foto escolhida que a conta ainda não recebeu (servidor fora na hora).
+static func avatar_pending() -> bool:
+	return bool(_file().get_value(ACCOUNT_SECTION, "avatar_pending", false))
+
+
+static func set_avatar_pending(pending: bool) -> void:
+	_file().set_value(ACCOUNT_SECTION, "avatar_pending", pending)
+	_file().save(PATH)
+
+
 # --- histórico de partidas ----------------------------------------------------
 #
 # As partidas de xadrez que terminaram, mais recente primeiro, para a tela de
@@ -344,11 +354,12 @@ static func forget() -> void:
 	_config = null
 
 
-## O aviso de versão nova: quando a última consulta respondeu, e a versão a que o
-## jogador disse "agora não".
+## A versão nova obrigatória: quando a última consulta respondeu, e a versão que
+## ela achou (`UpdateCheck.offer`).
 ##
-## A versão pulada, e não só "não perguntar mais": quem recusou a 1.21 não quer
-## ouvir dela de novo, mas a 1.22 é outra conversa.
+## Guardada, e não só mostrada: a tela de atualizar continua na próxima abertura
+## mesmo sem rede. Sai quando a instalada alcança a guardada, ou quando uma
+## consulta diz que não há versão nova (release apagada).
 const UPDATE_SECTION := "update"
 
 
@@ -361,10 +372,23 @@ static func set_update_checked(now: int) -> void:
 	_file().save(PATH)
 
 
-static func skipped_update() -> String:
-	return str(_file().get_value(UPDATE_SECTION, "skipped", ""))
+static func pending_update() -> Dictionary:
+	var stored = _file().get_value(UPDATE_SECTION, "pending", {})
+	return stored if stored is Dictionary else {}
 
 
-static func skip_update(version: String) -> void:
-	_file().set_value(UPDATE_SECTION, "skipped", version)
+## `{}` esquece.
+static func set_pending_update(offer: Dictionary) -> void:
+	_file().set_value(UPDATE_SECTION, "pending", offer)
+	_file().save(PATH)
+
+
+## A última versão aberta neste aparelho, para "Novidades" aparecer uma vez por
+## versão. Vazio antes da primeira (instalação nova, ou app de antes disto).
+static func seen_version() -> String:
+	return str(_file().get_value(UPDATE_SECTION, "seen", ""))
+
+
+static func set_seen_version(version: String) -> void:
+	_file().set_value(UPDATE_SECTION, "seen", version)
 	_file().save(PATH)

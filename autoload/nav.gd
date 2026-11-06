@@ -39,6 +39,9 @@ extends Node
 ## lugar.
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
+## Quanto o dedo anda, em pixels da base (432 de largura), antes de a lista
+## entender arrasto e não toque. 8 é ~20 px num celular comum.
+const SCROLL_DEADZONE := 8
 
 ## Quadro do último gesto atendido. Existe porque o mesmo "voltar" pode chegar
 ## duas vezes no mesmo quadro — pela notificação e pelo atalho de teclado — e duas
@@ -52,6 +55,37 @@ var _served_frame := -1
 
 func _ready() -> void:
 	get_tree().quit_on_go_back = false
+	get_tree().node_added.connect(_let_scroll_through)
+
+
+## Botão dentro de lista que rola deixa o arrasto passar para a lista.
+##
+## O filtro padrão de um botão é `STOP`: ele fica com o toque, e o
+## `ScrollContainer` em volta nunca vê o dedo andar. Arrastar começando em cima
+## de um item (a fileira de jogos do Online, os lances da revisão) não rolava.
+## Com `PASS` o toque chega aos dois: o botão aperta num toque simples, e quando o
+## dedo anda a lista começa a rolar e cancela o aperto
+## (`NOTIFICATION_SCROLL_BEGIN`), então arrastar não aperta nada sem querer.
+##
+## O `scroll_deadzone` padrão é 0, e com o toque chegando à lista isso vira o
+## defeito oposto: o dedo treme 2 ou 3 px num toque simples, a lista "começa a
+## rolar" e cancela o aperto. A folga devolve o toque a quem só tocou.
+##
+## Aqui, e não em cada lista: toda lista nova com botão nasceria com o defeito.
+func _let_scroll_through(node: Node) -> void:
+	var scroll := node as ScrollContainer
+	if scroll != null and scroll.scroll_deadzone == 0:
+		scroll.scroll_deadzone = SCROLL_DEADZONE
+		return
+	var button := node as BaseButton
+	if button == null or button.mouse_filter != Control.MOUSE_FILTER_STOP:
+		return
+	var parent := button.get_parent()
+	while parent != null:
+		if parent is ScrollContainer:
+			button.mouse_filter = Control.MOUSE_FILTER_PASS
+			return
+		parent = parent.get_parent()
 
 
 func _notification(what: int) -> void:

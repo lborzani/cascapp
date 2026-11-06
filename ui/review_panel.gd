@@ -55,6 +55,10 @@ var _solved := false
 var _mate_puzzle := false
 var _tried: Move = null
 var _view_flipped := false
+## Cor de quem jogou a partida; -1 no mesmo aparelho, onde os dois lados são
+## de quem revisa. Os desafios saem só dos erros dessa cor: o do oponente
+## abriria com a vez dele, e o jogador moveria as peças que não eram suas.
+var _side := -1
 ## A conferência do lance roda numa thread, com um Stockfish só do desafio — o
 ## da análise já foi encerrado quando ela terminou.
 var _checker: Thread = null
@@ -133,10 +137,11 @@ func _ready() -> void:
 
 
 ## Chamado depois de entrar na árvore. `history` é o da partida, no formato do
-## fio (`Move.to_dict`).
-func open(history: Array, flipped: bool) -> void:
+## fio (`Move.to_dict`); `side` é a cor de quem jogou, ou -1 no mesmo aparelho.
+func open(history: Array, side: int) -> void:
 	_history = history.duplicate()
-	_board.flipped = flipped
+	_side = side
+	_board.flipped = side == Board.Side.BLACK
 	var rules := ChessRules.new()
 	var state := rules.initial_state()
 	_states = [state.clone()]
@@ -239,13 +244,15 @@ func _show(ply: int) -> void:
 	_tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
 	# O lance certo não é dito: quem errou descobre no desafio, que é o que
 	# ensina. A revisão só aponta que havia coisa melhor.
-	_retry.visible = (
+	var slipped: bool = (
 		(entry["missed_mate"] or verdict >= GameReview.Verdict.INACCURACY) and entry["best"] != ""
 	)
+	_retry.visible = slipped and (_side < 0 or entry["side"] == _side)
+	var invite := " Toque em Tentar de novo para achar." if _retry.visible else ""
 	if entry["missed_mate"]:
-		_detail.text = "Havia um mate. Toque em Tentar de novo para achar."
-	elif _retry.visible:
-		_detail.text = "Havia um lance melhor. Toque em Tentar de novo para achar."
+		_detail.text = "Havia um mate." + invite
+	elif slipped:
+		_detail.text = "Havia um lance melhor." + invite
 	else:
 		_detail.text = ""
 

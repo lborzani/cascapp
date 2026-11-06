@@ -1,6 +1,7 @@
 import http from 'node:http';
 
-import type { TokenVerifier } from './accounts.js';
+import type { Account, TokenVerifier } from './accounts.js';
+import { decide, MIN_PLIES, type Report, type ResultReporter } from './ratings.js';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import {
@@ -8,6 +9,7 @@ import {
   parseClientMessage,
   type ClientMessage,
   type ErrorReason,
+  type FriendStatus,
   type LiveSummary,
   type RoomSummary,
   type Seat,
@@ -68,6 +70,13 @@ export interface RelayOptions {
    * confirmado e a sala é exatamente como era antes das contas.
    */
   verifyToken?: TokenVerifier;
+  /**
+   * Grava no PocketBase o resultado de xadrez que os dois lados contaram igual.
+   * Ausente, nenhuma partida conta para o Elo. Ver `ratings.ts`.
+   */
+  reportResult?: ResultReporter;
+  /** Quanto tempo o assento do outro fica vazio até o relato de quem ficou valer sozinho. */
+  abandonMs?: number;
 }
 
 /**
@@ -92,7 +101,14 @@ const DEFAULTS = {
   // O teto não existe para limitar o jogo: existe para o abuso bater num número
   // antes de bater na memória.
   roomLimit: 1_000,
-} as const satisfies Required<Omit<RelayOptions, 'verifyToken'>>;
+} as const satisfies Required<Omit<RelayOptions, 'verifyToken' | 'reportResult' | 'abandonMs'>>;
+
+/**
+ * O app espera 95 s de ausência antes de dizer "o oponente saiu"; o relay
+ * aceita o relato de quem ficou um pouco antes disso, para não somar as duas
+ * esperas.
+ */
+const ABANDON_MS = 60_000;
 
 /**
  * O estado por conexão mora aqui e não em campos enxertados no `WebSocket`,
@@ -104,6 +120,13 @@ interface Session {
   seat: Seat | null;
   /** Assiste à sala em `room`, sem assento. */
   watching: boolean;
+  /**
+   * Socket de presença (ver `presence` em `protocol.ts`): o id da conta, `''`
+   * enquanto o token é conferido, `null` num socket de sala.
+   */
+  presence: string | null;
+  /** Os amigos que esta presença declarou. */
+  friends: Set<string>;
   alive: boolean;
   helloTimer: NodeJS.Timeout;
   rateStart: number;
@@ -129,7 +152,7 @@ export interface Relay {
 }
 
 export function createRelay(options: RelayOptions = {}): Relay {
-  const config = { ...DEFAULTS, ...options };
+  const config = { ...DEFAULTS, abandonMs: ABANDON_MS, ...options };
   const sessions = new WeakMap<WebSocket, Session>();
   const registry = new RoomRegistry<WebSocket>(
     config.roomGraceMs,
@@ -205,9 +228,11 @@ export function createRelay(options: RelayOptions = {}): Relay {
       room: null,
       seat: null,
       watching: false,
+      presence: null,
+      friends: new Set(),
       alive: true,
       helloTimer: setTimeout(() => {
-        if (session.room === null) {
+        if (session.room === null && session.presence === null) {
           fail(socket, 'hello_timeout', 'Nenhuma sala foi informada.');
         }
       }, config.helloTimeoutMs),
@@ -232,6 +257,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
 
     socket.on('close', () => {
       clearTimeout(session.helloTimer);
+      leavePresence(socket, session);
       releaseSeat(socket, session);
     });
 
@@ -239,8 +265,16 @@ export function createRelay(options: RelayOptions = {}): Relay {
   });
 
   function handle(socket: WebSocket, session: Session, message: ClientMessage): void {
+    if (session.presence !== null) {
+      // Conta ainda sendo conferida: o que chegar antes da resposta é ignorado.
+      if (session.presence !== '') handlePresence(socket, session, message);
+      return;
+    }
     if (session.room === null) {
       switch (message.t) {
+        case 'presence':
+          openPresence(socket, session, message.token, message.friends);
+          break;
         case 'host':
           claimSeat(socket, session, message.room, message.token, (code) =>
             registry.openRoom(
@@ -293,9 +327,117 @@ export function createRelay(options: RelayOptions = {}): Relay {
       case 'leave':
         socket.close(1000, 'leave');
         break;
+      case 'result':
+        if (session.seat === null) break;
+        receiveReport(session.room, session.seat, message);
+        break;
+      case 'queue': {
+        if (!session.watching) break;
+        const changed = message.on
+          ? registry.enqueue(session.room, socket, message.name, message.token)
+          : registry.dequeue(session.room, socket);
+        if (changed) announceQueue(session.room);
+        break;
+      }
+      case 'yield':
+        if (session.seat === null) break;
+        swapSeat(socket, session, session.room, session.seat);
+        break;
       default:
         break;
     }
+  }
+
+  // --- Elo do xadrez: o relay como árbitro (ver `ratings.ts`) ------------------
+
+  interface Rating {
+    reports: Map<Seat, Report>;
+    /** Quando cada assento ficou vazio; sem entrada, ocupado. */
+    leftAt: Map<Seat, number>;
+    /** Partidas (pelo hash dos lances) já decididas nesta sala. */
+    settled: Set<string>;
+    timer: NodeJS.Timeout | null;
+  }
+
+  const ratings = new WeakMap<Room<WebSocket>, Rating>();
+
+  function ratingOf(room: Room<WebSocket>): Rating {
+    let rating = ratings.get(room);
+    if (rating === undefined) {
+      rating = { reports: new Map(), leftAt: new Map(), settled: new Set(), timer: null };
+      ratings.set(room, rating);
+    }
+    return rating;
+  }
+
+  function rated(room: Room<WebSocket>): boolean {
+    return config.reportResult !== undefined && room.game === 'chess' && room.capacity === 2;
+  }
+
+  function receiveReport(room: Room<WebSocket>, seat: Seat, message: { t: 'result' } & Report): void {
+    if (!rated(room)) return;
+    const rating = ratingOf(room);
+    if (rating.settled.has(message.moves)) return;
+    const { winner, white, plies, moves } = message;
+    rating.reports.set(seat, { winner, white, plies, moves });
+    judge(room);
+  }
+
+  function judge(room: Room<WebSocket>): void {
+    const rating = ratingOf(room);
+    if (rating.timer !== null) clearTimeout(rating.timer);
+    rating.timer = null;
+    const verdict = decide(rating.reports, rating.leftAt, Date.now(), config.abandonMs);
+    if (verdict.kind === 'wait') {
+      rating.timer = setTimeout(() => judge(room), verdict.ms);
+      rating.timer.unref();
+      return;
+    }
+    if (verdict.kind === 'none') return;
+    const report = verdict.report;
+    // A conta de alguém ainda está sendo conferida (o PocketBase responde em até
+    // 5 s): os relatos ficam, e a confirmação chama `judge` de novo.
+    const people = identitiesOf(room);
+    if (!people.has(0) || !people.has(1)) return;
+    rating.settled.add(report.moves);
+    rating.reports.clear();
+    void settle(room, report);
+  }
+
+  /** Os dois concordaram (ou o outro abandonou): grava e conta para a mesa. */
+  async function settle(room: Room<WebSocket>, report: Report): Promise<void> {
+    const people = identitiesOf(room);
+    const black: Seat = report.white === 0 ? 1 : 0;
+    const whiteAccount = people.get(report.white);
+    const blackAccount = people.get(black);
+    // Sem conta dos dois lados não há de quem mudar o Elo, e contra si mesmo
+    // (dois aparelhos na mesma conta) não há o que medir.
+    if (whiteAccount === undefined || blackAccount === undefined) return;
+    if (whiteAccount.id === blackAccount.id || report.plies < MIN_PLIES) return;
+    const result = report.winner === -1 ? 'draw' : report.winner === report.white ? 'white' : 'black';
+    const outcome = await config.reportResult?.({
+      key: `${room.code}:${room.createdAt}:${report.moves}`,
+      white: whiteAccount.id,
+      black: blackAccount.id,
+      result,
+      plies: report.plies,
+    });
+    if (outcome === null || outcome === undefined) return;
+    whiteAccount.elo = outcome.white.elo;
+    blackAccount.elo = outcome.black.elo;
+    config.verifyToken?.setElo?.(whiteAccount.id, outcome.white.elo);
+    config.verifyToken?.setElo?.(blackAccount.id, outcome.black.elo);
+    const message: ServerMessage = {
+      t: 'rated',
+      ratings: [
+        { seat: report.white, ...outcome.white },
+        { seat: black, ...outcome.black },
+      ],
+    };
+    for (const seated of room.seats) {
+      if (seated !== null) send(seated, message);
+    }
+    for (const watcher of watchersOf(room)) send(watcher, message);
   }
 
   function claimSeat(
@@ -319,6 +461,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     clearTimeout(session.helloTimer);
     session.room = outcome.room;
     session.seat = outcome.seat;
+    ratingOf(outcome.room).leftAt.delete(outcome.seat);
     // O socket antigo do mesmo assento é um zumbi que a rede móvel deixou para
     // trás; derrubá-lo evita que o `close` dele apague o assento novo.
     if (outcome.evicted !== null) {
@@ -343,15 +486,80 @@ export function createRelay(options: RelayOptions = {}): Relay {
       send(watcher, { t: 'peer', seat: outcome.seat });
     }
     sendIdentities(socket, outcome.room);
+    sendQueue(socket, outcome.room);
     confirmIdentity(socket, session, outcome.room, outcome.seat, token);
+  }
+
+  // --- fila de quem joga a próxima -------------------------------------------
+
+  /** A fila como `socket` a vê: os apelidos e a posição dele nela. Fila vazia não manda nada. */
+  function sendQueue(socket: WebSocket, room: Room<WebSocket>): void {
+    if (room.queue.length === 0) return;
+    queueTo(socket, room);
+  }
+
+  function queueTo(socket: WebSocket, room: Room<WebSocket>): void {
+    send(socket, {
+      t: 'queue',
+      names: room.queue.map((entry) => entry.name),
+      you: room.queue.findIndex((entry) => entry.socket === socket),
+    });
+  }
+
+  /** Inteira para todos, inclusive vazia: é assim que o último a sair some da tela. */
+  function announceQueue(room: Room<WebSocket>): void {
+    for (const seated of room.seats) {
+      if (seated !== null) queueTo(seated, room);
+    }
+    for (const watcher of watchersOf(room)) queueTo(watcher, room);
+  }
+
+  /**
+   * O jogador cede o assento ao primeiro da fila (ver `RoomRegistry.yieldSeat`).
+   *
+   * Os relatos de Elo pendentes são descartados: o assento já é de outra conta, e
+   * um relato que esperasse pela confirmação dela gravaria a partida que acabou
+   * no nome de quem acabou de sentar. A partida decidida antes da troca já
+   * capturou as contas em `settle` e não é afetada.
+   */
+  function swapSeat(socket: WebSocket, session: Session, room: Room<WebSocket>, seat: Seat): void {
+    const outcome = registry.yieldSeat(room, seat, socket);
+    if (outcome === null) return;
+    const challenger = outcome.next.socket;
+    const other = sessions.get(challenger);
+    if (other === undefined) return;
+    session.seat = null;
+    session.watching = true;
+    other.seat = seat;
+    other.watching = false;
+
+    const rating = ratingOf(room);
+    rating.reports.clear();
+    if (rating.timer !== null) clearTimeout(rating.timer);
+    rating.timer = null;
+    rating.leftAt.delete(seat);
+
+    const swap: ServerMessage = {
+      t: 'swap',
+      seat,
+      name: outcome.next.name,
+      watchers: watchersOf(room).length,
+    };
+    for (const seated of room.seats) {
+      if (seated === null) continue;
+      send(seated, seated === challenger ? { ...swap, key: outcome.key } : swap);
+    }
+    for (const watcher of watchersOf(room)) send(watcher, swap);
+    announceQueue(room);
+    confirmIdentity(challenger, other, room, seat, outcome.next.token);
   }
 
   // --- nomes confirmados pela conta -----------------------------------------
 
-  /** Por sala, o nome conferido de cada assento. Some junto com a sala. */
-  const identities = new WeakMap<Room<WebSocket>, Map<Seat, string>>();
+  /** Por sala, a conta conferida de cada assento. Some junto com a sala. */
+  const identities = new WeakMap<Room<WebSocket>, Map<Seat, Account>>();
 
-  function identitiesOf(room: Room<WebSocket>): Map<Seat, string> {
+  function identitiesOf(room: Room<WebSocket>): Map<Seat, Account> {
     let map = identities.get(room);
     if (map === undefined) {
       map = new Map();
@@ -360,10 +568,14 @@ export function createRelay(options: RelayOptions = {}): Relay {
     return map;
   }
 
+  function identityMessage(seat: Seat, account: Account): ServerMessage {
+    return { t: 'identity', seat, name: account.name, user: account.id, avatar: account.avatar, elo: account.elo };
+  }
+
   /** Quem chega fica sabendo dos nomes já confirmados na sala. */
   function sendIdentities(socket: WebSocket, room: Room<WebSocket>): void {
-    for (const [seat, name] of identitiesOf(room)) {
-      send(socket, { t: 'identity', seat, name });
+    for (const [seat, account] of identitiesOf(room)) {
+      send(socket, identityMessage(seat, account));
     }
   }
 
@@ -382,16 +594,131 @@ export function createRelay(options: RelayOptions = {}): Relay {
   ): void {
     identitiesOf(room).delete(seat);
     if (token === '' || config.verifyToken === undefined) return;
-    void config.verifyToken(token).then((name) => {
-      if (name === null || session.room !== room || session.seat !== seat) return;
+    void config.verifyToken(token).then((account) => {
+      if (account === null || session.room !== room || session.seat !== seat) return;
       if (room.seats[seat] !== socket) return;
-      identitiesOf(room).set(seat, name);
-      const message: ServerMessage = { t: 'identity', seat, name };
+      // Cópia: o Elo dela muda aqui (`settle`) sem mexer no cache do verificador.
+      identitiesOf(room).set(seat, { ...account });
+      // Um relato que chegou antes desta confirmação esperava por ela.
+      if (rated(room)) judge(room);
+      const message = identityMessage(seat, account);
       for (const seated of room.seats) {
         if (seated !== null) send(seated, message);
       }
       for (const watcher of watchersOf(room)) send(watcher, message);
     });
+  }
+
+  // --- presença dos amigos -----------------------------------------------------
+  //
+  // Um socket por app aberto, fora das salas: "esta conta está aqui". A lista de
+  // amigos vem do próprio app, e o relay não consulta o PocketBase para isso: uma
+  // conta só aparece para outra quando **as duas** se listam. Quem mente na
+  // própria lista não descobre nada — falta a outra metade.
+
+  /** Conta → os sockets de presença dela (um por aparelho com o app aberto). */
+  const online = new Map<string, Set<WebSocket>>();
+
+  function openPresence(socket: WebSocket, session: Session, token: string, friends: string[]): void {
+    clearTimeout(session.helloTimer);
+    session.presence = '';
+    session.friends = new Set(friends);
+    const verify = config.verifyToken;
+    if (verify === undefined) {
+      fail(socket, 'bad_token', 'Este servidor não confere contas.');
+      return;
+    }
+    void verify(token).then((account) => {
+      if (!isOpen(socket)) return;
+      if (account === null) {
+        fail(socket, 'bad_token', 'Conta não confirmada.');
+        return;
+      }
+      session.presence = account.id;
+      let sockets = online.get(account.id);
+      if (sockets === undefined) {
+        sockets = new Set();
+        online.set(account.id, sockets);
+      }
+      sockets.add(socket);
+      send(socket, { t: 'friends', online: friendsOf(account.id, session.friends) });
+    });
+  }
+
+  function handlePresence(socket: WebSocket, session: Session, message: ClientMessage): void {
+    const me = session.presence ?? '';
+    switch (message.t) {
+      case 'who':
+        session.friends = new Set(message.friends);
+        send(socket, { t: 'friends', online: friendsOf(me, session.friends) });
+        break;
+      case 'invite': {
+        if (!session.friends.has(message.to) || !lists(message.to, me)) break;
+        const invited: ServerMessage = { t: 'invited', from: me, game: message.game, room: message.room };
+        for (const target of online.get(message.to) ?? []) send(target, invited);
+        break;
+      }
+      case 'ping':
+        send(socket, { t: 'pong' });
+        break;
+      case 'leave':
+        socket.close(1000, 'leave');
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Algum aparelho de `id` com o app aberto tem `other` na lista. */
+  function lists(id: string, other: string): boolean {
+    for (const socket of online.get(id) ?? []) {
+      if (sessions.get(socket)?.friends.has(other)) return true;
+    }
+    return false;
+  }
+
+  function friendsOf(me: string, friends: Set<string>): FriendStatus[] {
+    const result: FriendStatus[] = [];
+    let seated: Map<string, Room<WebSocket>> | null = null;
+    for (const id of friends) {
+      if (!lists(id, me)) continue;
+      seated ??= seatedAccounts();
+      const room = seated.get(id);
+      result.push({
+        id,
+        game: room?.game ?? '',
+        room: room?.code ?? '',
+        playing: room !== undefined && occupied(room) >= room.capacity,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Conta → a sala em que ela está sentada agora, pela conta conferida de cada
+   * assento ocupado.
+   *
+   * ponytail: varre todas as salas a cada `who` com amigo online (≤ 1000 salas,
+   * o app pergunta a cada 5 s só com a lista aberta). Índice mantido em
+   * `confirmIdentity`/`releaseSeat` se isso aparecer no perfil do processo.
+   */
+  function seatedAccounts(): Map<string, Room<WebSocket>> {
+    const seated = new Map<string, Room<WebSocket>>();
+    for (const room of registry.all()) {
+      for (const [seat, account] of identitiesOf(room)) {
+        if (isOpen(room.seats[seat])) seated.set(account.id, room);
+      }
+    }
+    return seated;
+  }
+
+  function leavePresence(socket: WebSocket, session: Session): void {
+    const id = session.presence;
+    session.presence = null;
+    if (id === null || id === '') return;
+    const sockets = online.get(id);
+    sockets?.delete(socket);
+    if (sockets?.size === 0) online.delete(id);
   }
 
   function watch(socket: WebSocket, session: Session, rawCode: string): void {
@@ -423,6 +750,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
       watchers,
     });
     sendIdentities(socket, outcome.room);
+    sendQueue(socket, outcome.room);
     announceWatchers(outcome.room);
   }
 
@@ -438,7 +766,7 @@ export function createRelay(options: RelayOptions = {}): Relay {
     const { room, seat } = session;
     if (room !== null && session.watching) {
       session.room = null;
-      registry.unwatch(room, socket);
+      if (registry.unwatch(room, socket)) announceQueue(room);
       announceWatchers(room);
       return;
     }
@@ -448,6 +776,10 @@ export function createRelay(options: RelayOptions = {}): Relay {
     // Um socket já substituído por uma reconexão não ocupa mais o assento, e
     // `release` o ignora — sem isso o zumbi anunciaria a saída de quem acabou
     // de voltar, e os outros veriam "jogador saiu" no meio da partida.
+    if (room.seats[seat] === socket) {
+      ratingOf(room).leftAt.set(seat, Date.now());
+      judge(room);
+    }
     for (const peer of registry.release(room, seat, socket)) {
       send(peer, { t: 'peer_left', seat });
     }
