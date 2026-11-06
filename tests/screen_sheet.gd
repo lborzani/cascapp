@@ -3,7 +3,10 @@ extends Node
 ## Renderiza as telas do jogo fora do editor, para julgar mudanças visuais sem
 ## depender do aparelho.
 ##
-##   godot --path . --resolution 720x1280 res://tests/screen_sheet.tscn
+##   godot --path . res://tests/screen_sheet.tscn
+##
+## Não roda com `--headless` (o palco volta preto). O tamanho da janela não
+## importa: a cena é desenhada num palco de tamanho fixo (`shot_stage.gd`).
 ##
 ## Salva em user://shots/. Com `SHOT=01c` na variável de ambiente, só os prints
 ## cujo nome começa por isso — para conferir uma tela sem esperar as outras trinta.
@@ -35,6 +38,7 @@ const SHOTS := [
 	["res://scenes/ludo_match.tscn", "17c_ludo_andando"],
 	["res://scenes/ludo_match.tscn", "17d_ludo_pilha"],
 	["res://scenes/settings.tscn", "18_ajustes"],
+	["res://scenes/settings.tscn", "18b_historico"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/bomber_match.tscn", "21_bomberman"],
@@ -51,9 +55,12 @@ const OPENING := [
 	["e1", "g1"], ["c8", "g4"],
 ]
 
+const Stage := preload("res://tests/shot_stage.gd")
+
 var _index := -1
 var _frames := 0
 var _scene: Node = null
+var _stage: SubViewport = null
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute("user://shots")
@@ -62,6 +69,7 @@ func _ready() -> void:
 	# quem nunca abriu o app — com um painel cobrindo metade dos prints de menu.
 	# O print das boas-vindas desfaz a marca sozinho, e só ele.
 	Prefs.set_welcomed()
+	_stage = Stage.make(self, PORTRAIT_WINDOW)
 	_next()
 
 ## Prints que rodam com o aparelho deitado.
@@ -211,16 +219,12 @@ func _next() -> void:
 			# sete numeradas, e a bola da vez anunciada embaixo do placar.
 			Game.pool_format = PoolRules.Format.BRAZILIAN
 			Game.start_hotseat(Game.POOL)
-	# A janela gira **antes** de a cena existir: é o `_ready` dela que escreve a
-	# base de 768x432, e escrevê-la numa janela em pé desenha a tela deitada
-	# espremida dentro dela.
-	var wanted := LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW
-	if DisplayServer.window_get_size() != wanted:
-		DisplayServer.window_set_size(wanted)
-		await get_tree().process_frame
+	# O palco gira **antes** de a cena existir: a cena deitada se mede no
+	# `_ready`, e medida num palco em pé ela sai espremida.
+	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW)
 
 	_scene = load(SHOTS[_index][0]).instantiate()
-	add_child(_scene)
+	_stage.add_child(_scene)
 	if shot == "02_xadrez":
 		_setup_check(_scene)
 	elif shot == "05_entrar":
@@ -260,6 +264,10 @@ func _next() -> void:
 		_play_opening(_scene)
 		if shot == "07_material":
 			_stuff_captures(_scene)
+	elif shot == "18b_historico":
+		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina
+		# nova, cheio na de quem joga. Os dois estados valem ser vistos.
+		_scene._open_history()
 	elif shot == "01b_folha":
 		_scene._open_sheet(Game.game_id)
 	elif shot == "01d_como_jogar":
@@ -477,8 +485,7 @@ func _process(_delta: float) -> void:
 	# cada filho separadamente — no meio do fade um painel opaco deixa o que está
 	# atrás aparecer. Um print tirado cedo demais documenta um bug que não existe.
 	if _frames == 40:
-		var image := get_viewport().get_texture().get_image()
-		image.save_png("user://shots/%s.png" % SHOTS[_index][1])
+		Stage.save(_stage, "user://shots/%s.png" % SHOTS[_index][1])
 		print("shot ", SHOTS[_index][1])
 		_next()
 

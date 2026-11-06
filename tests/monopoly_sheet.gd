@@ -3,7 +3,7 @@ extends Node
 ## Renderiza o tabuleiro 3D de Metrópole fora do editor, para julgar o desenho
 ## sem depender do aparelho.
 ##
-##   godot --path . --resolution 1280x720 res://tests/monopoly_sheet.tscn
+##   godot --path . res://tests/monopoly_sheet.tscn
 ##
 ## Salva em user://shots/. Existe separado do `screen_sheet.gd` porque este jogo
 ## ainda não tem cena de partida — o que há para olhar é o tabuleiro, e ele
@@ -52,13 +52,17 @@ const SHOTS := [
 
 var _index := -1
 ## Segundos decorridos desde que a cena foi montada.
+const Stage := preload("res://tests/shot_stage.gd")
+
 var _elapsed := 0.0
+var _stage: SubViewport = null
 var _root: Control = null
 var _board: MonopolyBoard3D = null
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute("user://shots")
+	_stage = Stage.make(self, Vector2i(1280, 720))
 	_next()
 
 
@@ -95,7 +99,7 @@ func _next() -> void:
 	Game.table_size = seats
 
 	_root = load(MATCH_SCENE).instantiate()
-	add_child(_root)
+	_stage.add_child(_root)
 	_board = _root._board
 
 	var state := _showcase(seats)
@@ -165,8 +169,7 @@ func _process(_delta: float) -> void:
 	# sem isto o peão já teria chegado. Mesmo motivo do print da captura do Ludo.
 	_board.set_process(false)
 	await RenderingServer.frame_post_draw
-	var image := get_viewport().get_texture().get_image()
-	image.save_png("user://shots/%s.png" % SHOTS[_index][0])
+	Stage.save(_stage, "user://shots/%s.png" % SHOTS[_index][0])
 	print("  ", SHOTS[_index][0])
 	_next()
 
