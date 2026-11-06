@@ -49,13 +49,13 @@ compact = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 6
+theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 10
+theme_override_constants/margin_bottom = 8
 
 [node name="Row" type="VBoxContainer" parent="Safe/Shell/Pad"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 4
 
 [node name="Table" type="Control" parent="Safe/Shell/Pad/Row"]
 unique_name_in_owner = true
@@ -65,7 +65,7 @@ script = ExtResource("3_table")
 
 [node name="Bottom" type="HBoxContainer" parent="Safe/Shell/Pad/Row"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="LocalSlot" type="VBoxContainer" parent="Safe/Shell/Pad/Row/Bottom"]
 unique_name_in_owner = true
@@ -148,7 +148,7 @@ script = ExtResource("7_paper")
 
 [node name="Box" type="VBoxContainer" parent="ChoiceLayer/Center/Panel"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="ChoiceTitle" type="Label" parent="ChoiceLayer/Center/Panel/Box"]
 unique_name_in_owner = true
@@ -196,7 +196,7 @@ script = ExtResource("7_paper")
 
 [node name="Box" type="VBoxContainer" parent="Overlay/Center/Panel"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="OverlayTitle" type="Label" parent="Overlay/Center/Panel/Box"]
 unique_name_in_owner = true

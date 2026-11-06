@@ -75,7 +75,7 @@ func _ready() -> void:
 	column.add_child(_subtitle)
 
 	_table = VBoxContainer.new()
-	_table.add_theme_constant_override("separation", 3)
+	_table.add_theme_constant_override("separation", AppTheme.SPACE_XS)
 	column.add_child(_table)
 
 	var buttons := HBoxContainer.new()

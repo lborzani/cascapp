@@ -73,7 +73,6 @@ func _ready() -> void:
 	# As cadeiras no lugar do número. "2 de 4" responde "falta muito?" e não
 	# responde "quem já está aqui?" — e é a segunda pergunta que faz esperar valer.
 	_seats = SeatTable.new()
-	_seats.custom_minimum_size.y = 200.0
 	column.add_child(_seats)
 
 	_hint = Label.new()

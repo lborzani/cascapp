@@ -95,7 +95,7 @@ var _copied_left := 0.0
 func _ready() -> void:
 	alignment = FlowContainer.ALIGNMENT_CENTER
 	add_theme_constant_override("h_separation", 12)
-	add_theme_constant_override("v_separation", 2)
+	add_theme_constant_override("v_separation", AppTheme.SPACE_XS)
 
 	_clock = _caption()
 	_rounds = _caption()

@@ -404,7 +404,7 @@ func _refresh_roster(shown: BomberState) -> void:
 		if not shown.players[seat].alive:
 			continue
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
+		row.add_theme_constant_override("separation", AppTheme.SPACE_S)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var coaster := Coaster.new()
 		coaster.custom_minimum_size = Vector2(22, 22)
@@ -527,7 +527,7 @@ func _build_result() -> void:
 	panel.add_child(margin)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	margin.add_child(column)
 
 	_result_title = Label.new()

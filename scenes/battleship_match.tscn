@@ -54,7 +54,7 @@ theme_override_constants/margin_bottom = 16
 
 [node name="VBox" type="VBoxContainer" parent="Safe/Shell/Pad" unique_id=311000004]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="TopTagSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=311000005]
 custom_minimum_size = Vector2(0, 68)
@@ -155,14 +155,14 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 18
+theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 18
+theme_override_constants/margin_bottom = 16
 script = ExtResource("9_safe")
 
 [node name="VBox" type="VBoxContainer" parent="PlaceLayer/Margin" unique_id=311000023]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="PlaceTitle" type="Label" parent="PlaceLayer/Margin/VBox" unique_id=311000024]
 layout_mode = 2
@@ -266,10 +266,10 @@ script = ExtResource("10_paper")
 
 [node name="Margin" type="MarginContainer" parent="OverlayLayer/Margin/Center/Panel" unique_id=311000045]
 layout_mode = 2
-theme_override_constants/margin_left = 22
-theme_override_constants/margin_top = 22
-theme_override_constants/margin_right = 22
-theme_override_constants/margin_bottom = 22
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
 
 [node name="VBox" type="VBoxContainer" parent="OverlayLayer/Margin/Center/Panel/Margin" unique_id=311000046]
 layout_mode = 2

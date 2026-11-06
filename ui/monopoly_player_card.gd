@@ -52,8 +52,8 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	_margin = MarginContainer.new()
-	_margin.add_theme_constant_override("margin_left", 7)
-	_margin.add_theme_constant_override("margin_right", 7)
+	_margin.add_theme_constant_override("margin_left", AppTheme.SPACE_S)
+	_margin.add_theme_constant_override("margin_right", AppTheme.SPACE_S)
 	_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_margin)
 	var margin := _margin
@@ -65,7 +65,7 @@ func _ready() -> void:
 	# ignora âncora. Um filho solto ali não é um filho posicionado — é um filho
 	# em cima de todos os outros.
 	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 7)
+	line.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(line)
 

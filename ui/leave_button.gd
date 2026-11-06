@@ -108,7 +108,7 @@ func ask() -> void:
 	center.add_child(panel)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	panel.add_child(column)
 
 	var title := Label.new()

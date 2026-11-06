@@ -347,7 +347,7 @@ func _fill_create_row() -> void:
 		if not Game.mode_available(Game.Mode.ONLINE, id):
 			continue
 		var column := VBoxContainer.new()
-		column.add_theme_constant_override("separation", 2)
+		column.add_theme_constant_override("separation", AppTheme.SPACE_XS)
 		column.alignment = BoxContainer.ALIGNMENT_CENTER
 		var button := Button.new()
 		button.theme_type_variation = &"IconButton"
