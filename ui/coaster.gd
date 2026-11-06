@@ -25,11 +25,6 @@ const TURN_GAP_RATIO := 0.06
 	set(value):
 		piece = value
 		queue_redraw()
-## Ícone renderizado do jogo. Quando existe, ocupa o lugar da peça plana.
-var icon: Texture2D = null:
-	set(value):
-		icon = value
-		queue_redraw()
 @export var fill := AppTheme.COASTER:
 	set(value):
 		fill = value
@@ -61,11 +56,6 @@ func _draw() -> void:
 		radius -= ring_width + diameter * TURN_GAP_RATIO
 	draw_circle(center, radius, fill)
 	draw_arc(center, radius - ring_width * 0.5, 0.0, TAU, 48, ring, ring_width, true)
-	if icon != null:
-		# O PNG já traz a margem em volta da peça (o enquadramento do render),
-		# então ele cobre a bolacha inteira, anel incluído.
-		draw_texture_rect(icon, Rect2(center - Vector2.ONE * radius, Vector2.ONE * radius * 2.0), false)
-		return
 	if piece != 0:
 		PieceRenderer.draw_piece(self, piece, center, radius * 1.25)
 		return

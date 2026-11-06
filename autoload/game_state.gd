@@ -493,13 +493,6 @@ func piece_of(id: StringName) -> int:
 	return Board.piece(Board.Side.WHITE, int(entry["icon"]))
 
 
-## O ícone renderizado do jogo (`tools/render_icons.py`), ou null para quem ainda
-## não tem um — aí a bolacha cai na peça plana de `piece_of`.
-func icon_of(id: StringName) -> Texture2D:
-	var path := "res://assets/icons/%s.png" % id
-	return load(path) if ResourceLoader.exists(path) else null
-
-
 ## A categoria de um jogo, ou vazio para quem não declarou uma. Vazio não é erro:
 ## um jogo sem categoria continua aparecendo em "Todos", e é só o filtro dele que
 ## não existe — um jogo que some da tela porque esqueceram uma chave é pior que um

@@ -250,7 +250,6 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_title.text = Game.game_title(id).to_upper()
 	_meta.text = _meta_text(id)
 	_icon.piece = Game.piece_of(id)
-	_icon.icon = Game.icon_of(id)
 	_rules_link.visible = GameRulesDoc.load_for(id) != null
 	_modes = modes_for(id)
 

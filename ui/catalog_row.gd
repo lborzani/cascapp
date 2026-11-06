@@ -59,7 +59,6 @@ func _notification(what: int) -> void:
 		_coaster.position = Vector2(PAD, (size.y - ICON) * 0.5)
 		_coaster.size = Vector2(ICON, ICON)
 		_coaster.piece = Game.piece_of(game_id)
-		_coaster.icon = Game.icon_of(game_id)
 		_coaster.modulate.a = _fade()
 
 
@@ -87,7 +86,6 @@ func _fade() -> float:
 
 func _draw() -> void:
 	_coaster.piece = Game.piece_of(game_id)
-	_coaster.icon = Game.icon_of(game_id)
 	_coaster.modulate.a = _fade()
 	var fade := _fade()
 	var face := AppTheme.display(900)
