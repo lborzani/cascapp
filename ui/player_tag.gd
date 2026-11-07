@@ -221,8 +221,10 @@ func _draw() -> void:
 	var text_x := _pad() + _coaster.size.x + 12.0
 	var name_size := 18 if shape == Shape.STRIP else 15
 	var has_detail := not subtitle.is_empty() or _alerting()
-	# Nome sozinho fica no meio da etiqueta; com detalhe ou bolinhas embaixo, sobe.
-	var two_lines := has_detail or pips > 0
+	# Nome sozinho fica no meio da etiqueta; com detalhe, bolinhas ou capturas
+	# embaixo, sobe. Sem contar as capturas, o nome ficava no meio e a fileira de
+	# peças era desenhada por cima dele.
+	var two_lines := has_detail or pips > 0 or (shape == Shape.STRIP and not captured.is_empty())
 	var name_y := size.y * 0.5 + (6.0 if not two_lines else -2.0)
 	# Com largura, e não `-1`: um apelido longo numa etiqueta ancorada passava por
 	# cima do leque do vizinho. Cortar é feio; escrever por cima da mesa é pior.

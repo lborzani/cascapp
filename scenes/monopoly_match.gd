@@ -235,7 +235,7 @@ func _build_layout() -> void:
 
 	_rail = VBoxContainer.new()
 	_rail.custom_minimum_size.x = RAIL_WIDTH
-	_rail.add_theme_constant_override("separation", 6)
+	_rail.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	row.add_child(_rail)
 
 	_rail_top = Control.new()
@@ -525,7 +525,7 @@ func _build_bar(stage: Control) -> void:
 	bar.add_child(margin)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 6)
+	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	margin.add_child(column)
 
 	_status = Label.new()

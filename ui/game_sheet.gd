@@ -37,7 +37,7 @@ var _segments: SegmentedControl = null
 var _modes: Array[int] = []
 var _sections := {}
 var _players: HBoxContainer = null
-var _clock: GridContainer = null
+var _clock: VBoxContainer = null
 var _formats: GridContainer = null
 var _levels: HBoxContainer = null
 var _title_label: Label = null
@@ -171,10 +171,8 @@ func _build_body() -> VBoxContainer:
 	_players.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	body.add_child(_wrap("players", "Jogadores", _players))
 
-	_clock = GridContainer.new()
-	_clock.columns = 3
-	_clock.add_theme_constant_override("h_separation", AppTheme.SPACE_S)
-	_clock.add_theme_constant_override("v_separation", AppTheme.SPACE_S)
+	_clock = VBoxContainer.new()
+	_clock.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	body.add_child(_wrap("clock", "Ritmo", _clock))
 
 	_formats = GridContainer.new()
@@ -346,9 +344,11 @@ func _chip(label: String, on_press: Callable) -> Button:
 	return button
 
 
+## Os botões do grupo em ordem, mesmo quando vêm em linhas (o ritmo).
 func _mark(group: Node, index: int) -> void:
-	for position in group.get_child_count():
-		var button: Button = group.get_child(position)
+	var buttons := group.find_children("*", "Button", true, false)
+	for position in buttons.size():
+		var button: Button = buttons[position]
 		button.theme_type_variation = &"ChipSelected" if position == index else &"ChipButton"
 
 
@@ -380,8 +380,18 @@ func _build_clock() -> void:
 	_clear(_clock)
 	if not Game.supports_clock(game_id):
 		return
-	for index in Game.TIME_CONTROLS.size():
-		_clock.add_child(_chip(str(Game.TIME_CONTROLS[index]["label"]), _select_clock.bind(index)))
+	# Linhas cheias, e não grade: cinco ritmos numa grade de três deixavam a
+	# segunda linha com dois chips e um buraco no lugar do terceiro. Em linhas,
+	# cada uma se estica até a borda — três em cima, dois embaixo, sem vão.
+	var count := Game.TIME_CONTROLS.size()
+	var per_row := ceili(float(count) / ceili(count / 3.0))
+	var row: HBoxContainer = null
+	for index in count:
+		if index % per_row == 0:
+			row = HBoxContainer.new()
+			row.add_theme_constant_override("separation", AppTheme.SPACE_S)
+			_clock.add_child(row)
+		row.add_child(_chip(str(Game.TIME_CONTROLS[index]["label"]), _select_clock.bind(index)))
 	_select_clock(Game.time_control)
 
 

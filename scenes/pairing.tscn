@@ -59,7 +59,7 @@ theme_override_constants/margin_bottom = 24
 
 [node name="VBox" type="VBoxContainer" parent="Safe/Shell/Scroll/Pad"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="Title" type="Label" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
@@ -69,7 +69,7 @@ theme_type_variation = &"Hint"
 [node name="HostPanel" type="VBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
 [node name="CodeCard" type="PanelContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel"]
 layout_mode = 2
@@ -77,7 +77,7 @@ script = ExtResource("6_paper")
 
 [node name="CodeBox" type="VBoxContainer" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard"]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="CodeCaption" type="Label" parent="Safe/Shell/Scroll/Pad/VBox/HostPanel/CodeCard/CodeBox"]
 layout_mode = 2

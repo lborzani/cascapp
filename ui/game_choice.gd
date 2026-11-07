@@ -297,14 +297,22 @@ func _draw_stacked() -> void:
 	# Duas linhas de nome cabem: "Batalha Naval" numa coluna de 120 px não cabe em
 	# uma, e abreviar o nome do jogo na tela que serve para escolher o jogo seria
 	# economizar no lugar errado.
-	var band := float(text_size) * 2.6 + PAD
-	var icon := minf(size.x - PAD * 2.0, size.y - band)
-	var center := Vector2(size.x * 0.5, (size.y - band) * 0.5 + PAD * 0.4)
+	# A faixa tem a altura das linhas que o nome usa de verdade: reservar duas
+	# para "Xadrez" deixava a bolacha pequena em cima e um vão vazio embaixo.
+	var one_line := font.get_string_size(title.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, text_size).x <= size.x - PAD
+	var band := float(text_size) * (1.3 if one_line else 2.6) + PAD
+	# A bolacha cabe entre o topo e a faixa do nome, com respiro dos dois lados.
+	# Centrada mais embaixo, como era, ela descia por cima da primeira linha do
+	# nome nos cartões de favorito.
+	var top := float(AppTheme.SPACE_S)
+	var bottom := size.y - band - AppTheme.SPACE_XS
+	var disc := minf(size.x - PAD * 2.0, bottom - top)
+	var center := Vector2(size.x * 0.5, (top + bottom) * 0.5)
 	# A bolacha atrás da peça: é a mesma moldura redonda da sala de espera e da
 	# coluna de jogadores, e é ela que separa a peça da arte de fundo.
-	draw_circle(center, icon * 0.46, Color(AppTheme.COASTER, _fade() * 0.92))
-	draw_arc(center, icon * 0.46, 0.0, TAU, 40, Color(AppTheme.GOLD, _fade() * 0.7), 2.0, true)
-	PieceRenderer.draw_piece(self, piece, center, icon * 0.72, _fade())
+	draw_circle(center, disc * 0.46, Color(AppTheme.COASTER, _fade() * 0.92))
+	draw_arc(center, disc * 0.46, 0.0, TAU, 40, Color(AppTheme.GOLD, _fade() * 0.7), 2.0, true)
+	PieceRenderer.draw_piece(self, piece, center, disc * 0.72, _fade())
 
 	draw_multiline_string(
 		font, Vector2(PAD * 0.5, size.y - band + float(text_size)), title.to_upper(),

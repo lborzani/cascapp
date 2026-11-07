@@ -48,9 +48,9 @@ compact = true
 [node name="Pad" type="MarginContainer" parent="Margin/Shell"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/margin_left = 14
+theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 14
+theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 12
 
 [node name="Row" type="HBoxContainer" parent="Margin/Shell/Pad"]
@@ -66,7 +66,7 @@ script = ExtResource("2_board")
 [node name="DieColumn" type="VBoxContainer" parent="Margin/Shell/Pad/Row"]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="DieSpacer" type="Control" parent="Margin/Shell/Pad/Row/DieColumn"]
 layout_mode = 2
@@ -139,7 +139,7 @@ script = ExtResource("10_paper")
 
 [node name="Box" type="VBoxContainer" parent="Overlay/Center/Panel"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
 [node name="OverlayTitle" type="Label" parent="Overlay/Center/Panel/Box"]
 unique_name_in_owner = true

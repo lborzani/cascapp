@@ -87,7 +87,7 @@ func _ready() -> void:
 	column.add_child(_subtitle)
 
 	_partners = HBoxContainer.new()
-	_partners.add_theme_constant_override("separation", 6)
+	_partners.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	column.add_child(_partners)
 
 	var columns := HBoxContainer.new()
@@ -110,7 +110,7 @@ func _ready() -> void:
 
 	_cash_row = HBoxContainer.new()
 	_cash_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_cash_row.add_theme_constant_override("separation", 6)
+	_cash_row.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	column.add_child(_cash_row)
 	for step in CASH_STEPS:
 		var button := Button.new()
@@ -145,7 +145,7 @@ func _side_column(head: Label, list: VBoxContainer) -> Control:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	holder.add_child(scroll)
 
-	list.add_theme_constant_override("separation", 3)
+	list.add_theme_constant_override("separation", AppTheme.SPACE_XS)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 	return holder

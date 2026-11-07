@@ -96,11 +96,11 @@ func _setup_host() -> void:
 
 func _host_hint() -> String:
 	if Game.listed_room:
-		return "Esta sala aparece na lista da tela inicial do outro aparelho. Quem tiver o código %s também entra direto." % _code
-	# "Em Multiplayer", e não "na tela inicial": o campo do código mudou de lugar
-	# quando a tela de entrar virou um destino da gaveta, e uma instrução que
+		return "Esta sala aparece na aba Online do outro aparelho. Quem tiver o código %s também entra direto." % _code
+	# "Na aba Online", e não "em Multiplayer" nem "na tela inicial": o campo do
+	# código mudou de lugar duas vezes (gaveta, depois aba), e uma instrução que
 	# aponta para onde a coisa **estava** é pior que instrução nenhuma.
-	var channels := "No outro aparelho: em Multiplayer, digite %s no campo do código, ou aponte a câmera para o QR." % _code
+	var channels := "No outro aparelho: na aba Online, digite %s no campo do código, ou aponte a câmera para o QR." % _code
 	if Pairing.nfc.is_available():
 		channels = "No outro aparelho: digite %s, aponte a câmera para o QR, ou encoste os dois (NFC)." % _code
 	return "%s Funciona de qualquer lugar com internet — não precisa ser a mesma rede." % channels

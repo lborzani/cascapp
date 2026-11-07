@@ -77,7 +77,7 @@ func _ready() -> void:
 	panel.add_child(margin)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	margin.add_child(column)
 
 	var title := Label.new()

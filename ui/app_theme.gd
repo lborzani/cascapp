@@ -471,7 +471,7 @@ static func _style_inputs(theme: Theme) -> void:
 	theme.set_stylebox("selected", "ItemList", box(ACCENT_SOFT, RADIUS))
 	theme.set_stylebox("selected_focus", "ItemList", box(ACCENT_SOFT, RADIUS))
 	theme.set_stylebox("hovered", "ItemList", box(Color(TEXT, 0.05), RADIUS))
-	theme.set_constant("v_separation", "ItemList", 6)
+	theme.set_constant("v_separation", "ItemList", SPACE_S)
 
 
 static func _style_panels(theme: Theme) -> void:

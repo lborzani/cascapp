@@ -322,13 +322,15 @@ func _probe_game_sheet() -> void:
 	)
 	_equals(sheet._segments.segment_count(), modes.size(), "um segmento por modo disponível")
 	_equals(sheet.mode, modes[0], "e a folha abre no primeiro")
-	_equals(sheet._clock.get_child_count(), Game.TIME_CONTROLS.size(), "um botão por ritmo")
+	var rhythms := sheet._clock.find_children("*", "Button", true, false)
+	_equals(rhythms.size(), Game.TIME_CONTROLS.size(), "um botão por ritmo")
+	_equals(sheet._clock.get_child_count(), 2, "cinco ritmos em duas linhas cheias")
 
-	sheet._clock.get_child(1).pressed.emit()
+	rhythms[1].pressed.emit()
 	_equals(Game.time_control, 1, "escolher o ritmo grava a escolha")
 	_equals(Game.clock_initial(), 90.0, "1:30 são 90 segundos")
-	_equals(sheet._clock.get_child(1).theme_type_variation, &"ChipSelected", "o escolhido fica marcado")
-	_equals(sheet._clock.get_child(0).theme_type_variation, &"ChipButton", "e os outros não")
+	_equals(rhythms[1].theme_type_variation, &"ChipSelected", "o escolhido fica marcado")
+	_equals(rhythms[0].theme_type_variation, &"ChipButton", "e os outros não")
 
 	# Damas não tem relógio: a seção inteira sai, e a escolha continua gravada em
 	# `Game` — ela mora lá, não na tela.
