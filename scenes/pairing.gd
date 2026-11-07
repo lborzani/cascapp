@@ -71,7 +71,7 @@ func _setup_host() -> void:
 	_code = Pairing.generate_code()
 	# Quem hospeda decide o ritmo e o formato; os dois viajam no `welcome` para
 	# quem entrar. O que vai no `option` depende do jogo — limite de rodadas em
-	# Metrópole, semente do mapa em Bomberman —, e quem sabe disso é o catálogo.
+	# Metrópole, semente do baralho no Uno —, e quem sabe disso é o catálogo.
 	Net.time_control = Game.time_control
 	Net.option = Game.host_option()
 

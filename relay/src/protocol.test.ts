@@ -83,7 +83,7 @@ describe('parseClientMessage host', () => {
  */
 describe('cleanGame', () => {
   it('deixa passar os identificadores do catálogo', () => {
-    for (const id of ['chess', 'checkers', 'battleship', 'ludo', 'monopoly', 'uno', 'bomberman']) {
+    for (const id of ['chess', 'checkers', 'battleship', 'ludo', 'monopoly', 'uno']) {
       assert.equal(cleanGame(id), id);
     }
   });

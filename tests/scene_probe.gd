@@ -2324,7 +2324,7 @@ func _test_friends_drawer() -> bool:
 	(dan_card.find_child("Action", true, false) as Button).pressed.emit()
 	var games := drawer._rows.get_children().filter(func(node: Node) -> bool: return node.has_meta(&"game"))
 	var game_ids := games.map(func(node: Node) -> StringName: return node.get_meta(&"game"))
-	_check(game_ids.has(Game.CHESS) and not game_ids.has(Game.BOMBERMAN), "o convite oferece os jogos do relay, sem o Bomberman")
+	_check(game_ids.has(Game.CHESS), "o convite oferece os jogos do relay")
 	games[game_ids.find(Game.CHESS)].pressed.emit()
 	await get_tree().process_frame
 	_check(menu._drawer() == null, "escolher o jogo fecha a gaveta")

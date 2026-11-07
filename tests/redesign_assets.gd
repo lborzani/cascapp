@@ -22,7 +22,6 @@ func _ready() -> void:
 	_bounds("user://shots/16_naval.png", Rect2i(60, 90, 310, 300), "naval_alvo")
 	_bounds("user://shots/16_naval.png", Rect2i(130, 415, 170, 160), "naval_seu")
 	_bounds("user://shots/22_sinuca.png", Rect2i(275, 5, 1285, 710), "sinuca")
-	_bounds("user://shots/21_bomberman.png", Rect2i(340, 5, 880, 710), "bomberman")
 	await _uno_table()
 	get_tree().quit()
 

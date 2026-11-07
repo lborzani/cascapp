@@ -70,11 +70,6 @@ const CROP := {
 	# transparência some no fundo escuro do cartão; por cima seria um bloco de
 	# bege ocupando o terço superior da linha.
 	Game.MONOPOLY: 0.92,
-	# Bomberman é o único mapa mais largo que alto, e o único em que a faixa cabe
-	# quase inteira dentro dele: são 2,5 fileiras de 11. Cai no **meio**, onde o
-	# xadrez de pilares está cercado de caixas — a borda de concreto de cima e de
-	# baixo é uma tira cinza lisa que não diz nada desfocada.
-	Game.BOMBERMAN: 0.50,
 	# O Uno nao tem tabuleiro: a arte e um leque de cartas, e ele ja e uma faixa
 	# larga e baixa do tamanho da linha. A janela cai no meio dele.
 	Game.UNO: 0.50,
@@ -171,10 +166,6 @@ func _cover(id: StringName, size: Vector2i) -> Vector2:
 
 ## A proporção de cada tabuleiro, em unidades quaisquer.
 func _board_ratio(id: StringName) -> Vector2:
-	if id == Game.BOMBERMAN:
-		# Treze por onze: [BomberView] escolhe a casa pelo lado mais apertado, e num
-		# nó quadrado sobrariam duas casas de vazio que a janela recorta.
-		return Vector2(float(BomberState.COLS), float(BomberState.ROWS))
 	if id == Game.POOL:
 		return Vector2(2.0, 1.0)
 	if id == Game.UNO:
@@ -220,8 +211,6 @@ func _board_for(id: StringName) -> Control:
 		state.meta[LudoRules.PROG] = progress
 		ludo.state = state
 		return ludo
-	if id == Game.BOMBERMAN:
-		return _bomber_map()
 	if id == Game.UNO:
 		return _uno_fan()
 	if id == Game.POOL:
@@ -236,64 +225,6 @@ func _board_for(id: StringName) -> Control:
 	var view := BoardView.new()
 	view.ruleset = Game.make_ruleset(id)
 	view.state = view.ruleset.initial_state()
-	return view
-
-
-## O mapa de Bomberman armado à mão, na faixa que a janela vê.
-##
-## A posição inicial não serve aqui, e é o mesmo problema do mar e do Ludo: os
-## quatro bonecos nascem nos **cantos**, e a janela olha o meio. A arte sairia um
-## labirinto vazio — que é geometria bonita e não diz qual jogo é.
-##
-## O que identifica este tabuleiro desfocado a 13% são três coisas, e as três
-## estão postas de propósito nas fileiras 4 a 6: o xadrez de pilares cinzas, as
-## caixas cor de tijolo em volta, e uma bomba com o fogo aberto em cruz. Os
-## bonecos entram pela cor — as mesmas quatro do Ludo —, que é o que sobra de um
-## disco de 20 pixels depois do desfoque.
-##
-## Tudo isso mora da **coluna 7 para a direita**, e essa é a parte que não é
-## óbvia: o degradê de [constant FADE_FROM] apaga a arte até 30% da largura e só a
-## entrega inteira aos 95%, porque à esquerda estão o ícone e o nome do jogo. A
-## primeira versão desta função pôs a bomba na coluna 5 — no meio do mapa, e no
-## meio do apagamento. Ela estava lá, e ninguém ia ver.
-func _bomber_map() -> Control:
-	var view := BomberView.new()
-	var rules := BomberRules.new()
-	var state := rules.initial_state(4, 4242)
-
-	# Chão embaixo do que vai ser posto: um boneco desenhado por cima de uma caixa
-	# lê como erro de desenho, e o fogo atravessando concreto contradiz a regra que
-	# a própria arte deveria estar anunciando.
-	for cell: Vector2i in [
-		Vector2i(7, 5), Vector2i(11, 5), Vector2i(7, 6),
-		Vector2i(9, 5), Vector2i(8, 5), Vector2i(10, 5), Vector2i(9, 4), Vector2i(9, 6),
-	]:
-		var index := BomberState.index_of(cell.x, cell.y)
-		state.tiles[index] = BomberState.Tile.FLOOR
-		state.prizes[index] = BomberState.Prize.NONE
-
-	for entry: Array in [[0, Vector2i(7, 5)], [1, Vector2i(11, 5)], [2, Vector2i(7, 6)]]:
-		var player: BomberState.Bomber = state.players[int(entry[0])]
-		var cell: Vector2i = entry[1]
-		player.x = cell.x * BomberState.CELL + BomberRules.HALF
-		player.y = cell.y * BomberState.CELL + BomberRules.HALF
-
-	var bomb := BomberState.Bomb.new()
-	bomb.col = 9
-	bomb.row = 5
-	bomb.flame = 1
-	# Pavio pela metade: o desenho da bomba pulsa com ele, e no fim do pavio ela
-	# aparece no tamanho errado para o que a linha quer mostrar.
-	bomb.fuse = BomberRules.FUSE / 2
-	state.bombs.append(bomb)
-
-	# O fogo em cruz de um braço só. Dois braços encostariam nos bonecos, e um
-	# boneco dentro do fogo é uma cena que a regra resolve matando — a arte estaria
-	# mostrando o instante que não existe.
-	for cell: Vector2i in [Vector2i(8, 5), Vector2i(10, 5), Vector2i(9, 4), Vector2i(9, 6)]:
-		state.flames[BomberState.index_of(cell.x, cell.y)] = BomberRules.FLAME_TICKS
-
-	view.state = state
 	return view
 
 
@@ -368,8 +299,8 @@ func _mask(image: Image, size: Vector2i, wide: bool) -> void:
 ## uma linha de mira congelados na arte de fundo seriam um gesto parado no meio,
 ## que lê como captura de tela e não como textura.
 ##
-## A mesa **não** é a do arranjo inicial, e é o mesmo problema do mar, do Ludo e
-## do Bomberman: ali as dez bolas nascem encostadas nas tabelas, e a janela olha o
+## A mesa **não** é a do arranjo inicial, e é o mesmo problema do mar e do Ludo:
+## ali as dez bolas nascem encostadas nas tabelas, e a janela olha o
 ## meio. A arte saía um retângulo de pano vazio — tecnicamente uma mesa de
 ## sinuca, e visualmente nada.
 ##

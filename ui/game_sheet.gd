@@ -21,7 +21,6 @@ signal closed
 
 const SLIDE := 0.22
 const PAIRING_SCENE := "res://scenes/pairing.tscn"
-const BOMBER_LOBBY_SCENE := "res://scenes/bomber_lobby.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 var mode := Game.Mode.HOTSEAT
@@ -70,12 +69,6 @@ static func launch(tree: SceneTree, chosen_mode: int) -> void:
 	if chosen_mode == Game.Mode.ONLINE:
 		Game.mode = Game.Mode.ONLINE
 		Game.role = Game.Role.HOST
-		# O Bomberman fala com o servidor autoritativo, e não com o relay: vai para
-		# o lobby próprio dele. Código vazio quer dizer criar sala.
-		if Game.game_id == Game.BOMBERMAN:
-			BomberNet.pending_code = ""
-			tree.change_scene_to_file(BOMBER_LOBBY_SCENE)
-			return
 		tree.change_scene_to_file(PAIRING_SCENE)
 		return
 	if chosen_mode == Game.Mode.SOLO:

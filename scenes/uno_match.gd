@@ -177,7 +177,7 @@ func _exit_tree() -> void:
 
 
 ## Semente e regra da casa. No solo as duas saem do menu e do sorteio local; em
-## rede virão juntas dentro de `Net.option`, como em `bomber_match.gd`.
+## rede virão juntas dentro de `Net.option`.
 func _adopt_rules() -> void:
 	if Game.mode == Game.Mode.ONLINE:
 		# A mesa, a semente e a regra da casa vêm de quem abriu a sala, não das

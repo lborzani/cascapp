@@ -1,7 +1,7 @@
 # Jogos de Rolê — multiplayer por código, sem cadastro
 
 Coleção de jogos para celular, hoje com **xadrez**, **damas**, **batalha naval**,
-**Ludo**, **Metrópole**, **Uno**, **Bomberman** e **sinuca**. Dá para jogar
+**Ludo**, **Metrópole**, **Uno** e **sinuca**. Dá para jogar
 contra um bot, com alguém no mesmo aparelho, ou pela internet: um **abre uma
 sala** e o outro entra digitando o **código de 6 caracteres** — de qualquer
 lugar, cada um na sua rede, um deles em dados móveis se quiser. Também dá para
@@ -1953,26 +1953,18 @@ A versão do Godot está escrita uma vez, em `env.GODOT_VERSION`, e tem de
 acompanhar o `config/features` do `project.godot`. O download e os modelos de
 exportação ficam em cache por versão, em `.github/actions/godot`.
 
-### Deploy dos servidores
+### Deploy do relay
 
-`.github/workflows/deploy.yml` publica os **dois** servidores no Fly: o relay
-(Node, `relay/`) e o de Bomberman (o mesmo projeto Godot, sem tela). São dois
-apps porque são dois bichos — um repassa bytes de jogos por turno, o outro roda
-uma simulação a 30 Hz por sala e fala UDP.
+`.github/workflows/deploy.yml` publica o relay (Node, `relay/`) no Fly. Ela
+dispara em `main`, e só quando muda algo em `relay/`: uma mudança no app não
+reinicia as salas em curso.
 
-Ela dispara em `main`, e só quando muda algo que de fato afeta um deles. O filtro
-não é economia: o servidor de Bomberman é o projeto Godot inteiro rodando sem
-tela, então quase toda mudança de **regra** o afeta — mas uma mudança de tela,
-não. Sem o filtro, cada ajuste de cor num cartão de menu reconstruiria uma imagem
-de Godot e reiniciaria as partidas em curso. É a separação entre `core/` e `ui/`
-virando regra de esteira.
-
-Um segredo, `FLY_API_TOKEN`, com acesso aos dois apps. Sem ele a tarefa falha
+Um segredo, `FLY_API_TOKEN`, com acesso ao app. Sem ele a tarefa falha
 **dizendo isso**, em vez de morrer dentro do `flyctl` com uma mensagem de
 autenticação que não explica o que fazer.
 
-Os dois terminam com `fly scale count 1`, e ele não é economia de custo: as salas
-— e, no Bomberman, a partida inteira — moram na memória do processo. É a
+O deploy termina com `fly scale count 1`, e ele não é economia de custo: as salas
+moram na memória do processo. É a
 armadilha das limitações conhecidas, transformada num passo que roda sozinho.
 Depois disso o relay é conferido pelo `/healthz`: o que decide se a publicação
 deu certo é o processo **respondendo**, e não o código de saída do `deploy`.
@@ -2074,7 +2066,6 @@ godot --headless --path . res://tests/scene_probe.tscn
 godot --headless --path . res://tests/pairing_probe.tscn
 godot --headless --path . res://tests/ludo_probe.tscn
 godot --headless --path . --script res://tests/monopoly_probe.gd
-godot --headless --path . --script res://tests/bomber_probe.gd
 ```
 
 O relay tem suíte própria, em Node:
@@ -2111,10 +2102,6 @@ CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://
 
 ```bash
 CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://tests/rejoin_smoke.gd
-```
-
-```bash
-CHESS_RELAY_URL=ws://127.0.0.1:8080/ws godot --headless --path . --script res://tests/bomber_net_smoke.gd
 ```
 
 `test_runner.gd` cobre o que é fácil de errar sem perceber: `perft` do xadrez nas
@@ -2248,35 +2235,6 @@ mudando de mão com a hipoteca junto, a recusa devolvendo a fase intacta, e a
 dívida sendo quitada por uma troca fechada na fase RAISE. Em rede isso não é
 hipótese: é a única barreira entre o outro aparelho e o tabuleiro daqui.
 
-`bomber_probe.gd` (headless, sem relay) tem o **determinismo** como teste que
-sustenta todos os outros. Bomberman é o primeiro jogo do app em que os aparelhos
-não trocam posições: cada um roda a mesma simulação com os mesmos comandos e
-confia que chegou ao mesmo lugar. A suíte confere o estado inteiro depois de
-centenas de tiques, e não só o que cada regra faz isoladamente — porque uma
-divergência de uma unidade não aparece como erro, aparece como um jogador vivo
-numa tela e morto na outra, vinte segundos depois.
-
-Cobre também o **acerto de passo** (`core/bomber_lockstep.gd`): que o comando
-vale com atraso e não na hora, que a mensagem só sai a cada três, que o repetido
-não sobrescreve o que já chegou, e que um tique sem o byte de alguém **não roda**
-— parar é a única resposta que converge, porque prever ou repetir o último comando
-faz dois aparelhos discordarem sobre o passado. Mais a **saída de cadeira**, que
-sai num tique anunciado com o histórico dela junto: sem o repasse, quem ficou sem
-os últimos bytes de quem caiu esperaria por eles para sempre.
-
-E fecha com **dois aparelhos** no mesmo processo, cada um com o seu acerto de
-passo, trocando comandos por um correio que atrasa quatro tiques e perde uma
-mensagem inteira. Os dois param em tiques diferentes — é o ponto — e terminam com
-o mesmo mapa, os mesmos bonecos e o gerador no mesmo ponto.
-
-`bomber_net_smoke.gd` põe isso na rede de verdade, que é o que aquele não pode
-fazer: que a **semente viaja** no `welcome` (dois mapas diferentes aparecem como
-um jogador atravessando uma parede que só existe na tela do outro), que o comando
-sobrevive à ida e volta pelo JSON, e que as duas simulações convergem. Ele anda no
-relógio de verdade de propósito: o relay corta a sessão de quem passa de quarenta
-mensagens por segundo, e a primeira versão deste teste — que bombardeava um
-`_pump` por quadro — acusava dessincronia onde havia desconexão.
-
 `pairing_probe.gd` abre as duas telas de menu e a de pareamento nos dois papéis,
 com os autoloads de verdade: a escolha do jogo (um cartão por entrada do
 catálogo, tocar grava o jogo), o painel de ajustes (abre em criar/local, não em
@@ -2315,7 +2273,6 @@ core/                 regras e estado, sem nenhuma dependência de UI ou de rede
   monopoly_rules.gd   o turno em fases, a troca por predicado e a falência
   uno_rules.gd        baralho semeado, pilha de compra, grito e dúvida
   pool_rules.gd       a mesa, a física determinística e os dois formatos
-  bomber_rules.gd     a simulação de passo fixo, sem tela e sem rede
   bot.gd              busca alfa-beta, sem saber qual jogo está jogando
 
 net/
@@ -2345,7 +2302,6 @@ scenes/
   ludo_match.tscn/.gd  o ciclo role-e-escolha, com quatro cores num aparelho
   monopoly_match.tscn/.gd  o turno em fases, a coluna de jogadores e o 3D
   uno_match.tscn/.gd   a mesa, a mão em leque e os botões de lance sem carta
-  bomber_match.tscn/.gd  o relógio de passo fixo e os dois controles de polegar
   pool_match.tscn/.gd  a mesa, o arrasto que vira tacada e a tacada assistida
   board_view.gd       desenho do tabuleiro e das peças (herda GridView)
   piece_renderer.gd   ponto único de desenho de peça (textura, ou polígono)
@@ -2388,7 +2344,7 @@ Plex Mono** nos números que precisam alinhar — relógio, dinheiro, código da
 
 | Objeto | Componente | Onde aparece |
 |--------|------------|--------------|
-| Bolacha de chopp | `Coaster` | avatar do jogador, ícone do jogo, `?` da barra, direcional do Bomberman |
+| Bolacha de chopp | `Coaster` | avatar do jogador, ícone do jogo, `?` da barra |
 | Papel | `PaperCard` | comanda do código, escritura, fim de partida, boas-vindas |
 | Giz tracejado | `StyleBoxDashed` | botão secundário, etiqueta de quem espera, aviso |
 | Placa | `AppTheme.plate()` | a ação da tela — uma por tela, no máximo |
@@ -2410,7 +2366,7 @@ telas: o modo em abas, os ajustes daquele modo, um botão para começar e o link
 papel, o QR, o NFC e a lista de salas abertas — e de criar uma. Você é o nome e a
 bolacha com que o jogador aparece na mesa.
 
-A sala de espera de quem abre (`scenes/pairing.tscn`, e a do Bomberman) mostra o
+A sala de espera de quem abre (`scenes/pairing.tscn`) mostra o
 código numa comanda com "Copiar" e "Mostrar QR" — o QR começa escondido, porque
 ocupa meia tela para servir a um caminho só — e as cadeiras em volta da mesa, com
 quem já sentou.
@@ -2429,7 +2385,7 @@ partida na tela, o gesto sai direto: não há mais partida a proteger.
 
 #### Como jogar
 
-As regras dos oito jogos moram em `data/rules/<id>.tres`, um `GameRulesDoc` por
+As regras dos sete jogos moram em `data/rules/<id>.tres`, um `GameRulesDoc` por
 jogo — objetivo, passos numerados e avisos, e um bloco por formato na sinuca. Elas
 foram escritas a partir do código de regras, e quem mudar uma regra em `core/`
 muda a frase ali junto. Duas portas levam a elas: o link da folha do jogo abre a
@@ -2922,40 +2878,6 @@ proporção da base está conferindo o caso fácil, não o layout.
 A regra de forma: **uma dimensão mínima derivada da outra é um acordo com o
 sentido do layout**, e este foi trocado de coluna para fileira sem que o arquivo
 que assinou o acordo ficasse sabendo.
-
-**O bot de Bomberman andava em círculo, e a memória de alvo não era o conserto.**
-
-O rastro era literal: `1,2 1,3 1,2 1,3` até morrer. O diagnóstico óbvio é que o
-alvo é recalculado a cada tique e a escolha inverte quando a casa muda — e eu
-implementei a correção óbvia, memória de alvo, e a saída ficou **byte a byte
-idêntica**. Depois a correção seguinte, guardar o destino em vez do vizinho:
-idêntica de novo.
-
-Duas correções corretas em cima de um diagnóstico errado. O que faltava era
-olhar em vez de deduzir: instrumentado, o bot estava **morto**, e o "círculo" era
-o boneco tremendo em cima da divisa entre duas casas. Ele andava 32 unidades, o
-centro cruzava a fronteira, `x / CELL` devolvia outra casa, a busca era refeita da
-casa nova e apontava para trás.
-
-A causa é uma linha que eu tinha **documentado e não implementado**: o comentário
-de `_step_toward` dizia que o bot mira o centro da casa vizinha, e o código
-comparava coordenadas de casa. Um comentário que descreve a intenção em vez do
-código é pior que nenhum — foi ele que me fez procurar o bug longe daqui.
-
-Duas coisas que valem guardar do episódio, além do bug:
-
-- **saída idêntica depois de mexer no código é um dado**, não uma coincidência a
-  ignorar. Da segunda vez que aconteceu, era o sinal de que eu estava consertando
-  outra coisa;
-- o estado do bot está registrado abaixo em vez de escondido atrás de uma
-  asserção fraca.
-
-**O bot de Bomberman é um esboço.** Ele foge do fogo, põe bomba, quebra caixa — e
-se mata sozinho com frequência: com quatro máquinas na mesa, as quatro morrem em
-uns dez segundos. `tests/bomber_probe.gd` guarda o **mecanismo** (a decisão sempre
-sai, cabe num byte, mexe no mapa) e não finge medir qualidade. Quem for melhorá-lo
-começa por `tests/bomber_bot_trace.gd`, que conta em qual dos três ramos cada
-decisão cai — foi ele que encontrou os dois erros acima.
 
 **O bot de xadrez passeava com a torre, e não era a avaliação.**
 

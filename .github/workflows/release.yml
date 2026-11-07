@@ -67,7 +67,6 @@ jobs:
           godot --headless --path . res://tests/ota_probe.tscn
           godot --headless --path . res://tests/ludo_probe.tscn
           godot --headless --path . --script res://tests/monopoly_probe.gd
-          godot --headless --path . --script res://tests/bomber_probe.gd
 
   apk:
     name: APK assinado

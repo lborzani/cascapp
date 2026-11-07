@@ -31,8 +31,6 @@ static func for_game(id: StringName, options: Dictionary) -> Array[Dictionary]:
 			return _uno(options)
 		&"pool":
 			return _pool(options)
-		&"bomberman":
-			return _bomberman()
 	return []
 
 
@@ -107,12 +105,4 @@ static func _pool(options: Dictionary) -> Array[Dictionary]:
 		_row("Primeiro toque", "numa bola do adversário"),
 		_row("Falta", "passa a vez"),
 		_row("Bola sua na caçapa", "sai do jogo"),
-	]
-
-
-static func _bomberman() -> Array[Dictionary]:
-	return [
-		_row("Pavio", "%d segundos" % (BomberRules.FUSE / BomberRules.TICK_HZ)),
-		_row("Fogo em quem pôs a bomba", "atinge"),
-		_row("Prêmios", "bomba, fogo e velocidade"),
 	]
