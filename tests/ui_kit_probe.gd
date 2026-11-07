@@ -355,12 +355,12 @@ func _probe_banner() -> void:
 	stage.free()
 
 
-## Os oito jogos do catálogo, na ordem dele. Escritos à mão, e não lidos do
+## Os sete jogos do catálogo, na ordem dele. Escritos à mão, e não lidos do
 ## `Game`: o kit roda sem autoload — e uma lista à mão também é o que pega o jogo
 ## novo que entrar no catálogo sem regras.
 const RULED_GAMES: Array[StringName] = [
 	&"chess", &"checkers", &"battleship", &"ludo",
-	&"monopoly", &"uno", &"pool", &"bomberman",
+	&"monopoly", &"uno", &"pool",
 ]
 
 

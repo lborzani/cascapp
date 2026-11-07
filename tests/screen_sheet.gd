@@ -37,7 +37,6 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
-	["res://scenes/bomber_match.tscn", "21_bomberman"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
 	["res://scenes/match.tscn", "24_assistindo"],
@@ -76,7 +75,7 @@ func _ready() -> void:
 ## nenhuma, e ali `game_id` é o resto do print anterior.
 const LANDSCAPE_SHOTS := [
 	"17_ludo", "17b_ludo_bots", "17c_ludo_andando", "17d_ludo_pilha",
-	"21_bomberman", "22_sinuca", "22b_sinuca_brasileira",
+	"22_sinuca", "22b_sinuca_brasileira",
 ]
 const PORTRAIT_WINDOW := Vector2i(432, 768)
 ## Deitado num formato de celular de verdade, e **não** em 16:9.
@@ -131,11 +130,6 @@ func _next() -> void:
 			Prefs.remember_rejoin(
 				"DK4P2Q", Game.UNO, "chave", int(Time.get_unix_time_from_system())
 			)
-		"21_bomberman":
-			# Solo: um humano e três máquinas, que é o modo em que o jogo existe
-			# hoje. O print sai alguns segundos dentro da partida para o mapa já
-			# ter buracos — um mapa intocado não mostra o que o jogo faz.
-			Game.start_solo(Game.BOMBERMAN)
 		"01b_folha", "02_xadrez", "02b_regras_mesa":
 			Game.start_hotseat(Game.CHESS)
 		"01d_como_jogar":

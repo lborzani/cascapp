@@ -64,8 +64,7 @@ const TEXTURE_NAMES := {
 	# do jogo, não uma peça do tabuleiro. As construções da partida são volumes
 	# 3D e nunca passam por aqui.
 	Board.Kind.HOUSE: "house",
-	Board.Kind.BOMB: "bomb",
-	# As duas cartas em leque do Uno. Como o navio, o dado, a casinha e a bomba:
+	# As duas cartas em leque do Uno. Como o navio, o dado e a casinha:
 	# ícone do jogo, não peça de tabuleiro. As 108 cartas da partida são desenhadas
 	# por código (`ui/uno_card.gd`) e nunca passam por aqui — em arquivo elas seriam
 	# quinze desenhos vezes quatro cores, e uma paleta impossível de afinar.

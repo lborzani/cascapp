@@ -12,7 +12,7 @@ extends HFlowContainer
 ##
 ## ## Mora na barra da partida
 ##
-## Os oito jogos têm telas que não se parecem em nada, e a faixa entra em todas
+## Os sete jogos têm telas que não se parecem em nada, e a faixa entra em todas
 ## pelo mesmo lugar: a [MatchBar], que a liga à partida em `bind()`. Oito cópias
 ## seriam oito formatos de relógio e oito jeitos de escrever "rodada". O que muda
 ## de jogo para jogo é só de onde saem os números — e se há rodada para contar:
@@ -56,7 +56,7 @@ var rounds := 0:
 		rounds = value
 		_refresh_rounds()
 
-## O jogo conta rodadas. Uno, sinuca e Bomberman não contam — a regra deles não
+## O jogo conta rodadas. Uno e sinuca não contam — a regra deles não
 ## tem volta completa —, e um "0 rodadas" parado a partida inteira parece defeito.
 var counts_rounds := true:
 	set(value):

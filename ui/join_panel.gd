@@ -44,7 +44,6 @@ signal create_requested(game_id: StringName)
 ## que ninguém precise puxar para atualizar. Curto o bastante para parecer vivo,
 ## longo o bastante para não virar uma requisição por segundo.
 const ROOM_REFRESH := 6.0
-const BOMBER_LOBBY_SCENE := "res://scenes/bomber_lobby.tscn"
 ## Jogos que já sabem receber espectador: os que usam `match.gd`. Os outros
 ## recebem quem assiste no relay, mas nenhuma tela deles mostraria a partida.
 const WATCHABLE: Array[StringName] = [Game.CHESS, Game.CHECKERS]
@@ -397,13 +396,6 @@ func _enter_room(id: StringName, code: String) -> void:
 	Game.mode = Game.Mode.ONLINE
 	Game.role = Game.Role.GUEST
 	Game.game_id = id
-	# O Bomberman entra pelo servidor autoritativo, e não pelo relay: manda o código
-	# pro lobby próprio dele, que conecta e pede a sala. Os outros cinco seguem no
-	# relay.
-	if id == Game.BOMBERMAN:
-		BomberNet.pending_code = code.strip_edges().to_upper()
-		get_tree().change_scene_to_file(BOMBER_LOBBY_SCENE)
-		return
 	_set_status("Procurando a sala %s…" % code)
 	# Qualquer caminho até a sala leva a chave, se este aparelho tiver uma para ela:
 	# o cartão de voltar, o código digitado, a sala tocada na lista ou o QR. Quem

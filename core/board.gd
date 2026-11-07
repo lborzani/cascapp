@@ -38,15 +38,11 @@ enum Kind {
 	# como o rosto do jogo é privilegiar quem calhar de jogar com ela. A casa é o
 	# que **todo mundo** constrói.
 	HOUSE,
-	# bomberman: a bomba com o pavio aceso. Como a casinha, ela não é peça de
-	# tabuleiro nenhum — este jogo não tem tabuleiro de peças, tem um mapa e
-	# quatro bonecos. Ela existe só como o rosto do jogo na lista do menu.
-	BOMB,
-	# uno: uma carta de baralho vista de frente, em leque. Como a casinha e a
-	# bomba, só o rosto do jogo no menu — o Uno não tem peça nenhuma, tem 108
+	# uno: uma carta de baralho vista de frente, em leque. Como a casinha, só o
+	# rosto do jogo no menu — o Uno não tem peça nenhuma, tem 108
 	# cartas, e nenhuma delas representa o jogo melhor que a forma de carta.
 	CARD,
-	# sinuca: o taco e a branca. Como a casinha, a bomba e a carta, ela é só o
+	# sinuca: o taco e a branca. Como a casinha e a carta, ela é só o
 	# rosto do jogo no menu — sinuca não tem peça de tabuleiro, tem nove bolas
 	# iguais em forma e diferentes em cor, e nenhuma delas diz "sinuca" sozinha.
 	# O taco diz.
@@ -59,8 +55,8 @@ const NO_SQUARE := -1
 
 ## Cinco bits de espécie, e o lado logo acima.
 ##
-## Eram quatro, e quatro deixaram de bastar: com `BOMB` em 15 o nibble estava
-## cheio, e a espécie seguinte — a carta do Uno — virou 16, que `kind_of()`
+## Eram quatro, e quatro deixaram de bastar: com a bomba do antigo Bomberman em 15 o
+## nibble estava cheio, e a espécie seguinte — a carta do Uno — virou 16, que `kind_of()`
 ## mascarava de volta para `EMPTY`. O sintoma foi o ícone do jogo simplesmente não
 ## aparecer, sem erro nenhum: a peça não era zero, então `draw_piece` seguia em
 ## frente e desenhava a espécie 0, que não tem desenho.

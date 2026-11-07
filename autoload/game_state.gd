@@ -12,7 +12,6 @@ const CHECKERS := &"checkers"
 const BATTLESHIP := &"battleship"
 const LUDO := &"ludo"
 const MONOPOLY := &"monopoly"
-const BOMBERMAN := &"bomberman"
 const UNO := &"uno"
 const POOL := &"pool"
 
@@ -22,21 +21,19 @@ const POOL := &"pool"
 ## de 768 px é uma lista que se rola — e uma lista que se rola é uma lista onde o
 ## último jogo não é visto. O filtro não encurta o catálogo, encurta a **procura**.
 ##
-## Quatro e não sete: uma categoria por jogo seria o mesmo que categoria nenhuma.
+## Três e não sete: uma categoria por jogo seria o mesmo que categoria nenhuma.
 ## O corte é pelo que o jogador reconhece de fora — peça num tabuleiro, dado que
-## anda, carta na mão, boneco que corre —, e não pela família de regras. Quem
+## anda, carta na mão —, e não pela família de regras. Quem
 ## abre o app não sabe que batalha naval e xadrez são jogos de informação
 ## diferente; sabe que nos dois se olha para uma grade.
 const CAT_BOARD := &"tabuleiro"
 const CAT_DICE := &"dados"
 const CAT_CARDS := &"cartas"
-const CAT_ACTION := &"acao"
 
 const CATEGORIES := [
 	{"id": CAT_BOARD, "label": "Tabuleiro"},
 	{"id": CAT_DICE, "label": "Dados"},
 	{"id": CAT_CARDS, "label": "Cartas"},
-	{"id": CAT_ACTION, "label": "Ação"},
 ]
 
 ## Catálogo: o que a tela de escolha mostra, na ordem em que mostra.
@@ -160,37 +157,6 @@ const GAMES := [
 		"rounds": true,
 		"visible": true,
 	},
-	# O primeiro jogo do catálogo que **não** é por turnos.
-	#
-	# Ele não tem `Ruleset`: não há lance legal para gerar nem vez de quem jogar.
-	# O que existe é uma simulação que anda trinta vezes por segundo com o que cada
-	# jogador está segurando (`core/bomber_rules.gd`), e é por isso que
-	# `game_title()` passou a ler o nome daqui em vez de instanciar a regra.
-	#
-	# `bot_levels` falso pelo mesmo motivo do Ludo, com uma razão a mais: o bot
-	# daqui não é busca nenhuma — é fugir do raio das bombas e empurrar o outro
-	# contra uma. Não há profundidade para regular.
-	{
-		"id": BOMBERMAN,
-		"title": "Bomberman",
-		"category": CAT_ACTION,
-		"icon": Board.Kind.BOMB,
-		"scene": "res://scenes/bomber_match.tscn",
-		# Sem "mesmo aparelho", e pelo mesmo motivo da batalha naval: o modo não
-		# existe de verdade. Os quatro jogam **ao mesmo tempo**, e um celular tem
-		# um direcional — dois polegares num aparelho deitado dariam dois
-		# jogadores, com os dois botões de bomba disputando o meio da tela. É um
-		# modo a projetar, não a oferecer de véspera.
-		"modes": [Mode.ONLINE, Mode.SOLO],
-		"clock": false,
-		"players": 4,
-		"players_range": [2, 4],
-		"bot_levels": false,
-		# O mapa tem 13 casas de largura por 11 de altura. Em retrato ele ficaria
-		# com uma casa do tamanho de um dedão inteiro ou com metade da tela vazia.
-		"landscape": true,
-		"visible": true,
-	},
 	# O primeiro jogo do catálogo com **mão oculta**.
 	#
 	# Sem "mesmo aparelho", e pelo mesmo motivo da batalha naval: seis mãos
@@ -219,7 +185,7 @@ const GAMES := [
 		"scene": "res://scenes/uno_match.tscn",
 		# Sem "mesmo aparelho": mão oculta num aparelho só exigiria uma cortina de
 		# "passe o celular" a cada turno — o mesmo motivo da batalha naval. Sala e
-		# solo, como Bomberman.
+		# solo.
 		"modes": [Mode.ONLINE, Mode.SOLO],
 		"clock": false,
 		"players": 4,
@@ -232,9 +198,8 @@ const GAMES := [
 	#
 	# O corte das categorias é pelo que o jogador reconhece de fora, e não pela
 	# família de regras: uma mesa de sinuca é uma superfície marcada onde se movem
-	# peças, que é a mesma resposta que xadrez, damas e batalha naval dão. "Ação" é
-	# boneco que corre e o relógio não para — aqui a vez é de um por vez, com todo o
-	# tempo do mundo para mirar. Uma categoria nova só para ela seria uma categoria
+	# peças, que é a mesma resposta que xadrez, damas e batalha naval dão. Uma
+	# categoria nova só para ela seria uma categoria
 	# por jogo, que é o mesmo que categoria nenhuma.
 	#
 	# `bot_levels` falso pelo motivo dos outros: o adversário daqui não é busca — é
@@ -399,9 +364,6 @@ func set_format(value: int, id: StringName = game_id) -> void:
 ##
 ## - **Metrópole**: o limite de rodadas, escolhido no menu. Duas mesas com
 ##   limites diferentes não seriam a mesma partida;
-## - **Bomberman**: a semente do mapa. Ali é mais grave que uma discordância de
-##   formato — o mapa **sai** da semente, e dois mapas diferentes aparecem como um
-##   jogador atravessando uma parede que só existe na tela do outro.
 ## - **Uno**: a semente do baralho nos 30 bits de baixo, e a regra da casa do 0 e
 ##   do 7 no bit 30. É o único que usa o campo para **duas** respostas, e elas
 ##   viajam juntas de propósito — separá-las em dois campos seria admitir um
@@ -410,13 +372,8 @@ func set_format(value: int, id: StringName = game_id) -> void:
 ## A semente é sorteada aqui, e não na cena da partida: quando a cena abre, quem
 ## entrou já precisa tê-la recebido, e o `welcome` sai desta tela.
 func host_option(id: StringName = game_id) -> int:
-	if id == BOMBERMAN:
-		# Nunca zero: `BomberRules.initial_state` trata o zero como "não me
-		# disseram nada" e inventa o próprio — o que daria dois mapas.
-		return (randi() & 0x7FFFFFFF) | 1
 	if id == UNO:
-		# Trinta bits de semente para sobrar o de cima, e nunca zero pelo mesmo
-		# motivo do Bomberman: o xorshift tem o zero como ponto fixo, e um baralho
+		# Trinta bits de semente para sobrar o de cima, e nunca zero: o xorshift tem o zero como ponto fixo, e um baralho
 		# semeado em zero é as 108 cartas na ordem de fábrica.
 		var packed := (randi() & 0x3FFFFFFF) | 1
 		return packed | UNO_SEVENS_BIT if uno_sevens else packed
@@ -684,8 +641,7 @@ func make_ruleset(id: StringName = game_id) -> Ruleset:
 		UNO:
 			# A semente **não** entra aqui: ela vem do `welcome` em rede e de um
 			# sorteio local no solo, e nenhum dos dois é resposta que este autoload
-			# tenha. Quem a preenche é `uno_match.gd`, como `bomber_match.gd` faz
-			# com a do mapa. O que sai daqui é a mesa e a regra da casa.
+			# tenha. Quem a preenche é `uno_match.gd`. O que sai daqui é a mesa e a regra da casa.
 			var uno := UnoRules.new()
 			uno.seats = players_of(UNO)
 			uno.sevens = uno_sevens
@@ -705,10 +661,8 @@ func make_ruleset(id: StringName = game_id) -> Ruleset:
 
 ## O nome do jogo sai do **catálogo**, e não de `make_ruleset(id).display_name()`.
 ##
-## Aquele caminho instanciava a regra inteira para ler uma string, e parou de
-## funcionar no primeiro jogo que não tem `Ruleset`: Bomberman é tempo real, não
-## tem lance legal para gerar nem vez de quem jogar, e não implementa a interface.
-## O catálogo já sabia o nome — as duas telas de menu leem `title` de lá desde
+## Aquele caminho instanciava a regra inteira para ler uma string. O catálogo já
+## sabia o nome — as duas telas de menu leem `title` de lá desde
 ## sempre —, e era esta a única resposta que vinha por outro caminho.
 func game_title(id: StringName = game_id) -> String:
 	return str(entry_of(id).get("title", ""))

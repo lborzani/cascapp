@@ -159,8 +159,7 @@ func _fill() -> void:
 		_rows.add_child(_row(friend))
 
 
-## A escolha do jogo do convite, no lugar da lista. Só jogos que abrem sala pelo
-## relay: o Bomberman tem servidor próprio, e a presença não o enxerga.
+## A escolha do jogo do convite, no lugar da lista. Só jogos que abrem sala.
 func _fill_games() -> void:
 	var prompt := _text("Chamar %s para…" % Friends.name_of(_inviting), &"Hint")
 	_rows.add_child(prompt)
@@ -185,7 +184,7 @@ func _fill_games() -> void:
 static func invite_games() -> Array[StringName]:
 	var ids: Array[StringName] = []
 	for id in Game.games_in():
-		if id != Game.BOMBERMAN and Game.mode_available(Game.Mode.ONLINE, id):
+		if Game.mode_available(Game.Mode.ONLINE, id):
 			ids.append(id)
 	return ids
 

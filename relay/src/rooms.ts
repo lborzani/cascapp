@@ -143,7 +143,7 @@ export class RoomRegistry<S extends OpenState> {
      * o sintoma para quem está jogando é o processo sendo reiniciado pelo Fly no
      * meio da partida.
      *
-     * É a mesma defesa que o servidor de Bomberman já tinha
+     * É a mesma defesa que o antigo servidor de Bomberman tinha
      * (`BomberProtocol.MAX_ROOMS`) e que faltava deste lado. Recusar uma sala
      * nova é ruim; ficar sem servidor para todo mundo é pior, e a recusa tem
      * texto próprio para quem a vê saber que não foi o código dele.

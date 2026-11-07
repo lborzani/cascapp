@@ -72,8 +72,8 @@ func _ready() -> void:
 
 	# A seta é desenhada, e não um caractere de texto.
 	#
-	# "▾" dependeria da fonte do sistema ter o glifo, que é a mesma aposta que o
-	# emoji da bomba do Bomberman perdeu — lá ele saía roxo num aparelho e como um
+	# "▾" dependeria da fonte do sistema ter o glifo, que é a mesma aposta que um
+	# emoji antigo do menu perdeu — lá ele saía roxo num aparelho e como um
 	# quadrado vazio noutro. Dois traços custam menos que essa dúvida, e são o
 	# mesmo traço da seta do cartão de jogo.
 	_arrow = Control.new()

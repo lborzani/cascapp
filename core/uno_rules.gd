@@ -14,7 +14,7 @@ extends Ruleset
 ## ## De onde vem o acaso
 ##
 ## De uma semente, e não de `randi()`. Este é o segundo jogo do app com sorteio
-## dentro do estado, e ele segue o Bomberman em vez do Ludo — pelos dois motivos:
+## dentro do estado, e ele não segue o Ludo — pelos dois motivos:
 ##
 ## - o **embaralhamento inicial** precisa ser igual nos N aparelhos antes do
 ##   primeiro lance, e não há lance nenhum onde ele pudesse viajar;
@@ -352,7 +352,7 @@ static func seat_ahead(state: MatchState, steps := 1) -> int:
 
 ## Xorshift de 32 bits, com o estado dentro de `meta`.
 ##
-## Escrito à mão pelo mesmo motivo do Bomberman: `RandomNumberGenerator` é um
+## Escrito à mão: `RandomNumberGenerator` é um
 ## objeto com estado interno que não sobrevive ao `clone()`, e `randi()` é global.
 ## Os dois dariam baralhos diferentes em aparelhos diferentes, que é a única coisa
 ## que este jogo não pode permitir.

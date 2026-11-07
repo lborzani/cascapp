@@ -58,7 +58,7 @@ var _again: Button = null
 
 func _ready() -> void:
 	theme = AppTheme.shared()
-	# Deitada como Ludo, Uno, Metrópole e Bomberman, e aqui pelo motivo mais
+	# Deitada como Ludo, Uno e Metrópole, e aqui pelo motivo mais
 	# literal de todos: a mesa é duas vezes mais larga que alta. Em retrato ela
 	# ocuparia um terço da tela com faixa preta em cima e embaixo.
 	Orientation.to_landscape(get_tree())
