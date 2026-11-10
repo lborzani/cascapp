@@ -28,6 +28,7 @@ func _ready() -> void:
 	_test_table_mode(match_scene)
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
+	await _test_repetition_draw()
 	await _test_rematch()
 	await _test_review()
 	await _test_review_side()
@@ -457,6 +458,23 @@ func _test_checkers_capture_taps() -> void:
 	_check(scene._selection.is_empty(), "a pedra sem captura não é selecionada")
 	_check(scene._hint.contains("obrigatória"), "a tela avisa que a captura é obrigatória (obtido: '%s')" % scene._hint)
 
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## Os cavalos vão e voltam duas vezes: a posição inicial aparece pela terceira
+## vez, a partida acaba empatada e o painel diz por quê.
+func _test_repetition_draw() -> void:
+	print("empate por repetição")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for round in 2:
+		for step in [["g1", "f3"], ["g8", "f6"], ["f3", "g1"], ["f6", "g8"]]:
+			_play(scene, step[0], step[1])
+	_equals(scene._outcome, Ruleset.Outcome.DRAW, "a terceira vez da mesma posição empata")
+	_check(scene._result_detail().contains("repetição"), "e o painel diz o motivo (obtido: '%s')" % scene._result_detail())
 	scene.queue_free()
 	await get_tree().process_frame
 

@@ -18,6 +18,7 @@ func _initialize() -> void:
 	_test_chess_special_moves()
 	_test_chess_notation()
 	_test_chess_uci()
+	_test_chess_draws()
 	_test_review_rules()
 	_test_review_curve()
 	_test_review_accuracy()
@@ -559,6 +560,63 @@ func _position(rules: ChessRules, pieces: Dictionary, castle: int = 0) -> MatchS
 
 static func _sq(name: String) -> int:
 	return Board.square(name.unicode_at(0) - "a".unicode_at(0), int(name.substr(1)) - 1)
+
+
+## Empates que dependem da partida e não só da posição: repetição, posição morta
+## e o tempo pela norma (perde no tempo só quem o outro ainda pode dar mate).
+func _test_chess_draws() -> void:
+	print("xadrez empates")
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	# O estado vai como argumento: o lambda captura o valor da variável quando
+	# nasce, e trocar `state` depois deixaria ele jogando no tabuleiro antigo.
+	var play := func(board: MatchState, texts: Array) -> void:
+		for text in texts:
+			rules.apply_move(board, rules.move_from_uci(board, text))
+	var shuffle := ["g1f3", "g8f6", "f3g1", "f6g8"]
+	play.call(state, shuffle)
+	_equals(rules.repetitions(state), 2, "a posição inicial voltou uma vez")
+	_equals(rules.outcome(state), Ruleset.Outcome.ONGOING, "duas vezes ainda não é empate")
+	play.call(state, shuffle)
+	_equals(rules.repetitions(state), 3, "e voltou de novo")
+	_equals(rules.outcome(state), Ruleset.Outcome.DRAW, "três vezes é empate")
+	_equals(rules.draw_reason(state), "repetição", "pelo motivo certo")
+
+	state = rules.initial_state()
+	play.call(state, shuffle)
+	play.call(state, ["e2e4"])
+	_equals(state.ply, 5, "o lance de peão foi jogado")
+	_equals(rules.repetitions(state), 1, "lance de peão recomeça a contagem")
+	_equals((state.meta["seen"] as PackedInt64Array).size(), 1, "e esquece as posições de antes")
+	var copy := state.clone()
+	rules.apply_move(copy, rules.move_from_uci(copy, "g8f6"))
+	_equals((state.meta["seen"] as PackedInt64Array).size(), 1, "o clone não mexe nas posições do original")
+
+	var lay := func(pieces: Dictionary) -> MatchState:
+		var board := MatchState.new()
+		board.meta = {"castle": 0, "ep": Board.NO_SQUARE, "halfmove": 0}
+		for square: String in pieces:
+			var spec: Array = pieces[square]
+			board.set_piece(_sq(square), Board.piece(spec[0], spec[1]))
+		return board
+	var W := Board.Side.WHITE
+	var B := Board.Side.BLACK
+	var K := Board.Kind.KING
+	var same: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "f8": [B, Board.Kind.BISHOP]})
+	_equals(rules.draw_reason(same), "material insuficiente", "bispos da mesma cor não dão mate")
+	var other: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "c8": [B, Board.Kind.BISHOP]})
+	_equals(rules.draw_reason(other), "", "bispos de cores diferentes ainda dão")
+	var lone: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "b1": [W, Board.Kind.KNIGHT]})
+	_equals(rules.draw_reason(lone), "material insuficiente", "cavalo sozinho não dá mate")
+
+	var bishop_pawn: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "a7": [B, Board.Kind.PAWN]})
+	_check(rules.can_mate(bishop_pawn, W), "no tempo, bispo contra peão ainda pode dar mate")
+	_check(not rules.can_mate(lone, W), "cavalo contra rei sozinho não pode")
+	var two_knights: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "b1": [W, Board.Kind.KNIGHT], "g1": [W, Board.Kind.KNIGHT]})
+	_check(rules.can_mate(two_knights, W), "dois cavalos podem")
+	var bishop_rook: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "h8": [B, Board.Kind.ROOK]})
+	_check(rules.can_mate(bishop_rook, W), "bispo contra torre pode, a torre bloqueia")
+	_check(not rules.can_mate(same, W), "bispo contra bispo da mesma cor não pode")
 
 
 # --- checkers ----------------------------------------------------------------

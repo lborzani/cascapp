@@ -43,6 +43,7 @@ static func _chess(options: Dictionary) -> Array[Dictionary]:
 		_row("Ritmo", str(options.get("clock", "Sem relógio"))),
 		_row("Roque, en passant e promoção", "sempre"),
 		_row("Empate sem captura nem peão", "50 lances"),
+		_row("Mesma posição três vezes", "empate"),
 		_row("Planejar lances na vez do outro", "em rede"),
 	]
 

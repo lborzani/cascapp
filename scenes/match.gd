@@ -293,7 +293,7 @@ func _flag(side: int) -> void:
 	var detail := "%s ficaram sem tempo." % ("Brancas" if side == Board.Side.WHITE else "Pretas")
 	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		detail = "Você perdeu no tempo." if side == Game.local_side else "O oponente perdeu no tempo."
-	if _ruleset is ChessRules and not (_ruleset as ChessRules).has_mating_material(_state, winner):
+	if _ruleset is ChessRules and not (_ruleset as ChessRules).can_mate(_state, winner):
 		title = "Empate"
 		detail = "Tempo esgotado, mas o outro lado não tem material para dar mate."
 		winner = -1
@@ -970,7 +970,11 @@ func _record_game(title: String, detail: String) -> void:
 
 func _result_detail() -> String:
 	if _outcome == Ruleset.Outcome.DRAW:
-		return "Empate em %d lances." % _state.ply
+		var reason := (_ruleset as ChessRules).draw_reason(_state) if _ruleset is ChessRules else ""
+		if reason.is_empty() and _ruleset is ChessRules:
+			reason = "afogamento"
+		return "Empate por %s em %d lances." % [reason, _state.ply] if not reason.is_empty() \
+			else "Empate em %d lances." % _state.ply
 	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		var won := (_outcome == Ruleset.Outcome.WHITE_WINS) == (Game.local_side == Board.Side.WHITE)
 		return "Você venceu em %d lances." % _state.ply if won else "Você perdeu em %d lances." % _state.ply
