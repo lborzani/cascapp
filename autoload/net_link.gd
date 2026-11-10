@@ -627,7 +627,19 @@ func _welcome() -> Dictionary:
 		"tc": time_control,
 		"opt": option,
 		"names": _name_list(),
+		# O assento das brancas. A revanche troca as cores, e quem volta com o
+		# processo morto não tem como saber disso: sem este campo ele tirava a cor
+		# do assento e voltava com as peças da primeira partida.
+		"w": _white_seat_now(),
 	}
+
+
+## Quem joga de brancas agora. Quem joga lê do próprio lado, que a revanche
+## troca; quem assiste já guarda em `white_seat`.
+func _white_seat_now() -> int:
+	if seats != 2 or is_spectator:
+		return white_seat
+	return local_seat if local_side == Board.Side.WHITE else 1 - local_seat
 
 
 # --- nomes --------------------------------------------------------------------
@@ -778,6 +790,11 @@ func _adopt_table(message: Dictionary) -> void:
 	# qualquer mensagem, e para um convidado as duas respostas são a mesma.
 	if seats == 2:
 		local_side = HOST_SIDE if local_seat == 0 else Board.opponent(HOST_SIDE)
+		# Quem mandou sabe quem está de brancas depois de uma revanche. Versão sem
+		# o campo fica com a conta do assento, como antes.
+		if message.has("w"):
+			white_seat = int(message["w"])
+			local_side = Board.Side.WHITE if local_seat == white_seat else Board.Side.BLACK
 
 
 ## O aperto de mão, do lado de quem chegou. O código prova que se entrou *nesta*
