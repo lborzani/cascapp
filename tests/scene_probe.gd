@@ -639,7 +639,7 @@ func _test_review_side() -> void:
 	await _settle(panel, "_thread")
 	_check(not panel._board.flipped, "de brancas, brancas embaixo")
 	var fake := func(side: int, verdict: int, best: String) -> Dictionary:
-		return {"san": "x", "side": side, "verdict": verdict, "missed_mate": false, "best": best}
+		return {"san": "x", "side": side, "verdict": verdict, "missed_mate": false, "best": best, "best_san": "x", "score": 50.0}
 	panel._entries = [
 		fake.call(Board.Side.WHITE, GameReview.Verdict.GOOD, ""),
 		fake.call(Board.Side.BLACK, GameReview.Verdict.MISTAKE, "e7e6"),
@@ -653,12 +653,14 @@ func _test_review_side() -> void:
 	panel._show(3)
 	_check(panel._retry.visible, "erro de quem jogou vira desafio")
 	panel._retry.pressed.emit()
-	_equals(panel._puzzle_state.side_to_move, Board.Side.WHITE, "com a vez das brancas")
-	panel._on_tap(_square("e7"))
-	_equals(panel._pick, Board.NO_SQUARE, "peça preta não se ergue")
-	panel._on_tap(_square("e2"))
-	_equals(panel._pick, _square("e2"), "peça branca sim")
-	panel._retry.pressed.emit()
+	var challenge: ChallengeView = panel._challenge
+	_equals(challenge._state.side_to_move, Board.Side.WHITE, "com a vez das brancas")
+	challenge._on_tap(_square("e7"))
+	_equals(challenge._pick, Board.NO_SQUARE, "peça preta não se ergue")
+	challenge._on_tap(_square("e2"))
+	_equals(challenge._pick, _square("e2"), "peça branca sim")
+	challenge._action.pressed.emit()
+	_check(not challenge.visible, "desistir volta à revisão")
 
 	# No mesmo aparelho os dois lados eram de quem revisa.
 	panel._side = -1
