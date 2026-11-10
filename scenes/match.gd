@@ -434,7 +434,9 @@ func _try_select(square: int) -> void:
 		_hint = ""
 		return
 	_hint = "Essa peça não tem lance legal agora."
-	if _check_square() != Board.NO_SQUARE:
+	if _ruleset is CheckersRules and not _legal.is_empty() and _legal[0].is_capture():
+		_hint = "Captura obrigatória: jogue a peça que come mais peças."
+	elif _check_square() != Board.NO_SQUARE:
 		_hint = "Você está em xeque: só valem lances que respondam ao xeque."
 	Sound.play(Sound.Cue.ALERT)
 	_banner.show_message(_hint, Banner.Kind.ALERT)

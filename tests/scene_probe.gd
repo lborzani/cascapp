@@ -450,6 +450,13 @@ func _test_checkers_capture_taps() -> void:
 	scene._on_square_tapped(_square("g7"))
 	_equals(scene._state.ply, 1, "escolhida a rota, o lance acontece")
 
+	# Captura obrigatória: com c3 podendo comer, a pedra de g3 não anda, e a tela
+	# diz o motivo em vez de ficar muda.
+	_lay_out(scene, ["c3", "g3"], ["d4"])
+	scene._on_square_tapped(_square("g3"))
+	_check(scene._selection.is_empty(), "a pedra sem captura não é selecionada")
+	_check(scene._hint.contains("obrigatória"), "a tela avisa que a captura é obrigatória (obtido: '%s')" % scene._hint)
+
 	scene.queue_free()
 	await get_tree().process_frame
 

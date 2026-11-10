@@ -24,7 +24,7 @@ func _initialize() -> void:
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
-	_test_checkers_optional_capture()
+	_test_checkers_mandatory_capture()
 	_test_checkers_promotion()
 	_test_battleship_placement()
 	_test_battleship_shots()
@@ -579,49 +579,39 @@ func _test_checkers_capture_routes() -> void:
 	var state := MatchState.new()
 	state.meta = {"idle": 0}
 	state.set_piece(Board.square(2, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
-	# One route captures two pieces, the other only one. Capturing is optional,
-	# so both are offered — but each route must be played to its end.
+	# Uma rota come duas peças, a outra uma.
 	state.set_piece(Board.square(3, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 	state.set_piece(Board.square(5, 5), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 	state.set_piece(Board.square(1, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 
 	var moves := rules.generate_moves(state)
-	var counts := PackedInt32Array()
-	for move in moves:
-		counts.append(move.captured.size())
-	counts.sort()
-	_equals(counts, PackedInt32Array([1, 2]), "as duas rotas de captura são legais")
-
-	var longest: Move = null
-	for move in moves:
-		if move.captured.size() == 2:
-			longest = move
-	if longest == null:
-		_check(false, "sequência de duas capturas existe")
+	_equals(moves.size(), 1, "lei da maioria: só a rota que come mais é legal")
+	if moves.is_empty():
 		return
-	_equals(longest.to_square(), Board.square(6, 6), "sequência de duas capturas termina em g7")
+	_equals(moves[0].captured.size(), 2, "e ela come duas")
+	_equals(moves[0].to_square(), Board.square(6, 6), "sequência de duas capturas termina em g7")
 
 
-func _test_checkers_optional_capture() -> void:
-	print("damas captura opcional")
+func _test_checkers_mandatory_capture() -> void:
+	print("damas captura obrigatória")
 	var rules := CheckersRules.new()
 	var state := MatchState.new()
 	state.meta = {"idle": 0}
-	# The man on c3 can capture on d4; the one on g3 has nothing to do with it
-	# and must still be free to move.
+	# A pedra de c3 captura em d4; a de g3 não tem nada a ver com isso e, com
+	# captura na mesa, não pode andar.
 	state.set_piece(Board.square(2, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
 	state.set_piece(Board.square(6, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
 	state.set_piece(Board.square(3, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 
-	var quiet_from_idle_piece := 0
-	var captures := 0
-	for move in rules.generate_moves(state):
-		if move.is_capture():
-			captures += 1
-		elif move.from_square() == Board.square(6, 2):
-			quiet_from_idle_piece += 1
-	_equals(captures, 1, "a captura continua disponível")
-	_equals(quiet_from_idle_piece, 2, "a outra pedra pode mover mesmo havendo captura")
+	var moves := rules.generate_moves(state)
+	_equals(moves.size(), 1, "com captura na mesa, só ela é lance")
+	if not moves.is_empty():
+		_check(moves[0].is_capture(), "e o lance é a captura")
+
+	# Sem captura, as duas pedras andam.
+	state.set_piece(Board.square(3, 3), 0)
+	state.set_piece(Board.square(3, 6), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
+	_equals(rules.generate_moves(state).size(), 4, "sem captura, os lances simples voltam")
 
 
 func _test_checkers_promotion() -> void:

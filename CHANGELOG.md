@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.40
+
+- Damas: capturar agora é obrigatório, como na regra oficial. Se houver mais de um jeito de capturar, vale o que come mais peças.
+
 ## 1.39
 
 - Xadrez: Treino novo, na aba Você. Os erros das partidas que você revisa voltam como desafio. Acertou de primeira, o desafio volta daqui a alguns dias; errou, volta amanhã.

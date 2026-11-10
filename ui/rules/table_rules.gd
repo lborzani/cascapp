@@ -50,7 +50,7 @@ static func _chess(options: Dictionary) -> Array[Dictionary]:
 static func _checkers(options: Dictionary) -> Array[Dictionary]:
 	return [
 		_row("Ritmo", str(options.get("clock", "Sem relógio"))),
-		_row("Capturar", "opcional"),
+		_row("Capturar", "obrigatório, a que come mais"),
 		_row("Dama", "voa"),
 		_row("Empate só com damas", "%d lances" % CheckersRules.IDLE_DRAW_LIMIT),
 	]

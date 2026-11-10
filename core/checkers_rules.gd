@@ -5,12 +5,10 @@ extends Ruleset
 ## Captured pieces stay on the board until the sequence ends, so the same piece
 ## can never be jumped twice ("regra turca").
 ##
-## Capturing is **optional** here, unlike tournament rules. The obligation (and
-## the "lei da maioria" that forces the longest sequence) made the board feel
-## broken in practice: tapping a piece that could move but was not the one
-## holding the required capture simply did nothing, with no way for the UI to
-## explain why. A started sequence still has to be finished — you pick a jump
-## route, not a jump count.
+## Capturar é obrigatório, com a lei da maioria: havendo captura, só valem as
+## sequências que comem mais peças (pela quantidade; dama não pesa mais que
+## pedra). Tocar numa peça que não tem esse lance não faz nada no tabuleiro, então
+## `match.gd` diz o motivo no aviso.
 
 const DIAGONALS := [[1, 1], [1, -1], [-1, 1], [-1, -1]]
 ## Plies of dame-only, capture-free shuffling before the game is called a draw.
@@ -45,8 +43,16 @@ func initial_state() -> MatchState:
 
 
 func generate_moves(state: MatchState) -> Array[Move]:
-	var moves := _quiet_moves(state)
-	moves.append_array(_capture_moves(state))
+	var captures := _capture_moves(state)
+	if captures.is_empty():
+		return _quiet_moves(state)
+	var most := 0
+	for move in captures:
+		most = maxi(most, move.captured.size())
+	var moves: Array[Move] = []
+	for move in captures:
+		if move.captured.size() == most:
+			moves.append(move)
 	return moves
 
 

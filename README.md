@@ -52,11 +52,12 @@ quebrado mesmo estando gerado corretamente.
 tabuleiro no fim da sequência e não pode ser saltada duas vezes). Promoção só
 acontece quando a pedra *termina* o lance na última linha.
 
-**Captura é opcional**, diferente das regras de torneio. A obrigatoriedade (e a
-lei da maioria, que força a maior sequência) fazia o tabuleiro parecer quebrado:
-tocar numa pedra que podia mover mas não era a da captura obrigatória não fazia
-nada, sem como a interface explicar o motivo. Uma sequência iniciada ainda
-precisa ser terminada — você escolhe a rota do salto, não quantas peças comer.
+**Captura é obrigatória, com a lei da maioria**, como na regra oficial: havendo
+captura, só valem as sequências que comem mais peças (pela quantidade, sem peso
+a mais para a dama). Foi opcional até a 1.39, porque tocar numa pedra que podia
+mover e não era a da captura não fazia nada e a tela ficava muda. Agora o aviso
+diz "Captura obrigatória" nesse toque. A sequência começada vai até o fim, e
+entre rotas que comem o mesmo tanto você escolhe.
 
 **Uma sequência sem escolha resolve num toque só.** Quando o prefixo já tocado
 casa com um único lance, os saltos que faltam são forçados, e o lance acontece
