@@ -332,10 +332,45 @@ static func record_game(game: Dictionary) -> void:
 	_file().save(PATH)
 
 
+## A partida `at` já passou pela análise e deu o que tinha para o treino.
+static func mark_analysed(at: int) -> void:
+	var games := history()
+	for game in games:
+		if int(game.get("at", -1)) == at:
+			game["analysed"] = true
+	_file().set_value(HISTORY_SECTION, HISTORY_KEY, games)
+	_file().save(PATH)
+
+
 ## Só para os testes, como `forget_favorites()`.
 static func forget_history() -> void:
 	if _file().has_section(HISTORY_SECTION):
 		_file().erase_section(HISTORY_SECTION)
+		_file().save(PATH)
+
+
+# --- treino -------------------------------------------------------------------
+#
+# O baralho de `Training`, inteiro numa chave: ele é lido e regravado de uma vez
+# a cada desafio, e 200 cartões são poucas dezenas de KB.
+
+const TRAINING_SECTION := "training"
+const TRAINING_KEY := "deck"
+
+
+static func training() -> Array:
+	return (_file().get_value(TRAINING_SECTION, TRAINING_KEY, []) as Array).duplicate(true)
+
+
+static func set_training(deck: Array) -> void:
+	_file().set_value(TRAINING_SECTION, TRAINING_KEY, deck)
+	_file().save(PATH)
+
+
+## Só para os testes, como `forget_history()`.
+static func forget_training() -> void:
+	if _file().has_section(TRAINING_SECTION):
+		_file().erase_section(TRAINING_SECTION)
 		_file().save(PATH)
 
 

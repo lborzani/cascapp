@@ -33,6 +33,8 @@ func _ready() -> void:
 	await _test_review_side()
 	await _test_puzzle()
 	await _test_match_history()
+	await _test_training_collect()
+	await _test_training_panel()
 	_test_verified_names()
 	await _test_spectator()
 	_check(await _test_next_up() == true, "fila de quem joga a próxima rodou até o fim")
@@ -681,6 +683,7 @@ func _test_puzzle() -> void:
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
 	await get_tree().process_frame
+	Prefs.forget_training()
 	for step in [["e2", "e4"], ["e7", "e5"], ["f1", "c4"], ["b8", "c6"], ["d1", "h5"], ["g8", "f6"], ["d2", "d3"]]:
 		_play(scene, step[0], step[1])
 	scene._board.cancel_animation()
@@ -688,6 +691,12 @@ func _test_puzzle() -> void:
 	(_node(scene, "%ReviewButton") as Button).pressed.emit()
 	var panel: ReviewPanel = scene.get_child(scene.get_child_count() - 1)
 	await _settle(panel, "_thread")
+	var played := Prefs.training().map(func(card): return card["played"])
+	Prefs.forget_training()
+	Prefs.forget_history()
+	if not panel._entries.is_empty():
+		# No mesmo aparelho os dois lados são do jogador: os dois erros entram.
+		_check("g8f6" in played and "d2d3" in played, "a revisão manda 3...Cf6 e 4.d3 para o treino (%s)" % [played])
 	if panel._entries.is_empty():
 		panel._show(7)
 		_check(not panel._retry.visible, "sem análise, sem desafio")
@@ -696,6 +705,7 @@ func _test_puzzle() -> void:
 		await get_tree().process_frame
 		return
 
+	var challenge: ChallengeView = panel._challenge
 	panel._show(1)
 	_check(not panel._retry.visible, "lance bom não oferece desafio")
 
@@ -704,43 +714,43 @@ func _test_puzzle() -> void:
 	panel._show(6)
 	_check(panel._retry.visible, "erro grave oferece o desafio")
 	panel._retry.pressed.emit()
-	_check(panel._status.text.begins_with("Ache um lance melhor! Jogam as pretas"), "o desafio do erro começa (%s)" % panel._status.text)
+	_check(challenge._status.text.begins_with("Ache um lance melhor! Jogam as pretas"), "o desafio do erro começa (%s)" % challenge._status.text)
 	for attempt in 3:
-		panel._on_tap(_square("a7"))
-		panel._on_tap(_square("a6"))
-		await _settle(panel, "_checker")
-		_check(panel._status.text.contains("ainda perde muito"), "a6 é recusado (%d)" % (attempt + 1))
-	var best := ChessRules.new().move_from_uci(panel._puzzle_state, str(panel._entries[5]["best"]))
-	_equals(panel._pick, best.from_square(), "a dica aponta a peça do melhor lance")
+		challenge._on_tap(_square("a7"))
+		challenge._on_tap(_square("a6"))
+		await _settle(challenge, "_checker")
+		_check(challenge._status.text.contains("ainda perde muito"), "a6 é recusado (%d)" % (attempt + 1))
+	var best := ChessRules.new().move_from_uci(challenge._state, str(panel._entries[5]["best"]))
+	_equals(challenge._pick, best.from_square(), "a dica aponta a peça do melhor lance")
 	# Vale qualquer lance que segure, não só o do motor: g6 e De7 tapam o f7.
 	var other := "d8e7" if panel._entries[5]["best"] != "d8e7" else "g7g6"
-	panel._on_tap(Board.square(other.unicode_at(0) - 97, int(other[1]) - 1))
-	panel._on_tap(Board.square(other.unicode_at(2) - 97, int(other[3]) - 1))
-	await _settle(panel, "_checker")
-	_check(panel._solved, "outro lance bom também resolve (%s)" % panel._status.text)
-	panel._retry.pressed.emit()
+	challenge._on_tap(Board.square(other.unicode_at(0) - 97, int(other[1]) - 1))
+	challenge._on_tap(Board.square(other.unicode_at(2) - 97, int(other[3]) - 1))
+	await _settle(challenge, "_checker")
+	_check(challenge._solved, "outro lance bom também resolve (%s)" % challenge._status.text)
+	challenge._action.pressed.emit()
 
 	panel._show(7)
 	_check(panel._retry.visible, "o mate perdido oferece o desafio")
 	_check(not panel._detail.text.contains("Dxf7") and not panel._status.text.contains("Dxf7"), "sem entregar a resposta (%s)" % panel._detail.text)
 	panel._retry.pressed.emit()
-	_check(panel._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % panel._status.text)
-	_equals(panel._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")
+	_check(challenge._status.text.begins_with("Encontre o mate"), "o desafio começa (%s)" % challenge._status.text)
+	_equals(challenge._board.state.squares, panel._states[6].squares, "na posição de antes do 4.d3")
 	_check(not panel._nav.visible, "a navegação some durante o desafio")
 	_check(not panel._graph.visible and not panel._bar.visible, "gráfico e barra também, para não entregar a resposta")
 
 	for attempt in 3:
-		panel._on_tap(_square("a2"))
-		panel._on_tap(_square("a3"))
-		await _settle(panel, "_checker")
-		_check(panel._status.text.contains("escapar"), "a3 é recusado (%d)" % (attempt + 1))
-	_equals(panel._pick, _square("h5"), "depois de três erros a dama vira a dica")
+		challenge._on_tap(_square("a2"))
+		challenge._on_tap(_square("a3"))
+		await _settle(challenge, "_checker")
+		_check(challenge._status.text.contains("escapar"), "a3 é recusado (%d)" % (attempt + 1))
+	_equals(challenge._pick, _square("h5"), "depois de três erros a dama vira a dica")
 
-	panel._on_tap(_square("f7"))
-	await _settle(panel, "_checker")
-	_check(panel._solved, "Dxf7# resolve o desafio")
-	_check(panel._status.text.contains("xeque-mate"), "e a tela comemora (%s)" % panel._status.text)
-	panel._retry.pressed.emit()
+	challenge._on_tap(_square("f7"))
+	await _settle(challenge, "_checker")
+	_check(challenge._solved, "Dxf7# resolve o desafio")
+	_check(challenge._status.text.contains("xeque-mate"), "e a tela comemora (%s)" % challenge._status.text)
+	challenge._action.pressed.emit()
 	_check(panel._puzzle < 0 and panel._nav.visible, "voltar devolve a revisão")
 	_check(panel._graph.visible and panel._bar.visible, "com gráfico e barra de volta")
 
@@ -798,6 +808,177 @@ func _test_match_history() -> void:
 	Prefs.forget_history()
 
 
+## A análise que chega à revisão enche o baralho do treino. Entradas de
+## mentira no lugar do motor: o que se testa é a ligação, não o Stockfish.
+func _test_training_collect() -> void:
+	print("treino — coleta pela revisão")
+	Prefs.forget_training()
+	Prefs.forget_history()
+	var line := ["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6", "d2d3"]
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	var moves := []
+	for uci in line:
+		var move := rules.move_from_uci(state, uci)
+		moves.append(move.to_dict())
+		rules.apply_move(state, move)
+	var entries := []
+	for i in line.size():
+		var bad := i >= 5
+		entries.append({
+			"san": line[i], "uci": line[i], "side": Board.Side.WHITE if i % 2 == 0 else Board.Side.BLACK,
+			"fen": "", "best": "h5f7" if i == 6 else "g7g6", "best_san": "", "score": 60.0,
+			"after": 10.0 if bad else 58.0, "mate": 1 if i == 6 else 0, "missed_mate": i == 6,
+			"verdict": GameReview.Verdict.BLUNDER if i == 5 else GameReview.Verdict.GOOD,
+		})
+
+	var bot_game := {"at": 11, "moves": moves, "against": "Contra o bot (Avançado)", "side": Board.Side.BLACK}
+	Prefs.record_game(bot_game)
+	var panel := await _analysed_panel(bot_game, entries)
+	var deck := Prefs.training()
+	_equals(deck.size(), 1, "contra o bot só o erro do jogador entra")
+	if not deck.is_empty():
+		_equals(deck[0]["played"], "g8f6", "o das pretas, que eram dele")
+	_check(Prefs.history()[0].get("analysed", false), "a partida fica marcada como analisada")
+	panel._analysed(entries)
+	_equals(Prefs.training().size(), 1, "revisar de novo não duplica")
+	panel.close()
+
+	var hotseat := {"at": 12, "moves": moves, "against": "No mesmo aparelho", "side": Board.Side.WHITE, "hotseat": true}
+	Prefs.record_game(hotseat)
+	panel = await _analysed_panel(hotseat, entries.slice(0, 6))
+	_equals(Prefs.training().size(), 1, "análise cortada antes do mate perdido rende só o que achou")
+	_check(not Prefs.history()[0].get("analysed", false), "e a partida não fica marcada")
+	panel._analysed(entries)
+	_equals(Prefs.training().size(), 2, "no mesmo aparelho os dois lados entram")
+	panel.close()
+
+	panel = await _analysed_panel({}, entries)
+	_equals(Prefs.training().size(), 2, "revisão sem registro no histórico não mexe no treino")
+	panel.close()
+	await get_tree().process_frame
+	Prefs.forget_training()
+	Prefs.forget_history()
+
+
+## A tela de treino: serve o que venceu, dá nota, mostra quando volta, e
+## analisa as partidas que nunca foram revisadas. O desafio de mate é conferido
+## pelo motor quando há; sem ele, só o lance apontado vale — Dxf7# nos dois.
+func _test_training_panel() -> void:
+	print("treino — tela")
+	Prefs.forget_training()
+	Prefs.forget_history()
+	var settings := preload("res://scenes/settings.tscn").instantiate()
+	add_child(settings)
+	await get_tree().process_frame
+	var button: Button = settings.get_node("%TrainingButton")
+	_equals(button.text, "Treino", "sem desafio vencido, o botão não conta nada")
+	button.pressed.emit()
+	var panel: TrainingPanel = settings._training
+	_check(not panel._challenge.visible and panel._empty.visible, "baralho vazio mostra o aviso")
+	_check(panel._empty.status.text.begins_with("Nenhum erro"), "que explica de onde vêm os desafios")
+	_check(not panel._analyse.visible, "sem partida nova, sem botão de analisar")
+	settings.go_back()
+	await get_tree().process_frame
+
+	var now := int(Time.get_unix_time_from_system())
+	var mate := {
+		"prefix": "e2e4 e7e5 f1c4 b8c6 d1h5 g8f6", "played": "d2d3", "best": "h5f7", "best_san": "Dxf7#",
+		"score": 100.0, "mate": true, "box": 0, "due": 0, "at": now,
+	}
+	var later := mate.duplicate()
+	later["played"] = "a2a3"
+	later["due"] = now + 3 * Training.DAY
+	var broken := mate.duplicate()
+	broken["prefix"] = "e2e5"
+	broken["due"] = -1
+	Prefs.set_training([mate, later, broken])
+	settings._refresh_games()
+	_equals(button.text, "Treino (2 para hoje)", "o botão conta o que vence hoje")
+	button.pressed.emit()
+	panel = settings._training
+	_equals(Prefs.training().size(), 2, "cartão que não se refaz sai do baralho")
+	_check(panel._challenge.visible, "o desafio vencido está na tela")
+	_check(panel._challenge._status.text.begins_with("Encontre o mate"), "e é o de mate (%s)" % panel._challenge._status.text)
+	_check(panel._context.text.begins_with("Da partida de"), "com a partida de onde saiu")
+	panel._challenge._on_tap(_square("h5"))
+	panel._challenge._on_tap(_square("f7"))
+	await _settle(panel._challenge, "_checker")
+	_check(panel._challenge._solved, "Dxf7# resolve (%s)" % panel._challenge._status.text)
+	_equals(panel._challenge._action.text, "Próximo", "e o botão leva ao próximo")
+	panel._challenge._action.pressed.emit()
+	var deck := Prefs.training()
+	_equals(deck[0]["box"], 1, "de primeira, o cartão sobe")
+	_check(int(deck[0]["due"]) > now, "e sai de hoje")
+	_check(panel._empty.visible and panel._empty.status.text == "Nada para hoje.", "acabou o de hoje: nada mais")
+	_equals(panel._empty.detail.text, "O próximo desafio volta amanhã.", "e diz quando volta")
+	settings.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(panel), "voltar fecha o treino")
+	_equals(button.text, "Treino", "e o botão é recontado")
+
+	mate["due"] = 0
+	Prefs.set_training([mate])
+	button.pressed.emit()
+	panel = settings._training
+	panel._challenge._action.pressed.emit()
+	_equals(Prefs.training()[0]["box"], 0, "desistir volta ao começo")
+	_check(int(Prefs.training()[0]["due"]) - now >= Training.DAY - 5, "e o desafio volta amanhã")
+	settings.go_back()
+	await get_tree().process_frame
+
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	var moves := []
+	for uci in ["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6", "d2d3"]:
+		var move := rules.move_from_uci(state, uci)
+		moves.append(move.to_dict())
+		rules.apply_move(state, move)
+	Prefs.forget_training()
+	Prefs.record_game({"at": now, "moves": moves, "against": "No mesmo aparelho", "side": Board.Side.WHITE, "hotseat": true})
+	button.pressed.emit()
+	panel = settings._training
+	_check(panel._analyse.visible, "partida nunca revisada oferece a análise")
+	_equals(panel._analyse.text, "Analisar 1 partida nova", "com a contagem")
+	panel._analyse.pressed.emit()
+	await _settle(panel, "_thread")
+	if Prefs.history()[0].get("analysed", false):
+		_check(Prefs.training().size() >= 2, "a análise enche o baralho (%d)" % Prefs.training().size())
+		_check(panel._challenge.visible, "e o primeiro desafio já entra")
+		_check(not panel._analyse.visible, "sem mais nada a analisar, o botão some")
+	else:
+		_check(panel._analyse.text.begins_with("Não foi possível"), "sem motor, o botão diz por quê")
+	settings.go_back()
+	await get_tree().process_frame
+
+	button.pressed.emit()
+	panel = settings._training
+	if not Prefs.history()[0].get("analysed", false):
+		panel._analyse.pressed.emit()
+		settings.go_back()
+		await get_tree().process_frame
+		_check(not is_instance_valid(panel), "fechar no meio da análise não trava")
+	else:
+		settings.go_back()
+		await get_tree().process_frame
+	settings.queue_free()
+	await get_tree().process_frame
+	Prefs.forget_training()
+	Prefs.forget_history()
+
+
+func _analysed_panel(game: Dictionary, entries: Array) -> ReviewPanel:
+	var panel := ReviewPanel.new()
+	add_child(panel)
+	# Sem registro até a thread terminar: com motor, a análise de verdade não
+	# toca no treino, e quem conta é só a de mentira.
+	panel.open(game.get("moves", []), Training.played(game))
+	await _settle(panel, "_thread")
+	panel._game = game
+	panel._analysed(entries)
+	return panel
+
+
 ## O nome que o relay conferiu na conta vale por cima do apelido que o aparelho
 ## do outro manda; quando o assento troca de dono, a confirmação vai embora.
 func _test_verified_names() -> void:
@@ -823,7 +1004,7 @@ func _test_verified_names() -> void:
 
 ## Espera a thread `field` do painel terminar, quadro a quadro — é o `_process`
 ## dele que recolhe o resultado.
-func _settle(panel: ReviewPanel, field: String) -> void:
+func _settle(panel: Object, field: String) -> void:
 	for _i in 400:
 		if panel.get(field) == null:
 			return
