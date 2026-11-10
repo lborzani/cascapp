@@ -39,8 +39,18 @@ Feito em **Godot 4.7 / GDScript**.
 
 **Xadrez** — regras completas: movimentação de todas as peças, roque dos dois
 lados (com verificação de casas atacadas), *en passant*, promoção com escolha de
-peça, xeque, xeque-mate, afogamento, regra dos 50 lances e os empates por
-material insuficiente mais comuns.
+peça, xeque, xeque-mate, afogamento, regra dos 50 lances, repetição tripla e as
+posições mortas por material insuficiente.
+
+**A repetição mora em `meta.seen`**, e não no histórico: `MatchState.clone` não
+copia o histórico, e o bot clona a cada nó da busca. A lista só guarda as posições
+desde o último lance irreversível, porque antes dele nenhuma pode voltar.
+
+**Desistir e propor empate não estão na posição.** São decisões de quem joga, e
+`_recompute` as aplica por cima do que as regras dizem. As opções ficam no diálogo
+do botão de sair e valem para xadrez e damas. Em rede, a proposta vale só para o
+lance em que foi feita (`n` na mensagem): assim os dois aparelhos empatam com a
+mesma lista de lances e o relay aceita o resultado para o Elo.
 
 Para rocar, toque no rei e depois na casa de destino **ou na própria torre** —
 tocar na torre é como a maioria das pessoas faz e como os sites grandes aceitam.
@@ -1583,10 +1593,10 @@ toque, não de xadrez.
 de Wi-Fi para 4G no meio da partida voltaria já derrotado no cronômetro — e o
 relay foi construído justamente para essa troca não custar a partida.
 
-Cair no tempo é derrota, **exceto** quando quem ganharia não tem com que dar
-mate — rei sozinho, ou rei com um bispo ou um cavalo. Aí é empate, pela norma
-(`ChessRules.has_mating_material`). Sem essa verificação um empate teórico
-viraria derrota inventada pelo cronômetro.
+Cair no tempo é derrota, **exceto** quando quem ganharia não consegue dar mate
+por sequência nenhuma. Aí é empate, pela norma (`ChessRules.can_mate`). A conta
+olha os dois lados, porque o mate de peça menor precisa de casa bloqueada: bispo
+contra peão ou torre ainda pode dar mate, e cavalo contra rei sozinho não.
 
 Em rede, os dois relógios viajam dentro de cada lance, e não só o de quem jogou.
 Isso é exatamente certo e não redundância: o lado que **não** está para jogar não

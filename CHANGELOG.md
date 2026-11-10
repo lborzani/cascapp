@@ -10,6 +10,10 @@ novidade.
 ## 1.40
 
 - Damas: capturar agora é obrigatório, como na regra oficial. Se houver mais de um jeito de capturar, vale o que come mais peças.
+- Xadrez e damas: dá para desistir e propor empate sem sair da mesa. As opções ficam no botão de sair, e a revanche continua valendo.
+- Xadrez: a mesma posição pela terceira vez agora é empate, e o painel diz o motivo de cada empate.
+- Xadrez: quem fica sem tempo só empata se o outro não tiver como dar mate de jeito nenhum. Bispo contra peão, por exemplo, ainda ganha.
+- Xadrez: quem fecha o app depois de uma revanche volta com a cor certa.
 
 ## 1.39
 
