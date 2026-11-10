@@ -2,8 +2,8 @@ class_name ChessRules
 extends Ruleset
 
 ## Standard chess: castling, en passant, promotion, check/checkmate/stalemate,
-## the 50 move rule and the common insufficient-material draws.
-## Threefold repetition is not tracked (see README).
+## the 50 move rule, threefold repetition and the dead positions of
+## insufficient material.
 
 const KNIGHT_DIRS := [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]]
 const KING_DIRS := [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]
@@ -53,6 +53,7 @@ func initial_state() -> MatchState:
 		state.set_piece(Board.square(file, 7), Board.piece(Board.Side.BLACK, BACK_RANK[file]))
 	state.side_to_move = Board.Side.WHITE
 	state.meta = {"castle": CASTLE_ALL, "ep": Board.NO_SQUARE, "halfmove": 0}
+	state.meta["seen"] = PackedInt64Array([position_key(state)])
 	return state
 
 
@@ -222,11 +223,38 @@ func outcome(state: MatchState) -> Outcome:
 		if is_in_check(state, state.side_to_move):
 			return Outcome.BLACK_WINS if state.side_to_move == Board.Side.WHITE else Outcome.WHITE_WINS
 		return Outcome.DRAW
+	return Outcome.DRAW if draw_reason(state) != "" else Outcome.ONGOING
+
+
+## Por que a partida está empatada, para o painel; vazio se não está. Não olha o
+## afogamento: ele depende da lista de lances, que `outcome` já gerou.
+func draw_reason(state: MatchState) -> String:
+	if repetitions(state) >= 3:
+		return "repetição"
 	if int(state.meta.get("halfmove", 0)) >= 100:
-		return Outcome.DRAW
-	if _is_insufficient_material(state):
-		return Outcome.DRAW
-	return Outcome.ONGOING
+		return "regra dos 50 lances"
+	if not can_mate(state, Board.Side.WHITE) and not can_mate(state, Board.Side.BLACK):
+		return "material insuficiente"
+	return ""
+
+
+## Quantas vezes a posição atual já apareceu, contando ela. Só desde o último
+## lance irreversível (captura ou peão), que é quando `meta.seen` recomeça: depois
+## dele nenhuma posição anterior pode voltar.
+func repetitions(state: MatchState) -> int:
+	var seen: PackedInt64Array = state.meta.get("seen", PackedInt64Array())
+	return seen.count(seen[-1]) if not seen.is_empty() else 0
+
+
+## A posição como a repetição a compara: casas, vez, roque e en passant.
+##
+## ponytail: a casa de en passant entra mesmo quando nenhum peão pode capturar
+## nela, e então a posição logo depois de um avanço duplo nunca bate com outra.
+## A regra só a conta quando a captura existe; isso perde uma repetição rara.
+static func position_key(state: MatchState) -> int:
+	var extra := state.side_to_move + int(state.meta.get("castle", 0)) * 2 \
+		+ (int(state.meta.get("ep", Board.NO_SQUARE)) + 1) * 32
+	return hash(state.squares) | (extra << 32)
 
 
 func status_hint(state: MatchState) -> String:
@@ -390,30 +418,56 @@ func is_in_check(state: MatchState, side: int) -> bool:
 	return king != Board.NO_SQUARE and _is_attacked(state, king, Board.opponent(side))
 
 
-## `side` ainda consegue dar mate por alguma sequência legal?
+## `side` ainda consegue dar mate por alguma sequência legal, mesmo que só com
+## a ajuda do outro?
 ##
-## Existe para o relógio: pela norma, quem fica sem tempo só perde se o
-## adversário tiver com que dar mate — rei sozinho, ou rei com um bispo ou um
-## cavalo, não têm. Sem esta verificação um empate teórico viraria derrota
-## inventada pelo cronômetro.
+## É a régua da norma (FIDE 6.9) para quem fica sem tempo: perde só se o
+## adversário puder dar mate. E é a da posição morta: quando nenhum dos dois pode,
+## a partida está empatada.
 ##
-## Rei com dois cavalos é a exceção conhecida: o mate existe mas não pode ser
-## forçado, e a norma o conta como material suficiente. Fica de fora daqui de
-## propósito.
-func has_mating_material(state: MatchState, side: int) -> bool:
-	var minors := 0
+## O mate de peça menor precisa de casa bloqueada, e quem bloqueia são as peças do
+## próprio rei que leva o mate. Por isso a conta olha o outro lado também:
+## - um cavalo dá mate se o outro tiver qualquer peça além do rei; dois, sempre;
+## - bispos de uma cor só dão mate se o outro tiver alguma peça que não seja bispo
+##   dessa mesma cor (os bispos só atacam uma cor, e o rei escapa pela outra);
+## - bispos das duas cores, bispo com cavalo, peão, torre ou dama: sempre.
+func can_mate(state: MatchState, side: int) -> bool:
+	var knights := 0
+	var bishop_colors := {}
+	var other_pieces := 0
+	var other_bishop_colors := {}
+	var other_only_bishops := true
 	for sq in Board.SQUARE_COUNT:
 		var piece := state.squares[sq]
-		if piece == 0 or Board.side_of(piece) != side:
+		if piece == 0 or Board.kind_of(piece) == Board.Kind.KING:
 			continue
-		match Board.kind_of(piece):
-			Board.Kind.KING:
-				continue
-			Board.Kind.BISHOP, Board.Kind.KNIGHT:
-				minors += 1
+		var kind := Board.kind_of(piece)
+		var color := (Board.file_of(sq) + Board.rank_of(sq)) % 2
+		if Board.side_of(piece) != side:
+			other_pieces += 1
+			if kind == Board.Kind.BISHOP:
+				other_bishop_colors[color] = true
+			else:
+				other_only_bishops = false
+			continue
+		match kind:
+			Board.Kind.KNIGHT:
+				knights += 1
+			Board.Kind.BISHOP:
+				bishop_colors[color] = true
 			_:
 				return true
-	return minors >= 2
+	if knights > 0 and not bishop_colors.is_empty():
+		return true
+	if knights > 0:
+		return knights >= 2 or other_pieces > 0
+	if bishop_colors.size() >= 2:
+		return true
+	if bishop_colors.is_empty():
+		return false
+	# Bispos de uma cor só: o outro precisa de uma peça que bloqueie na outra cor.
+	return not other_only_bishops or other_bishop_colors.size() > 1 \
+		or (other_bishop_colors.size() == 1 and not other_bishop_colors.has(bishop_colors.keys()[0]))
 
 
 # --- notação -----------------------------------------------------------------
@@ -838,6 +892,11 @@ func _apply(state: MatchState, move: Move) -> void:
 	state.meta["halfmove"] = halfmove
 	state.side_to_move = Board.opponent(side)
 	state.ply += 1
+	var seen: PackedInt64Array = state.meta.get("seen", PackedInt64Array())
+	if halfmove == 0:
+		seen = PackedInt64Array()
+	seen.append(position_key(state))
+	state.meta["seen"] = seen
 
 
 ## Any king or rook leaving its home square — or any rook home square being
@@ -858,19 +917,3 @@ func _rights_after(rights: int, from: int, to: int) -> int:
 			63:
 				rights &= ~CASTLE_BK
 	return rights
-
-
-func _is_insufficient_material(state: MatchState) -> bool:
-	var minors := 0
-	for sq in Board.SQUARE_COUNT:
-		var p := state.squares[sq]
-		if p == 0:
-			continue
-		match Board.kind_of(p):
-			Board.Kind.KING:
-				continue
-			Board.Kind.BISHOP, Board.Kind.KNIGHT:
-				minors += 1
-			_:
-				return false
-	return minors <= 1

@@ -71,8 +71,15 @@ func ready() -> bool:
 ##
 ## `mate` diferente de zero substitui `cp` (positivo: quem joga dá mate). `best`
 ## é "(none)" sem lance legal. Dicionário vazio quando o motor morreu.
-func search(fen: String, movetime_ms: int) -> Dictionary:
-	_send("position fen " + fen)
+##
+## `moves`, os lances da partida desde a posição inicial em UCI, substitui o FEN
+## quando vem: só com eles o motor enxerga a repetição, e o bot que está ganhando
+## não cai num empate por repetir a posição.
+func search(fen: String, movetime_ms: int, moves := PackedStringArray()) -> Dictionary:
+	if moves.is_empty():
+		_send("position fen " + fen)
+	else:
+		_send("position startpos moves " + " ".join(moves))
 	_send("go movetime %d" % movetime_ms)
 	var result := {"cp": 0, "mate": 0, "wdl": [0, 1000, 0]}
 	while running():

@@ -39,6 +39,15 @@ var _clock := {}
 ## Lado que perdeu no tempo, ou -1. Como o abandono, é um fim que as regras do
 ## tabuleiro não conhecem: `Ruleset.outcome` continua dizendo ONGOING.
 var _flagged := -1
+## Lado que desistiu, ou -1. A partida acaba, mas a mesa fica: quem desiste
+## continua na sala para a revanche.
+var _conceded := -1
+## Os dois combinaram o empate.
+var _agreed := false
+## O lance em que propusemos empate, esperando a resposta; -1 sem proposta.
+var _draw_offered := -1
+## O cartão com a proposta do oponente, enquanto ela está na tela.
+var _draw_card: InviteCard = null
 ## Último segundo desenhado, para o cartão não ser redesenhado 60 vezes por
 ## segundo mostrando o mesmo texto.
 var _clock_shown := -1
@@ -132,6 +141,8 @@ func _ready() -> void:
 		Net.rematch_requested.connect(_on_rematch_requested)
 		Net.rematch_accepted.connect(_on_rematch_accepted)
 		Net.rematch_declined.connect(_on_rematch_declined)
+		Net.resigned.connect(_on_resigned)
+		Net.draw_message.connect(_on_draw_message)
 		Net.link_lost.connect(_on_link_lost)
 		Net.link_restored.connect(_on_link_restored)
 		Net.sync_received.connect(_apply_sync)
@@ -165,6 +176,7 @@ func _ready() -> void:
 	_board.square_tapped.connect(_on_square_tapped)
 	_board.outside_tapped.connect(_on_outside_tapped)
 	%Bar.leave_confirmed.connect(_exit)
+	%Bar.leave.extras = _end_options
 	%RematchButton.pressed.connect(_request_rematch)
 	%RematchDeclineButton.pressed.connect(_decline_rematch)
 	%ResultExitButton.pressed.connect(_exit)
@@ -209,6 +221,9 @@ func _new_game() -> void:
 	_captured = _empty_captured()
 	_clock = _fresh_clock()
 	_flagged = -1
+	_conceded = -1
+	_agreed = false
+	_clear_draw_offer()
 	_clock_shown = -1
 	_clear_premove()
 	_rematch = Rematch.IDLE
@@ -293,7 +308,7 @@ func _flag(side: int) -> void:
 	var detail := "%s ficaram sem tempo." % ("Brancas" if side == Board.Side.WHITE else "Pretas")
 	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		detail = "Você perdeu no tempo." if side == Game.local_side else "O oponente perdeu no tempo."
-	if _ruleset is ChessRules and not (_ruleset as ChessRules).has_mating_material(_state, winner):
+	if _ruleset is ChessRules and not (_ruleset as ChessRules).can_mate(_state, winner):
 		title = "Empate"
 		detail = "Tempo esgotado, mas o outro lado não tem material para dar mate."
 		winner = -1
@@ -434,7 +449,9 @@ func _try_select(square: int) -> void:
 		_hint = ""
 		return
 	_hint = "Essa peça não tem lance legal agora."
-	if _check_square() != Board.NO_SQUARE:
+	if _ruleset is CheckersRules and not _legal.is_empty() and _legal[0].is_capture():
+		_hint = "Captura obrigatória: jogue a peça que come mais peças."
+	elif _check_square() != Board.NO_SQUARE:
 		_hint = "Você está em xeque: só valem lances que respondam ao xeque."
 	Sound.play(Sound.Cue.ALERT)
 	_banner.show_message(_hint, Banner.Kind.ALERT)
@@ -785,6 +802,8 @@ func _play(move: Move, broadcast: bool) -> void:
 	# de sair junto com a animação, e ela começa duas linhas abaixo.
 	Sound.play(Sound.Cue.CAPTURE if move.is_capture() else Sound.Cue.MOVE)
 	_ruleset.apply_move(_state, move)
+	# A proposta de empate valia para a posição de antes.
+	_clear_draw_offer()
 	_board.last_move = move.path.duplicate()
 	_board.play_move(move.path, taken)
 	_selection.clear()
@@ -825,6 +844,12 @@ func _adopt_clocks(clocks: Array) -> void:
 func _recompute() -> void:
 	_legal = _ruleset.generate_moves(_state)
 	_outcome = _ruleset.outcome(_state)
+	# Desistência e empate combinado não estão na posição: são decisões de quem
+	# joga, e valem por cima dela.
+	if _outcome == Ruleset.Outcome.ONGOING and _conceded >= 0:
+		_outcome = Ruleset.Outcome.BLACK_WINS if _conceded == Board.Side.WHITE else Ruleset.Outcome.WHITE_WINS
+	elif _outcome == Ruleset.Outcome.ONGOING and _agreed:
+		_outcome = Ruleset.Outcome.DRAW
 	if _live != null:
 		_live.follow(_state.history)
 	if _outcome != Ruleset.Outcome.ONGOING:
@@ -859,6 +884,9 @@ func _show_result() -> void:
 ## no meio é um desfecho como qualquer outro, e merece o mesmo tratamento: quem
 ## ficou precisa saber por que o tabuleiro parou de responder.
 func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
+	# Todo fim de partida passa aqui. Sem isto, aceitar um cartão que sobrou na tela
+	# trocaria por empate uma partida já decidida no tempo ou por abandono.
+	_clear_draw_offer()
 	%ResultTitle.text = title
 	# O painel reabre (convite de revanche, oponente que sai); o Elo que já
 	# chegou não pode sumir dele.
@@ -903,6 +931,112 @@ func _open_review() -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
 	_review.open(_state.history, Game.local_side if Game.mode != Game.Mode.HOTSEAT else -1, _recorded_game)
+
+
+# --- desistir e propor empate --------------------------------------------------
+
+
+## O que o diálogo do botão de sair oferece além de sair. Só com a partida em
+## curso, e só para quem joga: quem assiste não tem o que encerrar.
+func _end_options() -> Array:
+	if Net.is_spectator or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
+		return []
+	if Game.mode == Game.Mode.ONLINE and not Net.connected:
+		return []
+	var options := []
+	if _draw_offered < 0:
+		options.append(["Empatar" if Game.mode == Game.Mode.HOTSEAT else "Propor empate", _offer_draw])
+	var resign_label := "Desistir"
+	if Game.mode == Game.Mode.HOTSEAT:
+		resign_label = "As %s desistem" % ("brancas" if _state.side_to_move == Board.Side.WHITE else "pretas")
+	options.append([resign_label, _resign])
+	return options
+
+
+## No mesmo aparelho desiste quem tem a vez; nos outros modos, sempre quem segura
+## o aparelho.
+func _resign() -> void:
+	var side := _state.side_to_move if Game.mode == Game.Mode.HOTSEAT else Game.local_side
+	if Game.mode == Game.Mode.ONLINE:
+		Net.send_resign(_state.ply)
+	_conceded = side
+	_recompute()
+
+
+## No mesmo aparelho os dois estão ali, e o diálogo já foi a confirmação. Contra o
+## bot, ele aceita quando a avaliação não está a favor dele. Em rede, a proposta
+## vai para o outro e espera a resposta.
+func _offer_draw() -> void:
+	match Game.mode:
+		Game.Mode.HOTSEAT:
+			_agree_draw()
+		Game.Mode.SOLO:
+			var for_bot := _ruleset.evaluate(_state) * (1.0 if Game.bot_side == Board.Side.WHITE else -1.0)
+			if for_bot <= 0.0:
+				_banner.show_message("O bot aceitou o empate.", Banner.Kind.INFO)
+				_agree_draw()
+			else:
+				_banner.show_message("O bot recusou o empate.", Banner.Kind.ALERT)
+		Game.Mode.ONLINE:
+			_draw_offered = _state.ply
+			Net.send_draw("draw", _state.ply)
+			_banner.show_message("Empate proposto. Esperando a resposta.", Banner.Kind.INFO)
+
+
+func _agree_draw() -> void:
+	_clear_draw_offer()
+	_agreed = true
+	_recompute()
+
+
+## A proposta da vez sai de cena: um lance foi jogado, a partida acabou ou outra
+## começou.
+func _clear_draw_offer() -> void:
+	_draw_offered = -1
+	if is_instance_valid(_draw_card):
+		_draw_card.queue_free()
+	_draw_card = null
+
+
+func _on_resigned(seat: int, _ply: int) -> void:
+	if _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
+		return
+	_conceded = Board.Side.WHITE if seat == _seat_of(Board.Side.WHITE) else Board.Side.BLACK
+	_recompute()
+
+
+## A proposta e a resposta valem para o lance `ply`: se um lance cruzou com
+## elas, a posição já é outra e a mensagem é ignorada.
+func _on_draw_message(kind: String, ply: int, _seat: int) -> void:
+	if _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0 or ply != _state.ply:
+		return
+	match kind:
+		"draw":
+			# Quem assiste só vê o resultado, se ele vier.
+			if Net.is_spectator or is_instance_valid(_draw_card):
+				return
+			_draw_card = InviteCard.new()
+			_draw_card.friend_name = _opponent_name()
+			_draw_card.text = "%s propõe empate" % _opponent_name()
+			_draw_card.accept_text = "Aceitar"
+			_draw_card.decline_text = "Recusar"
+			_draw_card.accepted.connect(func() -> void:
+				Net.send_draw("draw_ok", ply)
+				_agree_draw()
+			)
+			_draw_card.declined.connect(func() -> void:
+				Net.send_draw("draw_no", ply)
+				_clear_draw_offer()
+			)
+			add_child(_draw_card)
+		"draw_ok":
+			# Quem assiste também recebe o aceite, e é assim que o empate chega a ele.
+			if Net.is_spectator or _draw_offered == ply:
+				_agree_draw()
+		"draw_no":
+			if _draw_offered == ply:
+				_draw_offered = -1
+				_banner.show_message("O oponente recusou o empate.", Banner.Kind.ALERT)
 
 
 ## Conta ao relay como a partida acabou, para o Elo (`relay/src/ratings.ts`).
@@ -967,8 +1101,18 @@ func _record_game(title: String, detail: String) -> void:
 
 
 func _result_detail() -> String:
+	if _conceded >= 0:
+		if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
+			return "Você desistiu." if _conceded == Game.local_side else "O oponente desistiu."
+		return "%s desistiram." % ("As brancas" if _conceded == Board.Side.WHITE else "As pretas")
+	if _agreed:
+		return "Empate combinado em %d lances." % _state.ply
 	if _outcome == Ruleset.Outcome.DRAW:
-		return "Empate em %d lances." % _state.ply
+		var reason := (_ruleset as ChessRules).draw_reason(_state) if _ruleset is ChessRules else ""
+		if reason.is_empty() and _ruleset is ChessRules:
+			reason = "afogamento"
+		return "Empate por %s em %d lances." % [reason, _state.ply] if not reason.is_empty() \
+			else "Empate em %d lances." % _state.ply
 	if Game.mode != Game.Mode.HOTSEAT and not Net.is_spectator:
 		var won := (_outcome == Ruleset.Outcome.WHITE_WINS) == (Game.local_side == Board.Side.WHITE)
 		return "Você venceu em %d lances." % _state.ply if won else "Você perdeu em %d lances." % _state.ply

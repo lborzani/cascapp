@@ -19,7 +19,9 @@ extends SceneTree
 ## - **o anfitrião também volta.** Ele era o único que sabia receber quem volta, e
 ##   quando o ausente era ele mesmo, voltava sentando no assento 0 e abrindo uma
 ##   partida nova com outra semente enquanto os outros seguiam na antiga;
-## - **numa mesa de dois o anfitrião volta pelo outro**, que é o único que ficou.
+## - **numa mesa de dois o anfitrião volta pelo outro**, que é o único que ficou;
+## - **depois de uma revanche, quem volta joga com a cor da revanche**, e não com a
+##   que o assento tinha na primeira partida.
 
 const NetLink := preload("res://autoload/net_link.gd")
 const CODE := "VOLTA4"
@@ -230,6 +232,25 @@ func _process(delta: float) -> bool:
 				_equals(pair_back.time_control, 3, "e o mesmo ritmo, que só quem ficou sabia")
 				_equals(_ready_count[_links[1]], 1, "sem o outro receber uma partida nova")
 				_check(_links[1].connected, "e o outro sai do 'reconectando'")
+				print("revanche, cai e volta")
+				# A revanche troca as cores como `match.gd` faz: o lado de cada um.
+				for seat in _links:
+					_links[seat].local_side = Board.opponent(_links[seat].local_side)
+				_kill(1)
+				_next(16)
+		16:
+			if _waited() > 0.5:
+				var rematch_back := _spawn("Fabi")
+				rematch_back.join_relay(PAIR_CODE, &"chess", _keys[1])
+				_links[1] = rematch_back
+				_next(17)
+		17:
+			var rematch_back: Node = _links[1]
+			if _ready_count[rematch_back] > 0 or _waited() > DROP_NOTICE:
+				_equals(_ready_count[rematch_back], 1, "quem caiu depois da revanche é recebido")
+				_equals(rematch_back.local_side, Board.Side.WHITE, "e volta de brancas, a cor da revanche")
+				_equals(rematch_back.white_seat, 1, "sabendo que o assento dele é o das brancas")
+				_equals(_links[0].local_side, Board.Side.BLACK, "e quem ficou continua de pretas")
 				_finish()
 				return true
 	return false

@@ -15,6 +15,11 @@ const PHOTO := 44.0
 var friend_name := ""
 var game_title := ""
 var photo: Texture2D = null
+## Outra pergunta no mesmo cartão (a proposta de empate na partida). Vazios, é o
+## convite de sempre.
+var text := ""
+var accept_text := "Entrar"
+var decline_text := "Agora não"
 
 
 func _ready() -> void:
@@ -52,7 +57,8 @@ func _ready() -> void:
 	line.add_child(coaster)
 	var message := Label.new()
 	message.name = "Message"
-	message.text = "%s te chamou para %s" % [friend_name, game_title if not game_title.is_empty() else "jogar"]
+	message.text = text if not text.is_empty() \
+		else "%s te chamou para %s" % [friend_name, game_title if not game_title.is_empty() else "jogar"]
 	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	message.size_flags_horizontal = SIZE_EXPAND_FILL
 	message.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -63,10 +69,10 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	column.add_child(buttons)
-	var later := _button("Agora não", &"GhostButton")
+	var later := _button(decline_text, &"GhostButton")
 	later.pressed.connect(func() -> void: declined.emit())
 	buttons.add_child(later)
-	var enter := _button("Entrar", &"PrimaryButton")
+	var enter := _button(accept_text, &"PrimaryButton")
 	enter.pressed.connect(func() -> void: accepted.emit())
 	buttons.add_child(enter)
 

@@ -43,6 +43,7 @@ static func _chess(options: Dictionary) -> Array[Dictionary]:
 		_row("Ritmo", str(options.get("clock", "Sem relógio"))),
 		_row("Roque, en passant e promoção", "sempre"),
 		_row("Empate sem captura nem peão", "50 lances"),
+		_row("Mesma posição três vezes", "empate"),
 		_row("Planejar lances na vez do outro", "em rede"),
 	]
 
@@ -50,7 +51,7 @@ static func _chess(options: Dictionary) -> Array[Dictionary]:
 static func _checkers(options: Dictionary) -> Array[Dictionary]:
 	return [
 		_row("Ritmo", str(options.get("clock", "Sem relógio"))),
-		_row("Capturar", "opcional"),
+		_row("Capturar", "obrigatório, a que come mais"),
 		_row("Dama", "voa"),
 		_row("Empate só com damas", "%d lances" % CheckersRules.IDLE_DRAW_LIMIT),
 	]

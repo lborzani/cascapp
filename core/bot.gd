@@ -138,6 +138,14 @@ func think(game_id: StringName, state: MatchState, level: int, budget_ms := 0) -
 		settings = (LEVELS[clampi(level, 0, LEVELS.size() - 1)] as Dictionary).duplicate()
 	if budget_ms > 0 and budget_ms < int(settings["ms"]):
 		settings["ms"] = budget_ms
+	# O clone não leva o histórico, e o Stockfish precisa dele para ver repetição.
+	# Só quando ele vem desde a posição inicial; posição armada à mão vai por FEN.
+	if game_id == &"chess" and not state.history.is_empty() and state.history.size() == state.ply:
+		var moves := PackedStringArray()
+		var rules := ChessRules.new()
+		for data in state.history:
+			moves.append(rules.uci(Move.from_dict(data)))
+		settings["moves"] = moves
 	var position := state.clone()
 	_found = null
 	_abandoned = false
@@ -223,7 +231,7 @@ func _ask_engine(state: MatchState, settings: Dictionary) -> Move:
 		_engine.set_strength(elo)
 		_engine_elo = elo
 	var rules := ChessRules.new()
-	var seen := _engine.search(rules.fen(state), int(settings["ms"]))
+	var seen := _engine.search(rules.fen(state), int(settings["ms"]), settings.get("moves", PackedStringArray()))
 	if seen.is_empty():
 		_engine = null
 		_engine_failed = true

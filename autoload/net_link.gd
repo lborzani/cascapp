@@ -95,6 +95,11 @@ signal join_failed(reason: String)
 signal rematch_requested
 signal rematch_accepted
 signal rematch_declined
+## Um jogador desistiu da partida em `ply`, sem sair da sala.
+signal resigned(seat: int, ply: int)
+## Proposta de empate e a resposta: `kind` é `draw` (proposta), `draw_ok` ou
+## `draw_no`. `ply` é o lance em que ela vale: um lance jogado no meio a anula.
+signal draw_message(kind: String, ply: int, seat: int)
 ## O transporte caiu mas a sessão ainda pode voltar. O tabuleiro deve congelar e
 ## dizer isso, não declarar a partida encerrada.
 signal link_lost
@@ -316,6 +321,15 @@ func send_rematch_decline() -> void:
 	_send({"t": "rematch_no"})
 
 
+func send_resign(ply: int) -> void:
+	_send({"t": "resign", "n": ply})
+
+
+## `kind`: `draw`, `draw_ok` ou `draw_no`.
+func send_draw(kind: String, ply: int) -> void:
+	_send({"t": kind, "n": ply})
+
+
 ## Como a partida de xadrez acabou, para o relay arbitrar o Elo. `winner_seat`
 ## -1 é empate. Fora do relay (rede local, NFC) não há árbitro, e nada sai.
 func send_result(winner_seat: int, white_seat: int, plies: int, moves_hash: String) -> void:
@@ -454,6 +468,10 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			rematch_accepted.emit()
 		"rematch_no":
 			rematch_declined.emit()
+		"resign":
+			resigned.emit(from_seat, int(message.get("n", -1)))
+		"draw", "draw_ok", "draw_no":
+			draw_message.emit(str(message.get("t")), int(message.get("n", -1)), from_seat)
 		"bye":
 			_drop_seat(from_seat)
 
@@ -627,7 +645,19 @@ func _welcome() -> Dictionary:
 		"tc": time_control,
 		"opt": option,
 		"names": _name_list(),
+		# O assento das brancas. A revanche troca as cores, e quem volta com o
+		# processo morto não tem como saber disso: sem este campo ele tirava a cor
+		# do assento e voltava com as peças da primeira partida.
+		"w": _white_seat_now(),
 	}
+
+
+## Quem joga de brancas agora. Quem joga lê do próprio lado, que a revanche
+## troca; quem assiste já guarda em `white_seat`.
+func _white_seat_now() -> int:
+	if seats != 2 or is_spectator:
+		return white_seat
+	return local_seat if local_side == Board.Side.WHITE else 1 - local_seat
 
 
 # --- nomes --------------------------------------------------------------------
@@ -778,6 +808,11 @@ func _adopt_table(message: Dictionary) -> void:
 	# qualquer mensagem, e para um convidado as duas respostas são a mesma.
 	if seats == 2:
 		local_side = HOST_SIDE if local_seat == 0 else Board.opponent(HOST_SIDE)
+		# Quem mandou sabe quem está de brancas depois de uma revanche. Versão sem
+		# o campo fica com a conta do assento, como antes.
+		if message.has("w"):
+			white_seat = int(message["w"])
+			local_side = Board.Side.WHITE if local_seat == white_seat else Board.Side.BLACK
 
 
 ## O aperto de mão, do lado de quem chegou. O código prova que se entrou *nesta*

@@ -18,13 +18,14 @@ func _initialize() -> void:
 	_test_chess_special_moves()
 	_test_chess_notation()
 	_test_chess_uci()
+	_test_chess_draws()
 	_test_review_rules()
 	_test_review_curve()
 	_test_review_accuracy()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
-	_test_checkers_optional_capture()
+	_test_checkers_mandatory_capture()
 	_test_checkers_promotion()
 	_test_battleship_placement()
 	_test_battleship_shots()
@@ -561,6 +562,63 @@ static func _sq(name: String) -> int:
 	return Board.square(name.unicode_at(0) - "a".unicode_at(0), int(name.substr(1)) - 1)
 
 
+## Empates que dependem da partida e não só da posição: repetição, posição morta
+## e o tempo pela norma (perde no tempo só quem o outro ainda pode dar mate).
+func _test_chess_draws() -> void:
+	print("xadrez empates")
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	# O estado vai como argumento: o lambda captura o valor da variável quando
+	# nasce, e trocar `state` depois deixaria ele jogando no tabuleiro antigo.
+	var play := func(board: MatchState, texts: Array) -> void:
+		for text in texts:
+			rules.apply_move(board, rules.move_from_uci(board, text))
+	var shuffle := ["g1f3", "g8f6", "f3g1", "f6g8"]
+	play.call(state, shuffle)
+	_equals(rules.repetitions(state), 2, "a posição inicial voltou uma vez")
+	_equals(rules.outcome(state), Ruleset.Outcome.ONGOING, "duas vezes ainda não é empate")
+	play.call(state, shuffle)
+	_equals(rules.repetitions(state), 3, "e voltou de novo")
+	_equals(rules.outcome(state), Ruleset.Outcome.DRAW, "três vezes é empate")
+	_equals(rules.draw_reason(state), "repetição", "pelo motivo certo")
+
+	state = rules.initial_state()
+	play.call(state, shuffle)
+	play.call(state, ["e2e4"])
+	_equals(state.ply, 5, "o lance de peão foi jogado")
+	_equals(rules.repetitions(state), 1, "lance de peão recomeça a contagem")
+	_equals((state.meta["seen"] as PackedInt64Array).size(), 1, "e esquece as posições de antes")
+	var copy := state.clone()
+	rules.apply_move(copy, rules.move_from_uci(copy, "g8f6"))
+	_equals((state.meta["seen"] as PackedInt64Array).size(), 1, "o clone não mexe nas posições do original")
+
+	var lay := func(pieces: Dictionary) -> MatchState:
+		var board := MatchState.new()
+		board.meta = {"castle": 0, "ep": Board.NO_SQUARE, "halfmove": 0}
+		for square: String in pieces:
+			var spec: Array = pieces[square]
+			board.set_piece(_sq(square), Board.piece(spec[0], spec[1]))
+		return board
+	var W := Board.Side.WHITE
+	var B := Board.Side.BLACK
+	var K := Board.Kind.KING
+	var same: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "f8": [B, Board.Kind.BISHOP]})
+	_equals(rules.draw_reason(same), "material insuficiente", "bispos da mesma cor não dão mate")
+	var other: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "c8": [B, Board.Kind.BISHOP]})
+	_equals(rules.draw_reason(other), "", "bispos de cores diferentes ainda dão")
+	var lone: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "b1": [W, Board.Kind.KNIGHT]})
+	_equals(rules.draw_reason(lone), "material insuficiente", "cavalo sozinho não dá mate")
+
+	var bishop_pawn: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "a7": [B, Board.Kind.PAWN]})
+	_check(rules.can_mate(bishop_pawn, W), "no tempo, bispo contra peão ainda pode dar mate")
+	_check(not rules.can_mate(lone, W), "cavalo contra rei sozinho não pode")
+	var two_knights: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "b1": [W, Board.Kind.KNIGHT], "g1": [W, Board.Kind.KNIGHT]})
+	_check(rules.can_mate(two_knights, W), "dois cavalos podem")
+	var bishop_rook: MatchState = lay.call({"e1": [W, K], "e8": [B, K], "c1": [W, Board.Kind.BISHOP], "h8": [B, Board.Kind.ROOK]})
+	_check(rules.can_mate(bishop_rook, W), "bispo contra torre pode, a torre bloqueia")
+	_check(not rules.can_mate(same, W), "bispo contra bispo da mesma cor não pode")
+
+
 # --- checkers ----------------------------------------------------------------
 
 
@@ -579,49 +637,39 @@ func _test_checkers_capture_routes() -> void:
 	var state := MatchState.new()
 	state.meta = {"idle": 0}
 	state.set_piece(Board.square(2, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
-	# One route captures two pieces, the other only one. Capturing is optional,
-	# so both are offered — but each route must be played to its end.
+	# Uma rota come duas peças, a outra uma.
 	state.set_piece(Board.square(3, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 	state.set_piece(Board.square(5, 5), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 	state.set_piece(Board.square(1, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 
 	var moves := rules.generate_moves(state)
-	var counts := PackedInt32Array()
-	for move in moves:
-		counts.append(move.captured.size())
-	counts.sort()
-	_equals(counts, PackedInt32Array([1, 2]), "as duas rotas de captura são legais")
-
-	var longest: Move = null
-	for move in moves:
-		if move.captured.size() == 2:
-			longest = move
-	if longest == null:
-		_check(false, "sequência de duas capturas existe")
+	_equals(moves.size(), 1, "lei da maioria: só a rota que come mais é legal")
+	if moves.is_empty():
 		return
-	_equals(longest.to_square(), Board.square(6, 6), "sequência de duas capturas termina em g7")
+	_equals(moves[0].captured.size(), 2, "e ela come duas")
+	_equals(moves[0].to_square(), Board.square(6, 6), "sequência de duas capturas termina em g7")
 
 
-func _test_checkers_optional_capture() -> void:
-	print("damas captura opcional")
+func _test_checkers_mandatory_capture() -> void:
+	print("damas captura obrigatória")
 	var rules := CheckersRules.new()
 	var state := MatchState.new()
 	state.meta = {"idle": 0}
-	# The man on c3 can capture on d4; the one on g3 has nothing to do with it
-	# and must still be free to move.
+	# A pedra de c3 captura em d4; a de g3 não tem nada a ver com isso e, com
+	# captura na mesa, não pode andar.
 	state.set_piece(Board.square(2, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
 	state.set_piece(Board.square(6, 2), Board.piece(Board.Side.WHITE, Board.Kind.MAN))
 	state.set_piece(Board.square(3, 3), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
 
-	var quiet_from_idle_piece := 0
-	var captures := 0
-	for move in rules.generate_moves(state):
-		if move.is_capture():
-			captures += 1
-		elif move.from_square() == Board.square(6, 2):
-			quiet_from_idle_piece += 1
-	_equals(captures, 1, "a captura continua disponível")
-	_equals(quiet_from_idle_piece, 2, "a outra pedra pode mover mesmo havendo captura")
+	var moves := rules.generate_moves(state)
+	_equals(moves.size(), 1, "com captura na mesa, só ela é lance")
+	if not moves.is_empty():
+		_check(moves[0].is_capture(), "e o lance é a captura")
+
+	# Sem captura, as duas pedras andam.
+	state.set_piece(Board.square(3, 3), 0)
+	state.set_piece(Board.square(3, 6), Board.piece(Board.Side.BLACK, Board.Kind.MAN))
+	_equals(rules.generate_moves(state).size(), 4, "sem captura, os lances simples voltam")
 
 
 func _test_checkers_promotion() -> void:

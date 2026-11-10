@@ -111,17 +111,19 @@ func ask() -> void:
 	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	panel.add_child(column)
 
+	var more: Array = extras.call() if extras.is_valid() else []
 	var title := Label.new()
 	title.theme_type_variation = &"Title"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.text = "Sair da partida?"
+	title.text = "Encerrar a partida?" if not more.is_empty() else "Sair da partida?"
 	column.add_child(title)
 
 	var note := Label.new()
 	note.theme_type_variation = &"Subtitle"
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.text = "Você volta ao menu e deixa esta partida."
+	note.text = "Empatando ou desistindo, você continua na mesa para a revanche. Sair volta ao menu." \
+		if not more.is_empty() else "Você volta ao menu e deixa esta partida."
 	column.add_child(note)
 
 	# **Ficar** é a ação preenchida, e sair é a discreta.
@@ -135,6 +137,18 @@ func ask() -> void:
 	stay.text = "Continuar jogando"
 	stay.pressed.connect(_dismiss)
 	column.add_child(stay)
+
+	for option: Array in more:
+		var button := Button.new()
+		button.theme_type_variation = &"GhostButton"
+		button.custom_minimum_size = Vector2(0, 44)
+		button.text = option[0]
+		var action: Callable = option[1]
+		button.pressed.connect(func() -> void:
+			_dismiss()
+			action.call()
+		)
+		column.add_child(button)
 
 	var leave := Button.new()
 	leave.theme_type_variation = &"DangerButton"
@@ -180,6 +194,9 @@ func _accept() -> void:
 
 
 var _layer: Control = null
+## O que mais dá para fazer além de sair, perguntado na hora em que o diálogo
+## abre: `[[rótulo, Callable], …]`. A partida usa para desistir e propor empate.
+var extras := Callable()
 
 
 ## Porta com seta saindo, desenhada por código como o resto do app.
