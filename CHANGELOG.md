@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.39
+
+- Xadrez: Treino novo, na aba Você. Os erros das partidas que você revisa voltam como desafio. Acertou de primeira, o desafio volta daqui a alguns dias; errou, volta amanhã.
+- Treino: "Analisar partidas novas" revisa as partidas do histórico que você ainda não abriu e manda os erros delas para o treino.
+
 ## 1.38
 
 - O Bomberman saiu do app. A lista de jogos ficou com sete jogos, e a categoria "Ação" saiu junto com ele.
