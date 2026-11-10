@@ -105,17 +105,15 @@ func _row(game: Dictionary) -> Control:
 	open.theme_type_variation = &"PrimaryButton"
 	open.custom_minimum_size = Vector2(110, 44)
 	open.size_flags_vertical = SIZE_SHRINK_CENTER
-	# Partida gravada antes do campo `hotseat` abre com a cor gravada: brancas.
-	var played := -1 if game.get("hotseat", false) else int(game.get("side", Board.Side.WHITE))
-	open.pressed.connect(_open.bind(moves, played))
+	open.pressed.connect(_open.bind(game))
 	line.add_child(open)
 	return card
 
 
-func _open(moves: Array, side: int) -> void:
+func _open(game: Dictionary) -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
-	_review.open(moves, side)
+	_review.open(game.get("moves", []), Training.played(game), game)
 
 
 ## "14/10 às 17:32", na hora local do aparelho.

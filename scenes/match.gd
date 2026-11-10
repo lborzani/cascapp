@@ -68,9 +68,11 @@ const PREMOVE_MAX_LINKS := 4
 
 ## O adversário local. Existe sempre; só é acionado no modo solo.
 var _bot := Bot.new()
-## A partida que acabou já foi para o histórico. O painel de resultado reabre
-## por convite de revanche e por oponente que sai, e cada abertura gravaria de novo.
-var _recorded := false
+## A partida como foi para o histórico; vazio até ela acabar. Cheio, ela não é
+## gravada de novo — o painel de resultado reabre por convite de revanche e por
+## oponente que sai. A revisão leva junto para saber de quem são os erros que
+## vão para o treino.
+var _recorded_game := {}
 ## O desfecho desta partida já foi contado ao relay, para o Elo.
 var _reported := false
 ## O que o relay disse do Elo desta partida, para o painel; vazio até lá.
@@ -191,7 +193,7 @@ func _new_game() -> void:
 	# trocar o estado é o que impede o lance dela de cair no tabuleiro novo.
 	_bot.abandon()
 	_bot_pending = false
-	_recorded = false
+	_recorded_game = {}
 	_reported = false
 	_rating_text = ""
 	_state = _ruleset.initial_state()
@@ -900,7 +902,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 func _open_review() -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
-	_review.open(_state.history, Game.local_side if Game.mode != Game.Mode.HOTSEAT else -1)
+	_review.open(_state.history, Game.local_side if Game.mode != Game.Mode.HOTSEAT else -1, _recorded_game)
 
 
 ## Conta ao relay como a partida acabou, para o Elo (`relay/src/ratings.ts`).
@@ -944,15 +946,14 @@ func _on_rated(ratings: Array) -> void:
 
 ## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
 func _record_game(title: String, detail: String) -> void:
-	if _recorded or not _ruleset is ChessRules or _state.history.is_empty() or Net.is_spectator:
+	if not _recorded_game.is_empty() or not _ruleset is ChessRules or _state.history.is_empty() or Net.is_spectator:
 		return
-	_recorded = true
 	var against := "No mesmo aparelho"
 	if Game.mode == Game.Mode.SOLO:
 		against = "Contra o bot (%s)" % Bot.level_label(Game.game_id, Game.current_bot_level())
 	elif Game.mode == Game.Mode.ONLINE:
 		against = "Online contra %s" % _opponent_name()
-	Prefs.record_game({
+	_recorded_game = {
 		"at": int(Time.get_unix_time_from_system()),
 		"moves": _state.history.duplicate(),
 		"against": against,
@@ -961,7 +962,8 @@ func _record_game(title: String, detail: String) -> void:
 		"hotseat": Game.mode == Game.Mode.HOTSEAT,
 		"title": title,
 		"detail": detail,
-	})
+	}
+	Prefs.record_game(_recorded_game)
 
 
 func _result_detail() -> String:

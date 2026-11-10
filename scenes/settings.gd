@@ -21,6 +21,7 @@ var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _friends: FriendsPanel = null
 var _news: ChangelogPanel = null
+var _training: TrainingPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
@@ -60,10 +61,10 @@ func _ready() -> void:
 	%Switches.add_child(_haptics_switch)
 
 	%StatusLabel.text = _status_text()
-	var games := Prefs.history().size()
-	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
+	_refresh_games()
 	%HistoryButton.pressed.connect(_open_history)
 	%FriendsButton.pressed.connect(_open_friends)
+	%TrainingButton.pressed.connect(_open_training)
 	%UpdateButton.pressed.connect(_check_updates)
 	%NewsButton.pressed.connect(_open_news)
 	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
@@ -181,6 +182,9 @@ func go_back() -> void:
 	if is_instance_valid(_news) and not _news.is_queued_for_deletion():
 		_news.close()
 		return
+	if is_instance_valid(_training):
+		_training.close()
+		return
 	_leave()
 
 
@@ -226,6 +230,8 @@ func _open_news() -> void:
 ## Por cima desta tela, e não uma cena: fechar volta para cá como estava.
 func _open_history() -> void:
 	_history = HistoryPanel.new()
+	# Uma revisão aberta lá dentro pode ter mandado erros para o treino.
+	_history.closed.connect(_refresh_games)
 	add_child(_history)
 
 
@@ -233,6 +239,23 @@ func _open_friends() -> void:
 	Sound.play(Sound.Cue.TAP)
 	_friends = FriendsPanel.new()
 	add_child(_friends)
+
+
+func _open_training() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_training = TrainingPanel.new()
+	_training.closed.connect(_refresh_games)
+	add_child(_training)
+
+
+## Os contadores dos dois botões de partidas. "Treino" conta o que vence hoje,
+## e não o baralho inteiro: o número é o convite, e um convite para 40 desafios
+## que só voltam no mês que vem é mentira.
+func _refresh_games() -> void:
+	var games := Prefs.history().size()
+	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
+	var due := Training.due(Prefs.training(), int(Time.get_unix_time_from_system())).size()
+	%TrainingButton.text = "Treino (%d para hoje)" % due if due > 0 else "Treino"
 
 
 func _leave() -> void:

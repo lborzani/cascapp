@@ -23,20 +23,21 @@ const VERDICT_COLOR := {
 var _review := GameReview.new()
 var _thread: Thread = null
 var _history: Array = []
+## O registro do histórico (`Prefs.record_game`) de onde a partida veio; vazio
+## quando ela não foi para o histórico, e aí nada vai para o treino.
+var _game: Dictionary = {}
 ## Posição depois de cada meio-lance; `[0]` é a inicial.
 var _states: Array[MatchState] = []
 var _entries: Array = []
 var _ply := 0
 
 var _board := BoardView.new()
-var _status := Label.new()
-var _detail := Label.new()
-## O par de rótulos vai num cartão tingido pela nota do lance: a mensagem é o
-## que a revisão tem a dizer, e em cinza pequeno ela sumia embaixo do tabuleiro.
-var _message := PanelContainer.new()
+var _message := MessageCard.new()
+var _status: Label = _message.status
+var _detail: Label = _message.detail
 var _moves := HFlowContainer.new()
-var _next_mistake := Button.new()
-var _retry := Button.new()
+var _next_mistake: Button = null
+var _retry: Button = null
 var _nav := HBoxContainer.new()
 var _scroll := ScrollContainer.new()
 var _graph := EvalGraph.new()
@@ -44,25 +45,14 @@ var _bar := EvalGraph.Bar.new()
 ## Vitória esperada das brancas por posição; vazia até a análise chegar.
 var _curve: Array = []
 
-## Desafio "encontre o mate": índice da entrada em jogo, -1 fora dele.
-const HINT_AFTER := 3
+## Desafio: índice da entrada em jogo, -1 fora dele. O desafio tem o próprio
+## tabuleiro; enquanto ele está na tela, o replay some.
 var _puzzle := -1
-var _puzzle_state: MatchState = null
-var _pick := Board.NO_SQUARE
-var _misses := 0
-var _solved := false
-## Mate perdido pede o mate de volta; erro grave pede só um lance que segure.
-var _mate_puzzle := false
-var _tried: Move = null
-var _view_flipped := false
 ## Cor de quem jogou a partida; -1 no mesmo aparelho, onde os dois lados são
 ## de quem revisa. Os desafios saem só dos erros dessa cor: o do oponente
 ## abriria com a vez dele, e o jogador moveria as peças que não eram suas.
 var _side := -1
-## A conferência do lance roda numa thread, com um Stockfish só do desafio — o
-## da análise já foi encerrado quando ela terminou.
-var _checker: Thread = null
-var _puzzle_engine: Stockfish = null
+var _challenge := ChallengeView.new()
 
 
 func _ready() -> void:
@@ -96,24 +86,16 @@ func _ready() -> void:
 	_board.ruleset = ChessRules.new()
 	_board.size_flags_vertical = SIZE_EXPAND_FILL
 	_board.custom_minimum_size = Vector2(0, 300)
-	_board.square_tapped.connect(_on_tap)
 	column.add_child(_board)
-
-	var texts := VBoxContainer.new()
-	texts.add_theme_constant_override("separation", 4)
-	for label in [_status, _detail]:
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		texts.add_child(label)
-	_status.add_theme_font_override("font", AppTheme.font(800))
-	_status.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M)
-	_detail.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
-	_detail.add_theme_color_override("font_color", AppTheme.TEXT)
-	_message.add_child(texts)
 	column.add_child(_message)
-	_tone(AppTheme.TEXT_DIM)
 
-	_retry = _button("Tentar de novo", &"PrimaryButton", _toggle_puzzle)
+	_challenge.visible = false
+	_challenge.size_flags_vertical = SIZE_EXPAND_FILL
+	_challenge.continue_label = "Voltar à revisão"
+	_challenge.done.connect(func(_solved: bool, _clean: bool): _end_puzzle())
+	column.add_child(_challenge)
+
+	_retry = _button("Tentar de novo", &"PrimaryButton", func(): _start_puzzle(_ply - 1))
 	_retry.visible = false
 	column.add_child(_retry)
 
@@ -137,10 +119,12 @@ func _ready() -> void:
 
 
 ## Chamado depois de entrar na árvore. `history` é o da partida, no formato do
-## fio (`Move.to_dict`); `side` é a cor de quem jogou, ou -1 no mesmo aparelho.
-func open(history: Array, side: int) -> void:
+## fio (`Move.to_dict`); `side` é a cor de quem jogou, ou -1 no mesmo aparelho;
+## `game` é o registro dela no histórico, se houver.
+func open(history: Array, side: int, game := {}) -> void:
 	_history = history.duplicate()
 	_side = side
+	_game = game
 	_board.flipped = side == Board.Side.BLACK
 	var rules := ChessRules.new()
 	var state := rules.initial_state()
@@ -165,10 +149,6 @@ func _exit_tree() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _checker != null and not _checker.is_alive():
-		var solved: bool = _checker.wait_to_finish()
-		_checker = null
-		_judged(solved)
 	if _thread == null:
 		return
 	if _thread.is_alive():
@@ -182,6 +162,7 @@ func _process(_delta: float) -> void:
 ## A análise chegou: marcas nos chips, gráfico e barra.
 func _analysed(entries: Array) -> void:
 	_entries = entries
+	Training.collect(_game, _entries)
 	_next_mistake.disabled = _entries.is_empty()
 	_curve = GameReview.white_curve(_entries)
 	var dots := {}
@@ -203,12 +184,6 @@ func _stop() -> void:
 		_review.abandon()
 		_thread.wait_to_finish()
 		_thread = null
-	if _checker != null:
-		_checker.wait_to_finish()
-		_checker = null
-	if _puzzle_engine != null:
-		_puzzle_engine.quit()
-		_puzzle_engine = null
 
 
 func _show(ply: int) -> void:
@@ -216,7 +191,7 @@ func _show(ply: int) -> void:
 	_board.state = _states[_ply]
 	_board.last_move = PackedInt32Array(_history[_ply - 1]["p"]) if _ply > 0 else PackedInt32Array()
 	_board.refresh()
-	_tone(AppTheme.TEXT_DIM)
+	_message.tone(AppTheme.TEXT_DIM)
 	_retry.visible = false
 	for i in _moves.get_child_count():
 		(_moves.get_child(i) as Button).button_pressed = i == _ply - 1
@@ -241,7 +216,7 @@ func _show(ply: int) -> void:
 	var verdict: int = entry["verdict"]
 	var label: String = "Mate perdido" if entry["missed_mate"] else GameReview.LABEL[verdict]
 	_status.text = "%s — %s" % [_move_text(_ply - 1, entry), label]
-	_tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
+	_message.tone(AppTheme.DANGER if entry["missed_mate"] else VERDICT_COLOR[verdict])
 	# O lance certo não é dito: quem errou descobre no desafio, que é o que
 	# ensina. A revisão só aponta que havia coisa melhor.
 	var slipped: bool = (
@@ -277,185 +252,27 @@ func _fill_moves() -> void:
 		_moves.add_child(chip)
 
 
-# --- desafio: encontre o mate ---------------------------------------------------
+# --- desafio ------------------------------------------------------------------
 
 
-func _toggle_puzzle() -> void:
-	if _puzzle >= 0:
-		_end_puzzle()
-	else:
-		_start_puzzle(_ply - 1)
-
-
-## A posição de antes do lance que deixou o mate passar, com o tabuleiro virado
-## para quem joga — no mesmo aparelho, o mate perdido pode ser das pretas.
+## A posição de antes do erro, no tabuleiro do desafio. O gráfico e a barra
+## somem com o replay: a curva cai logo depois do lance e entregaria a resposta.
 func _start_puzzle(index: int) -> void:
 	_puzzle = index
-	_misses = 0
-	_solved = false
-	_pick = Board.NO_SQUARE
-	_puzzle_state = _states[index].clone()
-	_mate_puzzle = _entries[index]["missed_mate"]
-	_view_flipped = _board.flipped
-	_board.flipped = _puzzle_state.side_to_move == Board.Side.BLACK
-	_nav.visible = false
-	_scroll.visible = false
-	# A barra e o gráfico entregariam a resposta: a curva cai logo depois do lance.
-	_graph.visible = false
-	_bar.visible = false
-	_retry.text = "Desistir"
-	_tone(AppTheme.TEXT_DIM)
-	_status.text = "%s Jogam as %s." % [
-		"Encontre o mate!" if _mate_puzzle else "Ache um lance melhor!",
-		"brancas" if _puzzle_state.side_to_move == Board.Side.WHITE else "pretas",
-	]
-	_detail.text = "Toque na peça e depois na casa."
-	_tone(AppTheme.ACCENT)
-	_draw_puzzle(PackedInt32Array())
+	var entry: Dictionary = _entries[index]
+	for part in [_board, _message, _retry, _nav, _scroll, _graph, _bar]:
+		part.visible = false
+	_challenge.visible = true
+	_challenge.start(_states[index], str(entry["best"]), str(entry["best_san"]), float(entry["score"]), entry["missed_mate"])
 
 
 func _end_puzzle() -> void:
-	if _checker != null:
-		_checker.wait_to_finish()
-		_checker = null
 	_puzzle = -1
-	_pick = Board.NO_SQUARE
-	_board.flipped = _view_flipped
-	_board.selection = PackedInt32Array()
-	_board.targets = PackedInt32Array()
-	_board.capture_targets = PackedInt32Array()
-	_nav.visible = true
-	_scroll.visible = true
+	_challenge.visible = false
+	for part in [_board, _message, _nav, _scroll]:
+		part.visible = true
 	_graph.visible = not _curve.is_empty()
-	_retry.text = "Tentar de novo"
 	_show(_ply)
-
-
-func _on_tap(square: int) -> void:
-	if _puzzle < 0 or _solved or _checker != null:
-		return
-	if _pick != Board.NO_SQUARE:
-		var chosen := _move_to(square)
-		if chosen != null:
-			_try(chosen)
-			return
-	_pick = square if not _moves_from(square).is_empty() else Board.NO_SQUARE
-	_draw_puzzle(PackedInt32Array())
-
-
-func _moves_from(square: int) -> Array[Move]:
-	var out: Array[Move] = []
-	for move in ChessRules.new().generate_moves(_puzzle_state):
-		if move.from_square() == square:
-			out.append(move)
-	return out
-
-
-func _move_to(square: int) -> Move:
-	var found: Move = null
-	for move in _moves_from(_pick):
-		if move.to_square() != square:
-			continue
-		# ponytail: promoção vira dama; sub-promoção que dá mate fica de fora.
-		if found == null or move.promotion == Board.Kind.QUEEN:
-			found = move
-	return found
-
-
-func _draw_puzzle(last: PackedInt32Array) -> void:
-	_board.state = _puzzle_state
-	_board.last_move = last
-	_board.selection = PackedInt32Array([_pick]) if _pick != Board.NO_SQUARE else PackedInt32Array()
-	var targets := PackedInt32Array()
-	var captures := PackedInt32Array()
-	for move in _moves_from(_pick):
-		if move.is_capture():
-			captures.append(move.to_square())
-		else:
-			targets.append(move.to_square())
-	_board.targets = targets
-	_board.capture_targets = captures
-	_board.refresh()
-
-
-## Mostra o lance na hora e confere em segundo plano: subir o motor e olhar a
-## posição leva até meio segundo, e o tabuleiro parado nesse tempo pareceria
-## que o toque não pegou.
-func _try(move: Move) -> void:
-	_tried = move
-	var after := _puzzle_state.clone()
-	ChessRules.new().apply_move(after, move)
-	_board.state = after
-	_board.last_move = move.path
-	_board.selection = PackedInt32Array()
-	_board.targets = PackedInt32Array()
-	_board.capture_targets = PackedInt32Array()
-	_board.refresh()
-	_status.text = "Conferindo…"
-	_detail.text = ""
-	_checker = Thread.new()
-	var entry: Dictionary = _entries[_puzzle]
-	_checker.start(_judge.bind(after, ChessRules.new().uci(move), str(entry["best"]), float(entry["score"])))
-
-
-## Na thread. Sem motor, só o lance que ele tinha apontado vale. `before` é a
-## vitória esperada de quem joga na posição do desafio.
-func _judge(after: MatchState, played: String, best: String, before: float) -> bool:
-	var rules := ChessRules.new()
-	if _puzzle_engine == null:
-		_puzzle_engine = Stockfish.new()
-		if not _puzzle_engine.start():
-			_puzzle_engine = null
-	if _puzzle_engine == null:
-		return played == best
-	var seen := GameReview.look(_puzzle_engine, rules, after)
-	if seen.is_empty():
-		return played == best
-	if _mate_puzzle:
-		return GameReview.keeps_mate(seen["mate"], seen["mated"])
-	return GameReview.holds(before, 100.0 - float(seen["score"]))
-
-
-func _judged(solved: bool) -> void:
-	var san := ChessRules.new().notation(_puzzle_state, _tried)
-	if solved:
-		_solved = true
-		var praise := "segura a posição."
-		if san.ends_with("#"):
-			praise = "é xeque-mate."
-		elif _mate_puzzle:
-			praise = "mantém o mate."
-		elif san == _entries[_puzzle]["best_san"]:
-			praise = "era o melhor lance."
-		_status.text = "Isso! %s %s" % [san, praise]
-		_tone(AppTheme.SUCCESS)
-		_detail.text = ""
-		_retry.text = "Voltar à revisão"
-		return
-	_misses += 1
-	_pick = Board.NO_SQUARE
-	_status.text = "%s %s Tente de novo." % [
-		san, "deixa o mate escapar." if _mate_puzzle else "ainda perde muito."
-	]
-	_tone(AppTheme.DANGER)
-	_detail.text = ""
-	if _misses >= HINT_AFTER:
-		var best := ChessRules.new().move_from_uci(_puzzle_state, str(_entries[_puzzle]["best"]))
-		if best != null:
-			_pick = best.from_square()
-			_detail.text = "Dica: a peça destacada %s." % ("dá o mate" if _mate_puzzle else "faz o melhor lance")
-	_draw_puzzle(PackedInt32Array())
-
-
-## Cartão e título na cor da mensagem; o neutro (`TEXT_DIM`) mantém o título
-## em texto claro sobre um cartão discreto.
-func _tone(color: Color) -> void:
-	var neutral := color == AppTheme.TEXT_DIM
-	_message.add_theme_stylebox_override("panel", AppTheme.box(
-		AppTheme.SURFACE if neutral else Color(color, 0.16), AppTheme.RADIUS,
-		AppTheme.LINE_SOFT if neutral else color, 2
-	))
-	_status.add_theme_color_override("font_color", AppTheme.TEXT if neutral else color)
 
 
 func _jump_to_mistake() -> void:

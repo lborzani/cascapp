@@ -40,6 +40,7 @@ func _initialize() -> void:
 	_test_prefs()
 	_test_avatar()
 	_test_history()
+	_test_training()
 	_test_rounds_played()
 	_test_match_clock()
 
@@ -1153,6 +1154,78 @@ func _test_history() -> void:
 	_equals(reloaded.size(), Prefs.HISTORY_LIMIT, "sobrevive a fechar o app")
 	_equals(PackedInt32Array(reloaded[0]["moves"][0]["p"]), PackedInt32Array([12, 28]), "com os lances intactos")
 	Prefs.forget_history()
+
+
+## Entradas de mentira no formato de `GameReview.analyse`, só com o que o
+## baralho lê.
+func _test_training() -> void:
+	print("treino — baralho")
+	var good := GameReview.Verdict.GOOD
+	var entries := [
+		_entry(Board.Side.WHITE, "e2e4", "e2e4", good, false),
+		_entry(Board.Side.BLACK, "e7e5", "e7e5", good, false),
+		_entry(Board.Side.WHITE, "f1c4", "f1c4", GameReview.Verdict.INACCURACY, false),
+		_entry(Board.Side.BLACK, "g8f6", "g7g6", GameReview.Verdict.BLUNDER, false),
+		_entry(Board.Side.WHITE, "d2d3", "h5f7", GameReview.Verdict.GOOD, true),
+		_entry(Board.Side.BLACK, "a7a6", "", GameReview.Verdict.MISTAKE, false),
+	]
+	var both := Training.cards_from(entries, [Board.Side.WHITE, Board.Side.BLACK], 77)
+	_equals(both.size(), 2, "imprecisão e erro sem lance melhor ficam de fora")
+	_equals(both[0]["prefix"], "e2e4 e7e5 f1c4", "o cartão guarda os lances até o erro")
+	_equals(both[0]["played"], "g8f6", "e o lance errado")
+	_check(both[1]["mate"], "mate perdido vira desafio de mate mesmo com lance 'bom'")
+	_equals(both[1]["at"], 77, "o cartão lembra de que partida saiu")
+	var white := Training.cards_from(entries, [Board.Side.WHITE], 77)
+	_equals(white.size(), 1, "só os lances do lado pedido")
+	_equals(white[0]["played"], "d2d3", "o das brancas")
+
+	var now := 1_000_000
+	var card: Dictionary = both[0]
+	_equals(Training.due([card], now).size(), 1, "cartão novo vence na hora")
+	var steps := []
+	for i in 6:
+		card = Training.grade(card, true, now)
+		steps.append((int(card["due"]) - now) / Training.DAY)
+	_equals(steps, [1, 3, 7, 14, 30, 30], "acerto limpo sobe a escada e para nos 30 dias")
+	_equals(Training.due([card], now).size(), 0, "e sai dos vencidos")
+	card = Training.grade(card, false, now)
+	_equals(card["box"], 0, "errar volta ao começo")
+	_equals(int(card["due"]) - now, Training.DAY, "e o cartão volta amanhã")
+	_check(both[0]["box"] == 0 and both[0]["due"] == 0, "nota não mexe no cartão original")
+
+	var late: Dictionary = both[1].duplicate()
+	late["due"] = now - 10
+	var early: Dictionary = both[0].duplicate()
+	early["due"] = now - 5
+	_equals(Training.due([early, late], now)[0]["played"], late["played"], "o mais atrasado vem primeiro")
+
+	var learned := Training.grade(both[0], true, now)
+	var deck := Training.merge([learned], both)
+	_equals(deck.size(), 2, "o mesmo erro não duplica")
+	_equals(deck[0]["box"], 1, "e o cartão que já subiu não volta ao começo")
+
+	var many := []
+	for i in Training.LIMIT + 1:
+		many.append({"prefix": str(i), "played": "a2a3", "box": 0, "at": i})
+	many[50]["box"] = 3
+	many[60]["box"] = 3
+	many = Training.merge([], many)
+	_equals(many.size(), Training.LIMIT, "passou do teto, um sai")
+	_check(many.all(func(c): return c["prefix"] != "50"), "o mais aprendido e mais antigo")
+
+	Prefs.forget_training()
+	_equals(Prefs.training(), [], "baralho começa vazio")
+	Prefs.set_training(deck)
+	Prefs.forget()
+	_equals(Prefs.training(), deck, "e sobrevive a fechar o app")
+	Prefs.forget_training()
+
+
+func _entry(side: int, uci: String, best: String, verdict: int, missed: bool) -> Dictionary:
+	return {
+		"side": side, "uci": uci, "best": best, "best_san": best, "score": 60.0,
+		"verdict": verdict, "missed_mate": missed,
+	}
 
 
 func _test_prefs() -> void:
