@@ -29,6 +29,7 @@ func _ready() -> void:
 	_test_drag(match_scene)
 	await _test_checkers_capture_taps()
 	await _test_repetition_draw()
+	await _test_end_options()
 	await _test_rematch()
 	await _test_review()
 	await _test_review_side()
@@ -475,6 +476,95 @@ func _test_repetition_draw() -> void:
 			_play(scene, step[0], step[1])
 	_equals(scene._outcome, Ruleset.Outcome.DRAW, "a terceira vez da mesma posição empata")
 	_check(scene._result_detail().contains("repetição"), "e o painel diz o motivo (obtido: '%s')" % scene._result_detail())
+	scene.queue_free()
+	await get_tree().process_frame
+
+
+## Desistir e propor empate pelo diálogo do botão de sair, sem sair da mesa: no
+## mesmo aparelho, contra o bot e em rede.
+func _test_end_options() -> void:
+	print("desistir e propor empate")
+	Game.start_hotseat(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var options: Array = scene._end_options()
+	_equals(options.map(func(o): return o[0]), ["Empatar", "As brancas desistem"], "mesmo aparelho: empatar e a vez desiste")
+	(options[0][1] as Callable).call()
+	_equals(scene._outcome, Ruleset.Outcome.DRAW, "empatar encerra empatado")
+	_check(scene._result_detail().contains("combinado"), "e o painel diz que foi combinado")
+	_check((_node(scene, "%ResultLayer") as Control).visible, "o painel de fim abre")
+	_check(scene._end_options().is_empty(), "partida encerrada não oferece mais nada")
+	scene._new_game()
+	_play(scene, "e2", "e4")
+	options = scene._end_options()
+	_equals(options[1][0], "As pretas desistem", "a desistência é de quem tem a vez")
+	(options[1][1] as Callable).call()
+	_equals(scene._outcome, Ruleset.Outcome.WHITE_WINS, "as pretas desistiram, as brancas vencem")
+	_equals(scene._result_detail(), "As pretas desistiram.", "com o motivo no painel")
+	scene._new_game()
+	_equals(scene._outcome, Ruleset.Outcome.ONGOING, "a revanche começa do zero")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.bot_side = Board.Side.BLACK
+	Game.start_solo(Game.CHESS)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	scene._offer_draw()
+	_equals(scene._outcome, Ruleset.Outcome.DRAW, "bot sem vantagem aceita o empate")
+	scene._new_game()
+	scene._state.set_piece(_square("d1"), 0)
+	scene._recompute()
+	scene._offer_draw()
+	_equals(scene._outcome, Ruleset.Outcome.ONGOING, "bot com uma dama a mais recusa")
+	scene._resign()
+	_equals(scene._outcome, Ruleset.Outcome.BLACK_WINS, "desistir contra o bot dá a vitória a ele")
+	_equals(scene._result_detail(), "Você desistiu.", "e o painel fala com quem desistiu")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	Net.connected = true
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	scene._offer_draw()
+	_equals(scene._draw_offered, 0, "em rede a proposta espera a resposta")
+	_equals(scene._end_options().size(), 1, "e não dá para propor de novo enquanto isso")
+	Net.draw_message.emit("draw_no", 0, 1)
+	_equals(scene._draw_offered, -1, "recusada, a proposta acaba")
+	_equals(scene._outcome, Ruleset.Outcome.ONGOING, "e a partida segue")
+	scene._offer_draw()
+	Net.draw_message.emit("draw_ok", 0, 1)
+	_equals(scene._outcome, Ruleset.Outcome.DRAW, "aceita, é empate")
+	_check(scene._reported, "e o empate vai para o relay")
+	scene._new_game()
+	Net.draw_message.emit("draw", 3, 1)
+	_check(not is_instance_valid(scene._draw_card), "proposta de outro lance é ignorada")
+	Net.draw_message.emit("draw", 0, 1)
+	_check(is_instance_valid(scene._draw_card), "a proposta do oponente aparece num cartão")
+	scene._draw_card.accepted.emit()
+	_equals(scene._outcome, Ruleset.Outcome.DRAW, "aceitar a proposta empata")
+	scene._new_game()
+	Net.draw_message.emit("draw", 0, 1)
+	_play(scene, "e2", "e4")
+	_check(not is_instance_valid(scene._draw_card), "um lance jogado tira a proposta da tela")
+	scene._new_game()
+	Net.draw_message.emit("draw", 0, 1)
+	scene._on_opponent_left()
+	_check(not is_instance_valid(scene._draw_card), "o fim da partida tira a proposta da tela")
+	scene._new_game()
+	Net.resigned.emit(1, 0)
+	_equals(scene._outcome, Ruleset.Outcome.WHITE_WINS, "o oponente desistiu, vencemos")
+	_equals(scene._result_detail(), "O oponente desistiu.", "com o motivo no painel")
+	_check((_node(scene, "%RematchButton") as Control).visible, "e a revanche continua possível")
+	Net.connected = false
 	scene.queue_free()
 	await get_tree().process_frame
 

@@ -40,6 +40,10 @@ var _linked := {}
 var _abandoned := false
 var _left_at := 0.0
 var _abandon_seconds := 0.0
+## Proposta de empate e desistência pelo relay: o que cada lado ouviu.
+var _guest_draw := []
+var _host_draw := []
+var _host_resign := []
 
 
 func _initialize() -> void:
@@ -62,6 +66,9 @@ func _setup() -> void:
 	_host.join_failed.connect(func(reason: String): _rejected = reason)
 	_guest.join_failed.connect(func(reason: String): _rejected = reason)
 	_host.opponent_left.connect(func(): _abandoned = true)
+	_guest.draw_message.connect(func(kind: String, ply: int, seat: int): _guest_draw = [kind, ply, seat])
+	_host.draw_message.connect(func(kind: String, ply: int, seat: int): _host_draw = [kind, ply, seat])
+	_host.resigned.connect(func(seat: int, ply: int): _host_resign = [seat, ply])
 
 
 func _spawn_side(side_name: String) -> Node:
@@ -127,6 +134,15 @@ func _process(delta: float) -> bool:
 				_phase = 5
 		5:
 			if not _synced.is_empty():
+				_host.send_draw("draw", 1)
+				_phase = 50
+		50:
+			if not _guest_draw.is_empty():
+				_guest.send_draw("draw_ok", 1)
+				_guest.send_resign(1)
+				_phase = 51
+		51:
+			if not _host_draw.is_empty() and not _host_resign.is_empty():
 				# Fotografado antes da saída: depois dela os dois lados estão
 				# desconectados de propósito, e o relatório roda no fim.
 				_linked = {"host": _host.connected, "guest": _guest.connected}
@@ -170,6 +186,9 @@ func _report() -> void:
 	_equals(_synced.size(), 1, "histórico recebido no resync")
 	_equals(_clocks, [178.0, 176.5], "e os relógios junto")
 	_equals(_rejected, "", "nenhuma recusa")
+	_equals(_guest_draw, ["draw", 1, 0], "a proposta de empate chega com o lance e o assento de quem propôs")
+	_equals(_host_draw, ["draw_ok", 1, 1], "e o aceite volta")
+	_equals(_host_resign, [1, 1], "a desistência chega com o assento de quem desistiu")
 
 	_check(_abandoned, "a saída do oponente é anunciada")
 	# O `bye` chega no mesmo fôlego da saída. Sem ele, só a carência de 95s
