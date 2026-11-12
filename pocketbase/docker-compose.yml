@@ -1,4 +1,4 @@
-# Stack das contas no servidor de casa (`mammus`).
+# Stack das contas no servidor de casa (`homeserver`, Raspberry Pi).
 #
 # Escuta só no 127.0.0.1: quem publica é o Tailscale — a API pela internet
 # (Funnel, porta 8443, só /api) e o painel admin só pela tailnet (porta 8091).

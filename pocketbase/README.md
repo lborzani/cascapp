@@ -1,15 +1,20 @@
 # Contas (PocketBase)
 
-PocketBase das contas do Cascapp, rodando no servidor de casa (`mammus`, Ubuntu,
-Docker) atrás do Tailscale — a casa está em CGNAT e não há domínio próprio.
+PocketBase das contas do Cascapp, rodando no servidor de casa (`homeserver`, uma
+Raspberry Pi 64 bits, Docker) atrás do Tailscale — a casa está em CGNAT e não há
+domínio próprio. A imagem sai na arquitetura de quem constrói (`TARGETARCH` no
+`Dockerfile`): arm64 no Pi, amd64 num PC.
 
 | O quê | Onde | Quem alcança |
 |---|---|---|
-| API | `https://mammus.tailb8b7e1.ts.net:8443/api/` | internet (Tailscale Funnel, só `/api`) |
-| Painel admin | `https://mammus.tailb8b7e1.ts.net:8091/_/` | só a tailnet (`tailscale serve`) |
-| Container | `127.0.0.1:8090` no `mammus` | só o próprio servidor |
+| API | `https://homeserver.tailb8b7e1.ts.net:8443/api/` | internet (Tailscale Funnel, só `/api`) |
+| Painel admin | `https://homeserver.tailb8b7e1.ts.net:8091/_/` | só a tailnet (`tailscale serve`) |
+| Container | `127.0.0.1:8090` no `homeserver` | só o próprio servidor |
 
-A porta 443 do Funnel é do bot de música (`/` → `:3000`) e não é tocada.
+**Transição:** antes ele morava no `mammus`, e as versões do app até a 1.41 têm
+`https://mammus.tailb8b7e1.ts.net:8443` fixo. Enquanto elas existirem, a 8443
+`/api` do `mammus` só repassa para o `homeserver`; depois a ponte é desligada.
+A porta 443 do Funnel do `mammus` é do bot de música e não é tocada.
 
 ## Conta anônima
 
@@ -41,7 +46,7 @@ mesmo desfecho: ele chama `POST /api/cascapp/chess-result`
 `X-Cascapp-Relay`. A partida fica em `chess_games`, que cada um lê só as
 próprias e nenhuma conta escreve. K 40 nas 20 primeiras partidas, 20 depois.
 
-O segredo mora num `.env` no `mammus`, ao lado do compose, e no Fly como secret
+O segredo mora num `.env` no `homeserver`, ao lado do compose, e no Fly como secret
 do relay — os dois iguais. Uma vez (o `read -s` evita que ele fique no
 histórico do shell):
 
@@ -57,13 +62,24 @@ para aceitar. `GET /api/cascapp/friends` lista os amigos com o perfil público, 
 `DELETE /api/cascapp/friends/{id}` desfaz dos dois lados. A coleção `friendships`
 não tem regra aberta: só essas rotas (`pb_hooks/amigos.pb.js`) leem e escrevem.
 
+## Revisões de xadrez
+
+Cada partida de xadrez que termina no app (online, contra o bot ou no mesmo
+aparelho) vira um registro em `chess_reviews`, criado pelo próprio dono
+(`Account.push_reviews`): os lances em UCI, o lado dele e quando foi jogada. O
+worker de análise do servidor preenche depois; `status` vazio é pendente e só o
+servidor o muda. Dono e `played_at` são únicos juntos, então o reenvio de uma
+resposta perdida não duplica. Não passa pelo relay: a revisão é pessoal, e o
+relay só conhece um hash da partida.
+
 ## Subir ou atualizar
 
-Do repositório, com acesso SSH ao `mammus` pela tailnet:
+Do repositório, com acesso SSH ao `homeserver` pela tailnet (`USUARIO` é o seu
+usuário no Pi):
 
 ```bash
-tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations pb_hooks | ssh mammus@mammus 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
-ssh mammus@mammus 'cd ~/cascapp-contas && docker compose up -d --build'
+tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations pb_hooks | ssh USUARIO@homeserver 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
+ssh USUARIO@homeserver 'cd ~/cascapp-contas && docker compose up -d --build'
 ```
 
 As migrations rodam sozinhas na subida, e os hooks de `pb_hooks/` carregam junto. Versão nova do PocketBase: trocar o
@@ -79,7 +95,7 @@ tailscale serve --bg --https=8091 http://127.0.0.1:8090
 
 ## Superusuário
 
-Uma vez, no `mammus`. O `read -s` evita que a senha fique no histórico do shell:
+Uma vez, no `homeserver`. O `read -s` evita que a senha fique no histórico do shell:
 
 ```bash
 read -rs PB_PASS && docker compose -f ~/cascapp-contas/docker-compose.yml exec pocketbase /pb/pocketbase superuser upsert SEU_EMAIL "$PB_PASS"; unset PB_PASS
