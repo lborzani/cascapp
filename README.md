@@ -310,11 +310,14 @@ mudou para o Ludo caber:
 | Quem venceu | `Ruleset.outcome()` | `LudoRules.winner()`, que devolve a cor |
 | Vez | `side_to_move` | `meta["turn"]`, via `LudoRules.turn_of()` |
 
-Os dois caminhos convivem em vez de um servir aos dois casos: num jogo de dois o
-assento **é** a cor, e forçar xadrez e damas a falar em assentos trocaria um
-vocabulário certo por um genérico. `Net` deriva `local_side` do assento quando a
-mesa tem dois lugares — uma fonte só, em vez de quem abre escrever a sua e quem
-entra ler a do `welcome`.
+Os dois caminhos convivem em vez de um servir aos dois casos: forçar xadrez e
+damas a falar em assentos trocaria um vocabulário certo por um genérico. O
+assento **não** é a cor. Xadrez e damas tiram na moeda quem joga de brancas
+(`coin_toss` no catálogo, sorteio em `pairing.gd`), e a revanche troca as cores.
+Quem abre a sala passa o assento das brancas a `Net.host_relay`, ele viaja no
+`"w"` do `welcome` e do `resume`, e cada um tira a própria cor dele. Os outros
+jogos de dois (naval) mandam 0: quem abre joga primeiro. A tela da partida
+mostra a moeda girando (`CoinToss`) só na primeira partida da sala.
 
 #### Cadeira vazia vira máquina
 

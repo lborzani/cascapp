@@ -72,6 +72,7 @@ const GAMES := [
 		"category": CAT_BOARD,
 		"icon": Board.Kind.KNIGHT,
 		"scene": "res://scenes/match.tscn",
+		"coin_toss": true,
 		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
 		"clock": true,
 		"visible": true,
@@ -82,6 +83,7 @@ const GAMES := [
 		"category": CAT_BOARD,
 		"icon": Board.Kind.DAME,
 		"scene": "res://scenes/match.tscn",
+		"coin_toss": true,
 		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
 		"clock": false,
 		"visible": true,
@@ -694,6 +696,10 @@ func bot_turn(side_to_move: int) -> bool:
 ## a pergunta "há quanto tempo isto está acontecendo" não pode recomeçar do zero
 ## só porque um nó foi recriado.
 var match_started_at := 0
+## A partida aberta por `begin_match()` é uma que já estava em curso nesta sala:
+## o app voltou de uma queda ou foi reaberto. A moeda do sorteio de cor só gira
+## na primeira vez.
+var match_resumed := false
 
 
 ## Marca o começo da partida, ou recupera o de uma que já estava em curso.
@@ -711,6 +717,7 @@ func begin_match() -> void:
 	var now := int(Time.get_unix_time_from_system())
 	var code := Net.room_code()
 	match_started_at = Prefs.match_start(code, now) if not code.is_empty() else now
+	match_resumed = match_started_at != now
 	if not code.is_empty() and not Net.seat_key().is_empty():
 		Prefs.remember_rejoin(code, game_id, Net.seat_key(), now)
 

@@ -87,7 +87,11 @@ func _setup_host() -> void:
 
 	# A capacidade da mesa vem do catálogo: dois para xadrez, damas e batalha
 	# naval, quatro para o Ludo. A sala nasce do tamanho do jogo.
-	Net.host_relay(Game.game_id, _code, Game.listed_room, Game.players_of())
+	#
+	# Quem joga de brancas sai na moeda nos jogos que pedem (`coin_toss` no
+	# catálogo). Antes era sempre quem abria a sala.
+	var white := randi() % 2 if Game.entry_of(Game.game_id).get("coin_toss", false) else 0
+	Net.host_relay(Game.game_id, _code, Game.listed_room, Game.players_of(), white)
 	# O anfitrião também emula o cartão NFC. Um erro aqui era silencioso antes:
 	# o outro aparelho encostava, vibrava e não recebia nada, sem ninguém saber.
 	if Pairing.nfc.is_available():

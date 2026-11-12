@@ -58,8 +58,8 @@ func _setup() -> void:
 	_guest.opponent_joined.connect(func(_side: int): _joined["guest"] = true)
 	_guest.move_received.connect(func(data: Dictionary): _guest_moves.append(data))
 	_host.move_received.connect(func(data: Dictionary): _host_moves.append(data))
-	_host.watcher_joined.connect(func(): _host.send_watch_state(_history, [], 0))
-	_guest.watcher_joined.connect(func(): _guest.send_watch_state(_history, [], 0))
+	_host.watcher_joined.connect(func(): _host.send_watch_state(_history, [], 1))
+	_guest.watcher_joined.connect(func(): _guest.send_watch_state(_history, [], 1))
 	for entry in [["early", _early], ["late", _late]]:
 		var label: String = entry[0]
 		var link: Node = entry[1]
@@ -111,7 +111,8 @@ func _process(delta: float) -> bool:
 	match _phase:
 		0:
 			_setup()
-			_host.host_relay(&"chess", CODE)
+			# A moeda deu pretas a quem abriu: o espectador lê isso do `welcome`.
+			_host.host_relay(&"chess", CODE, false, 2, 1)
 			_phase = 1
 		1:
 			if _bridge(_host).state() == RelayBridge.State.WAITING:
@@ -167,7 +168,8 @@ func _report() -> void:
 	_equals(_moves["early"], [0, 1, 2, 3], "e vê todos os lances ao vivo")
 	_check(_started.has("late"), "quem chega no meio recebe a mesa")
 	_equals(Array(_synced.get("late", [])).size(), 2, "com o histórico inteiro até ali")
-	_equals(_late.white_seat, 0, "e sabe quem joga de brancas")
+	_equals(_late.white_seat, 1, "e sabe quem joga de brancas")
+	_equals(_early.white_seat, 1, "quem chega antes do primeiro lance sabe quem a moeda pôs de brancas")
 	_equals(_moves["late"], [2, 3], "e os lances seguintes chegam")
 	_equals(_late.game_id, &"chess", "o jogo vem do relay")
 	_equals(_host_moves.size(), 2, "o que o espectador mandou não chegou ao anfitrião")

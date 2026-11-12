@@ -112,7 +112,8 @@ func _process(delta: float) -> bool:
 				_refusal = _rejected
 				_refusal_seconds = _elapsed
 				_rejected = ""
-				_host.host_relay(&"chess", CODE)
+				# A moeda deu pretas a quem abriu.
+				_host.host_relay(&"chess", CODE, false, 2, 1)
 				_phase = 2
 		2:
 			# O convidado só procura a sala depois que o anfitrião abriu: um
@@ -176,10 +177,10 @@ func _report() -> void:
 	_equals(_linked.get("guest"), true, "convidado conectado")
 	_equals(_host.is_host, true, "um abriu a sala")
 	_equals(_guest.is_host, false, "e o outro entrou nela")
-	_equals(_host.local_side, Board.Side.WHITE, "anfitrião joga de brancas")
-	_equals(_guest.local_side, Board.Side.BLACK, "convidado joga de pretas")
-	_equals(_joined.get("host"), Board.Side.BLACK, "anfitrião vê o oponente de pretas")
-	_equals(_joined.get("guest"), Board.Side.WHITE, "convidado vê o oponente de brancas")
+	_equals(_host.local_side, Board.Side.BLACK, "anfitrião joga com a cor da moeda")
+	_equals(_guest.local_side, Board.Side.WHITE, "convidado fica com a outra")
+	_equals(_joined.get("host"), Board.Side.WHITE, "anfitrião vê o oponente de brancas")
+	_equals(_joined.get("guest"), Board.Side.BLACK, "convidado vê o oponente de pretas")
 	_equals(PackedInt32Array(_received.get("p", [])), PackedInt32Array([12, 28]), "lance intacto")
 	_equals(int(_received.get("n", -1)), 0, "índice do lance preservado")
 	_equals(Array(_received.get("c", [])), [178.0, 180.0], "relógios viajam com o lance")

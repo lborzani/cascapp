@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.41
+
+- Xadrez e damas online: quem cria a partida não joga mais sempre de brancas. Uma moeda gira no começo e decide a cor de cada um. Na revanche, as cores trocam como antes.
+
 ## 1.40
 
 - Damas: capturar agora é obrigatório, como na regra oficial. Se houver mais de um jeito de capturar, vale o que come mais peças.
