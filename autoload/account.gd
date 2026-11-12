@@ -104,6 +104,9 @@ func sign_in() -> bool:
 	elif ok and not avatar_file.is_empty() and not has_local:
 		# A conta tem foto e o aparelho não: reinstalação. Baixa a de lá.
 		await _fetch_own_avatar()
+	if ok:
+		# Partidas que terminaram com o servidor fora sobem agora.
+		push_reviews()
 	if not ok:
 		_retry.start()
 	return ok
@@ -153,6 +156,41 @@ func remove_friend(id: String) -> bool:
 		return false
 	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/" + id.uri_encode(), {})
 	return reply["code"] == 204
+
+
+# --- revisão no servidor --------------------------------------------------------
+#
+# Cada partida de xadrez que termina vira um pedido em `chess_reviews`, que o
+# worker do servidor de casa preenche (`pocketbase/pb_migrations/
+# 1760800000_revisoes_xadrez.js`). Como o nome e a foto: vale primeiro no
+# aparelho (`Prefs`, marca `uploaded`) e sobe quando der.
+
+
+## Sobe as partidas pendentes, da mais recente para a mais antiga. 200 subiu;
+## 400 é a mesma partida que já tinha subido (resposta perdida) ou uma que o
+## servidor nunca vai aceitar — repetir não muda nada, então as duas saem da
+## fila. Qualquer outra resposta (sem rede, 429, servidor fora) para tudo, e a
+## próxima entrada ou partida tenta de novo.
+func push_reviews() -> void:
+	if not signed_in():
+		return
+	for game: Dictionary in Prefs.pending_uploads():
+		var reply := await _call(HTTPClient.METHOD_POST, "/api/collections/chess_reviews/records", review_body(game, user_id))
+		if reply["code"] != 200 and reply["code"] != 400:
+			return
+		Prefs.mark_uploaded(int(game["at"]))
+
+
+## O registro de `chess_reviews` de uma partida do histórico (`Prefs.history`).
+static func review_body(game: Dictionary, owner: String) -> Dictionary:
+	return {
+		"owner": owner,
+		"moves": ChessRules.new().uci_line(game["moves"]),
+		"side": "white" if int(game.get("side", Board.Side.WHITE)) == Board.Side.WHITE else "black",
+		"hotseat": bool(game.get("hotseat", false)),
+		"against": str(game.get("against", "")).left(60),
+		"played_at": int(game["at"]),
+	}
 
 
 # --- avatar ---------------------------------------------------------------------

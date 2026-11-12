@@ -173,6 +173,38 @@ func _ready() -> void:
 		var forged := await Account._call(HTTPClient.METHOD_POST, "/api/collections/chess_games/records", game.merged({"key": key + "-5"}, true))
 		_check(forged["code"] != 200, "e o app não cria partida (HTTP %d)" % forged["code"])
 
+	print("revisão no servidor")
+	Prefs.forget_history()
+	var rules := ChessRules.new()
+	var played := rules.initial_state()
+	for text in ["e2e4", "e7e5", "g1f3"]:
+		rules.apply_move(played, rules.move_from_uci(played, text))
+	var finished := {
+		"at": int(Time.get_unix_time_from_system()), "moves": played.history, "side": Board.Side.BLACK,
+		"hotseat": false, "against": "Contra o bot (Avançado)", "uploaded": false,
+	}
+	Prefs.record_game(finished)
+	var url_now := Account.base_url()
+	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
+	await Account.push_reviews()
+	_equals(Prefs.pending_uploads().size(), 1, "servidor fora: a partida fica na fila")
+	OS.set_environment("CASCAPP_PB_URL", url_now)
+	await Account.push_reviews()
+	_equals(Prefs.pending_uploads(), [], "servidor de volta: sobe e sai da fila")
+	# A resposta se perdeu e o app manda de novo: o servidor recusa a repetida
+	# e ela sai da fila do mesmo jeito.
+	Prefs.forget_history()
+	Prefs.record_game(finished)
+	await Account.push_reviews()
+	_equals(Prefs.pending_uploads(), [], "reenvio da mesma partida também sai da fila")
+	var reviews: Variant = (await Account._call(HTTPClient.METHOD_GET, "/api/collections/chess_reviews/records", {}))["data"]
+	var uploaded: Array = reviews.get("items", []) if reviews is Dictionary else []
+	_equals(uploaded.size(), 1, "e o servidor tem uma só")
+	if uploaded.size() == 1:
+		_equals(uploaded[0].get("moves"), "e2e4 e7e5 g1f3", "com os lances em UCI")
+		_equals([uploaded[0].get("side"), uploaded[0].get("status")], ["black", ""], "do lado do dono, pendente")
+	Prefs.forget_history()
+
 	print("avatar")
 	var photo := Image.create(640, 480, false, Image.FORMAT_RGB8)
 	photo.fill(Color.ORANGE)

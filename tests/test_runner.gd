@@ -9,6 +9,7 @@ extends SceneTree
 ## Autoloads are not instantiated for a `--script` run, so the pairing helpers
 ## are reached through the script itself (they are static on purpose).
 const PairingLib := preload("res://autoload/pairing.gd")
+const AccountLib := preload("res://autoload/account.gd")
 
 var _failures := 0
 
@@ -469,6 +470,29 @@ func _test_chess_uci() -> void:
 		var move := rules.move_from_uci(promotion, text)
 		_equals(rules.uci(move) if move != null else "<nulo>", text, "promoção ida e volta " + text)
 	_check(rules.move_from_uci(promotion, "a7a8") == null, "promoção sem peça é recusada")
+
+	# A partida inteira, como o worker do servidor recebe: en passant (e5d6),
+	# roque (e1g1) e promoção com captura dos dois lados (b2a1q, c7b8q).
+	var line := "e2e4 a7a6 e4e5 d7d5 e5d6 a6a5 d6c7 a5a4 g1f3 a4a3 f1e2 a3b2 e1g1 b2a1q c7b8q"
+	var game := rules.initial_state()
+	for text in line.split(" "):
+		var move := rules.move_from_uci(game, text)
+		_check(move != null, "lance legal na partida de teste: " + text)
+		if move == null:
+			return
+		rules.apply_move(game, move)
+	_equals(rules.uci_line(game.history), line, "partida inteira em UCI")
+	_equals(rules.uci_line([]), "", "partida vazia, texto vazio")
+
+	var body := AccountLib.review_body({
+		"at": 1700000000, "moves": game.history, "side": Board.Side.BLACK,
+		"hotseat": false, "against": "Contra o bot (%s)" % "x".repeat(80),
+	}, "conta123")
+	_equals(body["moves"], line, "pedido de revisão leva os lances em UCI")
+	_equals(body["side"], "black", "e o lado do dono")
+	_equals(body["played_at"], 1700000000, "e quando foi jogada")
+	_equals(body["owner"], "conta123", "e de quem é")
+	_equals((body["against"] as String).length(), 60, "rótulo cortado no tamanho do servidor")
 
 
 func _test_review_rules() -> void:
@@ -1201,6 +1225,15 @@ func _test_history() -> void:
 	var reloaded := Prefs.history()
 	_equals(reloaded.size(), Prefs.HISTORY_LIMIT, "sobrevive a fechar o app")
 	_equals(PackedInt32Array(reloaded[0]["moves"][0]["p"]), PackedInt32Array([12, 28]), "com os lances intactos")
+	_equals(Prefs.pending_uploads(), [], "partidas de antes da revisão no servidor não sobem")
+
+	Prefs.record_game({"at": 900, "moves": [], "uploaded": false})
+	Prefs.record_game({"at": 901, "moves": [], "uploaded": false})
+	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [901, 900], "as novas entram na fila")
+	Prefs.mark_uploaded(901)
+	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [900], "a que subiu sai da fila")
+	Prefs.forget()
+	_equals(Prefs.pending_uploads().size(), 1, "a fila sobrevive a fechar o app")
 	Prefs.forget_history()
 
 

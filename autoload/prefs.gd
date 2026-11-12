@@ -334,10 +334,26 @@ static func record_game(game: Dictionary) -> void:
 
 ## A partida `at` já passou pela análise e deu o que tinha para o treino.
 static func mark_analysed(at: int) -> void:
+	_flag_game(at, "analysed")
+
+
+## As partidas que ainda não subiram para a revisão no servidor. Só as gravadas
+## com `"uploaded": false` — as de antes da revisão no servidor não têm a marca e
+## ficam de fora: subir 50 de uma vez estouraria o limite de criações por minuto.
+static func pending_uploads() -> Array:
+	return history().filter(func(game: Dictionary) -> bool: return game.get("uploaded", true) == false)
+
+
+## A partida `at` chegou ao servidor (ou ele a recusou de vez).
+static func mark_uploaded(at: int) -> void:
+	_flag_game(at, "uploaded")
+
+
+static func _flag_game(at: int, flag: String) -> void:
 	var games := history()
 	for game in games:
 		if int(game.get("at", -1)) == at:
-			game["analysed"] = true
+			game[flag] = true
 	_file().set_value(HISTORY_SECTION, HISTORY_KEY, games)
 	_file().save(PATH)
 
