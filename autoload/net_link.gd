@@ -482,9 +482,9 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 func _handle_as_spectator(message: Dictionary, from_seat: int) -> bool:
 	match str(message.get("t", "")):
 		"welcome":
-			# A partida começou com o espectador já na sala: primeira partida,
-			# então quem abriu (assento 0) joga de brancas.
-			_begin_watch(message, 0, [], [])
+			# A partida começou com o espectador já na sala. Quem joga de brancas
+			# saiu na moeda; versão sem o campo é quem abriu.
+			_begin_watch(message, int(message.get("w", 0)), [], [])
 		"watch_state":
 			var history := _list(message.get("m"))
 			if history.size() > SYNC_LIMIT:
@@ -853,7 +853,7 @@ func _on_ready(seat: int) -> void:
 		return
 	_mark_connected()
 	if seats == 2:
-		opponent_joined.emit(Board.opponent(HOST_SIDE))
+		opponent_joined.emit(Board.opponent(local_side))
 	else:
 		table_ready.emit(seats)
 
@@ -868,13 +868,18 @@ func relay_available() -> bool:
 ## `seats` é a capacidade da mesa. Sai do catálogo (`Game.players_of`) e não
 ## daqui: quantos jogadores um jogo tem é regra dele, e este arquivo não conhece
 ## jogo nenhum.
-func host_relay(id: StringName, code: String, listed := false, seats := 2) -> void:
+##
+## `white` é o assento que joga de brancas numa mesa de dois. Também sai de quem
+## chama: xadrez e damas tiram na moeda (`pairing.gd`), o resto fica com quem
+## abriu. Chega aos outros no `"w"` do `welcome`.
+func host_relay(id: StringName, code: String, listed := false, seats := 2, white := 0) -> void:
 	if not _wire_relay():
 		relay_unavailable.emit("Servidor de partidas indisponível neste build.")
 		return
 	is_host = true
 	game_id = id
-	local_side = HOST_SIDE
+	white_seat = white
+	local_side = Board.Side.WHITE if white == 0 else Board.Side.BLACK
 	local_seat = 0
 	self.seats = seats
 	bot_seats = PackedInt32Array()
@@ -1073,8 +1078,11 @@ func _on_relay_seated(seat: int, capacity: int) -> void:
 	# aparelho descobre **qual assento ele é**, e sem isso quem abre mandaria um
 	# `welcome` sem se apresentar.
 	_remember_name(seat, player_name)
-	if seats == 2:
-		local_side = HOST_SIDE if seat == 0 else Board.opponent(HOST_SIDE)
+	# Só antes de a partida começar. Depois a cor é a da partida (moeda, revanche),
+	# que este aparelho já tem; refazer pelo assento a apagava a cada reconexão.
+	# Para quem entra é um palpite: o `welcome` ou o `resume` trazem a certa.
+	if seats == 2 and not _session_started:
+		local_side = Board.Side.WHITE if seat == white_seat else Board.Side.BLACK
 
 
 ## Alguém sentou. Só quem abriu reage: é dele o `welcome`.

@@ -31,6 +31,7 @@ func _ready() -> void:
 	await _test_repetition_draw()
 	await _test_end_options()
 	await _test_rematch()
+	await _test_coin_toss()
 	await _test_review()
 	await _test_review_side()
 	await _test_puzzle()
@@ -613,6 +614,71 @@ func _test_rated_result() -> void:
 ## trocam. Antes um toque reiniciava os dois lados na hora — o outro jogador era
 ## arrastado para um tabuleiro novo sem ter sido consultado, e quem começou de
 ## brancas começava de brancas para sempre.
+## A moeda do sorteio de cor gira na primeira partida em rede de xadrez e damas,
+## e só nela: não para quem assiste, nem no mesmo aparelho, nem na volta de uma
+## queda.
+func _test_coin_toss() -> void:
+	print("moeda do sorteio de cor")
+	_equals(CoinToss.face_at(0.0), Board.Side.WHITE, "a moeda começa na face branca")
+	_equals(CoinToss.face_at(PI), Board.Side.BLACK, "meia volta mostra a preta")
+	_equals(CoinToss.face_at(CoinToss.HALF_TURNS * PI), Board.Side.WHITE, "o giro par para na branca")
+	_equals(CoinToss.face_at((CoinToss.HALF_TURNS + 1) * PI), Board.Side.BLACK, "e o ímpar na preta")
+
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.BLACK
+	Net.local_side = Board.Side.BLACK
+	Net.local_seat = 0
+	Net.is_spectator = false
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var coin: CoinToss = scene._coin_toss
+	_check(is_instance_valid(coin), "a primeira partida em rede mostra a moeda")
+	_equals(coin._caption.text, "Você joga de pretas", "com a cor de quem vê")
+	_equals(coin.kind, Board.Kind.PAWN, "e um peão nas faces do xadrez")
+	_equals(coin.mouse_filter, Control.MOUSE_FILTER_IGNORE, "sem segurar o toque")
+	await get_tree().create_timer(CoinToss.SPIN + CoinToss.HOLD + CoinToss.FADE + 0.4).timeout
+	_check(not is_instance_valid(coin), "e some sozinha")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	var cases := [
+		["damas", Game.CHECKERS, Game.Mode.ONLINE, false, true],
+		["quem assiste", Game.CHESS, Game.Mode.ONLINE, true, false],
+		["mesmo aparelho", Game.CHESS, Game.Mode.HOTSEAT, false, false],
+	]
+	for case in cases:
+		Game.game_id = case[1]
+		Game.mode = case[2]
+		Net.is_spectator = case[3]
+		scene = preload("res://scenes/match.tscn").instantiate()
+		add_child(scene)
+		await get_tree().process_frame
+		_equals(is_instance_valid(scene._coin_toss), case[4], "moeda em %s" % case[0])
+		if case[1] == Game.CHECKERS:
+			_equals(scene._coin_toss.kind, Board.Kind.MAN, "com a pedra de damas nas faces")
+		scene.queue_free()
+		await get_tree().process_frame
+	Net.is_spectator = false
+
+	# Volta de uma queda: a sala já tinha uma partida começada neste aparelho.
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Net._expected_code = "MOEDA1"
+	Prefs.restart_match("MOEDA1", int(Time.get_unix_time_from_system()) - 60)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	_check(Game.match_resumed, "a partida reaberta é a mesma")
+	_check(not is_instance_valid(scene._coin_toss), "e a moeda não gira de novo")
+	scene.queue_free()
+	await get_tree().process_frame
+	Net._expected_code = ""
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+
+
 func _test_rematch() -> void:
 	print("revanche")
 	Game.mode = Game.Mode.ONLINE

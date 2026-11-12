@@ -114,6 +114,8 @@ var _seated := true
 @onready var _board: BoardView = %Board
 var _match_status: MatchStatus = null
 @onready var _banner: Banner = %Banner
+## A moeda do sorteio de cor, enquanto está na tela.
+var _coin_toss: CoinToss = null
 @onready var _top_last_move: LastMoveLine = %TopLastMove
 @onready var _bottom_last_move: LastMoveLine = %BottomLastMove
 
@@ -198,6 +200,17 @@ func _ready() -> void:
 	# Depois de montar a partida: quem entrou numa que já estava em curso recebeu o
 	# histórico antes desta cena existir, e ele ficou guardado esperando.
 	Net.claim_sync()
+
+	# A cor saiu na moeda (`pairing.gd`): mostra o sorteio na primeira partida da
+	# sala. A revanche troca as cores sem moeda, e quem volta de uma queda já sabia
+	# a sua.
+	if (
+		Game.mode == Game.Mode.ONLINE and not Net.is_spectator and not Game.match_resumed
+		and Game.entry_of(Game.game_id).get("coin_toss", false)
+	):
+		_coin_toss = CoinToss.play(
+			self, Game.local_side, Board.Kind.PAWN if _ruleset is ChessRules else Board.Kind.MAN
+		)
 
 
 func _new_game() -> void:

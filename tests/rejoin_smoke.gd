@@ -203,7 +203,8 @@ func _process(delta: float) -> bool:
 				print("mesa de dois")
 				var pair_host := _spawn("Eva")
 				pair_host.time_control = 3
-				pair_host.host_relay(&"chess", PAIR_CODE, false, 2)
+				# A moeda deu pretas a quem abriu.
+				pair_host.host_relay(&"chess", PAIR_CODE, false, 2, 1)
 				_links = {0: pair_host}
 				_next(12)
 		12:
@@ -228,7 +229,7 @@ func _process(delta: float) -> bool:
 			var pair_back: Node = _links[0]
 			if (_ready_count[pair_back] > 0 and _links[1].connected) or _waited() > DROP_NOTICE:
 				_equals(_ready_count[pair_back], 1, "o anfitrião de uma mesa de dois é recebido pelo outro")
-				_equals(pair_back.local_side, Board.Side.WHITE, "e volta com as mesmas peças")
+				_equals(pair_back.local_side, Board.Side.BLACK, "e volta com as mesmas peças, as da moeda")
 				_equals(pair_back.time_control, 3, "e o mesmo ritmo, que só quem ficou sabia")
 				_equals(_ready_count[_links[1]], 1, "sem o outro receber uma partida nova")
 				_check(_links[1].connected, "e o outro sai do 'reconectando'")
@@ -248,9 +249,9 @@ func _process(delta: float) -> bool:
 			var rematch_back: Node = _links[1]
 			if _ready_count[rematch_back] > 0 or _waited() > DROP_NOTICE:
 				_equals(_ready_count[rematch_back], 1, "quem caiu depois da revanche é recebido")
-				_equals(rematch_back.local_side, Board.Side.WHITE, "e volta de brancas, a cor da revanche")
-				_equals(rematch_back.white_seat, 1, "sabendo que o assento dele é o das brancas")
-				_equals(_links[0].local_side, Board.Side.BLACK, "e quem ficou continua de pretas")
+				_equals(rematch_back.local_side, Board.Side.BLACK, "e volta de pretas, a cor da revanche")
+				_equals(rematch_back.white_seat, 0, "sabendo que o assento das brancas é o do outro")
+				_equals(_links[0].local_side, Board.Side.WHITE, "e quem ficou continua de brancas")
 				_finish()
 				return true
 	return false
