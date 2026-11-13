@@ -181,6 +181,24 @@ func push_reviews() -> void:
 		Prefs.mark_uploaded(int(game["at"]))
 
 
+## A revisão da partida `at` no servidor: `{"status", "analysis"}`, com `status`
+## "" (pendente), "done", "failed" ou "missing" (não subiu). Vazio sem conta ou
+## sem resposta. Quem decide o que fazer é `GameReview.server_step`.
+func fetch_review(at: int) -> Dictionary:
+	if not signed_in():
+		return {}
+	var filter := ('owner = "%s" && played_at = %d' % [user_id, at]).uri_encode()
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/collections/chess_reviews/records?filter=%s&perPage=1&skipTotal=1" % filter, {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return {}
+	var items: Array = reply["data"].get("items", [])
+	if items.is_empty():
+		return {"status": "missing", "analysis": []}
+	var record: Dictionary = items[0]
+	var analysis: Variant = record.get("analysis")
+	return {"status": str(record.get("status", "")), "analysis": analysis if analysis is Array else []}
+
+
 ## O registro de `chess_reviews` de uma partida do histórico (`Prefs.history`).
 static func review_body(game: Dictionary, owner: String) -> Dictionary:
 	return {

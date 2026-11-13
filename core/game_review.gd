@@ -35,8 +35,22 @@ const INACCURACY_DROP := 10.0
 const MISTAKE_DROP := 20.0
 const BLUNDER_DROP := 30.0
 
-## Por posição. Uma partida de 40 lances são 81 buscas: ~25 s no celular.
-const MOVETIME_MS := 300
+## Por posição, no motor do celular: o trabalho que um Galaxy A16 faz em ~300 ms
+## (medido por adb em 2026-11-12). Uma partida de 40 lances são 81 buscas, ~25 s.
+## O servidor analisa mais fundo (200 mil nós, `pocketbase/worker`).
+const NODES := 50000
+## Teto por posição: só o aparelho lento chega nele, e sai com análise mais rasa.
+const MOVETIME_MS := 2000
+
+## A análise do servidor (`chess_reviews`) ainda pendente: o app espera por ela
+## consultando a cada `SERVER_POLL_S`, até `SERVER_WAIT_S`. Passou disso (fila
+## cheia, worker parado), revisa no próprio aparelho.
+const SERVER_POLL_S := 2.0
+const SERVER_WAIT_S := 90.0
+## Tempo médio por posição no servidor, só para a barra de progresso da espera.
+const SERVER_S_PER_POSITION := 0.3
+
+enum Source { SERVER, WAIT, LOCAL }
 
 var progress := 0
 var total := 0
@@ -142,37 +156,62 @@ static func _white(score: float, side: int) -> float:
 ## `score`/`after` são a vitória esperada de quem jogou. `fen` e `mate` são da
 ## posição antes do lance — é dela que o puzzle de mate perdido parte. Vazio
 ## quando o motor não sobe.
-func analyse(history: Array) -> Array:
-	var engine := Stockfish.new()
-	if not engine.start():
-		return []
-	engine.set_strength(0)
+##
+## `lines` é a análise do servidor (`chess_reviews.analysis`), uma por posição
+## da inicial em diante; com ela o motor nem sobe. Mais curta que a partida (o
+## servidor corta partida longa), a revisão para onde ela acaba.
+func analyse(history: Array, lines := []) -> Array:
+	var engine: Stockfish = null
+	if lines.is_empty():
+		engine = Stockfish.new()
+		if not engine.start():
+			return []
+		engine.set_strength(0)
 	var rules := ChessRules.new()
 	var state := rules.initial_state()
 	total = history.size()
 	progress = 0
 	var out := []
-	var seen := look(engine, rules, state)
+	var seen := look(engine, rules, state, _line(lines, 0))
 	for data in history:
 		if _abandoned or seen.is_empty():
 			break
 		var move := rules.move_from_uci(state, rules.uci(Move.from_dict(data)))
 		if move == null:
 			break
-		var judged := judge(engine, rules, state, seen, move)
+		var judged := judge(engine, rules, state, seen, move, _line(lines, progress + 1))
 		if judged.is_empty():
 			break
 		out.append(judged[0])
 		seen = judged[1]
 		progress += 1
-	engine.quit()
+	if engine != null:
+		engine.quit()
 	return out
+
+
+static func _line(lines: Array, index: int) -> Dictionary:
+	return lines[index] if index < lines.size() and lines[index] is Dictionary else {}
+
+
+## De onde vem a revisão, pela resposta de `Account.fetch_review`. `queued` diz
+## que a partida ainda está na fila de envio do aparelho (pode estar subindo
+## agora); `waited` é quanto já se esperou, em segundos.
+static func server_step(reply: Dictionary, queued: bool, waited: float) -> Source:
+	var status := str(reply.get("status", "failed"))
+	if status == "done" and reply.get("analysis") is Array and not reply["analysis"].is_empty():
+		return Source.SERVER
+	var pending := status == "" or (status == "missing" and queued)
+	return Source.WAIT if pending and waited < SERVER_WAIT_S else Source.LOCAL
 
 
 ## Um lance: a entrada da revisão (formato de `analyse`) e o que o motor viu
 ## depois dele, `[entry, after]`. `seen` é o `look` da posição de antes; o lance
 ## é aplicado em `state`. Vazio quando o motor morreu no meio.
-static func judge(engine: Stockfish, rules: ChessRules, state: MatchState, seen: Dictionary, move: Move) -> Array:
+##
+## `line_after`, quando vem, é a análise do servidor da posição depois do lance
+## e substitui a busca.
+static func judge(engine: Stockfish, rules: ChessRules, state: MatchState, seen: Dictionary, move: Move, line_after := {}) -> Array:
 	var entry := {
 		"san": rules.notation(state, move),
 		"uci": rules.uci(move),
@@ -188,7 +227,7 @@ static func judge(engine: Stockfish, rules: ChessRules, state: MatchState, seen:
 		entry["best_san"] = rules.notation(state, best_move)
 
 	rules.apply_move(state, move)
-	var after := look(engine, rules, state)
+	var after := look(engine, rules, state, line_after)
 	if after.is_empty():
 		return []
 	entry["after"] = 100.0 - float(after["score"])
@@ -204,14 +243,23 @@ func abandon() -> void:
 
 
 ## Nota da posição para quem tem a vez. Posição terminal não vai ao motor (ele
-## responde `bestmove (none)` sem nota útil): mate é 0, empate 50.
-static func look(engine: Stockfish, rules: ChessRules, state: MatchState) -> Dictionary:
+## responde `bestmove (none)` sem nota útil): mate é 0, empate 50. `line` é a
+## análise do servidor desta posição (`{"wdl", "mate", "best"}`), e no lugar
+## dela vai a busca; sem as duas, vazio.
+static func look(engine: Stockfish, rules: ChessRules, state: MatchState, line := {}) -> Dictionary:
 	match rules.outcome(state):
 		Ruleset.Outcome.WHITE_WINS, Ruleset.Outcome.BLACK_WINS:
 			return {"score": 0.0, "mate": 0, "best": "", "mated": true}
 		Ruleset.Outcome.DRAW:
 			return {"score": 50.0, "mate": 0, "best": "", "mated": false}
-	var seen := engine.search(rules.fen(state), MOVETIME_MS)
+	var seen := line
+	if seen.is_empty():
+		if engine == null:
+			return {}
+		seen = engine.search(rules.fen(state), MOVETIME_MS, PackedStringArray(), NODES)
+	elif not (seen.get("wdl") is Array and seen["wdl"].size() == 3):
+		return {}
 	if seen.is_empty():
 		return {}
-	return {"score": expected(seen["wdl"]), "mate": seen["mate"], "best": seen["best"], "mated": false}
+	# Do servidor os números chegam como float (JSON).
+	return {"score": expected(seen["wdl"]), "mate": int(seen.get("mate", 0)), "best": str(seen.get("best", "")), "mated": false}

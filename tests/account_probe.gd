@@ -203,6 +203,12 @@ func _ready() -> void:
 	if uploaded.size() == 1:
 		_equals(uploaded[0].get("moves"), "e2e4 e7e5 g1f3", "com os lances em UCI")
 		_equals([uploaded[0].get("side"), uploaded[0].get("status")], ["black", ""], "do lado do dono, pendente")
+	# `done` só o worker grava (superusuário); a escolha com ela está no test_runner.
+	_equals(await Account.fetch_review(finished["at"]), {"status": "", "analysis": []}, "fetch_review: pendente")
+	_equals((await Account.fetch_review(finished["at"] + 1))["status"], "missing", "fetch_review: partida que não subiu")
+	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
+	_equals(await Account.fetch_review(finished["at"]), {}, "fetch_review: servidor fora")
+	OS.set_environment("CASCAPP_PB_URL", url_now)
 	Prefs.forget_history()
 
 	print("avatar")

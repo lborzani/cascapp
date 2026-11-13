@@ -75,12 +75,19 @@ func ready() -> bool:
 ## `moves`, os lances da partida desde a posição inicial em UCI, substitui o FEN
 ## quando vem: só com eles o motor enxerga a repetição, e o bot que está ganhando
 ## não cai num empate por repetir a posição.
-func search(fen: String, movetime_ms: int, moves := PackedStringArray()) -> Dictionary:
+##
+## `nodes` maior que zero limita pelo trabalho, e `movetime_ms` vira teto: o
+## motor para no primeiro dos dois. Assim a análise tem a mesma qualidade em
+## qualquer aparelho, e só o aparelho lento é cortado pelo relógio.
+func search(fen: String, movetime_ms: int, moves := PackedStringArray(), nodes := 0) -> Dictionary:
 	if moves.is_empty():
 		_send("position fen " + fen)
 	else:
 		_send("position startpos moves " + " ".join(moves))
-	_send("go movetime %d" % movetime_ms)
+	var limit := "go movetime %d" % movetime_ms
+	if nodes > 0:
+		limit += " nodes %d" % nodes
+	_send(limit)
 	var result := {"cp": 0, "mate": 0, "wdl": [0, 1000, 0]}
 	while running():
 		var line := _read()

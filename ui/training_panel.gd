@@ -194,10 +194,20 @@ func _start_analysis() -> void:
 	_analyse_next()
 
 
+## A análise do servidor entra se já estiver pronta; aqui não se espera por ela
+## (são várias partidas em fila), e o resto vai ao motor do aparelho.
 func _analyse_next() -> void:
+	var game: Dictionary = _todo[0]
+	var lines := []
+	if Account.signed_in():
+		var reply := await Account.fetch_review(int(game.get("at", 0)))
+		if not is_inside_tree() or _todo.is_empty() or _todo[0] != game:
+			return
+		if GameReview.server_step(reply, false, INF) == GameReview.Source.SERVER:
+			lines = reply["analysis"]
 	_review = GameReview.new()
 	_thread = Thread.new()
-	_thread.start(_review.analyse.bind(_todo[0].get("moves", [])))
+	_thread.start(_review.analyse.bind(game.get("moves", []), lines))
 
 
 func _stop() -> void:
