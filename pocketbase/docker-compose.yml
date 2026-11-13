@@ -47,5 +47,23 @@ services:
       NODES: ${WORKER_NODES:-200000}
       THREADS: "3"
 
+  # Busca de uma posição na hora (`worker/search.mjs`), para o desafio e a
+  # avaliação ao vivo. Mesma imagem do worker, outro processo, um núcleo. O
+  # Funnel publica `:8443/cascapp/search` (ver o README). Confere o token de
+  # quem pede no PocketBase pela rede do compose.
+  search:
+    image: cascapp-worker:sf19
+    restart: unless-stopped
+    command: ["node", "/app/search.mjs"]
+    cpus: "1"
+    ports:
+      - "127.0.0.1:8093:8093"
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      PB_URL: http://pocketbase:8090
+      SEARCH_NODES: ${SEARCH_NODES:-100000}
+
 volumes:
   pb_data:
