@@ -30,7 +30,7 @@ func _initialize() -> void:
 		_check(seen.get("mate") == 1, "nota é mate em 1 (veio %s)" % seen.get("mate"))
 		_check(rules.move_from_uci(state, str(seen.get("best"))) != null, "lance do motor é legal para ChessRules")
 
-		engine.set_strength(1320)
+		engine.set_strength(1350)
 		_check(engine.ready(), "aceita UCI_Elo")
 		var opening := engine.search(rules.fen(rules.initial_state()), 100)
 		_check(rules.move_from_uci(rules.initial_state(), str(opening.get("best"))) != null, "joga lance legal limitado")

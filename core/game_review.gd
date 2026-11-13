@@ -35,10 +35,11 @@ const INACCURACY_DROP := 10.0
 const MISTAKE_DROP := 20.0
 const BLUNDER_DROP := 30.0
 
-## Por posição, no motor do celular: o trabalho que um Galaxy A16 faz em ~300 ms
-## (medido por adb em 2026-11-12). Uma partida de 40 lances são 81 buscas, ~25 s.
-## O servidor analisa mais fundo (200 mil nós, `pocketbase/worker`).
-const NODES := 50000
+## Por posição, no motor do celular (SF 15.1 com avaliação clássica): o que um
+## Galaxy A16 faz em ~300 ms, medido por adb em 2026-11-12 (257 a 529 mil nós).
+## Uma partida de 40 lances são 81 buscas, ~25 s. Só vale sem internet; com ela,
+## a análise é a do servidor (SF 19, 200 mil nós, `pocketbase/worker`).
+const NODES := 200000
 ## Teto por posição: só o aparelho lento chega nele, e sai com análise mais rasa.
 const MOVETIME_MS := 2000
 

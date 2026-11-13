@@ -52,7 +52,7 @@ const LEVELS := [
 ##
 ## `base` é o nível de `LEVELS` que dá o tempo de busca e que joga quando o
 ## Stockfish não existe no aparelho. Iniciante não tem `elo`: o piso do
-## Stockfish é 1320, forte demais para quem está aprendendo, e ali joga a busca
+## Stockfish do APK (15.1) é 1350, forte demais para quem está aprendendo, e ali joga a busca
 ## própria com deslizes — que é exatamente o adversário que erra peças.
 const CHESS_LEVELS := [
 	{"label": "Iniciante", "elo": 0, "shown": "~800", "base": 0},
