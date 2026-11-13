@@ -184,8 +184,11 @@ export function serve(handle, port) {
         return reply(400, { error: 'JSON inválido' });
       }
       const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
+      const started = Date.now();
       const { status, body: out } = await handle({ token, body });
       reply(status, out);
+      // Uma linha por pedido, sem conta nem posição: só para ver o uso.
+      console.log(`${status} ${Date.now() - started} ms`);
     });
   }).listen(port, '0.0.0.0');
 }
