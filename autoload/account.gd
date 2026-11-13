@@ -23,7 +23,7 @@ signal avatar_changed
 ## Chegou a foto de outra conta pedida em [method avatar_of].
 signal remote_avatar_loaded
 
-const DEFAULT_URL := "https://mammus.tailb8b7e1.ts.net:8443"
+const DEFAULT_URL := "https://homeserver.tailb8b7e1.ts.net:8443/cascapp"
 const EMAIL_DOMAIN := "anon.cascapp.invalid"
 const RETRY_SECONDS := 60.0
 ## Um pedido a mais que isto é servidor fora do ar, e não lentidão.
@@ -104,6 +104,9 @@ func sign_in() -> bool:
 	elif ok and not avatar_file.is_empty() and not has_local:
 		# A conta tem foto e o aparelho não: reinstalação. Baixa a de lá.
 		await _fetch_own_avatar()
+	if ok:
+		# Partidas que terminaram com o servidor fora sobem agora.
+		push_reviews()
 	if not ok:
 		_retry.start()
 	return ok
@@ -153,6 +156,59 @@ func remove_friend(id: String) -> bool:
 		return false
 	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/" + id.uri_encode(), {})
 	return reply["code"] == 204
+
+
+# --- revisão no servidor --------------------------------------------------------
+#
+# Cada partida de xadrez que termina vira um pedido em `chess_reviews`, que o
+# worker do servidor de casa preenche (`pocketbase/pb_migrations/
+# 1760800000_revisoes_xadrez.js`). Como o nome e a foto: vale primeiro no
+# aparelho (`Prefs`, marca `uploaded`) e sobe quando der.
+
+
+## Sobe as partidas pendentes, da mais recente para a mais antiga. 200 subiu;
+## 400 é a mesma partida que já tinha subido (resposta perdida) ou uma que o
+## servidor nunca vai aceitar — repetir não muda nada, então as duas saem da
+## fila. Qualquer outra resposta (sem rede, 429, servidor fora) para tudo, e a
+## próxima entrada ou partida tenta de novo.
+func push_reviews() -> void:
+	if not signed_in():
+		return
+	for game: Dictionary in Prefs.pending_uploads():
+		var reply := await _call(HTTPClient.METHOD_POST, "/api/collections/chess_reviews/records", review_body(game, user_id))
+		if reply["code"] != 200 and reply["code"] != 400:
+			return
+		Prefs.mark_uploaded(int(game["at"]))
+
+
+## A revisão da partida `at` no servidor: `{"status", "analysis"}`, com `status`
+## "" (pendente), "done", "failed" ou "missing" (não subiu). Vazio sem conta ou
+## sem resposta. Quem decide o que fazer é `GameReview.server_step`.
+func fetch_review(at: int) -> Dictionary:
+	if not signed_in():
+		return {}
+	var filter := ('owner = "%s" && played_at = %d' % [user_id, at]).uri_encode()
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/collections/chess_reviews/records?filter=%s&perPage=1&skipTotal=1" % filter, {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return {}
+	var items: Array = reply["data"].get("items", [])
+	if items.is_empty():
+		return {"status": "missing", "analysis": []}
+	var record: Dictionary = items[0]
+	var analysis: Variant = record.get("analysis")
+	return {"status": str(record.get("status", "")), "analysis": analysis if analysis is Array else []}
+
+
+## O registro de `chess_reviews` de uma partida do histórico (`Prefs.history`).
+static func review_body(game: Dictionary, owner: String) -> Dictionary:
+	return {
+		"owner": owner,
+		"moves": ChessRules.new().uci_line(game["moves"]),
+		"side": "white" if int(game.get("side", Board.Side.WHITE)) == Board.Side.WHITE else "black",
+		"hotseat": bool(game.get("hotseat", false)),
+		"against": str(game.get("against", "")).left(60),
+		"played_at": int(game["at"]),
+	}
 
 
 # --- avatar ---------------------------------------------------------------------

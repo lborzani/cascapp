@@ -22,6 +22,9 @@ const VERDICT_COLOR := {
 
 var _review := GameReview.new()
 var _thread: Thread = null
+## `Time.get_ticks_msec` de quando começou a espera pela análise do servidor;
+## -1 fora dela.
+var _waiting_since := -1
 var _history: Array = []
 ## O registro do histórico (`Prefs.record_game`) de onde a partida veio; vazio
 ## quando ela não foi para o histórico, e aí nada vai para o treino.
@@ -132,10 +135,43 @@ func open(history: Array, side: int, game := {}) -> void:
 	for data in _history:
 		rules.apply_move(state, rules.move_from_uci(state, rules.uci(Move.from_dict(data))))
 		_states.append(state.clone())
-	_thread = Thread.new()
-	_thread.start(_review.analyse.bind(_history))
 	_fill_moves()
 	_show(0)
+	_begin()
+
+
+## A análise do servidor (`GameReview.server_step`): pronta, usa; pendente,
+## espera com a barra andando; senão, o motor do aparelho.
+func _begin() -> void:
+	if _game.is_empty() or not Account.signed_in():
+		_run([])
+		return
+	var queued: bool = _game.get("uploaded", true) == false
+	if queued:
+		# Pode ter terminado sem rede: tenta subir de novo enquanto espera.
+		Account.push_reviews()
+	_waiting_since = Time.get_ticks_msec()
+	while true:
+		var reply: Dictionary = await Account.fetch_review(int(_game["at"]))
+		if not is_inside_tree():
+			return
+		var waited := (Time.get_ticks_msec() - _waiting_since) / 1000.0
+		match GameReview.server_step(reply, queued, waited):
+			GameReview.Source.SERVER:
+				_run(reply["analysis"])
+				return
+			GameReview.Source.LOCAL:
+				_run([])
+				return
+		await get_tree().create_timer(GameReview.SERVER_POLL_S).timeout
+		if not is_inside_tree():
+			return
+
+
+func _run(lines: Array) -> void:
+	_waiting_since = -1
+	_thread = Thread.new()
+	_thread.start(_review.analyse.bind(_history, lines))
 
 
 func close() -> void:
@@ -149,6 +185,12 @@ func _exit_tree() -> void:
 
 
 func _process(_delta: float) -> void:
+	if _waiting_since >= 0:
+		# O servidor não diz quanto falta: a estimativa é pelo tempo médio.
+		var expected := (_history.size() + 1) * GameReview.SERVER_S_PER_POSITION + GameReview.SERVER_POLL_S
+		var elapsed := (Time.get_ticks_msec() - _waiting_since) / 1000.0
+		_status.text = "Analisando a partida no servidor… %d%%" % mini(95, int(elapsed / expected * 100))
+		return
 	if _thread == null:
 		return
 	if _thread.is_alive():

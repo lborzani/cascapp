@@ -617,6 +617,16 @@ func uci(move: Move) -> String:
 	return text
 
 
+## A partida inteira em UCI, separada por espaço ("e2e4 e7e5 e1g1 a7a8q"): o
+## formato que o worker de revisão no servidor lê (`chess_reviews`). `history`
+## no formato do fio, como `MatchState.history`.
+func uci_line(history: Array) -> String:
+	var text := PackedStringArray()
+	for data: Dictionary in history:
+		text.append(uci(Move.from_dict(data)))
+	return " ".join(text)
+
+
 ## O lance legal que o texto UCI descreve, ou `null`. Procurar na lista legal em
 ## vez de montar o `Move` à mão é o que traz junto as marcas que só o gerador
 ## sabe pôr (roque, en passant, captura).

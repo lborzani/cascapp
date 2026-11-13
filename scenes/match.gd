@@ -1109,8 +1109,11 @@ func _record_game(title: String, detail: String) -> void:
 		"hotseat": Game.mode == Game.Mode.HOTSEAT,
 		"title": title,
 		"detail": detail,
+		# Ainda não subiu para a revisão no servidor (`Account.push_reviews`).
+		"uploaded": false,
 	}
 	Prefs.record_game(_recorded_game)
+	Account.push_reviews()
 
 
 func _result_detail() -> String:

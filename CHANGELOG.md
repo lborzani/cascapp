@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.42
+
+- Xadrez: a revisão da partida agora é feita no nosso servidor. Ela olha cerca de quatro vezes mais fundo e não gasta a bateria do celular. Logo depois da partida, leva alguns segundos; reabrir a revisão é na hora.
+- Xadrez: sem internet, a revisão continua sendo feita no próprio celular, como antes.
+- Treino: as partidas que o servidor já revisou entram no treino sem precisar analisar de novo no celular.
+
 ## 1.41
 
 - Xadrez e damas online: quem cria a partida não joga mais sempre de brancas. Uma moeda gira no começo e decide a cor de cada um. Na revanche, as cores trocam como antes.

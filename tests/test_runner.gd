@@ -9,6 +9,7 @@ extends SceneTree
 ## Autoloads are not instantiated for a `--script` run, so the pairing helpers
 ## are reached through the script itself (they are static on purpose).
 const PairingLib := preload("res://autoload/pairing.gd")
+const AccountLib := preload("res://autoload/account.gd")
 
 var _failures := 0
 
@@ -22,6 +23,7 @@ func _initialize() -> void:
 	_test_review_rules()
 	_test_review_curve()
 	_test_review_accuracy()
+	_test_review_server()
 	_test_checkers_notation()
 	_test_checkers_opening()
 	_test_checkers_capture_routes()
@@ -470,6 +472,29 @@ func _test_chess_uci() -> void:
 		_equals(rules.uci(move) if move != null else "<nulo>", text, "promoção ida e volta " + text)
 	_check(rules.move_from_uci(promotion, "a7a8") == null, "promoção sem peça é recusada")
 
+	# A partida inteira, como o worker do servidor recebe: en passant (e5d6),
+	# roque (e1g1) e promoção com captura dos dois lados (b2a1q, c7b8q).
+	var line := "e2e4 a7a6 e4e5 d7d5 e5d6 a6a5 d6c7 a5a4 g1f3 a4a3 f1e2 a3b2 e1g1 b2a1q c7b8q"
+	var game := rules.initial_state()
+	for text in line.split(" "):
+		var move := rules.move_from_uci(game, text)
+		_check(move != null, "lance legal na partida de teste: " + text)
+		if move == null:
+			return
+		rules.apply_move(game, move)
+	_equals(rules.uci_line(game.history), line, "partida inteira em UCI")
+	_equals(rules.uci_line([]), "", "partida vazia, texto vazio")
+
+	var body := AccountLib.review_body({
+		"at": 1700000000, "moves": game.history, "side": Board.Side.BLACK,
+		"hotseat": false, "against": "Contra o bot (%s)" % "x".repeat(80),
+	}, "conta123")
+	_equals(body["moves"], line, "pedido de revisão leva os lances em UCI")
+	_equals(body["side"], "black", "e o lado do dono")
+	_equals(body["played_at"], 1700000000, "e quando foi jogada")
+	_equals(body["owner"], "conta123", "e de quem é")
+	_equals((body["against"] as String).length(), 60, "rótulo cortado no tamanho do servidor")
+
 
 func _test_review_rules() -> void:
 	print("review — classificação")
@@ -531,6 +556,43 @@ func _test_review_accuracy() -> void:
 	var black_accuracy := GameReview.accuracy(entries, black)
 	_check(black_accuracy > 10.0 and black_accuracy < 60.0, "um erro grave derruba as pretas (%.1f)" % black_accuracy)
 	_equals(GameReview.accuracy([], white), -1.0, "quem não jogou não tem nota")
+
+
+## A análise do servidor no lugar do motor. As posições são as que o worker da
+## Pi devolveu em 2026-11-12 (200 mil nós, PV tirada) para o mate do pastor que
+## não aconteceu, a mesma partida do `stockfish_probe`. Não precisa do motor.
+const SERVER_MISSED_MATE := '[{"best":"e2e4","mate":0,"wdl":[60,935,5]},{"best":"e7e5","mate":0,"wdl":[4,920,76]},{"best":"g1f3","mate":0,"wdl":[50,943,7]},{"best":"g8f6","mate":0,"wdl":[18,963,19]},{"best":"g1f3","mate":0,"wdl":[28,960,12]},{"best":"g7g6","mate":0,"wdl":[52,942,6]},{"best":"h5f7","mate":1,"wdl":[1000,0,0]},{"best":"f6h5","mate":0,"wdl":[1000,0,0]}]'
+
+
+func _test_review_server() -> void:
+	print("review — análise do servidor")
+	var rules := ChessRules.new()
+	var state := rules.initial_state()
+	for text in ["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6", "d2d3"]:
+		rules.apply_move(state, rules.move_from_uci(state, text))
+	var lines: Array = JSON.parse_string(SERVER_MISSED_MATE)
+	var review := GameReview.new()
+	var entries := review.analyse(state.history, lines)
+	_equals(entries.size(), 7, "uma entrada por lance, sem subir o motor")
+	_equals(review.progress, 7, "e o progresso chega ao fim")
+	if entries.size() == 7:
+		_equals(entries[5]["verdict"], GameReview.Verdict.BLUNDER, "3...Cf6 é erro grave")
+		_check(entries[6]["missed_mate"], "4.d3 deixa o mate passar")
+		_equals(entries[6]["best_san"], "Dxf7#", "o melhor era Dxf7#")
+		_equals(entries[6]["mate"], 1, "mate em 1, inteiro mesmo vindo do JSON")
+		_check(not entries[4]["missed_mate"], "lance sem mate na mesa não é mate perdido")
+	_equals(GameReview.new().analyse(state.history, lines.slice(0, 4)).size(), 3, "análise mais curta que a partida para onde acaba")
+
+	var done := {"status": "done", "analysis": lines}
+	var source := GameReview.Source
+	_equals(GameReview.server_step(done, false, 0.0), source.SERVER, "pronta: usa a do servidor")
+	_equals(GameReview.server_step({"status": "done", "analysis": []}, false, 0.0), source.LOCAL, "pronta mas vazia: motor do aparelho")
+	_equals(GameReview.server_step({"status": "", "analysis": []}, false, 10.0), source.WAIT, "pendente: espera")
+	_equals(GameReview.server_step({"status": "", "analysis": []}, false, GameReview.SERVER_WAIT_S), source.LOCAL, "pendente além do teto: motor do aparelho")
+	_equals(GameReview.server_step({"status": "failed", "analysis": []}, false, 0.0), source.LOCAL, "falhou no servidor: motor do aparelho")
+	_equals(GameReview.server_step({"status": "missing", "analysis": []}, true, 0.0), source.WAIT, "ainda subindo: espera")
+	_equals(GameReview.server_step({"status": "missing", "analysis": []}, false, 0.0), source.LOCAL, "não subiu e não vai subir: motor do aparelho")
+	_equals(GameReview.server_step({}, true, 0.0), source.LOCAL, "sem conta ou sem rede: motor do aparelho")
 
 
 func _notate(rules: Ruleset, state: MatchState, from: String, to: String) -> String:
@@ -1201,6 +1263,15 @@ func _test_history() -> void:
 	var reloaded := Prefs.history()
 	_equals(reloaded.size(), Prefs.HISTORY_LIMIT, "sobrevive a fechar o app")
 	_equals(PackedInt32Array(reloaded[0]["moves"][0]["p"]), PackedInt32Array([12, 28]), "com os lances intactos")
+	_equals(Prefs.pending_uploads(), [], "partidas de antes da revisão no servidor não sobem")
+
+	Prefs.record_game({"at": 900, "moves": [], "uploaded": false})
+	Prefs.record_game({"at": 901, "moves": [], "uploaded": false})
+	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [901, 900], "as novas entram na fila")
+	Prefs.mark_uploaded(901)
+	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [900], "a que subiu sai da fila")
+	Prefs.forget()
+	_equals(Prefs.pending_uploads().size(), 1, "a fila sobrevive a fechar o app")
 	Prefs.forget_history()
 
 

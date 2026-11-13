@@ -1,7 +1,7 @@
-# Stack das contas no servidor de casa (`mammus`).
+# Stack das contas no servidor de casa (`homeserver`, Raspberry Pi).
 #
 # Escuta só no 127.0.0.1: quem publica é o Tailscale — a API pela internet
-# (Funnel, porta 8443, só /api) e o painel admin só pela tailnet (porta 8091).
+# (Funnel, porta 8443, só /cascapp/api) e o painel admin só pela tailnet (porta 8092).
 # Ver o README desta pasta.
 name: cascapp-contas
 
@@ -11,7 +11,7 @@ services:
     image: cascapp-pocketbase:0.40.5
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8092:8090"
     volumes:
       - pb_data:/pb/pb_data
     # O segredo que o relay manda ao registrar um resultado de xadrez. Mora no
@@ -24,6 +24,28 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Analisa as revisões de xadrez (`worker/`). Sem porta: fala com o PocketBase
+  # pela rede do compose, com um superusuário só dele (`WORKER_EMAIL` e
+  # `WORKER_PASSWORD` no `.env`). Três núcleos no máximo, para sobrar um para o
+  # galaticos e o resto da Pi.
+  worker:
+    build: worker
+    image: cascapp-worker:sf19
+    restart: unless-stopped
+    cpus: "3"
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      PB_URL: http://pocketbase:8090
+      PB_EMAIL: ${WORKER_EMAIL:-}
+      PB_PASSWORD: ${WORKER_PASSWORD:-}
+      # 200 mil, quatro vezes o que o app faz em 300 ms num Galaxy A16 (50 mil,
+      # medido por adb em 2026-11-12): uma partida de 40 lances sai em ~23 s, a
+      # mesma espera da revisão local de hoje. O motor local fica em 50 mil.
+      NODES: ${WORKER_NODES:-200000}
+      THREADS: "3"
 
 volumes:
   pb_data:
