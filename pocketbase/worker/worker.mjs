@@ -28,7 +28,7 @@ export const config = {
   stockfish: env('STOCKFISH', 'stockfish'),
   // Trabalho fixo por posição: mesma resposta em qualquer máquina, o que deixa
   // o cache por posição confiável. O tempo é só teto contra máquina lenta.
-  nodes: Number(env('NODES', '50000')),
+  nodes: Number(env('NODES', '200000')),
   movetimeMs: Number(env('MOVETIME_MS', '2000')),
   threads: Number(env('THREADS', '3')),
   hashMb: Number(env('HASH_MB', '128')),

@@ -41,9 +41,10 @@ services:
       PB_URL: http://pocketbase:8090
       PB_EMAIL: ${WORKER_EMAIL:-}
       PB_PASSWORD: ${WORKER_PASSWORD:-}
-      # 50 mil: o que o app faz hoje em 300 ms num Galaxy A16 (1 thread), medido
-      # por adb em 2026-11-12. Mesma qualidade da revisão local.
-      NODES: ${WORKER_NODES:-50000}
+      # 200 mil, quatro vezes o que o app faz em 300 ms num Galaxy A16 (50 mil,
+      # medido por adb em 2026-11-12): uma partida de 40 lances sai em ~23 s, a
+      # mesma espera da revisão local de hoje. O motor local fica em 50 mil.
+      NODES: ${WORKER_NODES:-200000}
       THREADS: "3"
 
 volumes:
