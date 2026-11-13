@@ -1,5 +1,6 @@
-# Worker de análise do mentor de xadrez: Node + Stockfish compilado da mesma
-# versão que vai no APK (`sf_19`), para a nota bater com a do motor local.
+# Worker de análise do mentor de xadrez: Node + Stockfish 19 compilado. O APK
+# leva o 15.1 sem rede (mais leve); aqui fica o 19, mais fundo, porque a
+# análise do servidor é a que vale com internet.
 #
 # `SF_ARCH` padrão é o da Raspberry Pi 5 (Cortex-A76, com dotprod). Num PC:
 # `--build-arg SF_ARCH=x86-64-avx2`. O `make` baixa as redes NNUE, então na Pi o

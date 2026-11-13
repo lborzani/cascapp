@@ -43,6 +43,9 @@ func start(path := binary()) -> bool:
 		quit()
 		return false
 	_send("setoption name UCI_ShowWDL value true")
+	# O do APK é o 15.1 sem a rede embutida: sem isto ele recusa toda busca.
+	# Motor que não tem a opção (16 em diante) só ignora.
+	_send("setoption name Use NNUE value false")
 	return ready()
 
 

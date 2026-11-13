@@ -87,12 +87,14 @@ jobs:
       - name: Regras (perft, damas, QR, prefs)
         run: godot --headless --path . --script res://tests/test_runner.gd
 
-      # O Stockfish do apt é mais velho que o do APK, e não importa: o que se
-      # testa aqui é a conversa UCI, que é a mesma desde sempre.
+      # O mesmo motor do APK: Stockfish 15.1 sem a rede embutida, com a
+      # avaliação clássica (`android_plugin/build_stockfish.sh`). O do apt é
+      # outra versão, com rede, e não pegaria o app esquecendo o `Use NNUE`.
       - name: Stockfish (UCI)
         run: |
-          sudo apt-get install -y -qq stockfish
-          STOCKFISH=/usr/games/stockfish godot --headless --path . --script res://tests/stockfish_probe.gd
+          curl -fsSL https://github.com/official-stockfish/Stockfish/archive/refs/tags/sf_15.1.tar.gz | tar xz -C /tmp
+          make -C /tmp/Stockfish-sf_15.1/src -j"$(nproc)" build ARCH=x86-64-modern EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF > /tmp/sf-build.log 2>&1 || { tail -30 /tmp/sf-build.log; exit 1; }
+          STOCKFISH=/tmp/Stockfish-sf_15.1/src/stockfish godot --headless --path . --script res://tests/stockfish_probe.gd
 
       # A conta anônima contra um PocketBase de verdade, na mesma versão do
       # servidor (lida do Dockerfile) e com as mesmas migrations. Fora daqui o

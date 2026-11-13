@@ -1978,7 +1978,7 @@ func _test_stockfish_license() -> void:
 	_check(link != null, "os Ajustes têm o aviso")
 	if link != null:
 		_check(link.text.contains("GPLv3"), "o aviso nomeia a licença")
-		_check(link.uri.ends_with("/tree/sf_19"), "e leva ao código-fonte da versão que vai no APK")
+		_check(link.uri.ends_with("/tree/sf_15.1"), "e leva ao código-fonte da versão que vai no APK")
 	settings.free()
 
 
