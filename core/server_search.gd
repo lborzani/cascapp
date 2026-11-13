@@ -20,6 +20,8 @@ const RETRY_MS := 30000
 var _local: Stockfish = null
 var _elo := 0
 var _client: HTTPClient = null
+## `host:porta` da conexão em `_client`.
+var _target := ""
 var _down_until := 0
 
 
@@ -82,7 +84,10 @@ func _local_engine() -> Stockfish:
 func _ask(body: Dictionary) -> Dictionary:
 	var url := parse_url(Account.base_url() + "/search")
 	var deadline := Time.get_ticks_msec() + TIMEOUT_MS
-	if _client == null or _client.get_status() != HTTPClient.STATUS_CONNECTED:
+	# A conexão aberta só serve se for para o mesmo servidor.
+	var target := "%s:%d" % [url["host"], url["port"]]
+	if _client == null or _client.get_status() != HTTPClient.STATUS_CONNECTED or target != _target:
+		_target = target
 		_client = HTTPClient.new()
 		var tls: TLSOptions = TLSOptions.client() if url["tls"] else null
 		if _client.connect_to_host(url["host"], url["port"], tls) != OK or not _wait(deadline, [HTTPClient.STATUS_RESOLVING, HTTPClient.STATUS_CONNECTING], HTTPClient.STATUS_CONNECTED):
