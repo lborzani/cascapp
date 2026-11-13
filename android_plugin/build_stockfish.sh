@@ -29,6 +29,10 @@ export LDFLAGS="-static -Wno-unused-command-line-argument"
 tmp=$(mktemp -d)
 curl -fsSL "https://github.com/official-stockfish/Stockfish/archive/refs/tags/$VERSION.tar.gz" | tar xz -C "$tmp"
 cd "$tmp"/Stockfish-*/src
+# O Makefile do 15.1 passa ao clang do NDK um flag que o clang 18 (NDK 27) já
+# removeu, e a compilação para em "unknown argument". O pass manager novo é o
+# padrão faz tempo; tirar o flag não muda o binário.
+sed -i 's/-fexperimental-new-pass-manager//' Makefile
 make -j"$(nproc)" build ARCH=armv8 COMP=ndk EXTRACXXFLAGS="-DNNUE_EMBEDDING_OFF" EXTRALDFLAGS="-Wl,-z,max-page-size=16384"
 make strip ARCH=armv8 COMP=ndk
 
