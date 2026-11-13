@@ -23,7 +23,7 @@ signal avatar_changed
 ## Chegou a foto de outra conta pedida em [method avatar_of].
 signal remote_avatar_loaded
 
-const DEFAULT_URL := "https://homeserver.tailb8b7e1.ts.net:8443"
+const DEFAULT_URL := "https://homeserver.tailb8b7e1.ts.net:8443/cascapp"
 const EMAIL_DOMAIN := "anon.cascapp.invalid"
 const RETRY_SECONDS := 60.0
 ## Um pedido a mais que isto é servidor fora do ar, e não lentidão.

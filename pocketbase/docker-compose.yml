@@ -1,7 +1,7 @@
 # Stack das contas no servidor de casa (`homeserver`, Raspberry Pi).
 #
 # Escuta só no 127.0.0.1: quem publica é o Tailscale — a API pela internet
-# (Funnel, porta 8443, só /api) e o painel admin só pela tailnet (porta 8091).
+# (Funnel, porta 8443, só /cascapp/api) e o painel admin só pela tailnet (porta 8092).
 # Ver o README desta pasta.
 name: cascapp-contas
 
@@ -11,7 +11,7 @@ services:
     image: cascapp-pocketbase:0.40.5
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8092:8090"
     volumes:
       - pb_data:/pb/pb_data
     # O segredo que o relay manda ao registrar um resultado de xadrez. Mora no

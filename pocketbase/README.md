@@ -7,9 +7,15 @@ domínio próprio. A imagem sai na arquitetura de quem constrói (`TARGETARCH` n
 
 | O quê | Onde | Quem alcança |
 |---|---|---|
-| API | `https://homeserver.tailb8b7e1.ts.net:8443/api/` | internet (Tailscale Funnel, só `/api`) |
-| Painel admin | `https://homeserver.tailb8b7e1.ts.net:8091/_/` | só a tailnet (`tailscale serve`) |
-| Container | `127.0.0.1:8090` no `homeserver` | só o próprio servidor |
+| API | `https://homeserver.tailb8b7e1.ts.net:8443/cascapp/api/` | internet (Tailscale Funnel, só `/cascapp/api`) |
+| Painel admin | `https://homeserver.tailb8b7e1.ts.net:8092/_/` | só a tailnet (`tailscale serve`) |
+| Container | `127.0.0.1:8092` no `homeserver` | só o próprio servidor |
+
+As três portas do Funnel da Pi já têm dono (443 galaticos, 8443 ate-o-japao,
+10000 SPMove), e a 8090 local é do galaticos. Por isso o Cascapp divide a 8443
+pelo caminho `/cascapp/api`, e o app usa `…:8443/cascapp` como endereço base.
+Só o `/api` vai para a internet; o painel `/_/` fica na tailnet. Nunca rodar
+`tailscale funnel` sem `--https=`: isso troca a 443 do galaticos.
 
 **Transição:** antes ele morava no `mammus`, e as versões do app até a 1.41 têm
 `https://mammus.tailb8b7e1.ts.net:8443` fixo. Enquanto elas existirem, a 8443
@@ -79,8 +85,11 @@ usuário no Pi):
 
 ```bash
 tar -C pocketbase -cf - Dockerfile docker-compose.yml pb_migrations pb_hooks | ssh USUARIO@homeserver 'mkdir -p ~/cascapp-contas && tar -C ~/cascapp-contas -xf -'
-ssh USUARIO@homeserver 'cd ~/cascapp-contas && docker compose up -d --build'
+ssh USUARIO@homeserver 'cd ~/cascapp-contas && docker build --network host -t cascapp-pocketbase:0.40.5 . && docker compose up -d --no-build'
 ```
+
+O `--network host` é porque o BuildKit da Pi não resolve DNS (o host usa o
+MagicDNS); o `--no-build` usa a imagem que acabou de sair.
 
 As migrations rodam sozinhas na subida, e os hooks de `pb_hooks/` carregam junto. Versão nova do PocketBase: trocar o
 `PB_VERSION` do `Dockerfile` e a tag da `image` no compose, ler as notas de
@@ -89,8 +98,8 @@ release e subir de novo.
 Publicação pelo Tailscale (uma vez; fica salva no `tailscaled`):
 
 ```bash
-tailscale funnel --bg --https=8443 --set-path=/api http://127.0.0.1:8090/api
-tailscale serve --bg --https=8091 http://127.0.0.1:8090
+tailscale funnel --bg --https=8443 --set-path=/cascapp/api http://127.0.0.1:8092/api
+tailscale serve --bg --https=8092 http://127.0.0.1:8092
 ```
 
 ## Superusuário
