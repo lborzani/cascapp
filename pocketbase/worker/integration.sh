@@ -26,5 +26,5 @@ docker exec "$PB" /pb/pocketbase superuser upsert worker@teste.invalid "$PASS" -
 
 docker run --rm --network "$NET" \
   -e PB_URL="http://$PB:8090" -e PB_EMAIL=worker@teste.invalid -e PB_PASSWORD="$PASS" \
-  -e NODES="${NODES:-500000}" -e THREADS="${THREADS:-3}" \
+  -e NODES="${NODES:-50000}" -e THREADS="${THREADS:-3}" \
   cascapp-worker:teste node /app/integration.mjs

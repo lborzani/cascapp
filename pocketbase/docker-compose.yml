@@ -25,5 +25,26 @@ services:
       timeout: 5s
       retries: 3
 
+  # Analisa as revisões de xadrez (`worker/`). Sem porta: fala com o PocketBase
+  # pela rede do compose, com um superusuário só dele (`WORKER_EMAIL` e
+  # `WORKER_PASSWORD` no `.env`). Três núcleos no máximo, para sobrar um para o
+  # galaticos e o resto da Pi.
+  worker:
+    build: worker
+    image: cascapp-worker:sf19
+    restart: unless-stopped
+    cpus: "3"
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      PB_URL: http://pocketbase:8090
+      PB_EMAIL: ${WORKER_EMAIL:-}
+      PB_PASSWORD: ${WORKER_PASSWORD:-}
+      # 50 mil: o que o app faz hoje em 300 ms num Galaxy A16 (1 thread), medido
+      # por adb em 2026-11-12. Mesma qualidade da revisão local.
+      NODES: ${WORKER_NODES:-50000}
+      THREADS: "3"
+
 volumes:
   pb_data:
