@@ -140,32 +140,16 @@ func open(history: Array, side: int, game := {}) -> void:
 	_begin()
 
 
-## A análise do servidor (`GameReview.server_step`): pronta, usa; pendente,
-## espera com a barra andando; senão, o motor do aparelho.
+## A análise do servidor (`Account.server_review`): pronta, usa; pendente ou
+## recém-subida, espera com a barra andando; senão, o motor do aparelho.
 func _begin() -> void:
 	if _game.is_empty() or not Account.signed_in():
 		_run([])
 		return
-	var queued: bool = _game.get("uploaded", true) == false
-	if queued:
-		# Pode ter terminado sem rede: tenta subir de novo enquanto espera.
-		Account.push_reviews()
 	_waiting_since = Time.get_ticks_msec()
-	while true:
-		var reply: Dictionary = await Account.fetch_review(int(_game["at"]))
-		if not is_inside_tree():
-			return
-		var waited := (Time.get_ticks_msec() - _waiting_since) / 1000.0
-		match GameReview.server_step(reply, queued, waited):
-			GameReview.Source.SERVER:
-				_run(reply["analysis"])
-				return
-			GameReview.Source.LOCAL:
-				_run([])
-				return
-		await get_tree().create_timer(GameReview.SERVER_POLL_S).timeout
-		if not is_inside_tree():
-			return
+	var lines := await Account.server_review(_game, is_inside_tree)
+	if is_inside_tree():
+		_run(lines)
 
 
 func _run(lines: Array) -> void:

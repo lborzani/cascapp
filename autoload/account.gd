@@ -199,6 +199,51 @@ func fetch_review(at: int) -> Dictionary:
 	return {"status": str(record.get("status", "")), "analysis": analysis if analysis is Array else []}
 
 
+## Sobe uma partida do histórico agora, fora da fila (a de antes da revisão no
+## servidor, que nunca entrou nela). Verdadeiro se ela está lá: 200, ou 400 da
+## que já tinha subido.
+func upload_review(game: Dictionary) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/collections/chess_reviews/records", review_body(game, user_id))
+	if reply["code"] != 200 and reply["code"] != 400:
+		return false
+	Prefs.mark_uploaded(int(game["at"]))
+	return true
+
+
+## A análise do servidor da partida `game` (`Prefs.history`), pela regra de
+## `GameReview.server_step`: pronta volta na hora; pendente, espera; a que nunca
+## subiu sobe agora e espera junto. Vazio quando a revisão deve ser no aparelho.
+## `alive` falso interrompe a espera (a tela fechou, a fila andou).
+func server_review(game: Dictionary, alive: Callable) -> Array:
+	if game.is_empty() or not signed_in():
+		return []
+	var at := int(game.get("at", 0))
+	var queued: bool = game.get("uploaded", true) == false
+	if queued:
+		# Pode ter terminado sem rede: tenta subir de novo enquanto espera.
+		push_reviews()
+	var since := Time.get_ticks_msec()
+	while true:
+		var reply := await fetch_review(at)
+		if not alive.call():
+			return []
+		if reply.get("status") == "missing" and not queued:
+			queued = await upload_review(game)
+			if not alive.call():
+				return []
+		match GameReview.server_step(reply, queued, (Time.get_ticks_msec() - since) / 1000.0):
+			GameReview.Source.SERVER:
+				return reply["analysis"]
+			GameReview.Source.LOCAL:
+				return []
+		await get_tree().create_timer(GameReview.SERVER_POLL_S).timeout
+		if not alive.call():
+			return []
+	return []
+
+
 ## O registro de `chess_reviews` de uma partida do histórico (`Prefs.history`).
 static func review_body(game: Dictionary, owner: String) -> Dictionary:
 	return {

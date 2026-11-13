@@ -37,6 +37,7 @@ var _solved := false
 var _tried: Move = null
 ## A conferência roda numa thread, com um Stockfish que vive enquanto o desafio
 ## estiver na tela — o treino passa de um cartão a outro sem subir outro motor.
+## Com internet a nota vem do servidor (`ServerSearch`); sem, do aparelho.
 var _checker: Thread = null
 var _engine: Stockfish = null
 
@@ -173,7 +174,7 @@ func _try(move: Move) -> void:
 ## Na thread. Sem motor, só o lance que ele tinha apontado vale.
 func _judge(after: MatchState, played: String) -> bool:
 	if _engine == null:
-		_engine = Stockfish.new()
+		_engine = ServerSearch.new()
 		if not _engine.start():
 			_engine = null
 	if _engine == null:
