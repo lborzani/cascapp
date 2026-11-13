@@ -209,7 +209,37 @@ func _ready() -> void:
 	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
 	_equals(await Account.fetch_review(finished["at"]), {}, "fetch_review: servidor fora")
 	OS.set_environment("CASCAPP_PB_URL", url_now)
+
+	# Partida de antes da revisão no servidor: sem a marca `uploaded`.
+	var old := finished.duplicate()
+	old["at"] = int(finished["at"]) - 1000
+	old.erase("uploaded")
+	Prefs.record_game(old)
+	_check(await Account.upload_review(old), "upload_review: a partida antiga sobe na hora")
+	_equals((await Account.fetch_review(old["at"]))["status"], "", "e fica pendente")
+	_check(await Account.upload_review(old), "subir de novo não é erro (400 da repetida)")
+	# Pendente e sem worker aqui: a espera é cortada pelo `alive`.
+	var asked := [0]
+	var lines := await Account.server_review(old, func() -> bool:
+		asked[0] += 1
+		return asked[0] < 2)
+	_equals(lines, [], "server_review: cortada pelo alive, nada")
+	_equals(await Account.server_review({}, func() -> bool: return true), [], "server_review sem partida: nada")
 	Prefs.forget_history()
+
+	print("busca no servidor (ServerSearch)")
+	# Aqui o PocketBase não tem `/search` (404). A busca cai no motor do aparelho
+	# (se houver um no PATH da máquina), e o que se confere é o servidor: recusa
+	# não o deixa de lado; falha de rede deixa, por `RETRY_MS`.
+	var search := ServerSearch.new()
+	_check(search.start(), "com conta, sobe mesmo sem motor local")
+	search.search("8/8/8/8/8/8/8/K6k w - - 0 1", 100)
+	_equals(search._down_until, 0, "404 do servidor não o deixa de lado")
+	OS.set_environment("CASCAPP_PB_URL", "http://127.0.0.1:1")
+	search.search("8/8/8/8/8/8/8/K6k w - - 0 1", 100)
+	OS.set_environment("CASCAPP_PB_URL", url_now)
+	_check(search._down_until > Time.get_ticks_msec(), "servidor fora: fica de lado por um tempo")
+	search.quit()
 
 	print("avatar")
 	var photo := Image.create(640, 480, false, Image.FORMAT_RGB8)

@@ -50,6 +50,7 @@ func _ready() -> void:
 	await _test_battleship()
 	_test_back_navigation()
 	await _test_scroll_drag()
+	_test_server_search()
 	_test_stockfish_license()
 	await _test_manual_update()
 	await _test_match_bar()
@@ -1971,6 +1972,18 @@ func _test_manual_update() -> void:
 ## A GPL do Stockfish pede o aviso e o caminho para o código-fonte em quem
 ## distribui o binário. Uma linha nos Ajustes cumpre isso — e apagá-la numa
 ## limpeza de tela não quebraria nada que outro teste veja.
+func _test_server_search() -> void:
+	print("busca no servidor (ServerSearch)")
+	_equals(ServerSearch.parse_url("https://homeserver.tailb8b7e1.ts.net:8443/cascapp/search"),
+		{"tls": true, "host": "homeserver.tailb8b7e1.ts.net", "port": 8443, "path": "/cascapp/search"}, "endereço com porta e caminho")
+	_equals(ServerSearch.parse_url("http://127.0.0.1/search"), {"tls": false, "host": "127.0.0.1", "port": 80, "path": "/search"}, "http sem porta")
+	_equals(ServerSearch.parse_url("https://exemplo.dev"), {"tls": true, "host": "exemplo.dev", "port": 443, "path": "/"}, "sem caminho")
+	# Sem conta (a suíte não entra), nem tenta o servidor.
+	var search := ServerSearch.new()
+	_check(not search._server_ready(), "sem conta, o servidor não é tentado")
+	search.quit()
+
+
 func _test_stockfish_license() -> void:
 	print("licença do Stockfish")
 	var settings := preload("res://scenes/settings.tscn").instantiate()

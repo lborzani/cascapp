@@ -7,6 +7,13 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.43
+
+- O app ficou bem menor: o download completo caiu de 120 MB para cerca de 47 MB.
+- Xadrez: com internet, o desafio "Tentar de novo", a avaliação ao vivo de quem assiste e o Treino usam a análise do nosso servidor, mais funda. Sem internet, tudo continua funcionando no celular.
+- Treino: as partidas antigas do histórico também sobem para o servidor e são revisadas lá.
+- Xadrez: o bot joga como antes, sempre no celular.
+
 ## 1.42
 
 - Xadrez: a revisão da partida agora é feita no nosso servidor. Ela olha cerca de quatro vezes mais fundo e não gasta a bateria do celular. Logo depois da partida, leva alguns segundos; reabrir a revisão é na hora.

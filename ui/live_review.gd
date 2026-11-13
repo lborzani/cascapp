@@ -7,7 +7,8 @@ extends Node
 ## Só o último lance é julgado. É o único que a tela mostra, e é o que deixa
 ## quem entra no meio da partida ver a nota em menos de um segundo, em vez de
 ## esperar o motor passar pelo histórico inteiro. Uma busca por vez, numa
-## thread: a partida não espera o motor.
+## thread: a partida não espera o motor. Com internet a nota vem do servidor
+## (`ServerSearch`); sem, do aparelho.
 
 ## Entrada da revisão (formato de `GameReview.analyse`) do último lance; vazia
 ## sem lance, sem motor ou até a busca dele terminar.
@@ -99,7 +100,7 @@ func _process(_delta: float) -> void:
 ## Na thread. O motor sobe na primeira busca e fica para as seguintes.
 func _work(history: Array) -> Dictionary:
 	if _engine == null:
-		_engine = Stockfish.new()
+		_engine = ServerSearch.new()
 		if not _engine.start():
 			_engine = null
 			return {}
