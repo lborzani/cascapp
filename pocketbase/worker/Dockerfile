@@ -20,7 +20,7 @@ RUN apt-get update \
 FROM node:24-bookworm-slim
 
 COPY --from=stockfish /stockfish /usr/local/bin/stockfish
-COPY worker.mjs integration.mjs /app/
+COPY worker.mjs search.mjs integration.mjs /app/
 
 ENV STOCKFISH=/usr/local/bin/stockfish
 USER node

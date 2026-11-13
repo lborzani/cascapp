@@ -8,6 +8,7 @@ domínio próprio. A imagem sai na arquitetura de quem constrói (`TARGETARCH` n
 | O quê | Onde | Quem alcança |
 |---|---|---|
 | API | `https://homeserver.tailb8b7e1.ts.net:8443/cascapp/api/` | internet (Tailscale Funnel, só `/cascapp/api`) |
+| Busca (`/search`) | `https://homeserver.tailb8b7e1.ts.net:8443/cascapp/search` | internet, só com token de conta (`worker/search.mjs`) |
 | Painel admin | `https://homeserver.tailb8b7e1.ts.net:8092/_/` | só a tailnet (`tailscale serve`) |
 | Container | `127.0.0.1:8092` no `homeserver` | só o próprio servidor |
 
@@ -100,6 +101,7 @@ Publicação pelo Tailscale (uma vez; fica salva no `tailscaled`):
 ```bash
 tailscale funnel --bg --https=8443 --set-path=/cascapp/api http://127.0.0.1:8092/api
 tailscale serve --bg --https=8092 http://127.0.0.1:8092
+tailscale funnel --bg --https=8443 --set-path=/cascapp/search http://127.0.0.1:8093/search
 ```
 
 ## Superusuário

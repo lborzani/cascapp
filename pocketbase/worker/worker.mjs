@@ -141,8 +141,16 @@ export class Engine {
   }
 
   /** O que o motor vê na posição depois de `count` lances. */
-  async look(moves, count, cfg) {
-    this.send(positionCommand(moves, count));
+  look(moves, count, cfg) {
+    return this.search(positionCommand(moves, count), cfg);
+  }
+
+  /**
+   * Uma busca a partir de um comando `position` já validado por quem chama
+   * (`look` aqui, `search.mjs` para FEN de fora).
+   */
+  async search(position, cfg) {
+    this.send(position);
     this.send(`go nodes ${cfg.nodes} movetime ${cfg.movetimeMs}`);
     let seen = { wdl: [0, 1000, 0], mate: 0, pv: '' };
     const last = await this.read(
