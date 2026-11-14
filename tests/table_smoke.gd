@@ -24,7 +24,10 @@ const SEATS := 4
 const TIMEOUT_SECONDS := 30.0
 
 var _bridges: Array[RelayBridge] = []
+## Com `CHESS_RELAY_URL=ble://` a mesma partida roda pelo Bluetooth falso.
+const FakeBle := preload("res://tests/fake_ble.gd")
 var _url := ""
+var _air := {}
 var _failures := 0
 var _elapsed := 0.0
 var _phase := 0
@@ -52,6 +55,7 @@ func _spawn(index: int) -> RelayBridge:
 	var bridge := RelayBridge.new()
 	bridge.name = "Bridge%d" % index
 	bridge.url = _url
+	FakeBle.wire(bridge, _url, _air)
 	root.add_child(bridge)
 	bridge.message_received.connect(
 		func(message: Dictionary, from_seat: int):

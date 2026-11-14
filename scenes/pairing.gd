@@ -18,6 +18,9 @@ extends Control
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 
 var _code := ""
+## A sala desta tela é pelo Bluetooth, sem internet. Ver [method _toggle_bluetooth].
+var _bluetooth := false
+var _bluetooth_button: Button = null
 
 
 func _ready() -> void:
@@ -40,6 +43,14 @@ func _ready() -> void:
 	%BotsButton.pressed.connect(_start_with_bots)
 	%CopyButton.pressed.connect(_copy_code)
 	%QrButton.pressed.connect(_toggle_qr)
+	# Só onde há rádio para isso: num aparelho sem Bluetooth LE o botão prometeria
+	# uma partida que não acontece.
+	if Pairing.ble.is_available():
+		_bluetooth_button = Button.new()
+		_bluetooth_button.name = "BluetoothButton"
+		_bluetooth_button.theme_type_variation = &"GhostButton"
+		_bluetooth_button.pressed.connect(_toggle_bluetooth)
+		%HostHint.add_sibling(_bluetooth_button)
 
 	# O título da barra é o que a tela **é**; a linha abaixo dela é o que esta
 	# partida em particular tem — o jogo e o ritmo. Estavam juntos numa frase só,
@@ -76,11 +87,19 @@ func _setup_host() -> void:
 	Net.option = Game.host_option()
 
 	%CodeLabel.text = _code
-	%QrCode.payload = Pairing.build_payload(Game.game_id, _code)
+	_open_room()
+
+
+## Abre a sala no relay ou, com [member _bluetooth], neste próprio aparelho.
+func _open_room() -> void:
+	var payload := Pairing.build_payload(Game.game_id, _code, _bluetooth)
+	%QrCode.payload = payload
 	%HostHint.text = _host_hint()
 	%StatusLabel.text = "Abrindo a sala…"
+	if _bluetooth_button != null:
+		_bluetooth_button.text = "Voltar para a internet" if _bluetooth else "Sem internet? Jogar por Bluetooth"
 
-	if not Net.relay_available():
+	if not _bluetooth and not Net.relay_available():
 		_show_error("Este build não tem servidor de partidas configurado, então não dá para abrir uma sala.")
 		%StatusLabel.text = "Sem servidor de partidas neste build."
 		return
@@ -91,14 +110,40 @@ func _setup_host() -> void:
 	# Quem joga de brancas sai na moeda nos jogos que pedem (`coin_toss` no
 	# catálogo). Antes era sempre quem abria a sala.
 	var white := randi() % 2 if Game.entry_of(Game.game_id).get("coin_toss", false) else 0
-	Net.host_relay(Game.game_id, _code, Game.listed_room, Game.players_of(), white)
+	Pairing.relay.via_bluetooth = _bluetooth
+	# Sala pública não existe sem internet: a lista mora no servidor.
+	Net.host_relay(Game.game_id, _code, Game.listed_room and not _bluetooth, Game.players_of(), white)
 	# O anfitrião também emula o cartão NFC. Um erro aqui era silencioso antes:
 	# o outro aparelho encostava, vibrava e não recebia nada, sem ninguém saber.
 	if Pairing.nfc.is_available():
-		Pairing.nfc.broadcast(Pairing.build_payload(Game.game_id, _code))
+		Pairing.nfc.broadcast(payload)
+
+
+## Troca a sala entre a internet e o Bluetooth, com o mesmo código.
+##
+## A tela abre pela internet, que é o caminho de sempre, e o botão é a saída para
+## quando ela falta: dois celulares lado a lado, sem rede. O código não muda, para
+## o que já foi dito em voz alta continuar valendo — só o QR e o NFC ganham o
+## marcador que manda o convidado pelo Bluetooth.
+func _toggle_bluetooth() -> void:
+	if not _bluetooth:
+		var problem: String = await Pairing.ble.prepare()
+		if not is_inside_tree():
+			return
+		if not problem.is_empty():
+			_show_error(problem)
+			return
+	_bluetooth = not _bluetooth
+	Net.leave()
+	_open_room()
 
 
 func _host_hint() -> String:
+	if _bluetooth:
+		var how := "No outro celular: na aba Online, digite %s e toque em Bluetooth, ou aponte a câmera para o QR." % _code
+		if Pairing.nfc.is_available():
+			how = "No outro celular: digite %s e toque em Bluetooth, aponte a câmera para o QR, ou encoste os dois (NFC)." % _code
+		return "%s Sem internet: os dois precisam estar perto, com o Bluetooth ligado." % how
 	if Game.listed_room:
 		return "Esta sala aparece na aba Online do outro aparelho. Quem tiver o código %s também entra direto." % _code
 	# "Na aba Online", e não "em Multiplayer" nem "na tela inicial": o campo do
@@ -113,9 +158,16 @@ func _host_hint() -> String:
 ## A sala **é** o produto: sem ela o código na tela não leva a lugar nenhum, e o
 ## convidado recebe "nenhuma partida com esse código" — que parece erro de
 ## digitação dele. Quem tem de saber que a sala não abriu é quem a abriu.
-func _on_relay_unavailable(_reason: String) -> void:
+func _on_relay_unavailable(reason: String) -> void:
 	%StatusLabel.text = "A sala não abriu."
-	_show_error("Não consegui abrir a sala. Confira a internet deste aparelho — sem sala, o código não leva o outro jogador a lugar nenhum.")
+	if _bluetooth:
+		# O motivo já vem em texto de gente: rádio desligado, anúncio recusado.
+		_show_error(reason)
+		return
+	var message := "Não consegui abrir a sala. Confira a internet deste aparelho — sem sala, o código não leva o outro jogador a lugar nenhum."
+	if _bluetooth_button != null:
+		message += " Sem internet, toque em \"Jogar por Bluetooth\"."
+	_show_error(message)
 
 
 func _on_relay_state_changed(state: RelayBridge.State) -> void:
@@ -124,9 +176,11 @@ func _on_relay_state_changed(state: RelayBridge.State) -> void:
 		return
 	match state:
 		RelayBridge.State.CONNECTING:
-			%StatusLabel.text = "Falando com o servidor…"
+			%StatusLabel.text = "Abrindo a sala pelo Bluetooth…" if _bluetooth else "Falando com o servidor…"
 		RelayBridge.State.WAITING:
 			%StatusLabel.text = "Sala %s aberta. %s" % [_code, _waiting_text()]
+			if _bluetooth:
+				return  # Convite de amigo vai pela internet.
 			# A sala existe no relay agora: o amigo chamado pela gaveta já acha ela.
 			var invited := Friends.send_pending_invite(Game.game_id, _code)
 			if not invited.is_empty():

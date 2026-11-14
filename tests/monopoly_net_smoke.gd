@@ -32,7 +32,10 @@ const MINE := 1
 const YOURS := 6
 
 var _links: Array[Node] = []
+## Com `CHESS_RELAY_URL=ble://` a mesma partida roda pelo Bluetooth falso.
+const FakeBle := preload("res://tests/fake_ble.gd")
 var _url := ""
+var _air := {}
 var _failures := 0
 var _elapsed := 0.0
 var _phase := 0
@@ -91,6 +94,7 @@ func _spawn(index: int) -> Node:
 	var bridge := RelayBridge.new()
 	bridge.name = "RelayBridge"
 	bridge.url = _url
+	FakeBle.wire(bridge, _url, _air)
 	link.add_child(bridge)
 	branch.add_child(link)
 
