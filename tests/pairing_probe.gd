@@ -17,6 +17,7 @@ extends Node
 const PAIRING_SCENE := preload("res://scenes/pairing.tscn")
 const JOIN_SCENE := preload("res://scenes/join.tscn")
 const MENU_SCENE := preload("res://scenes/main_menu.tscn")
+const FakeBle := preload("res://tests/fake_ble.gd")
 
 var _failures := 0
 
@@ -30,6 +31,7 @@ func _ready() -> void:
 	await _probe_room_list()
 	await _probe_host()
 	await _probe_guest()
+	await _probe_bluetooth()
 
 	if _failures == 0:
 		print("OK — menu e pareamento consistentes.")
@@ -629,6 +631,117 @@ func _probe_guest() -> void:
 	await get_tree().process_frame
 	Game.reset_to_menu()
 	Game.game_id = Game.CHESS
+
+
+## A partida sem internet pelas duas telas, com o Bluetooth falso no lugar do
+## plugin. O rádio de verdade só se prova com dois celulares; o que se prova aqui
+## é que as telas oferecem o caminho, que ele leva o marcador certo no QR, e que o
+## modo de uma partida não vaza para a seguinte.
+func _probe_bluetooth() -> void:
+	print("sem internet (Bluetooth)")
+	var online := Pairing.parse_payload(Pairing.build_payload(Game.CHESS, "ABC234"))
+	_check(not online.has("bluetooth"), "o payload de sempre não pede Bluetooth")
+	var offline := Pairing.parse_payload(Pairing.build_payload(Game.CHESS, "ABC234", true))
+	_equals(offline.get("bluetooth"), true, "o da sala sem internet pede")
+	_equals(offline.get("code"), "ABC234", "com o mesmo código")
+	_equals(Pairing.parse_payload("XDM3|chess|ABC234|X"), {}, "quarto campo desconhecido é recusado")
+
+	# Sem o plugin, como neste PC, ninguém oferece o que não vai acontecer.
+	Game.reset_to_menu()
+	Game.mode = Game.Mode.ONLINE
+	Game.role = Game.Role.HOST
+	Game.game_id = Game.CHESS
+	var bare := PAIRING_SCENE.instantiate()
+	add_child(bare)
+	await get_tree().process_frame
+	_check(bare.find_child("BluetoothButton", true, false) == null, "sem rádio, a tela de criar não oferece o Bluetooth")
+	bare.free()
+	Game.reset_to_menu()
+
+	Pairing.ble.use_plugin(FakeBle.new({}))
+
+	# Anfitrião: a sala abre pela internet, e o botão a troca, com o mesmo código.
+	Game.mode = Game.Mode.ONLINE
+	Game.role = Game.Role.HOST
+	Game.game_id = Game.CHESS
+	var host := PAIRING_SCENE.instantiate()
+	add_child(host)
+	await get_tree().process_frame
+	var button: Button = host.find_child("BluetoothButton", true, false)
+	_check(button != null, "com rádio, a tela de criar oferece o Bluetooth")
+	if button != null:
+		var code: String = host.get_node("%CodeLabel").text
+		button.pressed.emit()
+		await _frames(5)
+		_check(Pairing.relay.via_bluetooth, "tocar troca a sala para o Bluetooth")
+		_equals(Pairing.relay.state(), RelayBridge.State.WAITING, "e ela abre sem internet")
+		var info := Pairing.parse_payload(host.get_node("%QrCode").payload)
+		_equals(info.get("bluetooth"), true, "o QR manda o convidado pelo Bluetooth")
+		_equals(info.get("code"), code, "com o mesmo código")
+		_check(host.get_node("%HostHint").text.contains("Bluetooth"), "e a dica diz o que fazer no outro celular")
+		_equals(button.text, "Voltar para a internet", "o botão desfaz a troca")
+		button.pressed.emit()
+		await get_tree().process_frame
+		_check(not Pairing.relay.via_bluetooth, "e voltar põe a sala na internet de novo")
+		_check(not Pairing.parse_payload(host.get_node("%QrCode").payload).has("bluetooth"), "com o QR de sempre")
+		button.pressed.emit()
+		await _frames(2)
+	host.free()
+	Game.reset_to_menu()
+	_check(not Pairing.relay.via_bluetooth, "sair da partida esquece o Bluetooth")
+
+	# Convidado: o mesmo código, pelo botão do Bluetooth.
+	Game.game_id = Game.CHESS
+	var join := JOIN_SCENE.instantiate()
+	add_child(join)
+	await get_tree().process_frame
+	if not Net.relay_available():
+		print("  (sem relay configurado — pulando o convidado)")
+		join.free()
+		return
+	var panel: JoinPanel = join.get_node("%JoinPanel")
+	var guest_button: Button = panel.find_child("BluetoothButton", true, false)
+	_check(guest_button != null, "a tela de entrar oferece o Bluetooth")
+	if guest_button != null:
+		# A sexta casa já entra pela internet sozinha; desfaz para testar o botão.
+		panel.get_node("%CodeInput").set_code("QQQ777")
+		await get_tree().process_frame
+		Net.leave()
+		panel._joining = false
+		guest_button.pressed.emit()
+		await _frames(2)
+		_check(Pairing.relay.via_bluetooth, "o botão procura a sala pelo Bluetooth")
+		var toast: Banner = join.get_node("%Toast")
+		for _i in 30:
+			if toast._message.contains("por perto"):
+				break
+			await get_tree().process_frame
+		_check(
+			toast._message.contains("por perto"),
+			"sala que não está por perto é recusada com o motivo (obtido: '%s')" % toast._message
+		)
+
+	Net.leave()
+	panel._joining = false
+	panel.join_payload({"game": Game.CHECKERS, "code": "QQQ777", "bluetooth": true})
+	await get_tree().process_frame
+	_check(Pairing.relay.via_bluetooth, "o QR de uma sala sem internet entra pelo Bluetooth")
+	_equals(Net._expected_code, "QQQ777", "na sala do QR")
+	Net.leave()
+	panel._joining = false
+	panel.join_payload({"game": Game.CHESS, "code": "QQQ777"})
+	await get_tree().process_frame
+	_check(not Pairing.relay.via_bluetooth, "e o QR de sempre, pela internet")
+
+	join.free()
+	await get_tree().process_frame
+	Game.reset_to_menu()
+	Game.game_id = Game.CHESS
+
+
+func _frames(count: int) -> void:
+	for _i in count:
+		await get_tree().process_frame
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:

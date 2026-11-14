@@ -138,8 +138,16 @@ const ERROR_TEXT := {
 }
 
 var url := DEFAULT_URL
+## Partida sem internet: o mesmo protocolo, por Bluetooth. O socket vira um
+## `BleSocket`, e quem abre a sala roda o relay em miniatura (`BleRoom`) no
+## próprio aparelho. Quem decide é a tela, antes de abrir ou entrar.
+var via_bluetooth := false
+## O rádio. O autoload `Pairing` liga o dele; os testes passam um com plugin falso.
+var ble: BleLink = null
 
-var _socket: WebSocketPeer = null
+## `WebSocketPeer`, ou `BleSocket` com `via_bluetooth`: os dois têm a mesma
+## superfície, e é só ela que este arquivo usa.
+var _socket = null
 var _state := State.OFFLINE
 var _room := ""
 var _game := ""
@@ -227,6 +235,8 @@ func seats_taken() -> int:
 ## Falso quando o build não tem relay configurado, para a UI poder dizer isso em
 ## vez de mostrar uma tentativa que nunca vai conectar.
 func is_configured() -> bool:
+	if via_bluetooth:
+		return ble != null
 	return not url.is_empty()
 
 
@@ -389,8 +399,11 @@ func _start(role: String, code: String, game_id: String) -> void:
 
 func _open_socket() -> void:
 	_close_socket()
-	_socket = WebSocketPeer.new()
-	var error := _socket.connect_to_url(url)
+	if via_bluetooth:
+		_socket = BleSocket.new(ble, _room, _role == "host", _key.is_empty())
+	else:
+		_socket = WebSocketPeer.new()
+	var error: int = _socket.connect_to_url(url)
 	if error != OK:
 		_socket = null
 		_drop("Não foi possível abrir a conexão com o servidor (erro %d)." % error)
@@ -421,7 +434,7 @@ func _process(delta: float) -> void:
 		return
 
 	_socket.poll()
-	var state := _socket.get_ready_state()
+	var state: int = _socket.get_ready_state()
 	if state == WebSocketPeer.STATE_CONNECTING:
 		_connect_timer += delta
 		if _connect_timer > CONNECT_TIMEOUT:
@@ -448,16 +461,24 @@ func _process(delta: float) -> void:
 ## Repetir a mesma pergunta a cada meio segundo por um minuto e meio só rende a
 ## mesma resposta.
 func _on_socket_closed() -> void:
-	var reason := _socket.get_close_reason()
+	var reason: String = _socket.get_close_reason()
 	if _socket.get_close_code() == CLOSE_POLICY:
 		_refusal = reason
 		_want_link = false
 		_close_socket()
 		set_process(false)
 		_set_state(State.OFFLINE)
-		failed.emit(ERROR_TEXT.get(reason, "O servidor recusou a conexão (%s)." % reason))
+		failed.emit(_refusal_text(reason, "O servidor recusou a conexão (%s)." % reason))
 		return
 	_drop("A conexão com o servidor caiu.")
+
+
+## Pelo Bluetooth a recusa também pode vir do rádio (`disabled`, `no_permission`),
+## com o texto em `BleLink`.
+static func _refusal_text(reason: String, fallback: String) -> String:
+	if ERROR_TEXT.has(reason):
+		return ERROR_TEXT[reason]
+	return BleLink.ERROR_TEXT.get(reason.get_slice(":", 0), fallback)
 
 
 ## Empurra o `leave` para a rede e só então fecha.
@@ -484,7 +505,7 @@ func _flush_despedida(delta: float) -> void:
 func _drain() -> void:
 	while _socket != null and _socket.get_available_packet_count() > 0:
 		_silence_timer = 0.0
-		var text := _socket.get_packet().get_string_from_utf8()
+		var text: String = _socket.get_packet().get_string_from_utf8()
 		var parsed: Variant = JSON.parse_string(text)
 		if parsed is Dictionary:
 			_handle(parsed)
@@ -632,7 +653,7 @@ func _handle(message: Dictionary) -> void:
 			set_process(false)
 			_close_socket()
 			_set_state(State.OFFLINE)
-			failed.emit(ERROR_TEXT.get(reason, str(message.get("detail", "Erro no servidor."))))
+			failed.emit(_refusal_text(reason, str(message.get("detail", "Erro no servidor."))))
 
 
 ## Ligado é **mesa cheia**, e não "tem mais alguém". Com dois assentos as duas

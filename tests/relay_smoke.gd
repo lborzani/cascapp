@@ -17,12 +17,15 @@ extends SceneTree
 ## verdade toda vez que a suíte rodasse.
 
 const NetLink := preload("res://autoload/net_link.gd")
+## Com `CHESS_RELAY_URL=ble://` a mesma partida roda pelo Bluetooth falso.
+const FakeBle := preload("res://tests/fake_ble.gd")
 const CODE := "TST123"
 const TIMEOUT_SECONDS := 20.0
 
 var _host: Node
 var _guest: Node
 var _url := ""
+var _air := {}
 var _failures := 0
 var _elapsed := 0.0
 var _phase := 0
@@ -83,6 +86,7 @@ func _spawn_side(side_name: String) -> Node:
 	var bridge := RelayBridge.new()
 	bridge.name = "RelayBridge"
 	bridge.url = _url
+	FakeBle.wire(bridge, _url, _air)
 	link.add_child(bridge)
 	branch.add_child(link)
 	return link

@@ -29,6 +29,8 @@ signal payload_received(info: Dictionary)
 signal payload_rejected(text: String)
 
 const PAYLOAD_PREFIX := "XDM3"
+## Quarto campo do payload de uma sala sem internet. Ver [method build_payload].
+const BLUETOOTH_FLAG := "B"
 ## Sem 0/O/1/I: estes códigos são lidos de uma tela e digitados à mão.
 const CODE_ALPHABET := "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const CODE_LENGTH := 6
@@ -36,9 +38,14 @@ const CODE_LENGTH := 6
 var nfc: NfcBridge
 var qr_scanner: QrScannerBridge
 var relay: RelayBridge
+## A partida sem internet, por Bluetooth LE. Só existe com o plugin `GodotBle`.
+var ble: BleLink
 
 
 func _ready() -> void:
+	ble = BleLink.new()
+	ble.name = "BleLink"
+	add_child(ble)
 	nfc = NfcBridge.new()
 	nfc.name = "NfcBridge"
 	add_child(nfc)
@@ -47,6 +54,7 @@ func _ready() -> void:
 	add_child(qr_scanner)
 	relay = RelayBridge.new()
 	relay.name = "RelayBridge"
+	relay.ble = ble
 	add_child(relay)
 
 	nfc.payload_received.connect(_on_external_payload)
@@ -63,8 +71,13 @@ func _ready() -> void:
 ## precisava saber *onde* estava o anfitrião. Com sala, ele só precisa saber
 ## *qual*. O QR encolheu de versão 5 (37x37) para versão 1 (21x21), e um QR
 ## menos denso é um QR que a câmera trava de longe e com a tela suja.
-static func build_payload(game_id: StringName, code: String) -> String:
-	return "%s|%s|%s" % [PAYLOAD_PREFIX, game_id, code]
+##
+## A sala sem internet ganha um quarto campo, `B`: quem lê o QR ou encosta o
+## celular entra pelo Bluetooth sem precisar escolher. É o único caminho em que o
+## convidado não teria como adivinhar — o código é o mesmo nos dois transportes.
+static func build_payload(game_id: StringName, code: String, bluetooth := false) -> String:
+	var payload := "%s|%s|%s" % [PAYLOAD_PREFIX, game_id, code]
+	return payload + "|" + BLUETOOTH_FLAG if bluetooth else payload
 
 
 ## Devolve {} para qualquer coisa que não seja um payload nosso, então uma tag
@@ -74,12 +87,17 @@ static func build_payload(game_id: StringName, code: String) -> String:
 ## que é o comportamento certo: melhor recusar do que ler os campos trocados.
 static func parse_payload(text: String) -> Dictionary:
 	var parts := text.strip_edges().split("|")
-	if parts.size() != 3 or parts[0] != PAYLOAD_PREFIX:
+	if parts.size() < 3 or parts.size() > 4 or parts[0] != PAYLOAD_PREFIX:
+		return {}
+	if parts.size() == 4 and parts[3] != BLUETOOTH_FLAG:
 		return {}
 	var code := parts[2].strip_edges().to_upper()
 	if code.length() != CODE_LENGTH:
 		return {}
-	return {"game": StringName(parts[1]), "code": code}
+	var info := {"game": StringName(parts[1]), "code": code}
+	if parts.size() == 4:
+		info["bluetooth"] = true
+	return info
 
 
 static func generate_code() -> String:

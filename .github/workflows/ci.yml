@@ -145,6 +145,24 @@ jobs:
           godot --headless --path . --script res://tests/pool_probe.gd
           godot --headless --path . res://tests/pool_scene_probe.tscn
 
+      # A partida sem internet, pelo Bluetooth falso (`tests/fake_ble.gd`). Com
+      # `ble://` as mesmas suítes do relay rodam contra o relay em miniatura que o
+      # anfitrião leva no próprio aparelho (`net/ble_room.gd`): se as duas
+      # passam, os jogos não sabem por qual caminho estão jogando. O `ble_smoke`
+      # cobre o que só existe aqui — o rádio do convidado caindo e voltando
+      # sozinho, e o anfitrião que é o próprio servidor.
+      - name: Partida sem internet (Bluetooth falso)
+        env:
+          CHESS_RELAY_URL: ble://
+        run: |
+          godot --headless --path . --script res://tests/ble_smoke.gd
+          godot --headless --path . --script res://tests/relay_smoke.gd
+          godot --headless --path . --script res://tests/table_smoke.gd
+          godot --headless --path . --script res://tests/ludo_net_smoke.gd
+          godot --headless --path . --script res://tests/ludo_bots_smoke.gd
+          godot --headless --path . --script res://tests/uno_net_smoke.gd
+          godot --headless --path . --script res://tests/monopoly_net_smoke.gd
+
       # O caminho pela internet, contra um relay de verdade. É o único teste que
       # exercita o aperto de mão inteiro — sala aberta de um lado, código do
       # outro — e o único que pegaria uma divergência entre o protocolo do jogo e

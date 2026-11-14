@@ -91,6 +91,16 @@ func _ready() -> void:
 	# código inteiro não deveria ter de procurar um botão.
 	%CodeInput.completed.connect(func(_code: String) -> void: _join_by_code())
 	%ScanButton.pressed.connect(_start_scan)
+	# O mesmo código, pelo Bluetooth: dois celulares lado a lado, sem internet. Só
+	# onde há rádio para isso, e numa linha própria — na fileira do código não
+	# cabe um quarto botão num celular em pé.
+	if Pairing.ble.is_available():
+		var bluetooth := Button.new()
+		bluetooth.name = "BluetoothButton"
+		bluetooth.theme_type_variation = &"GhostButton"
+		bluetooth.text = "Entrar sem internet (Bluetooth)"
+		bluetooth.pressed.connect(_join_by_code.bind(true))
+		%JoinButton.get_parent().add_sibling(bluetooth)
 	_fill_create_row()
 	%ScanButton.visible = Pairing.qr_scanner.is_available()
 
@@ -293,14 +303,14 @@ func _set_rooms_placeholder(message: String) -> void:
 # --- os quatro caminhos -------------------------------------------------------
 
 
-func _join_by_code() -> void:
+func _join_by_code(bluetooth := false) -> void:
 	var code: String = %CodeInput.code
 	if code.length() != Pairing.CODE_LENGTH:
 		_fail("O código tem %d caracteres." % Pairing.CODE_LENGTH)
 		return
 	# Sem jogo junto: quem digita um código não sabe — nem precisa saber — o que o
 	# anfitrião abriu, e o aperto de mão é quem responde isso.
-	_enter_room(Game.game_id, code)
+	_enter_room(Game.game_id, code, bluetooth)
 
 
 func _watch_by_code() -> void:
@@ -319,6 +329,8 @@ func _watch_room(code: String) -> void:
 		return
 	_joining = true
 	Game.mode = Game.Mode.ONLINE
+	# Assistir só existe pela internet.
+	Pairing.relay.via_bluetooth = false
 	_set_status("Entrando para assistir a sala %s…" % code)
 	Net.watch_relay(code)
 
@@ -383,16 +395,31 @@ func join_payload(info: Dictionary) -> void:
 	if info.get("watch", false):
 		_watch_room(str(info.get("code", "")))
 		return
-	_enter_room(StringName(str(info.get("game", Game.game_id))), str(info.get("code", "")))
+	# O QR ou o toque de uma sala sem internet já diz que é pelo Bluetooth.
+	_enter_room(
+		StringName(str(info.get("game", Game.game_id))), str(info.get("code", "")),
+		info.get("bluetooth", false)
+	)
 
 
-func _enter_room(id: StringName, code: String) -> void:
+func _enter_room(id: StringName, code: String, bluetooth := false) -> void:
 	if code.is_empty():
 		return
 	if _joining:
 		_fail("Já estou tentando entrar numa sala. Espere terminar para tentar outra.")
 		return
 	_joining = true
+	if bluetooth:
+		var problem: String = await Pairing.ble.prepare()
+		if not is_inside_tree():
+			return
+		if not problem.is_empty():
+			_joining = false
+			_fail(problem)
+			return
+	# Explícito nos dois sentidos: a ponte é a mesma, e o modo da última partida
+	# não pode decidir por onde vai esta.
+	Pairing.relay.via_bluetooth = bluetooth
 	Game.mode = Game.Mode.ONLINE
 	Game.role = Game.Role.GUEST
 	Game.game_id = id
@@ -413,7 +440,10 @@ func _on_relay_state_changed(state: RelayBridge.State) -> void:
 		return
 	match state:
 		RelayBridge.State.CONNECTING:
-			_set_status("Falando com o servidor…")
+			_set_status(
+				"Procurando a partida pelo Bluetooth…" if Pairing.relay.via_bluetooth
+				else "Falando com o servidor…"
+			)
 		RelayBridge.State.WAITING:
 			_show_waiting()
 		RelayBridge.State.RECONNECTING:

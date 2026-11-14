@@ -67,6 +67,12 @@ func _ready() -> void:
 	%TrainingButton.pressed.connect(_open_training)
 	%UpdateButton.pressed.connect(_check_updates)
 	%NewsButton.pressed.connect(_open_news)
+	# Sonda do Bluetooth sem internet: ferramenta de teste, nunca no build de release.
+	if OS.is_debug_build() and Pairing.ble.is_available():
+		var probe := Button.new()
+		probe.text = "Teste de Bluetooth (depuração)"
+		probe.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/ble_probe.tscn"))
+		%NewsButton.add_sibling(probe)
 	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)

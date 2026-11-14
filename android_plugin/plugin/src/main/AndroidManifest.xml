@@ -2,19 +2,43 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      A lista inteira de permissões do app. Nenhuma é *dangerous* fora da câmera,
-      e nenhuma toca em rádio do aparelho.
+      A lista inteira de permissões do app. As *dangerous* são a câmera e as de
+      Bluetooth, e as duas só são pedidas quando o jogador toca no que as usa.
 
       Saíram, nesta ordem: Bluetooth e proximidade de Wi-Fi junto com o Nearby
       Connections; localização, mudança de Wi-Fi e de rede junto com o hotspot
-      local e a descoberta por UDP. Com a partida acontecendo numa sala do relay,
-      o app precisa de internet e de nada mais — pedir permissão que não se usa é
-      o tipo de coisa que faz o jogador desconfiar da tela de instalação.
+      local e a descoberta por UDP. Pedir permissão que não se usa é o tipo de
+      coisa que faz o jogador desconfiar da tela de instalação.
+
+      O Bluetooth voltou para a partida sem internet (`ble/GodotBlePlugin.kt`),
+      desta vez sem o Nearby: o app nunca liga rádio nenhum sozinho, e o Wi-Fi
+      não é tocado. Até o Android 11 o scan BLE exige localização, por isso ela
+      vem limitada a `maxSdkVersion="30"`; do 12 em diante bastam as três de
+      "Dispositivos próximos", com `neverForLocation`.
     -->
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
 
     <uses-feature
         android:name="android.hardware.nfc"
@@ -38,6 +62,9 @@
         <meta-data
             android:name="org.godotengine.plugin.v2.GodotQrScanner"
             android:value="org.chessandcheckers.qr.GodotQrScannerPlugin" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.GodotBle"
+            android:value="org.chessandcheckers.ble.GodotBlePlugin" />
         <meta-data
             android:name="org.godotengine.plugin.v2.GodotStockfish"
             android:value="org.chessandcheckers.stockfish.GodotStockfishPlugin" />

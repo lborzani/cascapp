@@ -9,6 +9,42 @@ dois caminhos que exigem código nativo:
 | `GodotNfcPlugin.kt` + `NfcHceService.kt` | `GodotNfc` | encostar os celulares para parear |
 | `GodotQrScannerPlugin.kt` | `GodotQrScanner` | ler o QR com a câmera, dentro da própria tela do jogo |
 | `GodotWifiLinkPlugin.kt` | `GodotWifiLink` | hotspot local (caminho legado, ver README raiz) |
+| `GodotBlePlugin.kt` | `GodotBle` | partida sem internet por Bluetooth LE |
+
+## Bluetooth: a partida sem internet
+
+O anfitrião abre um canal L2CAP orientado a conexão
+(`listenUsingInsecureL2capChannel`, API 29+) e anuncia por BLE o código da sala
+(6 bytes) e o PSM do canal (2 bytes), como service data de um UUID do app. O
+convidado faz scan filtrado pelo código e conecta com
+`createInsecureL2capChannel(psm)`. Não há pareamento nas configurações nem
+diálogo de "tornar visível". O endereço do anfitrião não pode ir no QR porque
+`getAddress()` devolve `02:00:00:00:00:00` para apps comuns.
+
+O que trafega são linhas de texto. Do lado Godot, `net/ble_link.gd` embrulha o
+singleton, `net/ble_room.gd` é o relay em miniatura que roda no anfitrião e
+`net/ble_socket.gd` imita o `WebSocketPeer`. A `RelayBridge` só troca o socket, e o
+resto do app não sabe por qual caminho está jogando.
+
+Nada aqui liga rádio sozinho. A permissão é pedida por `requestPermissions` e o
+Bluetooth desligado por `ACTION_REQUEST_ENABLE`, os dois diálogos do sistema e só
+quando o jogador toca no botão. O Wi-Fi não é tocado: foi o Nearby Connections
+ligando o Wi-Fi por conta própria que tirou o modo sem internet anterior (ver
+"O que saiu" abaixo).
+
+Permissões: `BLUETOOTH_SCAN` (`neverForLocation`), `BLUETOOTH_ADVERTISE` e
+`BLUETOOTH_CONNECT` do Android 12 em diante; `BLUETOOTH`, `BLUETOOTH_ADMIN` e
+`ACCESS_FINE_LOCATION` só até o Android 11 (`maxSdkVersion="30"`), onde o scan BLE
+ainda exige localização ligada.
+
+Para testar sem rádio, `tests/fake_ble.gd` tem a mesma API: com
+`CHESS_RELAY_URL=ble://` as suítes de rede rodam pelo Bluetooth falso. No
+aparelho, a sonda fica em Você › "Teste de Bluetooth (depuração)", só em build de
+depuração, e mede 100 pings.
+
+```bash
+adb logcat -s godot:*
+```
 
 ## NFC: quando o toque vibra e nada acontece
 

@@ -247,6 +247,11 @@ func leave() -> void:
 	if connected:
 		_send_direct({"t": "bye"})
 	_close_relay()
+	# A partida sem internet acaba aqui. Quem abre a próxima pelo Bluetooth liga
+	# de novo; quem entra por um convite de amigo ou pelo cartão de voltar não
+	# herda o modo da partida anterior.
+	if _relay_bridge() != null:
+		_relay_bridge().via_bluetooth = false
 	is_host = false
 	connected = false
 	_session_started = false
