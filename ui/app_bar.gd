@@ -54,14 +54,14 @@ var action := -1:
 
 var _label: Label = null
 var _leading_button: IconButton = null
+var _friends: Button = null
+var _online := 0
 var _action_button: IconButton = null
 var _greeting: HBoxContainer = null
 var _greeting_name: Label = null
 var _avatar: Coaster = null
 
-const LOGO_PATH := "res://assets/icon/role.png"
-const LOGO := 40.0
-const AVATAR := 42.0
+const AVATAR := 48.0
 
 
 func _init() -> void:
@@ -99,8 +99,9 @@ func _init() -> void:
 	row.add_child(_action_button)
 
 
-## O cabeçalho da tela inicial: o logo, "Olá," e o nome do jogador em letreiro, e a
-## bolacha dele à direita — que leva à aba Você, onde o nome se troca.
+## O cabeçalho da tela inicial: a bolacha do jogador à esquerda (leva à aba Você,
+## onde o nome se troca), "Bora jogar," e o nome em letreiro, e à direita a pílula
+## dos amigos, que diz quantos estão online quando alguém está.
 ##
 ## Chamar de novo só troca o nome: é o que a tela faz quando as boas-vindas
 ## terminam, para a saudação mostrar o nome recém escolhido sem reabrir o app.
@@ -126,35 +127,6 @@ func _build_greeting() -> void:
 	row.add_child(_greeting)
 	row.move_child(_greeting, 0)
 
-	var logo := TextureRect.new()
-	logo.custom_minimum_size = Vector2(LOGO, LOGO)
-	logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	if ResourceLoader.exists(LOGO_PATH):
-		logo.texture = load(LOGO_PATH)
-	_greeting.add_child(logo)
-
-	var words := VBoxContainer.new()
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	words.add_theme_constant_override("separation", -4)
-	_greeting.add_child(words)
-	var hello := Label.new()
-	hello.text = "Olá,"
-	hello.theme_type_variation = &"Hint"
-	words.add_child(hello)
-	_greeting_name = Label.new()
-	_greeting_name.theme_type_variation = &"Greeting"
-	_greeting_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	words.add_child(_greeting_name)
-
-	var friends := IconButton.new()
-	friends.kind = IconButton.Kind.FRIENDS
-	friends.name = "FriendsButton"
-	friends.pressed.connect(func() -> void: friends_pressed.emit())
-	_greeting.add_child(friends)
-
 	# Um botão sem pele segurando a bolacha: a bolacha não recebe toque (ela é o
 	# mesmo desenho dentro da partida, onde o toque é do que está em volta).
 	var holder := Button.new()
@@ -165,8 +137,58 @@ func _build_greeting() -> void:
 	holder.pressed.connect(func() -> void: action_pressed.emit())
 	_greeting.add_child(holder)
 	_avatar = Coaster.new()
+	# O anel limão é do dono do aparelho: é a única bolacha desta tela.
+	_avatar.ring = AppTheme.ACCENT
 	_avatar.set_anchors_preset(Control.PRESET_FULL_RECT)
 	holder.add_child(_avatar)
+
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	words.add_theme_constant_override("separation", -4)
+	_greeting.add_child(words)
+	var hello := Label.new()
+	hello.text = "Bora jogar,"
+	hello.theme_type_variation = &"Hint"
+	words.add_child(hello)
+	_greeting_name = Label.new()
+	_greeting_name.theme_type_variation = &"Greeting"
+	_greeting_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	words.add_child(_greeting_name)
+
+	_friends = Button.new()
+	_friends.name = "FriendsButton"
+	_friends.theme_type_variation = &"GhostButton"
+	_friends.focus_mode = Control.FOCUS_NONE
+	_friends.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_friends.add_theme_font_override("font", AppTheme.font(800))
+	_friends.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	_friends.pressed.connect(func() -> void: friends_pressed.emit())
+	_friends.draw.connect(_draw_online_dot)
+	_greeting.add_child(_friends)
+	set_online(0)
+
+
+## Quantos amigos estão online agora. Zero mostra só "Amigos": um "0 online" é uma
+## notícia que não é notícia.
+func set_online(count: int) -> void:
+	if _friends == null:
+		return
+	_online = count
+	_friends.text = "%d online" % count if count > 0 else "Amigos"
+	var pill := AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_ICON)
+	pill.content_margin_top = 10
+	pill.content_margin_bottom = 10
+	pill.content_margin_left = 30 if count > 0 else 16
+	pill.content_margin_right = 16
+	for state: String in ["normal", "hover", "pressed"]:
+		_friends.add_theme_stylebox_override(state, pill)
+	_friends.queue_redraw()
+
+
+func _draw_online_dot() -> void:
+	if _online > 0:
+		_friends.draw_circle(Vector2(17.0, _friends.size.y * 0.5), 5.0, AppTheme.ACCENT)
 
 
 ## O fio que separa a barra do conteúdo. Um pixel a 7% de branco: ele existe para

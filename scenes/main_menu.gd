@@ -57,6 +57,11 @@ func _ready() -> void:
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
+	# A pílula dos amigos acompanha quem está online, sem abrir a gaveta.
+	var count_online := func() -> void: %AppBar.set_online(Friends.online.size())
+	Friends.changed.connect(count_online)
+	count_online.call()
+
 	%Tabs.current = AppTabs.GAMES
 	# Sem servidor de partidas não há sala para procurar. A aba continua lá,
 	# apagada: uma aba que some parece uma aba que foi removida.
@@ -110,6 +115,11 @@ func _fill_games() -> void:
 	if ids.size() % 2 == 1:
 		var featured := _tile(ids.pop_front())
 		featured.custom_minimum_size.y = FEATURED_HEIGHT
+		# O destaque diz por que é destaque, e no xadrez o Elo de quem joga.
+		if featured.favorite:
+			featured.tag = "Seu favorito"
+			if featured.game_id == Game.CHESS and Account.elo > 0:
+				featured.tag += " · Elo %d" % Account.elo
 		%GameList.add_child(featured)
 	var grid := GridContainer.new()
 	grid.columns = 2

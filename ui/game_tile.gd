@@ -38,6 +38,11 @@ var favorite := false:
 	set(value):
 		favorite = value
 		_star.queue_redraw()
+## Selo escuro ao lado da estrela ("Seu favorito · Elo 1204"). Vazio, não aparece.
+var tag := "":
+	set(value):
+		tag = value
+		queue_redraw()
 ## Nenhum modo deste jogo funciona neste build. O bloco continua na grade,
 ## apagado: um jogo que some parece um jogo que foi removido.
 var unavailable := false:
@@ -87,6 +92,15 @@ func _draw() -> void:
 		self, game_id, Vector2(size.x - unit - PAD * 1.6, face.position.y + unit + PAD),
 		unit, Color(ink, 0.24), color
 	)
+	if not tag.is_empty():
+		var tag_font := AppTheme.font(700)
+		var tag_width := tag_font.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12).x + 20.0
+		var pill := Rect2(STAR_ZONE, face.position.y + 11.0, tag_width, 24.0)
+		draw_style_box(AppTheme.box(ink, 12), pill)
+		draw_string(
+			tag_font, Vector2(pill.position.x, pill.get_center().y + 4.5), tag,
+			HORIZONTAL_ALIGNMENT_CENTER, tag_width, 12, AppTheme.TEXT
+		)
 	var bottom := face.end.y - PAD
 	draw_string(
 		AppTheme.font(700), Vector2(PAD, bottom), _players_text(),

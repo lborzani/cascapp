@@ -2657,8 +2657,12 @@ func _test_friends_drawer() -> bool:
 	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
 	add_child(menu)
 	await get_tree().process_frame
-	var button: IconButton = menu.find_child("FriendsButton", true, false)
+	var button: Button = menu.find_child("FriendsButton", true, false)
 	_check(button != null, "a saudação do menu tem o botão de amigos")
+	if button != null:
+		# A pílula conta quem está online sem abrir a gaveta, e sem ninguém diz só "Amigos".
+		var expected := "%d online" % Friends.online.size() if not Friends.online.is_empty() else "Amigos"
+		_equals(button.text, expected, "e ele diz quantos estão online")
 	if button != null:
 		button.pressed.emit()
 	await get_tree().process_frame

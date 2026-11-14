@@ -325,7 +325,8 @@ func _probe_game_sheet() -> void:
 		modes[modes.size() - 1], Game.Mode.ONLINE if Net.relay_available() else Game.Mode.HOTSEAT,
 		"e a sala por último, quando existe"
 	)
-	_equals(sheet._segments.segment_count(), modes.size(), "um segmento por modo disponível")
+	_equals(sheet._mode_box.get_child_count(), modes.size(), "um cartão por modo disponível")
+	_check((sheet._mode_box.get_child(0) as ModeCard).chosen, "com o primeiro marcado")
 	_equals(sheet.mode, modes[0], "e a folha abre no primeiro")
 
 	# Jogou num modo, a folha deste jogo volta nele — e a de outro jogo, não.
@@ -392,7 +393,7 @@ func _probe_game_sheet() -> void:
 	_equals(Game.bot_side, Board.Side.WHITE, "escolher pretas deixa as brancas com o bot")
 	sheet._sides.get_child(0).pressed.emit()
 	_equals(Game.bot_side, Board.Side.BLACK, "e vice-versa")
-	_check(sheet._start.text.to_upper().contains("COMEÇAR"), "fora de rede o botão diz começar")
+	_check(sheet._start.text.begins_with("Jogar"), "fora de rede o botão diz jogar (obtido: '%s')" % sheet._start.text)
 
 	if Net.relay_available():
 		sheet.select_mode(Game.Mode.ONLINE)
@@ -408,7 +409,7 @@ func _probe_game_sheet() -> void:
 
 	# "Como jogar" abre por cima da folha, e o gesto de voltar fecha só a página:
 	# a folha continua aberta, com o que já estava escolhido.
-	_check(sheet._rules_link.visible, "a folha tem o link Como jogar")
+	_check(sheet._rules_link.visible, "a folha tem o botão de regras")
 	var page := sheet.open_rules()
 	await get_tree().process_frame
 	_equals(page.doc.title, Game.game_title(Game.CHESS), "que abre as regras do jogo da folha")

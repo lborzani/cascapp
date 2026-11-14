@@ -4,8 +4,8 @@ extends Control
 ## A folha do jogo: como jogar este jogo, numa camada só.
 ##
 ## Eram duas telas — a dos modos e o diálogo de ajustes por cima dela —, e três
-## toques entre escolher o jogo e começar. Aqui o modo são abas no topo da folha,
-## os ajustes **daquele modo** ficam logo abaixo, e um botão termina.
+## toques entre escolher o jogo e começar. Aqui o modo é um cartão por opção no
+## topo da folha (`ModeCard`), os ajustes **daquele modo** ficam logo abaixo, e um botão termina.
 ##
 ## A folha abre no modo em que o jogo foi jogado da última vez (`Prefs.last_mode`),
 ## e na primeira vez no que começa na hora: contra o bot. Jogo repetido são dois
@@ -40,7 +40,8 @@ var _scrim: ColorRect = null
 var _title: Label = null
 var _meta: Label = null
 var _icon: Control = null
-var _segments: SegmentedControl = null
+## Um cartão por modo, na ordem de `_modes`.
+var _mode_box: VBoxContainer = null
 var _modes: Array[int] = []
 var _sections := {}
 var _players: HBoxContainer = null
@@ -159,20 +160,18 @@ func _build_body() -> VBoxContainer:
 	# "Como jogar" no cabeçalho, ao lado do nome: é a pergunta de quem abriu a
 	# folha de um jogo que não conhece, e ela vem antes de escolher o modo.
 	_rules_link = Button.new()
-	_rules_link.text = "Como jogar"
-	_rules_link.flat = true
+	_rules_link.text = "Regras"
+	_rules_link.theme_type_variation = &"GhostButton"
 	_rules_link.focus_mode = Control.FOCUS_NONE
 	_rules_link.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_rules_link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
-	for state_name: String in ["font_color", "font_hover_color"]:
-		_rules_link.add_theme_color_override(state_name, AppTheme.ACCENT)
-	_rules_link.add_theme_color_override("font_pressed_color", AppTheme.TEXT)
+	_rules_link.add_theme_font_override("font", AppTheme.font(800))
+	_rules_link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
 	_rules_link.pressed.connect(open_rules)
 	header.add_child(_rules_link)
 
-	_segments = SegmentedControl.new()
-	_segments.selected.connect(_on_segment)
-	body.add_child(_segments)
+	_mode_box = VBoxContainer.new()
+	_mode_box.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	body.add_child(_mode_box)
 
 	_players = HBoxContainer.new()
 	_players.add_theme_constant_override("separation", AppTheme.SPACE_S)
@@ -209,7 +208,8 @@ func _build_body() -> VBoxContainer:
 
 	_start = Button.new()
 	_start.theme_type_variation = &"PrimaryButton"
-	_start.custom_minimum_size.y = 52
+	_start.custom_minimum_size.y = 60
+	_start.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M + 2)
 	_start.pressed.connect(func() -> void:
 		Prefs.remember_mode(game_id, mode)
 		confirmed.emit(mode)
@@ -256,11 +256,18 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_rules_link.visible = GameRulesDoc.load_for(id) != null
 	_modes = modes_for(id)
 
-	var labels := PackedStringArray()
+	_clear(_mode_box)
 	for candidate in _modes:
-		labels.append(_mode_label(candidate, id))
-	_segments.setup(labels, 0)
-	_segments.visible = _modes.size() > 1
+		var card := ModeCard.new()
+		var words := _mode_words(candidate, id)
+		card.badge = words[0]
+		card.badge_color = words[1]
+		card.title = words[2]
+		card.detail = words[3]
+		card.pressed.connect(select_mode.bind(candidate))
+		_mode_box.add_child(card)
+	# Um modo só não é escolha: o cartão sairia marcado e sozinho.
+	_mode_box.visible = _modes.size() > 1
 	_unavailable.visible = _modes.is_empty()
 	_start.disabled = _modes.is_empty()
 
@@ -301,9 +308,8 @@ func close() -> void:
 
 func select_mode(chosen: int) -> void:
 	mode = chosen
-	var index := _modes.find(chosen)
-	if index >= 0:
-		_segments.set_current(index)
+	for index in _mode_box.get_child_count():
+		(_mode_box.get_child(index) as ModeCard).chosen = _modes[index] == chosen
 	var online := chosen == Game.Mode.ONLINE
 	var solo := chosen == Game.Mode.SOLO
 	# Nível e cor só existem onde há escolha: o bot do Ludo é uma heurística fixa,
@@ -315,23 +321,26 @@ func select_mode(chosen: int) -> void:
 	_section("level").visible = tunable
 	_section("side").visible = tunable
 	_section("visibility").visible = online
-	_start.text = "Criar sala" if online else "Começar"
+	# O botão diz o que vai acontecer, com as palavras do cartão escolhido.
+	_start.text = "Criar sala" if online else ("Jogar contra o bot" if solo else "Jogar aqui")
 
 
-func _on_segment(index: int) -> void:
-	if index < 0 or index >= _modes.size():
-		return
-	select_mode(_modes[index])
-
-
-func _mode_label(candidate: int, id: StringName) -> String:
+## O selo, a cor dele, o nome e a linha de um modo: [selo, cor, título, detalhe].
+func _mode_words(candidate: int, id: StringName) -> Array:
+	var many := Game.players_of(id) > 2
 	match candidate:
 		Game.Mode.ONLINE:
-			return "Online"
+			return ["Sala", AppTheme.GAME_COLORS["battleship"], "Online", "Cria uma sala e chama por código"]
 		Game.Mode.SOLO:
-			return "Contra bots" if Game.players_of(id) > 2 else "Contra o bot"
+			return [
+				"Bot", AppTheme.GAME_COLORS["chess"],
+				"Contra bots" if many else "Contra o bot", "Começa na hora, sem esperar ninguém",
+			]
 		_:
-			return "No celular"
+			return [
+				"1x1" if not many else "Mesa", AppTheme.GAME_COLORS["ludo"],
+				"No mesmo celular", "Passa o aparelho a cada jogada",
+			]
 
 
 func _draw_icon() -> void:
