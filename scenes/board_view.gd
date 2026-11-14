@@ -233,7 +233,7 @@ func _draw_travelling(arriving: int) -> void:
 ## está, a vazia é de onde ela veio.
 func _draw_last_move() -> void:
 	for square in last_move:
-		draw_rect(rect_of(square), Color(AppTheme.LAST_MOVE, 0.38))
+		draw_rect(rect_of(square), Color(AppTheme.LAST_MOVE, 0.6))
 
 
 ## O rei em xeque pulsa em vez de ficar com um fundo vermelho fixo. Movimento é

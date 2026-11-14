@@ -91,6 +91,12 @@ var _rating_elo := 0
 var _rating_delta := 0
 ## Selo e números do topo do fim de partida, e o confete por cima dele.
 var _result_header: ResultHeader = null
+## A faixa de lances embaixo do tabuleiro e a fileira "Propor empate · Desistir".
+var _moves_strip: MoveStrip = null
+var _end_row: HBoxContainer = null
+## O botão que pede um segundo toque para confirmar, e quando o pedido vence.
+var _armed: Button = null
+var _armed_until := 0
 var _review: ReviewPanel = null
 ## Avaliação ao vivo; só existe para quem assiste xadrez.
 var _live: LiveReview = null
@@ -193,6 +199,7 @@ func _ready() -> void:
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
 	_build_result_header()
+	_build_move_strip()
 
 	# A barra sabe o nome do jogo, o relógio da partida e o código da sala, mas só
 	# depois de `begin_match()`: é ele que decide se esta partida começa agora ou
@@ -1140,6 +1147,67 @@ func _result_stats() -> Array:
 	return stats
 
 
+## A faixa de lances logo embaixo do tabuleiro, e embaixo do cartão de baixo a
+## fileira com o que encerra a partida — as mesmas opções do diálogo de sair.
+func _build_move_strip() -> void:
+	var column: Control = %Board.get_parent().get_parent()
+	_moves_strip = MoveStrip.new()
+	column.add_child(_moves_strip)
+	column.move_child(_moves_strip, %Board.get_parent().get_index() + 1)
+	_end_row = HBoxContainer.new()
+	_end_row.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	column.add_child(_end_row)
+	column.move_child(_end_row, %QueueButton.get_index())
+
+
+## Um botão por opção do diálogo de sair (`_end_options`), com o mesmo rótulo e a
+## mesma ação. Somem quando a partida não tem mais o que encerrar.
+func _refresh_end_row() -> void:
+	if _end_row == null:
+		return
+	for child in _end_row.get_children():
+		_end_row.remove_child(child)
+		child.queue_free()
+	_armed = null
+	var options := _end_options()
+	_end_row.visible = not options.is_empty()
+	for option: Array in options:
+		var button := Button.new()
+		button.text = str(option[0])
+		button.theme_type_variation = &"GhostButton"
+		button.custom_minimum_size.y = 52
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.focus_mode = Control.FOCUS_NONE
+		var danger := button.text.contains("esist")
+		if danger:
+			for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+				button.add_theme_color_override(state, AppTheme.DANGER)
+		button.pressed.connect(_confirm_then.bind(button, option[1]))
+		_end_row.add_child(button)
+
+
+## Desistir e empatar encerram a partida, e o botão fica a um dedo do cartão:
+## o primeiro toque pede o segundo ("Toque de novo"), que vale por 3 s.
+func _confirm_then(button: Button, action: Callable) -> void:
+	var now := Time.get_ticks_msec()
+	if _armed == button and now <= _armed_until:
+		_armed = null
+		action.call()
+		_refresh_end_row()
+		return
+	if _armed != null and is_instance_valid(_armed):
+		_armed.text = str(_armed.get_meta(&"label", _armed.text))
+	button.set_meta(&"label", button.text)
+	button.text = "Toque de novo"
+	_armed = button
+	_armed_until = now + 3000
+	get_tree().create_timer(3.0).timeout.connect(func() -> void:
+		if is_instance_valid(button) and _armed == button:
+			button.text = str(button.get_meta(&"label"))
+			_armed = null
+	)
+
+
 ## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
 func _record_game(title: String, detail: String) -> void:
 	if not _recorded_game.is_empty() or not _ruleset is ChessRules or _state.history.is_empty() or Net.is_spectator:
@@ -1726,8 +1794,14 @@ func _refresh_last_move() -> void:
 
 	# Quem some é o Control que contém a linha, e não a linha: um filho invisível
 	# de `VBoxContainer` deixa de contar altura, e é a altura que precisa sumir.
-	%TopLastMoveSlot.visible = _top_last_move.has_move()
+	# Fora do modo mesa a faixa de lances responde a mesma pergunta, e mais: a linha
+	# de cima só fica para o tabuleiro dividido, onde cada lado precisa da dele.
+	%TopLastMoveSlot.visible = _top_last_move.has_move() and _table_mode
 	%BottomLastMoveSlot.visible = _bottom_last_move.has_move()
+	_moves_strip.visible = not _table_mode
+	_moves_strip.moves = _notation
+	_moves_strip.check = _board.check_square != Board.NO_SQUARE
+	_refresh_end_row()
 	_fit_board()
 
 
