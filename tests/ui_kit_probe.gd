@@ -152,26 +152,27 @@ func _probe_coaster() -> void:
 
 
 func _probe_paper() -> void:
-	print("papel")
+	print("cartão de diálogo")
 	var host := Control.new()
 	host.theme = AppTheme.shared()
 	root.add_child(host)
 	var paper := PaperCard.new()
 	host.add_child(paper)
 	var plain := Label.new()
-	var caption := Label.new()
-	caption.theme_type_variation = &"Caption"
 	var title := Label.new()
 	title.theme_type_variation = &"Title"
 	paper.add_child(plain)
-	paper.add_child(caption)
 	paper.add_child(title)
 	var box := paper.get_theme_stylebox("panel") as StyleBoxFlat
-	_check(box != null and box.bg_color == AppTheme.PAPER, "fundo de papel")
-	_equals(plain.get_theme_color("font_color"), AppTheme.PAPER_INK, "texto sobre papel em tinta escura")
-	_equals(caption.get_theme_color("font_color"), Color(AppTheme.PAPER_INK, 0.72), "a legenda não herda o cinza da lousa")
-	_equals(title.get_theme_color("font_color"), AppTheme.PAPER_INK, "nem o título, o claro")
-	_check(title.get_theme_font("font") == AppTheme.display(900), "mas continua com a voz de letreiro do tema")
+	_check(box != null and box.bg_color == AppTheme.SURFACE, "o cartão de diálogo é escuro, da família da tela")
+	_equals(plain.get_theme_color("font_color"), AppTheme.TEXT, "com o texto claro do tema")
+	_check(title.get_theme_font("font") == AppTheme.display(900), "e o título na voz de letreiro")
+	var deed := PaperCard.paper_box()
+	_check(deed.bg_color == AppTheme.PAPER, "o papel claro continua existindo para a escritura")
+	_equals(
+		PaperCard.paper_theme().get_color("font_color", "Label"), AppTheme.PAPER_INK,
+		"com a tinta escura dele"
+	)
 	paper.size = Vector2(200, 100)
 	paper.tilt_degrees = -1.2
 	_check(paper.pivot_offset.is_equal_approx(Vector2(100, 50)), "gira em torno do próprio centro")
