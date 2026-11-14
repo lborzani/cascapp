@@ -178,52 +178,43 @@ func _probe_game_picker() -> void:
 	await get_tree().process_frame
 
 	var list: Control = menu.get_node("%GameList")
-	# Uma linha por jogo **visível**, e não por entrada do catálogo: um jogo em
+	# Um bloco por jogo **visível**, e não por entrada do catálogo: um jogo em
 	# construção entra no catálogo com `visible` falso.
 	var shown := 0
 	for entry in Game.GAMES:
 		if entry.get("visible", true):
 			shown += 1
-	var rows := _rows(list)
-	_equals(rows.size(), shown, "uma linha por jogo visível do catálogo")
-	_equals(rows[0].game_id, Game.CHESS, "a primeira linha é o xadrez")
-	_check(list.get_child_count() > shown, "com um rótulo de categoria entre elas")
-	_check(not menu.get_node("%Favorites").visible, "sem favorito, a seção de cima não aparece")
+	var tiles := _tiles(list)
+	_equals(tiles.size(), shown, "um bloco por jogo visível do catálogo")
+	_equals(tiles[0].game_id, Game.CHESS, "o primeiro bloco é o xadrez")
+	_check(
+		tiles[0].custom_minimum_size.y > tiles[1].custom_minimum_size.y,
+		"com a conta ímpar, o primeiro é o bloco de destaque"
+	)
 
-	# A estrela é um segundo alvo dentro da linha: guarda o jogo sem abrir a folha e
-	# sem refazer o cardápio debaixo do dedo que acabou de tocar.
-	rows[0].favorite_toggled.emit()
-	_check(rows[0].favorite, "tocar na estrela acende o favorito")
-	_check(Prefs.is_favorite(Game.CHESS), "e grava no disco, não na sessão")
-	_equals(_rows(list).size(), shown, "sem refazer o cardápio no mesmo toque")
+	# A estrela é um segundo alvo dentro do bloco: guarda o jogo sem abrir a folha e
+	# sem refazer a grade debaixo do dedo que acabou de tocar.
+	tiles[1].favorite_toggled.emit()
+	_check(tiles[1].favorite, "tocar na estrela acende o favorito")
+	_check(Prefs.is_favorite(Game.CHECKERS), "e grava no disco, não na sessão")
+	_check(_tiles(list)[1] == tiles[1], "sem refazer a grade no mesmo toque")
 	_check(not menu._sheet_open(), "e sem abrir a folha")
 
-	var bar: ChipBar = menu.get_node("%Categories")
-	bar.select(ChipBar.FAVORITES)
+	# A ordem nova vale na próxima vez que a tela é montada.
+	menu._fill_games()
 	await get_tree().process_frame
-	_equals(_rows(list).size(), 1, "o filtro de favoritos mostra só o que foi guardado")
-	bar.select(Game.CAT_BOARD)
-	await get_tree().process_frame
-	_equals(
-		_rows(list).size(), Game.games_in(Game.CAT_BOARD).size(),
-		"e cada categoria mostra os jogos dela"
-	)
-	bar.select(ChipBar.ALL)
-	await get_tree().process_frame
-	_equals(_rows(list).size(), shown, "de volta em todos, o catálogo inteiro")
-	_check(menu.get_node("%Favorites").visible, "e o favorito ganha o cartão de cima")
-	_equals(
-		menu.get_node("%Favorites").find_children("*", "GameChoice", true, false).size(), 1,
-		"um cartão por favorito"
-	)
+	_equals(_tiles(list)[0].game_id, Game.CHECKERS, "o favorito passa para a frente na montagem seguinte")
+	_equals(_tiles(list).size(), shown, "e ninguém some da grade")
 	Prefs.forget_favorites()
-
-	# Tocar na linha abre a folha por cima, em vez de trocar de tela — e o gesto de
-	# voltar fecha a folha antes de pensar em sair do app.
-	var second: CatalogRow = _rows(list)[1]
-	second.chosen.emit()
+	menu._fill_games()
 	await get_tree().process_frame
-	_equals(Game.game_id, Game.CHECKERS, "tocar na linha escolhe o jogo")
+
+	# Tocar no bloco abre a folha por cima, em vez de trocar de tela — e o gesto de
+	# voltar fecha a folha antes de pensar em sair do app.
+	var second: GameTile = _tiles(list)[1]
+	second.pressed.emit()
+	await get_tree().process_frame
+	_equals(Game.game_id, Game.CHECKERS, "tocar no bloco escolhe o jogo")
 	_check(menu._sheet_open(), "e abre a folha dele")
 	menu.go_back()
 	_check(not menu._sheet_open(), "o gesto de voltar fecha a folha, e não o app")
@@ -245,10 +236,9 @@ func _probe_game_picker() -> void:
 	Game.game_id = Game.CHESS
 
 
-## Só as linhas do cardápio: a coluna guarda também os rótulos de categoria, e
-## contar filhos seria contar rótulo como se fosse jogo.
-func _rows(list: Control) -> Array:
-	return list.find_children("*", "CatalogRow", true, false)
+## Só os blocos de jogo: a coluna guarda também a grade que os contém.
+func _tiles(list: Control) -> Array:
+	return list.find_children("*", "GameTile", true, false)
 
 
 ## O painel de ajustes fica entre "quero jogar" e o tabuleiro, e só para quem

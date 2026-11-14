@@ -230,7 +230,7 @@ func _probe_scene_palette() -> void:
 func _probe_tabs() -> void:
 	print("abas")
 	var tabs := AppTabs.new()
-	tabs.size = Vector2(432, 64)
+	tabs.size = Vector2(432, AppTabs.HEIGHT)
 	tabs.current = AppTabs.GAMES
 	root.add_child(tabs)
 	var heard: Array[StringName] = []
