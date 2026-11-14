@@ -1,7 +1,7 @@
 class_name GameTile
 extends Button
 
-## O bloco de um jogo na tela inicial: a cor do jogo, a peça, o nome e a lotação.
+## O bloco de um jogo na tela inicial: a cor do jogo, o ícone, o nome e a lotação.
 ##
 ## A tela inicial era um cardápio em linhas, com pontilhado até a lotação. Lia
 ## bem e não convidava: sete linhas iguais são sete linhas a comparar. Um bloco
@@ -13,6 +13,11 @@ extends Button
 ## a lista (`Nav`) —, e o `pressed` é o "escolhi este jogo".
 ##
 ## A estrela é um segundo botão por cima do canto: guarda o jogo sem abri-lo.
+##
+## O ícone é desenhado aqui, em formas simples e numa tinta só (`draw_art`): a
+## dama empilhada, as ondas, o dado, as cartas, os prédios, a bola 8. Não é a
+## peça do tabuleiro em miniatura — é um sinal que se lê de longe, e por isso
+## cabe grande e apagado atrás do nome sem brigar com ele.
 
 ## A estrela foi tocada. Quem escuta grava e devolve o estado por `favorite` — o
 ## bloco não fala com o disco.
@@ -20,7 +25,6 @@ signal favorite_toggled
 
 const HEIGHT := 112.0
 const PAD := 14.0
-const ICON := 40.0
 const TITLE_SIZE := 22
 const COUNT_SIZE := 13
 const STAR_SIZE := 20.0
@@ -41,7 +45,6 @@ var unavailable := false:
 		unavailable = value
 		modulate.a = 0.4 if value else 1.0
 
-var _coaster: Coaster = null
 var _star: Button = null
 
 
@@ -53,13 +56,6 @@ func _init() -> void:
 	button_down.connect(queue_redraw)
 	button_up.connect(queue_redraw)
 
-	_coaster = Coaster.new()
-	_coaster.fill = Color(AppTheme.ACCENT_INK, 0.2)
-	_coaster.ring = Color(0, 0, 0, 0)
-	_coaster.position = Vector2(PAD, PAD)
-	_coaster.size = Vector2(ICON, ICON)
-	add_child(_coaster)
-
 	_star = Button.new()
 	_star.theme_type_variation = &"IconButton"
 	_star.pressed.connect(func() -> void: favorite_toggled.emit())
@@ -68,7 +64,6 @@ func _init() -> void:
 
 
 func _refresh() -> void:
-	_coaster.piece = Game.piece_of(game_id)
 	_star.tooltip_text = "Favoritar %s" % Game.game_title(game_id)
 	queue_redraw()
 
@@ -82,18 +77,15 @@ func _draw() -> void:
 	var face := Rect2(0.0, sunk, size.x, size.y - edge)
 	draw_style_box(AppTheme.box(color.darkened(0.3), AppTheme.RADIUS_LARGE), Rect2(0.0, edge, size.x, size.y - edge))
 	draw_style_box(AppTheme.box(color, AppTheme.RADIUS_LARGE), face)
-	_coaster.position.y = PAD + sunk
 	# À mão e não por âncora: o bloco não é contêiner, e a estrela afunda junto.
-	_star.position = Vector2(size.x - STAR_ZONE, sunk)
+	_star.position = Vector2(0.0, sunk)
 	_star.size = Vector2(STAR_ZONE, STAR_ZONE)
 
 	var ink := AppTheme.ACCENT_INK
-	# A peça do jogo, grande e apagada, inclinada no lado direito: é o que faz o
-	# bloco ler como "este jogo" antes de se ler o nome. Tingida de tinta escura,
-	# vira silhueta sobre a cor.
-	PieceRenderer.draw_piece(
-		self, Game.piece_of(game_id), Vector2(size.x - face.size.y * 0.4, face.get_center().y + 6.0),
-		face.size.y * 0.82, 0.14, 1.0, false, ink, -0.18
+	var unit := face.size.y * 0.3
+	draw_art(
+		self, game_id, Vector2(size.x - unit - PAD * 1.6, face.position.y + unit + PAD),
+		unit, Color(ink, 0.24), color
 	)
 	var bottom := face.end.y - PAD
 	draw_string(
@@ -129,3 +121,70 @@ func _draw_star() -> void:
 		return
 	points.append(points[0])
 	_star.draw_polyline(points, Color(AppTheme.ACCENT_INK, 0.55), 2.0, true)
+
+
+## O ícone de um jogo em torno de `center`, cabendo num raio `unit`.
+##
+## `ink` é a tinta do desenho e `hole` a cor do que é vazado nele (as pintas do
+## dado, o 8 da bola): quem chama passa a cor do fundo. Estático para o cartão de
+## voltar e a folha do jogo usarem o mesmo desenho.
+static func draw_art(
+	canvas: CanvasItem, id: StringName, center: Vector2, unit: float, ink: Color, hole: Color
+) -> void:
+	match String(id):
+		"checkers":
+			# Duas pedras empilhadas.
+			canvas.draw_circle(center + Vector2(0.0, unit * 0.22), unit * 0.92, ink)
+			canvas.draw_circle(center - Vector2(0.0, unit * 0.12), unit * 0.92, Color(ink, ink.a * 0.9))
+		"battleship":
+			for row in 2:
+				var wave := PackedVector2Array()
+				for step in 25:
+					var t := step / 24.0
+					wave.append(center + Vector2(
+						(t - 0.5) * unit * 2.4,
+						(row - 0.5) * unit * 0.9 + sin(t * TAU * 1.5) * unit * 0.24
+					))
+				canvas.draw_polyline(wave, ink, unit * 0.2, true)
+		"ludo":
+			canvas.draw_set_transform(center, 0.2, Vector2.ONE)
+			canvas.draw_style_box(
+				AppTheme.box(ink, int(unit * 0.3)), Rect2(Vector2.ONE * -unit * 0.9, Vector2.ONE * unit * 1.8)
+			)
+			for spot: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2.ZERO, Vector2(-1, 1), Vector2(1, 1)]:
+				canvas.draw_circle(spot * unit * 0.46, unit * 0.16, hole)
+			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		"uno":
+			# Duas cartas, a de trás mais apagada.
+			for index in 2:
+				canvas.draw_set_transform(center + Vector2((index - 0.5) * unit * 0.7, 0.0), -0.12 + index * 0.4, Vector2.ONE)
+				canvas.draw_style_box(
+					AppTheme.box(Color(ink, ink.a * (0.6 + 0.4 * index)), int(unit * 0.22)),
+					Rect2(-unit * 0.6, -unit * 0.9, unit * 1.2, unit * 1.8)
+				)
+			canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		"monopoly":
+			# Três prédios de alturas diferentes, no mesmo chão.
+			var ground := center.y + unit * 0.9
+			var heights := [1.1, 1.8, 1.4]
+			for index in 3:
+				var tall := unit * float(heights[index])
+				canvas.draw_style_box(
+					AppTheme.box(ink, int(unit * 0.12)),
+					Rect2(center.x + (index - 1.5) * unit * 0.66, ground - tall, unit * 0.58, tall)
+				)
+		"pool":
+			canvas.draw_circle(center, unit * 0.95, ink)
+			var face := AppTheme.display(700)
+			var font_size := int(unit * 1.2)
+			canvas.draw_string(
+				face, Vector2(center.x - unit, center.y + font_size * 0.36), "8",
+				HORIZONTAL_ALIGNMENT_CENTER, unit * 2.0, font_size, hole
+			)
+		_:
+			# Xadrez, e qualquer jogo que ainda não tenha desenho: a peça dele em
+			# silhueta, inclinada.
+			PieceRenderer.draw_piece(
+				canvas, Game.piece_of(id), center, unit * 2.6, ink.a, 1.0, false,
+				Color(ink.r, ink.g, ink.b), -0.18
+			)
