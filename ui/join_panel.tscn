@@ -10,8 +10,8 @@ script = ExtResource("1_panel")
 
 [node name="CodeCaption" type="Label" parent="."]
 layout_mode = 2
-theme_type_variation = &"Caption"
-text = "ENTRAR COM CÓDIGO"
+theme_type_variation = &"SectionHeader"
+text = "Tem um código de sala?"
 
 [node name="CodeInput" type="Control" parent="."]
 unique_name_in_owner = true

@@ -44,6 +44,8 @@ signal create_requested(game_id: StringName)
 ## que ninguém precise puxar para atualizar. Curto o bastante para parecer vivo,
 ## longo o bastante para não virar uma requisição por segundo.
 const ROOM_REFRESH := 6.0
+## A partir de quantas salas abertas o filtro por jogo vale a linha que ocupa.
+const FILTER_FROM := 6
 ## Jogos que já sabem receber espectador: os que usam `match.gd`. Os outros
 ## recebem quem assiste no relay, mas nenhuma tela deles mostraria a partida.
 const WATCHABLE: Array[StringName] = [Game.CHESS, Game.CHECKERS]
@@ -209,6 +211,9 @@ func show_rooms(rooms: Array) -> void:
 
 func _render_rooms() -> void:
 	_clear_rooms()
+	# O filtro só aparece quando há sala bastante para filtrar: com meia dúzia, ele
+	# ocupa uma linha para esconder o que já cabia na tela.
+	%GameFilter.visible = _rooms.size() > FILTER_FROM
 	var wanted: StringName = %GameFilter.current
 	var rooms := _rooms.filter(func(entry: Variant) -> bool:
 		if entry is not Dictionary:
@@ -366,10 +371,10 @@ func _fill_create_row() -> void:
 		button.custom_minimum_size = Vector2(56, 56)
 		button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		button.pressed.connect(func() -> void: create_requested.emit(id))
-		var coaster := Coaster.new()
-		coaster.set_anchors_preset(Control.PRESET_FULL_RECT)
-		coaster.piece = Game.piece_of(id)
-		button.add_child(coaster)
+		# O ladrilho do jogo, o mesmo da grade e das salas.
+		button.draw.connect(func() -> void:
+			GameTile.draw_badge(button, id, Rect2(0.0, 0.0, button.size.x, button.size.y - AppTheme.PLATE_EDGE))
+		)
 		column.add_child(button)
 		var label := Label.new()
 		label.text = Game.game_title(id)

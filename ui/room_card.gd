@@ -7,7 +7,11 @@ extends Button
 ## Um cartão bonito com um alvo pequeno é pior que um alvo grande sem enfeite —
 ## e aqui a linha inteira responde.
 
-const HEIGHT := 66.0
+const HEIGHT := 72.0
+const PAD := 12.0
+const ICON := 46.0
+## A pílula da direita, que diz o que o toque faz.
+const ACTION_SIZE := Vector2(86.0, 38.0)
 
 var code := ""
 var game_id := &"chess"
@@ -29,46 +33,45 @@ var watchers := -1
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(0, HEIGHT)
-	theme_type_variation = &"GhostButton"
+	# Sem caixa do tema: o cartão desenha a própria superfície.
+	theme_type_variation = &"IconButton"
 	# O desenho é todo próprio; o texto do Button seria uma segunda camada
 	# competindo com ele.
 	text = ""
 
 
 func _draw() -> void:
-	var pad := 16.0
-	var piece := Game.piece_of(game_id)
-	var piece_size := size.y * 0.62
-	var center := Vector2(pad + piece_size * 0.5, size.y * 0.5)
-	# A peça em bolacha, como no cardápio e na folha: a mesma moldura redonda para
-	# "qual jogo" em toda a lista do app.
-	draw_circle(center, piece_size * 0.5, AppTheme.COASTER)
-	draw_arc(center, piece_size * 0.5, 0.0, TAU, 40, Color(AppTheme.GOLD, 0.7), 2.0, true)
-	PieceRenderer.draw_piece(self, piece, center, piece_size * 0.74)
+	draw_style_box(AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), Rect2(Vector2.ZERO, size))
+	var tile := Rect2(PAD, (size.y - ICON) * 0.5 - 2.0, ICON, ICON)
+	GameTile.draw_badge(self, game_id, tile)
 
-	var text_x := pad + piece_size + 14.0
-	# Largura escrita, e não `-1`. Com `-1` o texto passa por baixo da seta e sai
-	# pela borda do cartão sem que nada acuse — e a linha de baixo ganhou um
-	# apelido escolhido por outra pessoa, que é justamente o pedaço cujo tamanho
-	# esta tela não controla.
-	var text_width := maxf(40.0, size.x - text_x - 34.0)
-	draw_string(
-		AppTheme.display(900), Vector2(text_x, size.y * 0.5 - 2.0), _title().to_upper(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 19, AppTheme.TEXT
+	# A pílula diz o que o toque faz: entrar numa sala que espera, assistir uma
+	# partida que já corre. Só a de entrar é limão — é a ação.
+	var live := watchers >= 0
+	var action := Rect2(
+		size.x - PAD - ACTION_SIZE.x, (size.y - ACTION_SIZE.y) * 0.5, ACTION_SIZE.x, ACTION_SIZE.y
+	)
+	draw_style_box(
+		AppTheme.box(AppTheme.SURFACE_HIGH if live else AppTheme.ACCENT, AppTheme.RADIUS), action
 	)
 	draw_string(
-		AppTheme.font(400), Vector2(text_x, size.y * 0.5 + 19.0), _detail(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 14, AppTheme.TEXT_DIM
+		AppTheme.display(600), Vector2(action.position.x, action.get_center().y + 5.5),
+		"Assistir" if live else "Entrar", HORIZONTAL_ALIGNMENT_CENTER, action.size.x, 15,
+		AppTheme.TEXT if live else AppTheme.ACCENT_INK
 	)
 
-	# Seta discreta à direita: diz "isto leva a algum lugar" sem competir com o
-	# texto, e é o mesmo vocabulário de lista do resto do app.
-	var arrow := Vector2(size.x - 26.0, size.y * 0.5)
-	draw_polyline(
-		PackedVector2Array([
-			arrow + Vector2(-4.0, -7.0), arrow + Vector2(4.0, 0.0), arrow + Vector2(-4.0, 7.0)
-		]),
-		AppTheme.TEXT_DIM, 2.0, true
+	var text_x := tile.end.x + PAD
+	# Largura escrita, e não `-1`. Com `-1` o texto passa por baixo da pílula e sai
+	# pela borda do cartão sem que nada acuse — e a linha de baixo tem um apelido
+	# escolhido por outra pessoa, o pedaço cujo tamanho esta tela não controla.
+	var text_width := maxf(40.0, action.position.x - text_x - PAD)
+	draw_string(
+		AppTheme.display(600), Vector2(text_x, size.y * 0.5 - 3.0), _title(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 17, AppTheme.TEXT
+	)
+	draw_string(
+		AppTheme.font(500), Vector2(text_x, size.y * 0.5 + 17.0), _detail(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 13, AppTheme.TEXT_DIM
 	)
 
 

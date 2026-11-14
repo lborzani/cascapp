@@ -136,6 +136,8 @@ static func draw_art(
 			# Duas pedras empilhadas.
 			canvas.draw_circle(center + Vector2(0.0, unit * 0.22), unit * 0.92, ink)
 			canvas.draw_circle(center - Vector2(0.0, unit * 0.12), unit * 0.92, Color(ink, ink.a * 0.9))
+			# Um fio na cor do fundo separa as duas: sem ele, em tinta cheia viram uma mancha só.
+			canvas.draw_arc(center - Vector2(0.0, unit * 0.12), unit * 0.92, 0.12, PI - 0.12, 24, Color(hole, ink.a), unit * 0.12, true)
 		"battleship":
 			for row in 2:
 				var wave := PackedVector2Array()
@@ -188,3 +190,16 @@ static func draw_art(
 				canvas, Game.piece_of(id), center, unit * 2.6, ink.a, 1.0, false,
 				Color(ink.r, ink.g, ink.b), -0.18
 			)
+
+
+## O ladrilho de um jogo: a cor dele, a borda de baixo e o ícone. É o "qual jogo"
+## de toda lista do app — cartão de voltar, folha, salas abertas, criar sala.
+static func draw_badge(canvas: CanvasItem, id: StringName, rect: Rect2) -> void:
+	var color: Color = AppTheme.GAME_COLORS.get(String(id), AppTheme.SURFACE_HIGH)
+	var radius := int(rect.size.y * 0.24)
+	canvas.draw_style_box(
+		AppTheme.box(color.darkened(0.3), radius),
+		Rect2(rect.position + Vector2(0.0, AppTheme.PLATE_EDGE), rect.size)
+	)
+	canvas.draw_style_box(AppTheme.box(color, radius), rect)
+	draw_art(canvas, id, rect.get_center(), rect.size.y * 0.3, AppTheme.ACCENT_INK, color)

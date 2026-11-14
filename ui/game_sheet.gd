@@ -335,12 +335,7 @@ func _mode_label(candidate: int, id: StringName) -> String:
 
 
 func _draw_icon() -> void:
-	var color: Color = AppTheme.GAME_COLORS.get(String(game_id), AppTheme.SURFACE_HIGH)
-	var edge := float(AppTheme.PLATE_EDGE)
-	var face := Rect2(0.0, 0.0, ICON, ICON)
-	_icon.draw_style_box(AppTheme.box(color.darkened(0.3), AppTheme.RADIUS), Rect2(0.0, edge, ICON, ICON))
-	_icon.draw_style_box(AppTheme.box(color, AppTheme.RADIUS), face)
-	GameTile.draw_art(_icon, game_id, face.get_center(), ICON * 0.3, AppTheme.ACCENT_INK, color)
+	GameTile.draw_badge(_icon, game_id, Rect2(0.0, 0.0, ICON, ICON))
 
 
 func _meta_text(id: StringName) -> String:

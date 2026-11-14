@@ -64,14 +64,9 @@ func _place_close() -> void:
 
 func _draw() -> void:
 	draw_style_box(AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), Rect2(Vector2.ZERO, size))
-	# O ladrilho na cor do jogo, com a borda de baixo dos blocos da grade: o cartão
-	# é a mesma família deles, deitado.
-	var color: Color = AppTheme.GAME_COLORS.get(String(game_id), AppTheme.SURFACE_HIGH)
-	var tile := Rect2(PAD, (size.y - ICON) * 0.5, ICON, ICON)
-	var edge := float(AppTheme.PLATE_EDGE)
-	draw_style_box(AppTheme.box(color.darkened(0.3), AppTheme.RADIUS), Rect2(tile.position + Vector2(0, edge), tile.size))
-	draw_style_box(AppTheme.box(color, AppTheme.RADIUS), tile)
-	PieceRenderer.draw_piece(self, Game.piece_of(game_id), tile.get_center(), ICON * 0.74)
+	# O mesmo ladrilho dos blocos da grade: o cartão é da família deles, deitado.
+	var tile := Rect2(PAD, (size.y - ICON) * 0.5 - 2.0, ICON, ICON)
+	GameTile.draw_badge(self, game_id, tile)
 
 	var text_x := tile.end.x + PAD
 	var text_width := maxf(40.0, size.x - text_x - IconButton.SIZE - 20.0)
