@@ -562,8 +562,10 @@ func _probe_guest() -> void:
 	# painel, e não da tela: `%` só enxerga dentro da cena que declarou o nome, e
 	# o painel é uma cena própria — é o que o torna reusável sem que a tela
 	# precise conhecer as peças dele.
+	# Sem botão de entrar: o caminho do Bluetooth é quem pode pedir com o campo
+	# pela metade.
 	field.set_code("ABC")
-	panel.get_node("%JoinButton").pressed.emit()
+	panel.get_node("%BluetoothButton").pressed.emit()
 	await get_tree().process_frame
 	# A recusa vai para o toast do topo, não para a linha de status: é ali que o
 	# rodapé enterrava os erros, entre uma mensagem de progresso e outra.
@@ -614,13 +616,13 @@ func _probe_guest() -> void:
 	panel.show_live([])
 	_check(not panel.get_node("%LiveCaption").visible, "sem partida ao vivo a seção some")
 
-	# O mesmo código do campo, pelo botão Assistir.
+	_check(panel.find_child("WatchButton", true, false) == null, "assistir não é mais um botão ao lado do código")
+	_check(panel.find_child("JoinButton", true, false) == null, "nem entrar: a sexta casa entra")
+
 	Net.leave()
 	panel._joining = false
-	panel.get_node("%WatchButton").pressed.emit()
+	panel._watch_room("LIVE01")
 	await get_tree().process_frame
-	_equals(Net._expected_code, "ZZZ999", "Assistir usa o código digitado")
-	_check(Net.is_spectator, "e entra como espectador")
 
 	# Jogo sem tela de espectador é recusado assim que o relay diz qual é.
 	panel._on_watching("ludo", 4)
@@ -631,17 +633,18 @@ func _probe_guest() -> void:
 	)
 	_check(not Net.is_spectator, "e a sala é deixada")
 
-	# "Criar sala" mora aqui também: quem abriu o app para jogar com alguém já está
-	# nesta aba, e mandá-lo à coleção de jogos só para voltar é um desvio que não
-	# decide nada. A fileira abre a mesma folha do cardápio, já em Online.
+	# Criar sala tem um caminho só: a folha de um jogo, na aba Jogos. Daqui, o
+	# link leva para lá.
 	Net.leave()
 	panel._joining = false
-	panel.create_requested.emit(Game.LUDO)
-	await get_tree().process_frame
-	_check(screen._sheet.is_open(), "tocar num jogo de Criar sala abre a folha")
-	_equals(screen._sheet.mode, Game.Mode.ONLINE, "já em Online")
-	screen.go_back()
-	_check(not screen._sheet.is_open(), "e o gesto de voltar fecha a folha")
+	_check(panel.find_child("CreateRow", true, false) == null, "a fileira de criar sala saiu da aba")
+	# A tela trocaria de cena de verdade, e a cena corrente aqui é a própria sonda:
+	# marcada como "já saindo", ela não navega, e o que se confere é o pedido.
+	screen._leaving = true
+	var asked := [0]
+	panel.create_requested.connect(func() -> void: asked[0] += 1)
+	panel.get_node("%CreateLink").pressed.emit()
+	_equals(asked[0], 1, "Criar a minha pede a aba Jogos")
 
 	screen.free()
 	await get_tree().process_frame

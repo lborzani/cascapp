@@ -36,16 +36,15 @@ extends VBoxContainer
 ## o rodapé é onde uma mensagem morre sem ninguém ver.
 signal failed(message: String)
 
-## Tocou numa bolacha de "Criar sala". A tela abre a folha daquele jogo em Online —
-## o painel não navega, como nenhum componente do app.
-signal create_requested(game_id: StringName)
+## Tocou em "Criar a minha". Criar sala é pela folha de um jogo, e os jogos moram
+## na aba Jogos: a tela leva para lá — o painel não navega, como nenhum componente
+## do app. Um caminho só para criar, em vez de dois.
+signal create_requested
 
 ## Uma sala aberta é uma pessoa esperando; a lista tem de acompanhar isso sem
 ## que ninguém precise puxar para atualizar. Curto o bastante para parecer vivo,
 ## longo o bastante para não virar uma requisição por segundo.
 const ROOM_REFRESH := 6.0
-## A partir de quantas salas abertas o filtro por jogo vale a linha que ocupa.
-const FILTER_FROM := 6
 ## Jogos que já sabem receber espectador: os que usam `match.gd`. Os outros
 ## recebem quem assiste no relay, mas nenhuma tela deles mostraria a partida.
 const WATCHABLE: Array[StringName] = [Game.CHESS, Game.CHECKERS]
@@ -84,42 +83,34 @@ func _ready() -> void:
 	Pairing.nfc.failed.connect(_fail)
 	Pairing.qr_scanner.failed.connect(_fail)
 
-	%RefreshButton.pressed.connect(_fetch_rooms)
 	%RoomsRequest.request_completed.connect(_on_rooms_fetched)
-	%JoinButton.pressed.connect(_join_by_code)
-	%WatchButton.pressed.connect(_watch_by_code)
 	%LiveRequest.request_completed.connect(_on_live_fetched)
-	# A sexta casa vale o mesmo que tocar em "Entrar": quem acabou de digitar o
-	# código inteiro não deveria ter de procurar um botão.
+	# Não há botão de entrar: a sexta casa entra. Quem acabou de digitar o código
+	# inteiro não deveria ter de procurar um botão.
 	%CodeInput.completed.connect(func(_code: String) -> void: _join_by_code())
 	%ScanButton.pressed.connect(_start_scan)
 	# O mesmo código, pelo Bluetooth: dois celulares lado a lado, sem internet. Só
-	# onde há rádio para isso, e numa linha própria — na fileira do código não
-	# cabe um quarto botão num celular em pé.
-	if Pairing.ble.is_available():
-		var bluetooth := Button.new()
-		bluetooth.name = "BluetoothButton"
-		bluetooth.theme_type_variation = &"GhostButton"
-		bluetooth.text = "Entrar sem internet (Bluetooth)"
-		bluetooth.pressed.connect(_join_by_code.bind(true))
-		%JoinButton.get_parent().add_sibling(bluetooth)
-	_fill_create_row()
+	# onde há rádio para isso.
+	%BluetoothButton.visible = Pairing.ble.is_available()
+	%BluetoothButton.pressed.connect(_join_by_code.bind(true))
+	%CreateLink.add_theme_color_override("font_color", AppTheme.ACCENT)
+	%CreateLink.add_theme_color_override("font_hover_color", AppTheme.ACCENT)
+	%CreateLink.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	%CreateLink.pressed.connect(func() -> void: create_requested.emit())
+	# O ponto de "Ao vivo" pulsa: é a única seção da tela que está acontecendo agora.
+	%LiveDot.draw.connect(func() -> void:
+		%LiveDot.draw_circle(%LiveDot.size * 0.5, 5.0, AppTheme.DANGER)
+	)
+	var pulse := %LiveDot.create_tween().set_loops()
+	pulse.tween_property(%LiveDot, "modulate:a", 0.35, 0.7)
+	pulse.tween_property(%LiveDot, "modulate:a", 1.0, 0.7)
 	%ScanButton.visible = Pairing.qr_scanner.is_available()
 
-	# O filtro é por **jogo**, e não por categoria como na tela inicial: quem
-	# procura sala procura a partida de um jogo. Ele não vai ao servidor — a
-	# resposta traz todas as salas abertas, que são poucas por natureza, e
-	# refiltrar no aparelho responde no toque em vez de numa ida à rede.
-	%GameFilter.setup(ChipBar.online_game_items())
-	%GameFilter.selected.connect(func(_id: StringName) -> void:
-		_render_rooms()
-		_render_live())
 	_set_hint()
 	_clear_status()
 
 	# O NFC escuta desde já: o gesto dele é encostar, e um botão antes disso é um
 	# passo que não faz nada visível.
-	%NfcHint.visible = Pairing.nfc.is_available()
 	if Pairing.nfc.is_available():
 		Pairing.nfc.listen()
 
@@ -128,7 +119,7 @@ func _ready() -> void:
 
 
 ## O mesmo cartão da tela inicial, no topo do painel. Quem caiu e vem direto para
-## "Multiplayer" procurar a partida é exatamente quem precisa dele.
+## Online procurar a partida é exatamente quem precisa dele.
 func _offer_rejoin() -> void:
 	var pending := Prefs.pending_rejoin(int(Time.get_unix_time_from_system()))
 	if pending.is_empty():
@@ -211,30 +202,11 @@ func show_rooms(rooms: Array) -> void:
 
 func _render_rooms() -> void:
 	_clear_rooms()
-	# O filtro só aparece quando há sala bastante para filtrar: com meia dúzia, ele
-	# ocupa uma linha para esconder o que já cabia na tela.
-	%GameFilter.visible = _rooms.size() > FILTER_FROM
-	var wanted: StringName = %GameFilter.current
-	var rooms := _rooms.filter(func(entry: Variant) -> bool:
-		if entry is not Dictionary:
-			return false
-		if wanted == ChipBar.ALL:
-			return true
-		return StringName(str(entry.get("game", Game.CHESS))) == wanted
-	)
+	var rooms := _rooms.filter(func(entry: Variant) -> bool: return entry is Dictionary)
 	if rooms.is_empty():
-		# Curto de propósito. A versão longa ensinava o que fazer em vez disso
-		# ("use o código, ou volte e crie a sua"), mas as duas saídas estão na
-		# tela — o campo logo acima e a gaveta logo ali —, e um parágrafo entre
-		# elas só empurra as duas para longe.
-		#
-		# Com filtro ligado a frase diz **de que jogo** não há sala: "nenhuma sala
-		# aberta" sob um chip de Ludo aceso faria o jogador concluir que o app
-		# inteiro está vazio.
-		if wanted == ChipBar.ALL:
-			_set_rooms_placeholder("Nenhuma sala aberta agora.")
-		else:
-			_set_rooms_placeholder("Nenhuma sala de %s agora." % Game.game_title(wanted))
+		# Curto de propósito: as duas saídas estão na tela — o campo logo acima e
+		# "Criar a minha" logo ao lado.
+		_set_rooms_placeholder("Nenhuma sala aberta agora.")
 		return
 
 	%RoomsEmpty.visible = false
@@ -273,13 +245,12 @@ func show_live(rooms: Array) -> void:
 func _render_live() -> void:
 	for child in %LiveRows.get_children():
 		child.queue_free()
-	var wanted: StringName = %GameFilter.current
 	var shown := 0
 	for entry in _live:
 		if entry is not Dictionary:
 			continue
 		var id := StringName(str(entry.get("game", "")))
-		if not WATCHABLE.has(id) or (wanted != ChipBar.ALL and id != wanted):
+		if not WATCHABLE.has(id):
 			continue
 		var card := RoomCard.new()
 		card.code = str(entry.get("code", ""))
@@ -318,14 +289,6 @@ func _join_by_code(bluetooth := false) -> void:
 	_enter_room(Game.game_id, code, bluetooth)
 
 
-func _watch_by_code() -> void:
-	var code: String = %CodeInput.code
-	if code.length() != Pairing.CODE_LENGTH:
-		_fail("O código tem %d caracteres." % Pairing.CODE_LENGTH)
-		return
-	_watch_room(code)
-
-
 ## Assistir. A tela troca de cena no `Net.watch_started`; recusa (sala que não
 ## existe, espectadores demais) volta pelo `join_failed`, como a de entrar.
 func _watch_room(code: String) -> void:
@@ -347,41 +310,6 @@ func _on_watching(game_id: String, _capacity: int) -> void:
 		return
 	Net.leave()
 	_on_join_failed("Assistir ainda não está disponível para %s." % Game.game_title(StringName(game_id)))
-
-
-## As bolachas de "Criar sala": um jogo por bolacha, só os que têm Online.
-##
-## Criar partida morava na outra aba, atrás de escolher o jogo. Mas quem abre o
-## app para jogar com alguém já está aqui — e mandar essa pessoa para a coleção de
-## jogos só para voltar é um desvio que não decide nada. A fileira é o mesmo
-## catálogo, curto, do que dá para abrir daqui.
-func _fill_create_row() -> void:
-	for child in %CreateRow.get_children():
-		%CreateRow.remove_child(child)
-		child.queue_free()
-	for id in Game.games_in():
-		if not Game.mode_available(Game.Mode.ONLINE, id):
-			continue
-		var column := VBoxContainer.new()
-		column.add_theme_constant_override("separation", AppTheme.SPACE_XS)
-		column.alignment = BoxContainer.ALIGNMENT_CENTER
-		var button := Button.new()
-		button.theme_type_variation = &"IconButton"
-		button.focus_mode = Control.FOCUS_NONE
-		button.custom_minimum_size = Vector2(56, 56)
-		button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		button.pressed.connect(func() -> void: create_requested.emit(id))
-		# O ladrilho do jogo, o mesmo da grade e das salas.
-		button.draw.connect(func() -> void:
-			GameTile.draw_badge(button, id, Rect2(0.0, 0.0, button.size.x, button.size.y - AppTheme.PLATE_EDGE))
-		)
-		column.add_child(button)
-		var label := Label.new()
-		label.text = Game.game_title(id)
-		label.theme_type_variation = &"Caption"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		column.add_child(label)
-		%CreateRow.add_child(column)
 
 
 func _start_scan() -> void:
@@ -558,21 +486,10 @@ func _fail(message: String) -> void:
 	failed.emit(message)
 
 
-## Caminho que some sem explicação lê como app quebrado — então a ausência é dita
-## uma vez, numa linha, e só quando existe.
-##
-## Some, e não fica apagado: um botão desabilitado ocupa o mesmo espaço de um que
-## funciona e ainda convida ao toque.
-##
-## O texto encolheu de três linhas para uma. A versão longa explicava plugin
-## Android, dizia que o código tem 6 caracteres e prometia que ele funciona de
-## qualquer rede — três coisas que ninguém lê empilhadas embaixo de uma lista, e
-## que o campo logo acima já responde por existir.
+## A linha ao lado dos botões do código: diz o que a tela faz sozinha. Não há
+## botão de entrar, então é aqui que o jogador descobre que a sexta letra entra —
+## e, onde o aparelho tem NFC, que encostar os dois também serve.
 func _set_hint() -> void:
-	var missing := PackedStringArray()
-	if not Pairing.qr_scanner.is_available():
-		missing.append("QR")
-	if not Pairing.nfc.is_available():
-		missing.append("NFC")
-	%Hint.visible = not missing.is_empty()
-	%Hint.text = "Sem %s neste aparelho — use o código." % " nem ".join(missing)
+	%Hint.text = "Entra sozinho na sexta letra."
+	if Pairing.nfc.is_available():
+		%Hint.text += " Ou encoste os aparelhos."

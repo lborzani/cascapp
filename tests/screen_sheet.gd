@@ -273,8 +273,7 @@ func _next() -> void:
 		# ausentes, e o print mostraria uma tela que nenhum aparelho vê. O que
 		# precisa ser julgado aqui é o cartão cheio, com os três caminhos.
 		panel.get_node("%ScanButton").visible = true
-		panel.get_node("%NfcHint").visible = true
-		panel.get_node("%Hint").visible = false
+		panel.get_node("%BluetoothButton").visible = true
 	elif shot == "06_capturas" or shot == "07_material":
 		_play_opening(_scene)
 		if shot == "07_material":
