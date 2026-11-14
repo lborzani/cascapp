@@ -599,13 +599,15 @@ func _test_rated_result() -> void:
 	_check(scene._reported, "o abandono do outro vai para o relay")
 	scene._show_overlay("O oponente saiu", "A partida foi encerrada no lance 0.", false)
 	Net.rated.emit([{"seat": 1, "elo": 1180, "delta": -20}, {"seat": 0, "elo": 1220, "delta": 20}])
-	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "o painel mostra o nosso Elo novo")
+	_check(str(scene._result_stats()).contains("1220"), "o painel mostra o nosso Elo novo")
+	_check(str(scene._result_stats()).contains("Elo +20"), "com a variação")
 	_equals(Account.elo, 1220, "e a conta fica com ele")
 	scene._show_overlay("O oponente saiu", "De novo.", false)
-	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "e ele continua lá quando o painel reabre")
+	_check(str(scene._result_stats()).contains("1220"), "e ele continua lá quando o painel reabre")
 
 	scene._new_game()
 	_check(not scene._reported and scene._rating_text.is_empty(), "a revanche começa sem relato nem Elo")
+	_check(not str(scene._result_stats()).contains("1220"), "e sem o bloco de Elo")
 	Account.elo = 0
 	scene.queue_free()
 	await get_tree().process_frame

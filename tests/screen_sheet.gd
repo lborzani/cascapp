@@ -315,6 +315,8 @@ func _next() -> void:
 		# recebido, com aceitar e recusar. É o caso que responde se três botões
 		# ainda cabem no painel.
 		_play_opening(_scene)
+		# Com vencedor decidido, para o print mostrar o selo e os números.
+		_scene._winner = Board.Side.WHITE
 		_scene._show_overlay("Brancas venceram", "Você venceu em 10 lances.", true)
 		_scene._on_rematch_requested()
 	elif shot == "10_planejado":

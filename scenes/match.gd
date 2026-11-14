@@ -86,6 +86,12 @@ var _recorded_game := {}
 var _reported := false
 ## O que o relay disse do Elo desta partida, para o painel; vazio até lá.
 var _rating_text := ""
+## O Elo novo e a variação, quando o relay os mandou. Zero é "ainda não".
+var _rating_elo := 0
+var _rating_delta := 0
+## Selo e números do topo do fim de partida, e o confete por cima dele.
+var _result_header: ResultHeader = null
+var _confetti: Confetti = null
 var _review: ReviewPanel = null
 ## Avaliação ao vivo; só existe para quem assiste xadrez.
 var _live: LiveReview = null
@@ -187,6 +193,7 @@ func _ready() -> void:
 	%NextUpButton.pressed.connect(_on_next_up_pressed)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
+	_build_result_header()
 
 	# A barra sabe o nome do jogo, o relógio da partida e o código da sala, mas só
 	# depois de `begin_match()`: é ele que decide se esta partida começa agora ou
@@ -221,6 +228,8 @@ func _new_game() -> void:
 	_recorded_game = {}
 	_reported = false
 	_rating_text = ""
+	_rating_elo = 0
+	_rating_delta = 0
 	_state = _ruleset.initial_state()
 	_selection.clear()
 	_hint = ""
@@ -906,7 +915,11 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
 	# O painel reabre (convite de revanche, oponente que sai); o Elo que já
 	# chegou não pode sumir dele.
-	%ResultDetail.text = detail if _rating_text.is_empty() else "%s\n%s" % [detail, _rating_text]
+	%ResultDetail.text = detail
+	# Abandono e saída não têm vencedor decidido no tabuleiro: o cartão fica só
+	# com o texto, sem selo nem números.
+	_result_header.visible = _winner != NO_RESULT
+	_result_header.show_result(_result_mood(), _result_stats())
 	_record_game(title, detail)
 	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
 	allow_rematch = allow_rematch and not Net.is_spectator
@@ -922,6 +935,8 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	# parecer que acabou três vezes.
 	if not %ResultLayer.visible:
 		Sound.play(Sound.Cue.WIN)
+		if _winner != NO_RESULT and _result_mood() == ResultHeader.Mood.WIN:
+			_confetti.burst()
 	%ResultLayer.visible = true
 	_banner.hide_message()
 	# Depois do texto: um convite que chegou enquanto a animação do último lance
@@ -1091,7 +1106,50 @@ func _on_rated(ratings: Array) -> void:
 			var delta := int(entry.get("delta", 0))
 			Account.elo = elo
 			_rating_text = "Elo %d (%s%d)" % [elo, "+" if delta >= 0 else "", delta]
-			%ResultDetail.text = "%s\n%s" % [%ResultDetail.text, _rating_text]
+			_rating_elo = elo
+			_rating_delta = delta
+			_result_header.set_stats(_result_stats())
+
+
+## O selo e a fileira de números entram no cartão de fim que a cena já tem: o
+## selo no topo, os números logo depois do texto. O confete cobre a camada toda.
+func _build_result_header() -> void:
+	var column: Control = %ResultTitle.get_parent()
+	_result_header = ResultHeader.new()
+	column.add_child(_result_header)
+	column.move_child(_result_header, 0)
+	var row := _result_header.stats_row()
+	column.add_child(row)
+	column.move_child(row, %ResultDetail.get_index() + 1)
+	_confetti = Confetti.new()
+	# Âncoras antes do `add_child`: depois, a camada escondida não recalcula.
+	_confetti.set_anchors_preset(Control.PRESET_FULL_RECT)
+	%ResultLayer.add_child(_confetti)
+
+
+## Para quem é a festa. Quem assiste e quem joga no mesmo celular sempre vê o
+## troféu: alguém da mesa venceu. Contra o bot e online, depende do lado.
+func _result_mood() -> ResultHeader.Mood:
+	if _winner == -1:
+		return ResultHeader.Mood.DRAW
+	if Net.is_spectator or Game.mode == Game.Mode.HOTSEAT:
+		return ResultHeader.Mood.WIN
+	return ResultHeader.Mood.WIN if _winner == Game.local_side else ResultHeader.Mood.LOSS
+
+
+## Duração, lances e — quando o relay já mandou — o Elo, com a variação acesa.
+func _result_stats() -> Array:
+	var seconds := int(Time.get_unix_time_from_system()) - Game.match_started_at
+	var stats: Array = [
+		[MatchStatus.clock_text(maxi(seconds, 0)), "duração"],
+		[str(ceili(_state.ply / 2.0)), "lances"],
+	]
+	if _rating_elo > 0:
+		stats.push_front([
+			str(_rating_elo), "Elo %s%d" % ["+" if _rating_delta >= 0 else "", _rating_delta],
+			_rating_delta >= 0,
+		])
+	return stats
 
 
 ## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
