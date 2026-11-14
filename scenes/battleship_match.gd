@@ -22,6 +22,7 @@ enum Phase { PLACING, WAITING, FIRING, OVER }
 
 var _rules := BattleshipRules.new()
 var _match_status: MatchStatus = null
+var _result_header: ResultHeader = null
 var _state: MatchState
 var _phase := Phase.PLACING
 var _outcome := Ruleset.Outcome.ONGOING
@@ -469,7 +470,8 @@ func _refresh_firing() -> void:
 		_show_result(
 			"Você venceu" if won else "Você perdeu",
 			_rules.outcome_text(_outcome),
-			Game.mode == Game.Mode.ONLINE
+			Game.mode == Game.Mode.ONLINE,
+			ResultHeader.Mood.WIN if won else ResultHeader.Mood.LOSS
 		)
 
 
@@ -502,9 +504,18 @@ func _fleet_status(side: int) -> String:
 	return "1 navio" if afloat == 1 else "%d navios" % afloat
 
 
-func _show_result(title: String, detail: String, allow_rematch: bool) -> void:
+## `mood` -1 é fim sem vencedor no mar (o oponente saiu): só o texto.
+func _show_result(title: String, detail: String, allow_rematch: bool, mood := -1) -> void:
 	%ResultTitle.text = title
 	%ResultDetail.text = detail
+	if _result_header == null:
+		_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %OverlayLayer)
+	_result_header.visible = mood >= 0
+	if mood >= 0 and not %OverlayLayer.visible:
+		_result_header.celebrate(mood, [
+			[ResultHeader.duration_since(Game.match_started_at), "duração"],
+			[str(_match_status.rounds), "rodadas"],
+		])
 	%RematchButton.visible = allow_rematch and not _abandoned
 	_refresh_rematch()
 	%OverlayLayer.visible = true

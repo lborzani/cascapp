@@ -1483,7 +1483,8 @@ func _finish(champion: int) -> void:
 	# novo em rede abre outra sala. O botão sai em vez de prometer o que não há —
 	# mesma decisão do Ludo.
 	_result.show_winner(
-		_state, champion, _player_label, Game.mode != Game.Mode.ONLINE
+		_state, champion, _player_label, Game.mode != Game.Mode.ONLINE,
+		_rules.rounds_played(_state)
 	)
 
 

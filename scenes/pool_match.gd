@@ -53,6 +53,7 @@ var _trays: Array[Control] = []
 var _bar: MatchBar = null
 var _overlay: Control = null
 var _overlay_title: Label = null
+var _result_header: ResultHeader = null
 var _again: Button = null
 
 
@@ -538,7 +539,17 @@ func _finish(champion: int) -> void:
 		_overlay_title.text = "Empate"
 	else:
 		_overlay_title.text = "%s venceu" % _seat_name(champion)
+	if _result_header == null:
+		_result_header = ResultHeader.attach(_overlay_title, _overlay_title, _overlay)
 	_overlay.visible = true
+	var mood := ResultHeader.Mood.DRAW
+	if champion != -2:
+		var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+		mood = ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS
+	_result_header.celebrate(mood, [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(_state.ply), "tacadas"],
+	])
 
 
 func _restart() -> void:

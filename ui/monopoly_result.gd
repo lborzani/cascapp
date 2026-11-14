@@ -22,6 +22,7 @@ const SHADE := 0.72
 
 var _panel: PaperCard = null
 var _title: Label = null
+var _header: ResultHeader = null
 var _subtitle: Label = null
 var _table: VBoxContainer = null
 var _again: Button = null
@@ -106,7 +107,7 @@ func _ready() -> void:
 ## para "Bot 2" ser "Bot 2" nos dois lugares — quem sabe quais cadeiras são
 ## máquina e qual nome está guardado no aparelho é a cena da partida.
 func show_winner(
-	state: MatchState, champion: int, labeler: Callable, allow_again: bool
+	state: MatchState, champion: int, labeler: Callable, allow_again: bool, rounds := 0
 ) -> void:
 	var by_rounds := MonopolyRules.limit_of(state) > 0
 	_title.text = "%s venceu" % labeler.call(champion)
@@ -117,7 +118,15 @@ func show_winner(
 	)
 	_fill_table(state, labeler, champion)
 	_again.visible = allow_again
+	if _header == null:
+		_header = ResultHeader.attach(_title, _subtitle, self)
 	visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_header.celebrate(ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(rounds), "rodadas"],
+	])
 
 
 ## O fim que ninguém escolheu: a mesa se desfez em rede.
@@ -130,6 +139,8 @@ func show_abandoned(message: String) -> void:
 	for child in _table.get_children():
 		child.queue_free()
 	_again.visible = false
+	if _header != null:
+		_header.visible = false
 	visible = true
 
 

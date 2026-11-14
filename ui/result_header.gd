@@ -23,6 +23,10 @@ var mood := Mood.WIN:
 		if _badge != null:
 			_badge.queue_redraw()
 
+## A chuva de confete da camada onde o cartão mora, quando o cabeçalho foi
+## montado por `attach()`.
+var confetti: Confetti = null
+
 var _badge: Control = null
 var _stats: HBoxContainer = null
 var _wobble: Tween = null
@@ -40,6 +44,37 @@ func _init() -> void:
 	_stats.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	_stats.visible = false
 	visibility_changed.connect(_sync_wobble)
+
+
+## Monta o cabeçalho num cartão de fim que a cena já tem: o selo logo antes do
+## título, a fileira de números logo depois de `after` (o texto de baixo, ou o
+## próprio título) e o confete cobrindo `layer`. Os seis jogos terminam assim.
+static func attach(title: Control, after: Control, layer: Control) -> ResultHeader:
+	var column := title.get_parent()
+	var header := ResultHeader.new()
+	column.add_child(header)
+	column.move_child(header, title.get_index())
+	var row := header.stats_row()
+	column.add_child(row)
+	column.move_child(row, after.get_index() + 1)
+	header.confetti = Confetti.new()
+	# Âncoras antes do `add_child`: depois, a camada escondida não recalcula.
+	header.confetti.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(header.confetti)
+	return header
+
+
+## Mostra o resultado e, na vitória, solta o confete.
+func celebrate(new_mood: Mood, stats: Array) -> void:
+	visible = true
+	show_result(new_mood, stats)
+	if new_mood == Mood.WIN and confetti != null:
+		confetti.burst()
+
+
+## A duração desde `started_at` (tempo Unix), como o relógio da barra escreve.
+static func duration_since(started_at: int) -> String:
+	return MatchStatus.clock_text(maxi(int(Time.get_unix_time_from_system()) - started_at, 0))
 
 
 ## Mostra o resultado. `stats` é uma lista de `[valor, legenda, destaque]`; o

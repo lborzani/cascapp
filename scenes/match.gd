@@ -91,7 +91,6 @@ var _rating_elo := 0
 var _rating_delta := 0
 ## Selo e números do topo do fim de partida, e o confete por cima dele.
 var _result_header: ResultHeader = null
-var _confetti: Confetti = null
 var _review: ReviewPanel = null
 ## Avaliação ao vivo; só existe para quem assiste xadrez.
 var _live: LiveReview = null
@@ -936,7 +935,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	if not %ResultLayer.visible:
 		Sound.play(Sound.Cue.WIN)
 		if _winner != NO_RESULT and _result_mood() == ResultHeader.Mood.WIN:
-			_confetti.burst()
+			_result_header.confetti.burst()
 	%ResultLayer.visible = true
 	_banner.hide_message()
 	# Depois do texto: um convite que chegou enquanto a animação do último lance
@@ -1114,17 +1113,7 @@ func _on_rated(ratings: Array) -> void:
 ## O selo e a fileira de números entram no cartão de fim que a cena já tem: o
 ## selo no topo, os números logo depois do texto. O confete cobre a camada toda.
 func _build_result_header() -> void:
-	var column: Control = %ResultTitle.get_parent()
-	_result_header = ResultHeader.new()
-	column.add_child(_result_header)
-	column.move_child(_result_header, 0)
-	var row := _result_header.stats_row()
-	column.add_child(row)
-	column.move_child(row, %ResultDetail.get_index() + 1)
-	_confetti = Confetti.new()
-	# Âncoras antes do `add_child`: depois, a camada escondida não recalcula.
-	_confetti.set_anchors_preset(Control.PRESET_FULL_RECT)
-	%ResultLayer.add_child(_confetti)
+	_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %ResultLayer)
 
 
 ## Para quem é a festa. Quem assiste e quem joga no mesmo celular sempre vê o
@@ -1139,9 +1128,8 @@ func _result_mood() -> ResultHeader.Mood:
 
 ## Duração, lances e — quando o relay já mandou — o Elo, com a variação acesa.
 func _result_stats() -> Array:
-	var seconds := int(Time.get_unix_time_from_system()) - Game.match_started_at
 	var stats: Array = [
-		[MatchStatus.clock_text(maxi(seconds, 0)), "duração"],
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
 		[str(ceili(_state.ply / 2.0)), "lances"],
 	]
 	if _rating_elo > 0:

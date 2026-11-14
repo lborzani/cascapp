@@ -85,6 +85,7 @@ var _bot_seats := PackedInt32Array()
 var _bot_pending := false
 
 var _match_status: MatchStatus = null
+var _result_header: ResultHeader = null
 ## Uma etiqueta por cor, na ordem das cores, pendurada no canto dela do tabuleiro.
 var _tags: Array[PlayerTag] = []
 
@@ -668,7 +669,17 @@ func _finish(champion: int) -> void:
 	_dice.enabled = false
 	%OverlayTitle.text = "%s venceu" % LudoRules.color_name(champion)
 	%OverlaySubtitle.text = "Quatro peões em casa."
+	if _result_header == null:
+		_result_header = ResultHeader.attach(%OverlayTitle, %OverlaySubtitle, %Overlay)
 	%Overlay.visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_result_header.celebrate(
+		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+			[ResultHeader.duration_since(Game.match_started_at), "duração"],
+			[str(_match_status.rounds), "rodadas"],
+		]
+	)
 
 
 func _restart() -> void:

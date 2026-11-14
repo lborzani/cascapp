@@ -77,6 +77,7 @@ const _ACTION_STYLE := {
 
 var _rules := UnoRules.new()
 var _state: MatchState
+var _result_header: ResultHeader = null
 var _busy := false
 ## Alguém saiu para valer, ou o link caiu. Nos dois casos a mesa para de aceitar
 ## toque — a diferença é que o segundo pode voltar.
@@ -1099,7 +1100,17 @@ func _finish(champion: int) -> void:
 	%OverlayTitle.text = "Você venceu" if champion == Game.local_seat else \
 		"%s venceu" % _seat_name(champion)
 	%OverlaySubtitle.text = "Ficou sem cartas na mão."
+	if _result_header == null:
+		_result_header = ResultHeader.attach(%OverlayTitle, %OverlaySubtitle, %Overlay)
 	%Overlay.visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_result_header.celebrate(
+		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+			[ResultHeader.duration_since(Game.match_started_at), "duração"],
+			[str(_state.ply), "jogadas"],
+		]
+	)
 
 
 func _restart() -> void:
