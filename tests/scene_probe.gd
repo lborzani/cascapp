@@ -971,7 +971,7 @@ func _test_match_history() -> void:
 	add_child(settings)
 	await get_tree().process_frame
 	var button: Button = settings.get_node("%HistoryButton")
-	_equals(button.text, "Histórico de partidas (1)", "a tela Você conta as partidas")
+	_equals(button.get_meta(&"detail"), "1 partida", "a tela Você conta as partidas")
 	button.pressed.emit()
 	var panel: HistoryPanel = settings._history
 	_check(panel != null, "o botão abre o histórico")
@@ -1056,7 +1056,7 @@ func _test_training_panel() -> void:
 	add_child(settings)
 	await get_tree().process_frame
 	var button: Button = settings.get_node("%TrainingButton")
-	_equals(button.text, "Treino", "sem desafio vencido, o botão não conta nada")
+	_equals(button.get_meta(&"detail"), "Nada para hoje", "sem desafio vencido, o botão não conta nada")
 	button.pressed.emit()
 	var panel: TrainingPanel = settings._training
 	_check(not panel._challenge.visible and panel._empty.visible, "baralho vazio mostra o aviso")
@@ -1078,7 +1078,7 @@ func _test_training_panel() -> void:
 	broken["due"] = -1
 	Prefs.set_training([mate, later, broken])
 	settings._refresh_games()
-	_equals(button.text, "Treino (2 para hoje)", "o botão conta o que vence hoje")
+	_equals(button.get_meta(&"detail"), "2 desafios hoje", "o botão conta o que vence hoje")
 	button.pressed.emit()
 	panel = settings._training
 	_equals(Prefs.training().size(), 2, "cartão que não se refaz sai do baralho")
@@ -1099,7 +1099,7 @@ func _test_training_panel() -> void:
 	settings.go_back()
 	await get_tree().process_frame
 	_check(not is_instance_valid(panel), "voltar fecha o treino")
-	_equals(button.text, "Treino", "e o botão é recontado")
+	_equals(button.get_meta(&"detail"), "Nada para hoje", "e o botão é recontado")
 
 	mate["due"] = 0
 	Prefs.set_training([mate])

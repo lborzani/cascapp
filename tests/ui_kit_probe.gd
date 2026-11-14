@@ -263,27 +263,24 @@ func _probe_tabs() -> void:
 
 
 func _probe_seats() -> void:
-	print("mesa de espera")
-	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 0), PI * 0.5), "o lugar de quem olha é embaixo")
-	_check(is_equal_approx(SeatTable.seat_angle(2, 4, 2), PI * 0.5), "mesmo quando ele é o assento 2")
-	_check(is_equal_approx(SeatTable.seat_angle(3, 4, 2), PI), "o seguinte fica à esquerda")
-	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 2), PI * 1.5), "o de frente fica em cima")
-	_check(is_equal_approx(SeatTable.seat_angle(1, 4, 2), 0.0), "e o último à direita")
-	var table := SeatTable.new()
-	table.size = Vector2(300, 240)
-	root.add_child(table)
-	table.capacity = 4
-	table.local_seat = 0
-	table.present = PackedInt32Array([0, 1])
-	table.refresh()
-	_equals(table.find_children("*", "Coaster", true, false).size(), 4, "uma bolacha por cadeira")
-	_equals(table.label_of(0), "Você", "a sua cadeira diz você")
-	_equals(table.label_of(1), "Chegou", "a de quem já sentou diz que chegou")
-	_equals(table.label_of(3), "Esperando", "e a vazia continua esperando")
-	table.capacity = 6
-	table.refresh()
-	_equals(table.find_children("*", "Coaster", true, false).size(), 6, "trocar a lotação refaz a mesa")
-	table.free()
+	print("lugares da sala de espera")
+	var seats := SeatList.new()
+	root.add_child(seats)
+	seats.capacity = 4
+	seats.local_seat = 2
+	seats.present = PackedInt32Array([0, 2])
+	seats.refresh()
+	_equals(seats.get_child_count(), 4, "uma linha por lugar")
+	_equals(seats.title_of(2), "Você", "o seu lugar diz você")
+	_equals(seats.detail_of(0), "Abriu a sala", "o assento 0 é de quem abriu")
+	_equals(seats.title_of(0), "Jogador 1", "e quem já sentou tem número")
+	_equals(seats.title_of(3), "Esperando alguém", "o vazio continua esperando")
+	_equals(seats.detail_of(3), "", "sem segunda linha")
+	_check(seats.is_taken(2) and not seats.present.has(1), "o local conta como sentado mesmo antes de o relay confirmar")
+	seats.capacity = 6
+	seats.refresh()
+	_equals(seats.get_child_count(), 6, "trocar a lotação refaz a lista")
+	seats.free()
 
 
 func _probe_code_input() -> void:

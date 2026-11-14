@@ -85,6 +85,32 @@ static func set_sound(value: bool) -> void:
 	_file().save(PATH)
 
 
+## Mostrar as casas para onde a peça escolhida pode ir. **Ligado** por padrão:
+## é o que ensina o jogo a quem está começando. Quem joga de olho fechado desliga.
+const TARGETS_KEY := "show_targets"
+## Planejar o lance na vez do outro (premove), no xadrez online. **Ligado** por
+## padrão, como sempre foi; o interruptor é para quem toca sem querer.
+const PREMOVE_KEY := "premove"
+
+
+static func show_targets() -> bool:
+	return bool(_file().get_value(SECTION, TARGETS_KEY, true))
+
+
+static func set_show_targets(value: bool) -> void:
+	_file().set_value(SECTION, TARGETS_KEY, value)
+	_file().save(PATH)
+
+
+static func premove_on() -> bool:
+	return bool(_file().get_value(SECTION, PREMOVE_KEY, true))
+
+
+static func set_premove(value: bool) -> void:
+	_file().set_value(SECTION, PREMOVE_KEY, value)
+	_file().save(PATH)
+
+
 static func set_haptics(value: bool) -> void:
 	_file().set_value(SECTION, HAPTICS_KEY, value)
 	_file().save(PATH)

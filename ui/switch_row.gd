@@ -18,13 +18,21 @@ extends Button
 
 signal switched(value: bool)
 
-const HEIGHT := 56.0
-const TRACK := Vector2(46.0, 26.0)
-const KNOB := 9.0
-const PAD := 16.0
+const HEIGHT := 60.0
+const TRACK := Vector2(52.0, 30.0)
+const KNOB := 11.0
+const PAD := 0.0
 ## Quanto o botão leva para atravessar o trilho. Curto: é a confirmação do toque,
 ## e uma animação de ajuste que se faz esperar é um ajuste que parece travado.
 const SLIDE := 0.12
+
+## A frase curta embaixo do nome: o que o interruptor muda, com palavras.
+var detail := "":
+	set(text_value):
+		detail = text_value
+		queue_redraw()
+
+var _label := ""
 
 var value := false:
 	set(new_value):
@@ -45,9 +53,8 @@ func _init() -> void:
 	custom_minimum_size.y = HEIGHT
 	alignment = HORIZONTAL_ALIGNMENT_LEFT
 	focus_mode = Control.FOCUS_NONE
-	theme_type_variation = &"NavItem"
-	add_theme_color_override("font_color", AppTheme.TEXT)
-	add_theme_color_override("font_hover_color", AppTheme.TEXT)
+	# Sem caixa nem texto do tema: a linha desenha o nome e a frase dela.
+	theme_type_variation = &"IconButton"
 	pressed.connect(func() -> void:
 		value = not value
 		switched.emit(value)
@@ -56,8 +63,10 @@ func _init() -> void:
 
 ## Estado inicial sem animação: a tela abre com o interruptor já onde ele está, e
 ## não com os dois deslizando na primeira aparição.
-func setup(label: String, start: bool) -> void:
-	text = label
+func setup(label: String, start: bool, about := "") -> void:
+	_label = label
+	detail = about
+	tooltip_text = label
 	value = start
 	_knob = 1.0 if start else 0.0
 
@@ -67,29 +76,34 @@ func _animate() -> void:
 
 
 func _draw() -> void:
+	var text_width := size.x - TRACK.x - 12.0
+	if detail.is_empty():
+		draw_string(
+			AppTheme.font(700), Vector2(PAD, size.y * 0.5 + 6.0), _label,
+			HORIZONTAL_ALIGNMENT_LEFT, text_width, 16, AppTheme.TEXT
+		)
+	else:
+		draw_string(
+			AppTheme.font(700), Vector2(PAD, size.y * 0.5 - 2.0), _label,
+			HORIZONTAL_ALIGNMENT_LEFT, text_width, 16, AppTheme.TEXT
+		)
+		draw_string(
+			AppTheme.font(500), Vector2(PAD, size.y * 0.5 + 15.0), detail,
+			HORIZONTAL_ALIGNMENT_LEFT, text_width, 12, AppTheme.TEXT_DIM
+		)
+
+	# Ligado, o trilho é limão cheio e a bolinha é tinta escura: lê de longe, e
+	# não depende de distinguir duas cores parecidas.
 	var track_position := Vector2(size.x - PAD - TRACK.x, (size.y - TRACK.y) * 0.5)
 	var rect := Rect2(track_position, TRACK)
-	var off := AppTheme.SURFACE_HIGH
-	var on := AppTheme.ACCENT_SOFT
-	draw_rect_rounded(rect, off.lerp(on, _knob))
-	draw_rect_rounded_outline(rect, AppTheme.BORDER.lerp(AppTheme.ACCENT, _knob))
-
+	draw_rect_rounded(rect, AppTheme.SURFACE_TOP.lerp(AppTheme.ACCENT, _knob))
 	var travel := TRACK.x - TRACK.y
 	var center := rect.position + Vector2(TRACK.y * 0.5 + travel * _knob, TRACK.y * 0.5)
-	draw_circle(center, KNOB, AppTheme.TEXT_DIM.lerp(AppTheme.ACCENT, _knob))
+	draw_circle(center, KNOB, AppTheme.TEXT_DIM.lerp(AppTheme.ACCENT_INK, _knob))
 
 
 func draw_rect_rounded(rect: Rect2, fill: Color) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = fill
 	style.set_corner_radius_all(int(rect.size.y * 0.5))
-	draw_style_box(style, rect)
-
-
-func draw_rect_rounded_outline(rect: Rect2, tint: Color) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	style.set_corner_radius_all(int(rect.size.y * 0.5))
-	style.set_border_width_all(1)
-	style.border_color = tint
 	draw_style_box(style, rect)

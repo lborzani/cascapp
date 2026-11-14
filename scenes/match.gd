@@ -567,6 +567,9 @@ func _tick_bot(delta: float) -> void:
 ## mover, então quase todo plano nasceria ilegal, e um recurso que falha na
 ## maioria das vezes atrapalha mais do que ajuda.
 func _premove_allowed() -> bool:
+	# Aba Você › "Planejar lance (premove)".
+	if not Prefs.premove_on():
+		return false
 	return (
 		Game.mode == Game.Mode.ONLINE
 		and Net.connected

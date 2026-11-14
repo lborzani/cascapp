@@ -257,6 +257,9 @@ func _draw_selection() -> void:
 ## Destinos vazios ganham um ponto; capturas ganham um anel em volta da peça,
 ## para a diferença entre "ando aqui" e "como isto" não depender de cor.
 func _draw_targets() -> void:
+	# Aba Você › "Mostrar lances possíveis". O lance continua valendo; só some a dica.
+	if not Prefs.show_targets():
+		return
 	# Os indicadores crescem ao aparecer: a diferença entre "surgiu" e "sempre
 	# esteve" é o que confirma que o toque foi registrado.
 	var grow := clampf(_target_time / TARGET_GROW, 0.0, 1.0)

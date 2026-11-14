@@ -2,13 +2,13 @@ extends Control
 
 ## Ajustes: o que vale para o app inteiro, e não para uma partida.
 ##
-## O nome do jogador e os dois interruptores de som e vibração. A tela existe
-## antes de ter muito o que ajustar de propósito — o nome precisa de um lugar
-## óbvio, e "óbvio" é uma engrenagem no canto da tela inicial, não um campo
-## escondido dentro de outra coisa.
+## A aba Você: a foto (que se troca tocando nela), o nome, três números, os
+## atalhos para o histórico e o treino, e os interruptores.
 ##
-## O **nome** salva ao sair do campo e ao tocar em "Salvar", e não a cada tecla:
-## gravar em disco a cada letra digitada é dez escritas para uma decisão. Os
+## O **nome** salva sozinho, ao sair do campo ou ao confirmar no teclado, e não a
+## cada tecla: gravar em disco a cada letra digitada é dez escritas para uma
+## decisão. Não há botão "Salvar" — ele valia só para o nome, ao lado de
+## interruptores que já gravavam sozinhos, e ninguém sabia o que ele salvava. Os
 ## **interruptores** salvam na hora, porque um interruptor não tem momento de
 ## confirmar — ele já é a decisão, e quem desligou o som e saiu pelo "Voltar"
 ## esperaria encontrá-lo desligado.
@@ -19,7 +19,6 @@ const JOIN_SCENE := "res://scenes/join.tscn"
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
-var _friends: FriendsPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
@@ -39,31 +38,30 @@ func _ready() -> void:
 	%NameEdit.placeholder_text = Prefs.DEFAULT_NAME
 	%NameEdit.text_submitted.connect(func(_text: String): _save())
 	%NameEdit.focus_exited.connect(_save)
-	%SaveButton.pressed.connect(_save_and_leave)
-
-	%AppBar.title = "Você"
-	# Aba é lugar, e de um lugar não se volta: quem quer outro lugar toca noutra aba.
-	%AppBar.leading = -1
 
 	%Tabs.current = AppTabs.YOU
 	if not Net.relay_available():
 		%Tabs.disabled = [AppTabs.ONLINE] as Array[StringName]
 	%Tabs.picked.connect(_go_tab)
 
-	_sound_switch = SwitchRow.new()
-	_sound_switch.setup("Som", Prefs.sound_on())
-	_sound_switch.switched.connect(_toggle_sound)
-	%Switches.add_child(_sound_switch)
+	_sound_switch = _switch("Som", "Peça, dado, carta e vitória", Prefs.sound_on(), _toggle_sound)
+	_haptics_switch = _switch("Vibração", "Um toque curto na sua vez", Prefs.haptics_on(), _toggle_haptics)
+	_switch(
+		"Mostrar lances possíveis", "Bolinhas nas casas de destino",
+		Prefs.show_targets(), Prefs.set_show_targets
+	)
+	_switch("Planejar lance (premove)", "Só no xadrez online", Prefs.premove_on(), Prefs.set_premove)
 
-	_haptics_switch = SwitchRow.new()
-	_haptics_switch.setup("Vibração", Prefs.haptics_on())
-	_haptics_switch.switched.connect(_toggle_haptics)
-	%Switches.add_child(_haptics_switch)
-
+	%Avatar.ring = AppTheme.ACCENT
+	%Version.text = "Versão %s" % AppVersion.text()
+	for state: String in ["font_color", "font_hover_color"]:
+		%NewsButton.add_theme_color_override(state, AppTheme.ACCENT)
+	%NewsButton.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	for shortcut: Button in [%HistoryButton, %TrainingButton]:
+		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
 	_refresh_games()
 	%HistoryButton.pressed.connect(_open_history)
-	%FriendsButton.pressed.connect(_open_friends)
 	%TrainingButton.pressed.connect(_open_training)
 	%UpdateButton.pressed.connect(_check_updates)
 	%NewsButton.pressed.connect(_open_news)
@@ -73,7 +71,9 @@ func _ready() -> void:
 		probe.text = "Teste de Bluetooth (depuração)"
 		probe.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/ble_probe.tscn"))
 		%NewsButton.add_sibling(probe)
-	%PhotoButton.visible = DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
+	# A própria bolacha é o botão de trocar a foto; sem seletor de arquivo no
+	# aparelho, ela só mostra.
+	%PhotoButton.disabled = not DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)
 	_update_preview()
@@ -120,7 +120,6 @@ func _toggle_haptics(value: bool) -> void:
 ## resposta que quase ninguém procura.
 func _status_text() -> String:
 	var parts := PackedStringArray()
-	parts.append("Versão %s" % AppVersion.text())
 	parts.append("On-line: %s" % ("sim" if Net.relay_available() else "não"))
 	parts.append("NFC: %s" % ("sim" if Pairing.nfc.is_available() else "não"))
 	parts.append("Câmera: %s" % ("sim" if Pairing.qr_scanner.is_available() else "não"))
@@ -134,20 +133,84 @@ func _save() -> void:
 	Account.push_name(Prefs.player_name())
 
 
-func _save_and_leave() -> void:
-	_save()
-	_leave()
-
-
-## O que os outros vão ver, escrito com o nome já aplicado. Um campo de texto não
-## diz onde o valor aparece; esta linha diz.
+## A linha sob o nome diz que ele salva sozinho e, com conta, o código de amigo —
+## que é o que se dita para alguém adicionar você.
 func _update_preview() -> void:
-	%Preview.text = "Nas partidas você aparece como %s." % Prefs.player_name()
-	# A bolacha é a mesma que os outros vão ver na mesa: mostrar o nome e a bolacha
-	# juntos responde "como eu apareço" sem o jogador ter de abrir uma partida.
+	%Preview.text = "Salva sozinho"
+	if not Account.friend_code.is_empty():
+		%Preview.text += " · código de amigo %s" % Account.friend_code
+	# A bolacha é a mesma que os outros vão ver na mesa.
 	%Avatar.player_name = Prefs.player_name()
 	%Avatar.photo = Account.local_avatar()
-	%PhotoButton.text = "Trocar foto" if %Avatar.photo != null else "Escolher foto"
+
+
+## Uma linha do cartão de interruptores. `save` grava a escolha; quem precisa de
+## mais (o som toca ao ligar) passa a própria função.
+func _switch(label: String, about: String, start: bool, save: Callable) -> SwitchRow:
+	var row := SwitchRow.new()
+	row.setup(label, start, about)
+	row.switched.connect(save)
+	%Switches.add_child(row)
+	return row
+
+
+## Os três números do topo. O Elo só existe com conta; sem ela o bloco diz isso
+## em vez de mostrar um zero que parece nota.
+func _fill_stats(games: int, due: int) -> void:
+	for child in %Stats.get_children():
+		%Stats.remove_child(child)
+		child.queue_free()
+	var chess: Color = AppTheme.GAME_COLORS["chess"]
+	_stat(str(Account.elo) if Account.elo > 0 else "—", "Elo no xadrez", chess, AppTheme.ACCENT_INK)
+	_stat(str(games), "partidas" if games != 1 else "partida", AppTheme.SURFACE, AppTheme.TEXT)
+	_stat(str(due), "para treinar hoje", AppTheme.SURFACE, AppTheme.TEXT)
+
+
+func _stat(value: String, caption: String, fill: Color, ink: Color) -> void:
+	var tile := PanelContainer.new()
+	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tile.custom_minimum_size.y = 80.0
+	var box := AppTheme.box(fill, AppTheme.RADIUS_LARGE)
+	box.content_margin_left = 6
+	box.content_margin_right = 6
+	tile.add_theme_stylebox_override("panel", box)
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", -2)
+	tile.add_child(column)
+	var number := Label.new()
+	number.text = value
+	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	number.add_theme_font_override("font", AppTheme.display(700))
+	number.add_theme_font_size_override("font_size", 28)
+	number.add_theme_color_override("font_color", ink)
+	column.add_child(number)
+	var label := Label.new()
+	label.text = caption
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", AppTheme.font(700))
+	label.add_theme_font_size_override("font_size", AppTheme.SIZE_CAPTION)
+	label.add_theme_color_override("font_color", ink if fill != AppTheme.SURFACE else AppTheme.TEXT_DIM)
+	column.add_child(label)
+	%Stats.add_child(tile)
+
+
+## Histórico e Treino: um cartão com o nome e uma linha que conta. O texto mora
+## em `meta` e não no `text` do botão, que não sabe ter duas linhas de pesos
+## diferentes.
+func _draw_shortcut(button: Button) -> void:
+	button.draw_style_box(
+		AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), Rect2(Vector2.ZERO, button.size)
+	)
+	var lit: bool = button.get_meta(&"lit", false)
+	button.draw_string(
+		AppTheme.display(600), Vector2(14.0, button.size.y * 0.5 - 2.0), str(button.get_meta(&"title", "")),
+		HORIZONTAL_ALIGNMENT_LEFT, button.size.x - 28.0, 18, AppTheme.TEXT
+	)
+	button.draw_string(
+		AppTheme.font(700), Vector2(14.0, button.size.y * 0.5 + 17.0), str(button.get_meta(&"detail", "")),
+		HORIZONTAL_ALIGNMENT_LEFT, button.size.x - 28.0, 13, AppTheme.ACCENT if lit else AppTheme.TEXT_DIM
+	)
 
 
 # --- foto -----------------------------------------------------------------------
@@ -181,9 +244,6 @@ func _on_photo_picked(picked: bool, paths: PackedStringArray, _filter: int) -> v
 func go_back() -> void:
 	if is_instance_valid(_history):
 		_history.close()
-		return
-	if is_instance_valid(_friends):
-		_friends.close()
 		return
 	if is_instance_valid(_news) and not _news.is_queued_for_deletion():
 		_news.close()
@@ -241,12 +301,6 @@ func _open_history() -> void:
 	add_child(_history)
 
 
-func _open_friends() -> void:
-	Sound.play(Sound.Cue.TAP)
-	_friends = FriendsPanel.new()
-	add_child(_friends)
-
-
 func _open_training() -> void:
 	Sound.play(Sound.Cue.TAP)
 	_training = TrainingPanel.new()
@@ -254,14 +308,32 @@ func _open_training() -> void:
 	add_child(_training)
 
 
-## Os contadores dos dois botões de partidas. "Treino" conta o que vence hoje,
-## e não o baralho inteiro: o número é o convite, e um convite para 40 desafios
-## que só voltam no mês que vem é mentira.
+## Os números da tela: os três blocos do topo e a linha de cada atalho. "Treino"
+## conta o que vence hoje, e não o baralho inteiro: o número é o convite, e um
+## convite para 40 desafios que só voltam no mês que vem é mentira.
 func _refresh_games() -> void:
 	var games := Prefs.history().size()
-	%HistoryButton.text = "Histórico de partidas (%d)" % games if games > 0 else "Histórico de partidas"
 	var due := Training.due(Prefs.training(), int(Time.get_unix_time_from_system())).size()
-	%TrainingButton.text = "Treino (%d para hoje)" % due if due > 0 else "Treino"
+	_fill_stats(games, due)
+	%HistoryButton.set_meta(&"title", "Histórico")
+	%HistoryButton.set_meta(&"detail", history_detail(games))
+	%TrainingButton.set_meta(&"title", "Treino")
+	%TrainingButton.set_meta(&"detail", training_detail(due))
+	%TrainingButton.set_meta(&"lit", due > 0)
+	%HistoryButton.queue_redraw()
+	%TrainingButton.queue_redraw()
+
+
+static func history_detail(games: int) -> String:
+	if games <= 0:
+		return "Reveja e revise"
+	return "%d partida%s" % [games, "" if games == 1 else "s"]
+
+
+static func training_detail(due: int) -> String:
+	if due <= 0:
+		return "Nada para hoje"
+	return "%d desafio%s hoje" % [due, "" if due == 1 else "s"]
 
 
 func _leave() -> void:
