@@ -3,6 +3,11 @@ extends Control
 ## A sala aberta, esperando alguém: o código de 6 caracteres, o QR e o cartão
 ## NFC emulado.
 ##
+## O topo é uma faixa na cor do jogo, com o código bem grande — é o que se dita
+## em voz alta para a mesa — e os três jeitos de passá-lo adiante: copiar, QR e
+## convidar um amigo que esteja online. Embaixo, um lugar por linha, com os
+## vazios pulsando, e no rodapé o botão de começar.
+##
 ## Só do lado de **quem abre**. A metade "convidado" desta tela virou
 ## `ui/join_panel.tscn` e mora na tela inicial, porque entrar numa partida não é
 ## uma decisão sobre um jogo — e aqui ela obrigava a escolher um antes de ver a
@@ -21,6 +26,8 @@ var _code := ""
 ## A sala desta tela é pelo Bluetooth, sem internet. Ver [method _toggle_bluetooth].
 var _bluetooth := false
 var _bluetooth_button: Button = null
+## A lista de amigos online para chamar, enquanto está na tela.
+var _invite_card: PanelContainer = null
 
 
 func _ready() -> void:
@@ -41,6 +48,9 @@ func _ready() -> void:
 	Pairing.relay.peer_gone.connect(func(_seat: int): _on_relay_state_changed(Pairing.relay.state()))
 	Pairing.nfc.failed.connect(_show_error)
 	%BotsButton.pressed.connect(_start_with_bots)
+	%InviteButton.pressed.connect(_invite)
+	%BackButton.pressed.connect(_back_to_menu)
+	_dress_band()
 	%CopyButton.pressed.connect(_copy_code)
 	%QrButton.pressed.connect(_toggle_qr)
 	# Só onde há rádio para isso: num aparelho sem Bluetooth LE o botão prometeria
@@ -52,19 +62,9 @@ func _ready() -> void:
 		_bluetooth_button.pressed.connect(_toggle_bluetooth)
 		%HostHint.add_sibling(_bluetooth_button)
 
-	# O título da barra é o que a tela **é**; a linha abaixo dela é o que esta
-	# partida em particular tem — o jogo e o ritmo. Estavam juntos numa frase só,
-	# e era a frase que crescia: "Xadrez • Criar partida • 3 + 2" não cabe numa
-	# barra sem reticências, e o que sumia no corte era justamente o ritmo.
-	%AppBar.title = "Criar partida"
-	%AppBar.leading = IconButton.Kind.BACK
-	%AppBar.leading_pressed.connect(_back_to_menu)
-
-	%Title.text = Game.game_title()
-	if Game.has_clock():
-		%Title.text = "%s • %s" % [%Title.text, Game.clock_label()]
-	elif Game.supports_rounds():
-		%Title.text = "%s • %s" % [%Title.text, Game.round_limit_label()]
+	# O título diz que sala é esta; o ritmo (ou o limite de rodadas) vai ao lado da
+	# lotação, em `_refresh_seats`.
+	%Title.text = "Sala de %s" % Game.game_title()
 	%Seats.capacity = Game.players_of()
 	%Seats.local_seat = 0
 	_setup_host()
@@ -144,15 +144,13 @@ func _host_hint() -> String:
 		if Pairing.nfc.is_available():
 			how = "No outro celular: digite %s e toque em Bluetooth, aponte a câmera para o QR, ou encoste os dois (NFC)." % _code
 		return "%s Sem internet: os dois precisam estar perto, com o Bluetooth ligado." % how
+	# Uma linha só: o código já está enorme logo acima, e repeti-lo aqui com três
+	# canais empilhados era o parágrafo que ninguém lia.
 	if Game.listed_room:
-		return "Esta sala aparece na aba Online do outro aparelho. Quem tiver o código %s também entra direto." % _code
-	# "Na aba Online", e não "em Multiplayer" nem "na tela inicial": o campo do
-	# código mudou de lugar duas vezes (gaveta, depois aba), e uma instrução que
-	# aponta para onde a coisa **estava** é pior que instrução nenhuma.
-	var channels := "No outro aparelho: na aba Online, digite %s no campo do código, ou aponte a câmera para o QR." % _code
+		return "Sala pública: aparece na aba Online de quem abrir o app. Com o código também se entra."
 	if Pairing.nfc.is_available():
-		channels = "No outro aparelho: digite %s, aponte a câmera para o QR, ou encoste os dois (NFC)." % _code
-	return "%s Funciona de qualquer lugar com internet — não precisa ser a mesma rede." % channels
+		return "Quem entra digita o código na aba Online, lê o QR ou encosta os aparelhos."
+	return "Quem entra digita o código na aba Online, ou lê o QR."
 
 
 ## A sala **é** o produto: sem ela o código na tela não leva a lugar nenhum, e o
@@ -217,9 +215,13 @@ func _refresh_seats() -> void:
 	%Seats.present = present
 	%Seats.refresh()
 	var players := Game.players_of()
-	%SeatsCount.text = (
-		"%d de %d" % [present.size(), players] if players > 2 else "2 lugares"
-	)
+	var parts := PackedStringArray()
+	if Game.has_clock():
+		parts.append(Game.clock_label())
+	elif Game.supports_rounds():
+		parts.append(Game.round_limit_label())
+	parts.append("%d de %d" % [present.size(), maxi(players, 2)])
+	%SeatsCount.text = " · ".join(parts)
 
 
 ## Quantos já estão na mesa, quando isso é uma pergunta. Numa sala de dois,
@@ -241,13 +243,88 @@ func _waiting_text() -> String:
 ## Some assim que a mesa enche, porque aí não falta ninguém para substituir.
 func _refresh_bots_button() -> void:
 	var taken := Pairing.relay.seats_taken()
-	%BotsButton.visible = (
-		Game.mode_available(Game.Mode.SOLO)
-		and Game.players_of() > 2
-		and taken >= 2
-		and taken < Game.players_of()
+	var players := Game.players_of()
+	var can_start := (
+		Game.mode_available(Game.Mode.SOLO) and players > 2 and taken >= 2 and taken < players
 	)
-	%BotsButton.text = "Começar com %d bot(s)" % (Game.players_of() - taken)
+	# O botão do rodapé está sempre lá: apagado, diz o que falta; aceso, é a saída
+	# para a mesa que não enche.
+	%BotsButton.disabled = not can_start
+	if can_start:
+		%BotsButton.text = "Começar com %d bot(s)" % (players - taken)
+	else:
+		%BotsButton.text = "Esperando o outro jogador" if players <= 2 else "Esperando jogadores"
+
+
+## A faixa do topo na cor do jogo, e os botões escuros sobre ela.
+func _dress_band() -> void:
+	var color: Color = AppTheme.GAME_COLORS.get(String(Game.game_id), AppTheme.SURFACE_HIGH)
+	var band := AppTheme.box(color, 0)
+	band.corner_radius_bottom_left = 32
+	band.corner_radius_bottom_right = 32
+	band.border_width_bottom = 6
+	band.border_color = color.darkened(0.3)
+	band.content_margin_left = AppTheme.SCREEN_PAD
+	band.content_margin_right = AppTheme.SCREEN_PAD
+	band.content_margin_top = AppTheme.SPACE_L
+	band.content_margin_bottom = AppTheme.SPACE_XL
+	%Band.add_theme_stylebox_override("panel", band)
+	var ink := AppTheme.ACCENT_INK
+	for label: Label in [%Title, %SeatsCount, %CodeCaption, %CodeLabel]:
+		label.add_theme_color_override("font_color", ink)
+	%Title.add_theme_font_override("font", AppTheme.display(700))
+	%Title.add_theme_font_size_override("font_size", 22)
+	for label: Label in [%SeatsCount, %CodeCaption]:
+		label.add_theme_font_override("font", AppTheme.font(800))
+		label.add_theme_font_size_override("font_size", AppTheme.SIZE_CAPTION + 1)
+	%CodeLabel.add_theme_font_override("font", AppTheme.display(700))
+	%CodeLabel.add_theme_font_size_override("font_size", 56)
+	for button: Button in [%BackButton, %CopyButton, %QrButton, %InviteButton]:
+		button.add_theme_font_override("font", AppTheme.font(800))
+		button.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+		for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+			button.add_theme_color_override(state, AppTheme.TEXT)
+		var dark := AppTheme.box(AppTheme.BACKGROUND, AppTheme.RADIUS)
+		dark.content_margin_left = 8
+		dark.content_margin_right = 8
+		for state: String in ["normal", "hover", "pressed"]:
+			button.add_theme_stylebox_override(state, dark)
+	%BackButton.add_theme_font_size_override("font_size", 22)
+
+
+## Chama um amigo que está online para esta sala. Sem ninguém online (ou sem
+## conta), o caminho é o código por mensagem — e o aviso diz isso.
+func _invite() -> void:
+	var online: Array = Friends.sorted().filter(
+		func(friend: Dictionary) -> bool: return Friends.online.has(str(friend.get("id", "")))
+	)
+	if online.is_empty():
+		%Toast.show_message("Nenhum amigo online agora. Copie o código e mande por mensagem.", Banner.Kind.INFO)
+		return
+	if _invite_card != null:
+		_invite_card.queue_free()
+	_invite_card = PanelContainer.new()
+	_invite_card.theme_type_variation = &"Card"
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	_invite_card.add_child(list)
+	var title := Label.new()
+	title.theme_type_variation = &"SectionHeader"
+	title.text = "Chamar para esta sala"
+	list.add_child(title)
+	for friend: Dictionary in online:
+		var id := str(friend.get("id", ""))
+		var call := Button.new()
+		call.theme_type_variation = &"GhostButton"
+		call.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		call.text = Friends.name_of(id)
+		call.pressed.connect(func() -> void:
+			Friends.invite(id, Game.game_id, _code)
+			%Toast.show_message("Chamei %s para esta sala." % Friends.name_of(id), Banner.Kind.INFO)
+			call.disabled = true
+		)
+		list.add_child(call)
+	%HostHint.add_sibling(_invite_card)
 
 
 ## As cadeiras vazias viram máquina, e a partida começa. Quem as joga é este
