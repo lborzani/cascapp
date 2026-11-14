@@ -128,6 +128,8 @@ func _next() -> void:
 	# Os favoritos também são do aparelho: só o print deles os tem, e sempre os
 	# mesmos quatro, um de cada categoria.
 	Prefs.forget_favorites()
+	# E o último modo de cada jogo também.
+	Prefs.forget_modes()
 	if shot == "01e_favoritos":
 		for id in [Game.CHESS, Game.LUDO, Game.UNO, Game.POOL]:
 			Prefs.toggle_favorite(id)

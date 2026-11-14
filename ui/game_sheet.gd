@@ -7,6 +7,10 @@ extends Control
 ## toques entre escolher o jogo e começar. Aqui o modo são abas no topo da folha,
 ## os ajustes **daquele modo** ficam logo abaixo, e um botão termina.
 ##
+## A folha abre no modo em que o jogo foi jogado da última vez (`Prefs.last_mode`),
+## e na primeira vez no que começa na hora: contra o bot. Jogo repetido são dois
+## toques — o bloco e o botão.
+##
 ## Cada seção aparece só onde significa alguma coisa: damas não pergunta ritmo,
 ## uma partida contra o bot não pergunta quem pode entrar, e o Ludo não pergunta
 ## quantos são. Uma escolha oferecida onde ela não vale é pior que escolha
@@ -19,7 +23,10 @@ extends Control
 signal confirmed(mode: int)
 signal closed
 
-const SLIDE := 0.22
+const SLIDE := 0.26
+## Canto de cima da folha: bem redondo, para ela ler como camada e não como tela.
+const SHEET_RADIUS := 32
+const ICON := 60.0
 const PAIRING_SCENE := "res://scenes/pairing.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 
@@ -32,7 +39,7 @@ var _slider: Control = null
 var _scrim: ColorRect = null
 var _title: Label = null
 var _meta: Label = null
-var _icon: Coaster = null
+var _icon: Control = null
 var _segments: SegmentedControl = null
 var _modes: Array[int] = []
 var _sections := {}
@@ -53,10 +60,10 @@ var _rules_link: Button = null
 ## perguntas separadas: o catálogo aceita o modo, e o aparelho consegue executá-lo
 ## (uma sala precisa de servidor).
 static func modes_for(id: StringName) -> Array[int]:
-	# A sala primeiro, porque é a que precisa de decisão (código, quem entra); o
-	# resto começa na hora. Lista aqui dentro e não em constante: `Game` é autoload,
-	# e autoload não entra em constante.
-	var order: Array[int] = [Game.Mode.ONLINE, Game.Mode.HOTSEAT, Game.Mode.SOLO]
+	# Do que começa na hora para o que precisa de mais gente: bot, mesmo celular,
+	# sala. Lista aqui dentro e não em constante: `Game` é autoload, e autoload não
+	# entra em constante.
+	var order: Array[int] = [Game.Mode.SOLO, Game.Mode.HOTSEAT, Game.Mode.ONLINE]
 	var available: Array[int] = []
 	for candidate in order:
 		if Game.mode_available(candidate, id):
@@ -107,10 +114,8 @@ func _init() -> void:
 	_panel.anchor_bottom = 1.0
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	var style := AppTheme.box(AppTheme.SURFACE, 0)
-	style.corner_radius_top_left = AppTheme.RADIUS_LARGE
-	style.corner_radius_top_right = AppTheme.RADIUS_LARGE
-	style.border_width_top = 2
-	style.border_color = AppTheme.LINE_SOFT
+	style.corner_radius_top_left = SHEET_RADIUS
+	style.corner_radius_top_right = SHEET_RADIUS
 	style.content_margin_left = AppTheme.SCREEN_PAD
 	style.content_margin_right = AppTheme.SCREEN_PAD
 	style.content_margin_top = AppTheme.SPACE_M
@@ -133,9 +138,11 @@ func _build_body() -> VBoxContainer:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	body.add_child(header)
-	_icon = Coaster.new()
-	_icon.custom_minimum_size = Vector2(54, 54)
+	# O ladrilho na cor do jogo, com o mesmo ícone do bloco que abriu a folha.
+	_icon = Control.new()
+	_icon.custom_minimum_size = Vector2(ICON, ICON + AppTheme.PLATE_EDGE)
 	_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_icon.draw.connect(_draw_icon)
 	header.add_child(_icon)
 	var words := VBoxContainer.new()
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -203,7 +210,10 @@ func _build_body() -> VBoxContainer:
 	_start = Button.new()
 	_start.theme_type_variation = &"PrimaryButton"
 	_start.custom_minimum_size.y = 52
-	_start.pressed.connect(func() -> void: confirmed.emit(mode))
+	_start.pressed.connect(func() -> void:
+		Prefs.remember_mode(game_id, mode)
+		confirmed.emit(mode)
+	)
 	body.add_child(_start)
 	return body
 
@@ -242,7 +252,7 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	Game.game_id = id
 	_title.text = Game.game_title(id)
 	_meta.text = _meta_text(id)
-	_icon.piece = Game.piece_of(id)
+	_icon.queue_redraw()
 	_rules_link.visible = GameRulesDoc.load_for(id) != null
 	_modes = modes_for(id)
 
@@ -261,9 +271,15 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_build_sides()
 	_build_visibility()
 
-	var wanted := preferred_mode if preferred_mode in _modes else (
-		_modes[0] if not _modes.is_empty() else Game.Mode.HOTSEAT
-	)
+	# Quem pediu um modo manda (o convite de amigo pede Online); depois vem o
+	# último modo deste jogo; e na primeira vez, o primeiro da lista.
+	var wanted := Game.Mode.HOTSEAT
+	if preferred_mode in _modes:
+		wanted = preferred_mode
+	elif Prefs.last_mode(id) in _modes:
+		wanted = Prefs.last_mode(id)
+	elif not _modes.is_empty():
+		wanted = _modes[0]
 	select_mode(wanted)
 
 	if visible:
@@ -313,9 +329,18 @@ func _mode_label(candidate: int, id: StringName) -> String:
 		Game.Mode.ONLINE:
 			return "Online"
 		Game.Mode.SOLO:
-			return "Contra bots" if Game.players_of(id) > 2 else "Contra bot"
+			return "Contra bots" if Game.players_of(id) > 2 else "Contra o bot"
 		_:
-			return "Aqui"
+			return "No celular"
+
+
+func _draw_icon() -> void:
+	var color: Color = AppTheme.GAME_COLORS.get(String(game_id), AppTheme.SURFACE_HIGH)
+	var edge := float(AppTheme.PLATE_EDGE)
+	var face := Rect2(0.0, 0.0, ICON, ICON)
+	_icon.draw_style_box(AppTheme.box(color.darkened(0.3), AppTheme.RADIUS), Rect2(0.0, edge, ICON, ICON))
+	_icon.draw_style_box(AppTheme.box(color, AppTheme.RADIUS), face)
+	GameTile.draw_art(_icon, game_id, face.get_center(), ICON * 0.3, AppTheme.ACCENT_INK, color)
 
 
 func _meta_text(id: StringName) -> String:

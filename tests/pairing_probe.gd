@@ -300,6 +300,8 @@ func _probe_game_sheet() -> void:
 	print("folha do jogo")
 	Game.reset_to_menu()
 	Game.time_control = 0
+	# O último modo é do aparelho de quem roda o teste.
+	Prefs.forget_modes()
 	var sheet := GameSheet.new()
 	add_child(sheet)
 	sheet.open(Game.CHESS)
@@ -318,12 +320,26 @@ func _probe_game_sheet() -> void:
 
 	var modes := GameSheet.modes_for(Game.CHESS)
 	_check(not modes.is_empty(), "o xadrez tem modo para oferecer")
+	_equals(modes[0], Game.Mode.SOLO, "contra o bot vem primeiro: é o que começa na hora")
 	_equals(
-		modes[0], Game.Mode.ONLINE if Net.relay_available() else Game.Mode.HOTSEAT,
-		"a sala vem primeiro quando existe"
+		modes[modes.size() - 1], Game.Mode.ONLINE if Net.relay_available() else Game.Mode.HOTSEAT,
+		"e a sala por último, quando existe"
 	)
 	_equals(sheet._segments.segment_count(), modes.size(), "um segmento por modo disponível")
 	_equals(sheet.mode, modes[0], "e a folha abre no primeiro")
+
+	# Jogou num modo, a folha deste jogo volta nele — e a de outro jogo, não.
+	sheet.select_mode(Game.Mode.HOTSEAT)
+	sheet._start.pressed.emit()
+	sheet.close()
+	sheet.open(Game.CHESS)
+	_equals(sheet.mode, Game.Mode.HOTSEAT, "a folha reabre no último modo do jogo")
+	sheet.close()
+	sheet.open(Game.CHECKERS)
+	_equals(sheet.mode, GameSheet.modes_for(Game.CHECKERS)[0], "e o outro jogo não herda a escolha")
+	sheet.close()
+	Prefs.forget_modes()
+	sheet.open(Game.CHESS)
 	var rhythms := sheet._clock.find_children("*", "Button", true, false)
 	_equals(rhythms.size(), Game.TIME_CONTROLS.size(), "um botão por ritmo")
 	_equals(sheet._clock.get_child_count(), 2, "cinco ritmos em duas linhas cheias")

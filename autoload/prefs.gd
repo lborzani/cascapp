@@ -150,6 +150,28 @@ static func toggle_favorite(id: StringName) -> bool:
 ## Esquece todos os favoritos. Como `forget_welcome()`, não há caminho no app que
 ## chegue aqui: quem chama é o teste que precisa da lista na ordem do catálogo e a
 ## folha de prints que fotografa a tela recém-instalada.
+## O último modo em que cada jogo foi jogado, para a folha abrir nele.
+##
+## Por jogo, e não um modo só para o app: quem joga xadrez contra o bot costuma
+## jogar Uno em sala. -1 quando o jogo nunca foi jogado neste aparelho.
+const MODES_SECTION := "last_mode"
+
+
+static func last_mode(id: StringName) -> int:
+	return int(_file().get_value(MODES_SECTION, String(id), -1))
+
+
+static func remember_mode(id: StringName, mode: int) -> void:
+	_file().set_value(MODES_SECTION, String(id), mode)
+	_file().save(PATH)
+
+
+static func forget_modes() -> void:
+	if _file().has_section(MODES_SECTION):
+		_file().erase_section(MODES_SECTION)
+		_file().save(PATH)
+
+
 static func forget_favorites() -> void:
 	if _file().has_section_key(SECTION, FAVORITES_KEY):
 		_file().erase_section_key(SECTION, FAVORITES_KEY)
