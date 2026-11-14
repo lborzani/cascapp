@@ -329,4 +329,4 @@ func _background() -> StyleBox:
 	if highlighted:
 		return AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS_LARGE, AppTheme.ACCENT, 2)
 	var fill := AppTheme.SURFACE if _hovered else Color(AppTheme.SURFACE, 0.55)
-	return AppTheme.dashed(fill, AppTheme.LINE_SOFT, AppTheme.RADIUS_LARGE)
+	return AppTheme.framed(fill, AppTheme.LINE_SOFT, AppTheme.RADIUS_LARGE)

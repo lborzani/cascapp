@@ -416,4 +416,4 @@ func _background() -> StyleBox:
 		style.shadow_color = Color(AppTheme.ACCENT, 0.20)
 		style.shadow_size = 7
 		return style
-	return AppTheme.dashed(Color(AppTheme.SURFACE, 0.35), AppTheme.LINE_SOFT)
+	return AppTheme.framed(Color(AppTheme.SURFACE, 0.35), AppTheme.LINE_SOFT)

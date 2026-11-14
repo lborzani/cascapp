@@ -137,7 +137,7 @@ func show_player(
 	var style: StyleBox = AppTheme.box(Color(color, 0.20), AppTheme.RADIUS, Color(color, 0.9), 2)
 	if not is_turn:
 		# Quem espera fica em contorno de giz, como as etiquetas dos outros jogos.
-		style = AppTheme.dashed(Color(AppTheme.SURFACE, 0.72), AppTheme.LINE_SOFT)
+		style = AppTheme.framed(Color(AppTheme.SURFACE, 0.72), AppTheme.LINE_SOFT)
 	# As folgas do tema saem.
 	#
 	# `AppTheme.box` embute 18 de lado e 14 em cima e embaixo, e está certo: ela

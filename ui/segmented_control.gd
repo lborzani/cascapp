@@ -36,7 +36,7 @@ func setup(labels: PackedStringArray, index := 0) -> void:
 	_buttons.clear()
 	for i in labels.size():
 		var button := Button.new()
-		button.text = labels[i].to_upper()
+		button.text = labels[i]
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.focus_mode = Control.FOCUS_NONE
 		button.clip_text = true

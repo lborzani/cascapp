@@ -109,7 +109,7 @@ func _init() -> void:
 func greet(player_name: String, photo: Texture2D = null) -> void:
 	if _greeting == null:
 		_build_greeting()
-	_greeting_name.text = player_name.to_upper()
+	_greeting_name.text = player_name
 	_avatar.player_name = player_name
 	_avatar.photo = photo
 

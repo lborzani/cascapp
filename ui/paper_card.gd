@@ -106,9 +106,9 @@ static func _paper_buttons(theme: Theme) -> void:
 	theme.set_stylebox("pressed", "SuccessSolidButton", AppTheme.plate(AppTheme.SUCCESS.darkened(0.08), success_edge, true))
 
 	var ghost_line := Color(AppTheme.PAPER_INK, 0.55)
-	theme.set_stylebox("normal", "GhostButton", AppTheme.dashed(Color(0, 0, 0, 0), ghost_line))
-	theme.set_stylebox("hover", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.06), ghost_line))
-	theme.set_stylebox("pressed", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.12), AppTheme.PAPER_INK))
+	theme.set_stylebox("normal", "GhostButton", AppTheme.framed(Color(0, 0, 0, 0), ghost_line))
+	theme.set_stylebox("hover", "GhostButton", AppTheme.framed(Color(AppTheme.PAPER_INK, 0.06), ghost_line))
+	theme.set_stylebox("pressed", "GhostButton", AppTheme.framed(Color(AppTheme.PAPER_INK, 0.12), AppTheme.PAPER_INK))
 
 	var danger := AppTheme.DANGER.darkened(0.35)
 	theme.set_stylebox("normal", "DangerButton", AppTheme.box(Color(0, 0, 0, 0), AppTheme.RADIUS, danger, 2))

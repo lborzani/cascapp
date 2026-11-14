@@ -86,7 +86,7 @@ func _draw() -> void:
 		var center_x := width * (index + 0.5)
 		_draw_icon(route, Vector2(center_x, size.y * 0.38), ink)
 		draw_string(
-			face, Vector2(width * index, size.y * 0.84), String(LABELS[route]).to_upper(),
+			face, Vector2(width * index, size.y * 0.84), String(LABELS[route]),
 			HORIZONTAL_ALIGNMENT_CENTER, width, LABEL_SIZE, ink
 		)
 

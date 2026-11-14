@@ -240,7 +240,7 @@ func is_open() -> bool:
 func open(id: StringName, preferred_mode := -1) -> void:
 	game_id = id
 	Game.game_id = id
-	_title.text = Game.game_title(id).to_upper()
+	_title.text = Game.game_title(id)
 	_meta.text = _meta_text(id)
 	_icon.piece = Game.piece_of(id)
 	_rules_link.visible = GameRulesDoc.load_for(id) != null
@@ -299,7 +299,7 @@ func select_mode(chosen: int) -> void:
 	_section("level").visible = tunable
 	_section("side").visible = tunable
 	_section("visibility").visible = online
-	_start.text = ("Criar sala" if online else "Começar").to_upper()
+	_start.text = "Criar sala" if online else "Começar"
 
 
 func _on_segment(index: int) -> void:

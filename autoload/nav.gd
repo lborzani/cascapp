@@ -78,7 +78,16 @@ func _let_scroll_through(node: Node) -> void:
 		scroll.scroll_deadzone = SCROLL_DEADZONE
 		return
 	var button := node as BaseButton
-	if button == null or button.mouse_filter != Control.MOUSE_FILTER_STOP:
+	if button == null:
+		return
+	# Todo botão afunda no toque. Aqui pelo mesmo motivo do arrasto: botão novo
+	# já nasce com isso. Quem desenha o próprio aperto marca `no_press`.
+	# A marca evita ligar duas vezes o botão que sai da árvore e volta.
+	if not button.has_meta(&"no_press") and not button.has_meta(&"press_bound"):
+		button.set_meta(&"press_bound", true)
+		button.button_down.connect(Motion.press.bind(button, true))
+		button.button_up.connect(Motion.press.bind(button, false))
+	if button.mouse_filter != Control.MOUSE_FILTER_STOP:
 		return
 	var parent := button.get_parent()
 	while parent != null:

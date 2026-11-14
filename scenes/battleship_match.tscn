@@ -24,7 +24,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0901961, 0.129412, 0.109804, 1)
+color = Color(0.0823529, 0.0705882, 0.168627, 1)
 
 [node name="Safe" type="MarginContainer" parent="." unique_id=311000003]
 layout_mode = 1
@@ -145,7 +145,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0901961, 0.129412, 0.109804, 1)
+color = Color(0.0823529, 0.0705882, 0.168627, 1)
 
 [node name="Margin" type="MarginContainer" parent="PlaceLayer" unique_id=311000022]
 layout_mode = 1
@@ -244,7 +244,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0901961, 0.129412, 0.109804, 0.85)
+color = Color(0.0823529, 0.0705882, 0.168627, 0.85)
 
 [node name="Margin" type="MarginContainer" parent="OverlayLayer" unique_id=311000042]
 layout_mode = 1

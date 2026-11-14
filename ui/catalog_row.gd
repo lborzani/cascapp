@@ -90,7 +90,7 @@ func _draw() -> void:
 	var fade := _fade()
 	var face := AppTheme.display(900)
 	var mono := AppTheme.mono(600)
-	var title := Game.game_title(game_id).to_upper()
+	var title := Game.game_title(game_id)
 	var text_x := PAD + ICON + GAP
 	var baseline := size.y * 0.5 + TITLE_SIZE * 0.34
 	var width := face.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, TITLE_SIZE).x
