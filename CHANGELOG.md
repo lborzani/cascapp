@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.44
+
+- Sem internet? Agora dá para jogar com quem está do lado pelo Bluetooth. Ao criar a partida, toque em "Sem internet? Jogar por Bluetooth". No outro celular, digite o código e toque em "Entrar sem internet (Bluetooth)", leia o QR ou encoste os dois.
+- Funciona em todos os jogos com partida online, em celulares com Android 10 ou mais novo. A permissão de dispositivos próximos só é pedida quando você toca no botão.
+- Sem internet, a partida não conta para o Elo, e ninguém de fora pode assistir.
+
 ## 1.43
 
 - O app ficou bem menor: o download completo caiu de 120 MB para cerca de 47 MB.
