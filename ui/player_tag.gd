@@ -219,8 +219,11 @@ func _draw() -> void:
 
 	var awake := active or alert
 	var text_x := _pad() + _coaster.size.x + 12.0
-	var name_size := 18 if shape == Shape.STRIP else 15
-	var has_detail := not subtitle.is_empty() or _alerting()
+	var name_size := 17 if shape == Shape.STRIP else 15
+	# Na faixa, quem está na vez lê "Sua vez" em limão na linha de baixo: é a
+	# mesma informação do anel, escrita.
+	var turn_line := active and shape == Shape.STRIP and not _alerting()
+	var has_detail := not subtitle.is_empty() or _alerting() or turn_line
 	# Nome sozinho fica no meio da etiqueta; com detalhe, bolinhas ou capturas
 	# embaixo, sobe. Sem contar as capturas, o nome ficava no meio e a fileira de
 	# peças era desenhada por cima dele.
@@ -230,9 +233,9 @@ func _draw() -> void:
 	# cima do leque do vizinho. Cortar é feio; escrever por cima da mesa é pior.
 	var room := maxf(0.0, size.x - text_x - _right_room())
 	draw_string(
-		AppTheme.font(700), Vector2(text_x, name_y), title,
+		AppTheme.display(600), Vector2(text_x, name_y), title,
 		HORIZONTAL_ALIGNMENT_LEFT, room, name_size,
-		AppTheme.TEXT if awake else Color(AppTheme.TEXT, 0.55)
+		AppTheme.TEXT if awake else AppTheme.TEXT_DIM
 	)
 
 	var detail := subtitle
@@ -240,9 +243,12 @@ func _draw() -> void:
 	if _alerting():
 		detail = alert_text
 		detail_color = AppTheme.DANGER
+	elif turn_line:
+		detail = "Sua vez" if subtitle.is_empty() else "Sua vez · %s" % subtitle.to_lower()
+		detail_color = AppTheme.ACCENT
 	var detail_width := 0.0
 	if has_detail:
-		var body := AppTheme.font(400)
+		var body := AppTheme.font(700 if turn_line else 400)
 		var detail_size := AppTheme.SIZE_BODY_S if shape == Shape.STRIP else AppTheme.SIZE_CAPTION
 		draw_string(
 			body, Vector2(text_x, size.y * 0.5 + 17.0), detail,
@@ -261,54 +267,31 @@ func _draw() -> void:
 		_draw_pips()
 	if not clock_text.is_empty():
 		_draw_clock()
-	elif active and shape == Shape.STRIP:
-		_draw_turn_chip()
 
 
-## O relógio num placar de bar: caixa escura e dígitos amarelos em mono, que é a
-## fonte em que 1 e 7 ocupam a mesma largura — um relógio que muda de largura a
-## cada segundo empurra o resto da faixa.
+## O relógio numa pílula: limão cheio com tinta escura em quem joga, escura e
+## apagada em quem espera, coral quando o tempo aperta. Em mono, que é a fonte em
+## que 1 e 7 ocupam a mesma largura — um relógio que muda de largura a cada
+## segundo empurra o resto da faixa.
 func _draw_clock() -> void:
 	var font := AppTheme.mono(600)
 	var font_size := AppTheme.SIZE_MONO_M if shape == Shape.STRIP else AppTheme.SIZE_MONO_S
-	var height := 34.0 if shape == Shape.STRIP else 24.0
+	var height := 40.0 if shape == Shape.STRIP else 24.0
 	var box := Rect2(
 		Vector2(size.x - _chip_width() + 10.0, size.y * 0.5 - height * 0.5),
 		Vector2(_chip_width() - 22.0, height)
 	)
-
-	var plate := StyleBoxFlat.new()
-	plate.bg_color = AppTheme.COASTER
-	plate.set_corner_radius_all(AppTheme.RADIUS_PLATE)
-	plate.border_color = Color(AppTheme.ACCENT, 0.55 if active else 0.18)
-	plate.set_border_width_all(1)
-	draw_style_box(plate, box)
-
-	var ink := AppTheme.ACCENT
-	if clock_urgent and active:
-		ink = AppTheme.DANGER
-	elif not active:
-		ink = Color(AppTheme.ACCENT, 0.5)
+	var fill := AppTheme.COASTER
+	var ink := AppTheme.TEXT_DIM
+	if active:
+		fill = AppTheme.DANGER if clock_urgent else AppTheme.ACCENT
+		ink = AppTheme.ACCENT_INK
+	draw_style_box(AppTheme.box(fill, AppTheme.RADIUS if shape == Shape.STRIP else 8), box)
 	var baseline := box.position.y + box.size.y * 0.5 \
 		+ (font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
 	draw_string(
 		font, Vector2(box.position.x, baseline), clock_text,
 		HORIZONTAL_ALIGNMENT_CENTER, box.size.x, font_size, ink
-	)
-
-
-func _draw_turn_chip() -> void:
-	var font := AppTheme.display(900)
-	var label := "SUA VEZ"
-	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	var chip := Rect2(
-		Vector2(size.x - text_size.x - 34.0, size.y * 0.5 - 14.0),
-		Vector2(text_size.x + 22.0, 28.0)
-	)
-	draw_style_box(AppTheme.plate(AppTheme.ACCENT, AppTheme.ACCENT_EDGE), chip)
-	draw_string(
-		font, chip.position + Vector2(0.0, 20.0), label,
-		HORIZONTAL_ALIGNMENT_CENTER, chip.size.x, 14, AppTheme.ACCENT_INK
 	)
 
 
@@ -329,7 +312,7 @@ func _draw_captured(start_x: float) -> void:
 	var advantage_room := 34.0 if advantage > 0 else 0.0
 	# O placar ocupa o canto direito o tempo todo, não só na vez do jogador —
 	# então o espaço dele sai da fileira sempre que houver relógio.
-	var showing_chip := active or not clock_text.is_empty()
+	var showing_chip := not clock_text.is_empty()
 	var limit := size.x - (_chip_width() if showing_chip else 14.0) - advantage_room
 	var step := CAPTURED_SIZE + CAPTURED_GAP
 	if ordered.size() > 1:
@@ -356,8 +339,6 @@ func _draw_captured(start_x: float) -> void:
 ## texto **não** pode invadir.
 func _right_room() -> float:
 	if not clock_text.is_empty():
-		return _chip_width()
-	if active and shape == Shape.STRIP:
 		return _chip_width()
 	return 10.0
 
@@ -401,19 +382,13 @@ func _chip_width() -> float:
 
 
 ## De quem é a vez é a pergunta que a etiqueta existe para responder, e ela
-## precisa ser respondida **de relance**, sem comparar as duas. Quem joga ganha
-## fundo e borda amarela; quem espera fica em contorno de giz, quase sem
-## preenchimento — afastar os dois extremos dobra a diferença pelo mesmo custo
-## visual.
+## precisa ser respondida **de relance**, sem comparar as duas. Quem joga sobe um
+## degrau de superfície e ganha a borda limão; quem espera fica na superfície
+## base, sem borda nenhuma.
 func _background() -> StyleBox:
+	var radius := AppTheme.RADIUS_LARGE if shape == Shape.STRIP else AppTheme.RADIUS
 	if alert:
-		return AppTheme.box(AppTheme.DANGER_SOFT, AppTheme.RADIUS, AppTheme.DANGER, 2)
+		return AppTheme.box(AppTheme.DANGER_SOFT, radius, AppTheme.DANGER, 2)
 	if active:
-		var style := AppTheme.box(
-			AppTheme.SURFACE_HIGH.lerp(AppTheme.ACCENT, 0.08), AppTheme.RADIUS,
-			AppTheme.ACCENT, 2
-		)
-		style.shadow_color = Color(AppTheme.ACCENT, 0.20)
-		style.shadow_size = 7
-		return style
-	return AppTheme.framed(Color(AppTheme.SURFACE, 0.35), AppTheme.LINE_SOFT)
+		return AppTheme.box(AppTheme.SURFACE_HIGH, radius, AppTheme.ACCENT, 2)
+	return AppTheme.box(AppTheme.SURFACE, radius)

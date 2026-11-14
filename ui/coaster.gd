@@ -39,9 +39,19 @@ const TURN_GAP_RATIO := 0.06
 	set(value):
 		ring = value
 		queue_redraw()
+## O halo da vez, de 0 a 1: um anel que cresce para fora e some, em laço.
+var _halo := 0.0:
+	set(value):
+		_halo = value
+		queue_redraw()
+var _pulse: Tween = null
+
 @export var turn := false:
 	set(value):
+		if turn == value:
+			return
 		turn = value
+		_sync_pulse()
 		queue_redraw()
 
 
@@ -50,10 +60,34 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+## A vez pulsa: parado, o anel limão é só uma borda mais clara, e a troca de vez
+## passava sem ninguém ver. Liga e desliga com `turn`, e só dentro da árvore —
+## bolacha fora de cena não gasta quadro.
+func _sync_pulse() -> void:
+	if _pulse != null:
+		_pulse.kill()
+		_pulse = null
+	_halo = 0.0
+	if not turn or not is_inside_tree():
+		return
+	_pulse = create_tween().set_loops()
+	_pulse.tween_property(self, "_halo", 1.0, 1.4).from(0.0)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_ENTER_TREE:
+		_sync_pulse()
+
+
 func _draw() -> void:
 	var diameter := minf(size.x, size.y)
 	var center := size * 0.5
 	var radius := diameter * 0.5
+	if turn and _halo > 0.0:
+		draw_arc(
+			center, radius + _halo * 8.0, 0.0, TAU, 48,
+			Color(AppTheme.ACCENT, 0.5 * (1.0 - _halo)), 3.0, true
+		)
 	var ring_width := maxf(2.0, diameter * RING_RATIO)
 	# O anel de vez fica por fora, e a bolacha encolhe para caber dentro do mesmo
 	# quadrado: acender a vez não pode empurrar o que está em volta.
