@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scenes/uno_match.gd" id="1_uno"]
 [ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="2_safe"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://ui/banner.gd" id="5_banner"]
 [ext_resource type="Script" path="res://ui/match_bar.gd" id="6_bar"]
 [ext_resource type="Script" path="res://ui/paper_card.gd" id="7_paper"]
+[ext_resource type="Script" path="res://ui/uno_fx.gd" id="8_fx"]
 
 [node name="UnoMatch" type="Control"]
 layout_mode = 3
@@ -114,6 +115,17 @@ offset_bottom = 110.0
 grow_horizontal = 2
 script = ExtResource("5_banner")
 
+[node name="Fx" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8_fx")
+
 [node name="ChoiceLayer" type="Control" parent="."]
 unique_name_in_owner = true
 visible = false
@@ -157,7 +169,7 @@ theme_type_variation = &"Display"
 text = "Escolha a cor"
 horizontal_alignment = 1
 
-[node name="ChoiceRow" type="HBoxContainer" parent="ChoiceLayer/Center/Panel/Box"]
+[node name="ChoiceRow" type="BoxContainer" parent="ChoiceLayer/Center/Panel/Box"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8

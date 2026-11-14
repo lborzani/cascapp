@@ -61,6 +61,13 @@ const TABLE_AT := Vector2(0.5, 0.50)
 ## entre dois leques em pé de 120. Na borda do retângulo eles vão para os cantos,
 ## e a distância entre eles passa a ser a altura útil inteira.
 const RADIUS := Vector2(0.42, 0.28)
+## De pé, o centro desce: as etiquetas dos assentos de cima sobem acima do leque,
+## e numa mesa de seis são três delas disputando a faixa de cima. Embaixo sobra —
+## o lugar do local fica vazio.
+const TABLE_AT_PORTRAIT := Vector2(0.5, 0.56)
+## A mesma borda de pé, alta o bastante para separar na vertical a etiqueta do
+## assento de cima das dos cantos, que na horizontal se cruzam.
+const RADIUS_PORTRAIT := Vector2(0.36, 0.36)
 
 ## Quanto o realce sobra para fora da carta central.
 const MAT_GROW := 0.09
@@ -115,6 +122,43 @@ var can_draw := false:
 		can_draw = value
 		queue_redraw()
 
+## O descarte mostra esta carta e esta cor em vez das de verdade, enquanto a carta
+## nova ainda voa até ele. Negativo é o descarte de verdade.
+##
+## Sem isto a carta jogada aparecia duas vezes — já pousada no descarte e ainda a
+## caminho dele —, e o voo deixava de ser o que conta o lance.
+var held_top := -1
+var _held_color := 0
+
+
+## Quanto a seta do sentido está girada. O inverte a faz dar meia volta até
+## assentar no sentido novo — é o único efeito dele que se vê, já que nenhuma mão
+## muda.
+var spin := 0.0:
+	set(value):
+		spin = value
+		queue_redraw()
+var _spin_tween: Tween
+
+
+func spin_direction() -> void:
+	if _spin_tween != null:
+		_spin_tween.kill()
+	_spin_tween = create_tween()
+	_spin_tween.tween_property(self, "spin", 0.0, 0.6).from(PI) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func hold_pile(card: int, color: int) -> void:
+	held_top = card
+	_held_color = color
+	queue_redraw()
+
+
+func release_pile() -> void:
+	held_top = -1
+	queue_redraw()
+
 ## Medidas calculadas no desenho e reusadas pelo toque. Guardadas em vez de
 ## recalculadas no `_gui_input` porque as duas contas precisam concordar: um monte
 ## que acende num lugar e aceita toque em outro é pior que um monte que não acende.
@@ -137,8 +181,18 @@ func _draw() -> void:
 	_draw_pile()
 
 
+func _portrait() -> bool:
+	return size.y > size.x
+
+
+## Altura dos versos nos assentos. Um lugar só para a conta, porque o desenho e a
+## etiqueta precisam concordar sobre o tamanho do leque.
+func _back_height() -> float:
+	return minf(size.y * 0.19, _card_height * 0.52)
+
+
 func _layout() -> void:
-	var center := Vector2(size.x * TABLE_AT.x, size.y * TABLE_AT.y)
+	var center := _table_center()
 	# As duas cartas do meio dividem a largura livre entre os assentos laterais.
 	#
 	# Menores do que caberiam, de propósito. O monte e o descarte são as duas
@@ -147,10 +201,48 @@ func _layout() -> void:
 	# nome de cada assento para fora do vão em que ele cabe, e o rótulo acaba tendo
 	# de escolher um lado conforme onde o assento está. Menores, o vão entre o
 	# assento e o meio abre, e o nome pode ir sempre para o mesmo lugar.
-	_card_height = minf(size.y * 0.30, (size.x * 0.12) / UnoCardArt.ASPECT)
+	if _portrait():
+		_card_height = minf(size.y * 0.22, (size.x * 0.20) / UnoCardArt.ASPECT)
+	else:
+		_card_height = minf(size.y * 0.30, (size.x * 0.12) / UnoCardArt.ASPECT)
 	var gap := UnoCardArt.width_for(_card_height) * 0.72
 	_deck_center = center - Vector2(gap, 0.0)
 	_pile_center = center + Vector2(gap, 0.0)
+
+
+# --- pontos para os voos ------------------------------------------------------
+#
+# Em coordenadas globais: quem lança a carta é a camada de cima, que atravessa a
+# mesa e a mão, e só ela sabe onde está. `_layout()` antes de cada um pelo mesmo
+# motivo de `seat_tag_spot`: a medida das cartas nasce no desenho.
+
+
+func deck_point() -> Vector2:
+	_layout()
+	return get_global_transform() * _deck_center
+
+
+func pile_point() -> Vector2:
+	_layout()
+	return get_global_transform() * _pile_center
+
+
+## O meio do leque de um assento, girado como ele. A carta de um adversário sai
+## dali deitada do jeito que ele a segura, e endireita no caminho.
+func seat_spot(seat: int) -> Transform2D:
+	_layout()
+	var facing := _angle_of(seat) - PI * 0.5
+	return Transform2D(facing, get_global_transform() * _seat_center(seat))
+
+
+func card_height() -> float:
+	_layout()
+	return _card_height
+
+
+func back_height() -> float:
+	_layout()
+	return _back_height()
 
 
 # --- os assentos --------------------------------------------------------------
@@ -169,7 +261,8 @@ func _angle_of(seat: int) -> float:
 
 
 func _table_center() -> Vector2:
-	return Vector2(size.x * TABLE_AT.x, size.y * TABLE_AT.y)
+	var at := TABLE_AT_PORTRAIT if _portrait() else TABLE_AT
+	return Vector2(size.x * at.x, size.y * at.y)
 
 
 ## O ponto onde o raio do assento encontra a **borda do retângulo**.
@@ -180,7 +273,8 @@ func _table_center() -> Vector2:
 func _seat_center(seat: int) -> Vector2:
 	var angle := _angle_of(seat)
 	var ray := Vector2(cos(angle), sin(angle))
-	var half := Vector2(size.x * RADIUS.x, size.y * RADIUS.y)
+	var radius := RADIUS_PORTRAIT if _portrait() else RADIUS
+	var half := Vector2(size.x * radius.x, size.y * radius.y)
 	var reach := INF
 	if not is_zero_approx(ray.x):
 		reach = minf(reach, half.x / absf(ray.x))
@@ -202,9 +296,24 @@ func seat_tag_spot(seat: int, tag: Vector2) -> Vector2:
 	if state == null:
 		return Vector2.ZERO
 	_layout()
+	var away := (_seat_center(seat) - _table_center()).normalized()
+	var spot := _tag_spot_along(seat, away, tag)
+	# Para fora pelo raio, quando cabe. Quando não cabe — sempre de pé, e deitado
+	# nos assentos do meio da lateral numa mesa de quatro —, o nome empurrado para
+	# fora voltava preso na borda, em cima do leque. Aí ele sobe ou desce.
+	if _portrait() or spot.x < 0.0 or spot.x > size.x - tag.x:
+		var vertical := Vector2(0.0, -1.0 if away.y < -0.01 else 1.0)
+		spot = _tag_spot_along(seat, vertical, tag)
+	return Vector2(
+		clampf(spot.x, 0.0, maxf(0.0, size.x - tag.x)),
+		clampf(spot.y, 0.0, maxf(0.0, size.y - tag.y))
+	)
+
+
+## A etiqueta encostada no leque do assento, do lado `away`, sem prender na vista.
+func _tag_spot_along(seat: int, away: Vector2, tag: Vector2) -> Vector2:
 	var center := _seat_center(seat)
-	var away := (center - _table_center()).normalized()
-	var back_height := minf(size.y * 0.19, _card_height * 0.52)
+	var back_height := _back_height()
 
 	# Quanto o leque ocupa **na direção em que a etiqueta vai**: um leque deitado
 	# ocupa pouco para cima e muito para o lado, e é a mesma conta que decide onde
@@ -217,11 +326,7 @@ func seat_tag_spot(seat: int, tag: Vector2) -> Vector2:
 	var facing := _angle_of(seat) - PI * 0.5
 	var mat := _extent(away, step * maxf(shown - 1, 0) * 0.5, half + pad, facing)
 	var reach := absf(away.x) * tag.x * 0.5 + absf(away.y) * tag.y * 0.5
-	var spot := center + away * (mat + reach + 8.0) - tag * 0.5
-	return Vector2(
-		clampf(spot.x, 0.0, maxf(0.0, size.x - tag.x)),
-		clampf(spot.y, 0.0, maxf(0.0, size.y - tag.y))
-	)
+	return center + away * (mat + reach + 8.0) - tag * 0.5
 
 
 func _draw_seats() -> void:
@@ -247,7 +352,7 @@ func _draw_seats() -> void:
 ## inclinar o aparelho para ler o que a mesa deveria dizer de relance.
 func _draw_seat(seat: int, center: Vector2, is_turn: bool) -> void:
 	var held := UnoRules.hand_size(state, seat)
-	var back_height := minf(size.y * 0.19, _card_height * 0.52)
+	var back_height := _back_height()
 	var shown := mini(held, MAX_BACKS)
 	var step := UnoCardArt.width_for(back_height) * BACK_STEP
 
@@ -358,6 +463,10 @@ func _draw_deck() -> void:
 
 
 func _draw_pile() -> void:
+	if held_top >= 0:
+		_draw_mat(_pile_center, UnoCardArt.COLORS[_held_color])
+		UnoCardArt.draw_card(self, held_top, _pile_center, _card_height)
+		return
 	var top := UnoRules.top_card(state)
 	if top < 0:
 		_draw_slot(_pile_center)
@@ -418,7 +527,7 @@ func _draw_direction() -> void:
 	# Quase o anel inteiro: solta no rodapé, a seta é um **ícone**, e um arco curto
 	# solto lê como um risco. Fechando três quartos de volta ela lê como giro.
 	var span := TAU * 0.72
-	var start := -PI * 0.35 if forward else -PI * 0.65
+	var start := (-PI * 0.35 if forward else -PI * 0.65) + spin
 	var sweep := span if forward else -span
 	draw_arc(center, radius, start, start + sweep, 28, ink, thickness, true)
 

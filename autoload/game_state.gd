@@ -170,14 +170,13 @@ const GAMES := [
 	# busca para regular. Uma busca honesta aqui precisaria de esperança
 	# matemática sobre um baralho que ninguém vê.
 	#
-	# Deitado, como Ludo e Metrópole, e por um motivo que só o desenho da mesa
-	# revelou: a partida é um anel de até seis jogadores em volta do monte.
+	# Sem `landscape`: o Uno segue o sensor e joga dos dois jeitos.
 	#
 	# Houve uma versão em retrato, com os adversários numa fileira de cartões no
 	# topo, e ela quebrava exatamente onde a mesa cresce: seis cartões numa faixa
-	# de 432 px dão 72 px cada, que é um nome cortado ao lado de um número. E o
-	# tamanho da mão alheia continuava sendo um algarismo a ler, quando sete versos
-	# empilhados dizem "muita carta" sem que ninguém leia nada.
+	# de 432 px dão 72 px cada, que é um nome cortado ao lado de um número. Por
+	# isso o jogo passou um tempo só deitado. O que resolveu não foi a orientação,
+	# foi o anel de assentos em volta do monte — e o anel cabe de pé também.
 	#
 	{
 		"id": UNO,
@@ -193,7 +192,6 @@ const GAMES := [
 		"players": 4,
 		"players_range": [UnoRules.MIN_SEATS, UnoRules.MAX_SEATS],
 		"bot_levels": false,
-		"landscape": true,
 		"visible": true,
 	},
 	# Sinuca em `CAT_BOARD`, e a escolha merece uma linha.
