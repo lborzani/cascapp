@@ -88,6 +88,13 @@ func _draw() -> void:
 	_star.size = Vector2(STAR_ZONE, STAR_ZONE)
 
 	var ink := AppTheme.ACCENT_INK
+	# A peça do jogo, grande e apagada, inclinada no lado direito: é o que faz o
+	# bloco ler como "este jogo" antes de se ler o nome. Tingida de tinta escura,
+	# vira silhueta sobre a cor.
+	PieceRenderer.draw_piece(
+		self, Game.piece_of(game_id), Vector2(size.x - face.size.y * 0.4, face.get_center().y + 6.0),
+		face.size.y * 0.82, 0.14, 1.0, false, ink, -0.18
+	)
 	var bottom := face.end.y - PAD
 	draw_string(
 		AppTheme.font(700), Vector2(PAD, bottom), _players_text(),

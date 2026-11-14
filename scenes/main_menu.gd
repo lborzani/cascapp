@@ -4,21 +4,19 @@ extends Control
 ##
 ## ## O que a tela é
 ##
-## O cabeçalho com o logo e o nome de quem está jogando, os favoritos em cartão
-## grande, o catálogo inteiro em cardápio de lousa, e as abas na base. Escolher um
-## jogo não troca de tela: sobe a **folha do jogo** por cima desta, com o modo e os
-## ajustes. A tela de modos que existia entre as duas saiu.
+## O cabeçalho com o logo e o nome de quem está jogando, o cartão de voltar para a
+## partida guardada (quando há uma), a grade de jogos e as abas na base. Escolher
+## um jogo não troca de tela: sobe a **folha do jogo** por cima desta, com o modo
+## e os ajustes.
 ##
-## ## Cardápio, e não grade
+## ## Grade de blocos na cor do jogo
 ##
-## Foi lista, depois grade de três colunas. A grade mostra mais jogos na mesma
-## altura e cobra por isso onde dói: num cartão de 118 px "Batalha Naval" quebra em
-## duas linhas de quatro letras e a peça vira mancha. O cardápio devolve o nome
-## inteiro, alinha a lotação à direita como um preço e dá a faixa toda ao dedo — e
-## é o que a tela faz de verdade: listar o que tem.
+## Foi lista, grade de três colunas e cardápio em linhas. A grade de três
+## quebrava "Batalha Naval" em duas linhas; o cardápio lia bem e não convidava.
+## Duas colunas resolvem os dois: o nome cabe inteiro, e cada jogo tem cor e
+## tamanho de coisa que se quer tocar (`GameTile`).
 ##
-## Os favoritos continuam acima, em cartão: lá o cartão é atalho, e a estrela
-## adianta o caminho sem esconder nada.
+## Os favoritos vêm na frente da grade, e a estrela mora no canto do bloco.
 ##
 ## ## Para onde esta tela leva
 ##
@@ -297,8 +295,8 @@ func _offer_rejoin() -> void:
 		Prefs.forget_rejoin()
 		card.queue_free()
 	)
-	# Irmão do cardápio, e não filho dele: a lista é refeita a cada troca de
-	# filtro, e o cartão sumiria no primeiro toque nela.
+	# Irmão da grade, e não filho dela: a grade é refeita quando os favoritos
+	# mudam, e o cartão sumiria junto.
 	%Content.add_child(card)
 	%Content.move_child(card, 0)
 

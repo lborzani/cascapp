@@ -55,6 +55,7 @@ func _probe_rejoin_offer() -> void:
 	Prefs.forget_rejoin()
 	Game.reset_to_menu()
 
+	_probe_ago()
 	var bare := MENU_SCENE.instantiate()
 	add_child(bare)
 	await get_tree().process_frame
@@ -74,7 +75,9 @@ func _probe_rejoin_offer() -> void:
 		var card: ResumeCard = cards[0]
 		_equals(card.code, "VOLTA7", "para a sala certa")
 		_equals(card.game_id, Game.UNO, "e o jogo certo")
-		_equals(card.get_index(), 0, "no topo, acima do filtro")
+		_equals(card.get_index(), 0, "no topo, acima da grade")
+		_equals(card._status(), "EM ANDAMENTO · SALA VOLTA7", "com a sala na linha de cima")
+		_equals(card.saved_at, now, "e sabendo quando a cadeira ficou")
 		card.dismissed.emit()
 		await get_tree().process_frame
 		_check(Prefs.pending_rejoin(now).is_empty(), "o X esquece a partida")
@@ -94,6 +97,13 @@ func _probe_rejoin_offer() -> void:
 	Prefs.remember_rejoin("VOLTA7", Game.UNO, "k-assento", now - Prefs.REJOIN_WINDOW - 60)
 	_check(Prefs.pending_rejoin(now).is_empty(), "e a sala que o relay já fechou não é oferecida")
 	Prefs.forget_rejoin()
+
+
+func _probe_ago() -> void:
+	_equals(ResumeCard.ago(20), "agora há pouco", "saiu agora")
+	_equals(ResumeCard.ago(5 * 60), "há 5 min", "minutos")
+	_equals(ResumeCard.ago(59 * 60), "há 59 min", "quase uma hora ainda é minuto")
+	_equals(ResumeCard.ago(3 * 3600 + 600), "há 3 h", "e depois, horas")
 
 
 func _resume_cards(menu: Node) -> Array:
