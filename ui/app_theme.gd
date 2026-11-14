@@ -84,20 +84,23 @@ const GAME_COLORS := {
 	"pool": Color("59d36b"),
 }
 
-## Casas do último lance. Verde e não o limão: o limão quer dizer "é aqui que
-## você age", e um lance que já aconteceu é exatamente o que não se pode mais
-## mudar. Desenhado sobre o tabuleiro, que não muda com o tema — e por isso ele
-## também não muda.
-const LAST_MOVE := Color("6fbf73")
+## Casas do último lance. Um amarelo-esverdeado, vizinho do limão sem ser ele:
+## o limão cheio quer dizer "é aqui que você age", e um lance que já aconteceu é
+## exatamente o que não se pode mais mudar. Sobre o tabuleiro violeta o verde de
+## antes virava cinza; este continua cor.
+const LAST_MOVE := Color("d9f060")
 
-## Lance planejado para a vez seguinte. Azul frio, e deliberadamente não o
-## limão: um plano é o contrário de "aja aqui" — é o que ainda não aconteceu.
-const PREMOVE := Color("6f9fd8")
+## Lance planejado para a vez seguinte. Ciano, e deliberadamente não o limão: um
+## plano é o contrário de "aja aqui" — é o que ainda não aconteceu. Ciano e não
+## o azul de antes, que sumia na casa violeta.
+const PREMOVE := Color("39c6ff")
 
-## Tabuleiros de xadrez, damas e Ludo. Ficam como estavam antes do tema.
-const BOARD_LIGHT := Color("e9d8b8")
-const BOARD_DARK := Color("8a5b3c")
-const BOARD_FRAME := Color("241d18")
+## Tabuleiros de xadrez, damas e Ludo: violeta, da mesma família do fundo. As
+## peças continuam as de sempre — o contorno escuro delas segura a leitura nas
+## duas casas.
+const BOARD_LIGHT := Color("e9e4ff")
+const BOARD_DARK := Color("8672e0")
+const BOARD_FRAME := Color("2d2757")
 
 ## Mar da batalha naval. As casas de um mar são todas iguais em função, e o
 ## contraste entre as duas é mínimo de propósito, só o bastante para a grade se

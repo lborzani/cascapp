@@ -83,12 +83,12 @@ func _probe_palette() -> void:
 	print("paleta")
 	_equals(AppTheme.BACKGROUND, Color("15122b"), "fundo é a noite")
 	_equals(AppTheme.ACCENT, Color("c8f53c"), "destaque é o limão")
-	_equals(AppTheme.BOARD_LIGHT, Color("e9d8b8"), "casa clara do tabuleiro não mudou")
-	_equals(AppTheme.BOARD_DARK, Color("8a5b3c"), "casa escura não mudou")
-	_equals(AppTheme.BOARD_FRAME, Color("241d18"), "moldura do tabuleiro ainda não mudou")
+	_equals(AppTheme.BOARD_LIGHT, Color("e9e4ff"), "casa clara do tabuleiro é violeta")
+	_equals(AppTheme.BOARD_DARK, Color("8672e0"), "e a escura também")
+	_equals(AppTheme.BOARD_FRAME, AppTheme.SURFACE_HIGH, "moldura do tabuleiro é um degrau de superfície")
 	_equals(AppTheme.WATER, Color("223a4d"), "o mar não mudou")
-	_equals(AppTheme.LAST_MOVE, Color("6fbf73"), "o último lance não mudou")
-	_equals(AppTheme.PREMOVE, Color("6f9fd8"), "o lance planejado não mudou")
+	_equals(AppTheme.LAST_MOVE, Color("d9f060"), "o último lance é amarelo-esverdeado")
+	_equals(AppTheme.PREMOVE, Color("39c6ff"), "o lance planejado é ciano")
 	var text_pairs := [
 		["TEXT", AppTheme.TEXT, "BACKGROUND", AppTheme.BACKGROUND],
 		["TEXT_DIM", AppTheme.TEXT_DIM, "BACKGROUND", AppTheme.BACKGROUND],
@@ -101,6 +101,9 @@ func _probe_palette() -> void:
 	for pair: Array in text_pairs:
 		var ratio := AppTheme.contrast(pair[1], pair[3])
 		_check(ratio >= 4.5, "%s sobre %s legível como texto (%.1f:1)" % [pair[0], pair[2], ratio])
+	# As duas casas têm de se distinguir entre si, e a marca do último lance da casa.
+	_check(AppTheme.contrast(AppTheme.BOARD_LIGHT, AppTheme.BOARD_DARK) >= 3.0, "casa clara e escura se distinguem")
+	_check(AppTheme.LAST_MOVE != AppTheme.ACCENT, "o último lance não é a cor de ação")
 	var line := AppTheme.contrast(AppTheme.BACKGROUND.blend(AppTheme.LINE), AppTheme.BACKGROUND)
 	_check(line >= 3.0, "LINE contorna coisa tocável (%.1f:1)" % line)
 
