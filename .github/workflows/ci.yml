@@ -145,6 +145,14 @@ jobs:
           godot --headless --path . --script res://tests/pool_probe.gd
           godot --headless --path . res://tests/pool_scene_probe.tscn
 
+      # O boliche tem física de verdade (Jolt). `--fixed-fps` anda 1/60 s por
+      # quadro sem esperar o relógio: a jogada roda inteira em segundos.
+      - name: Boliche
+        run: |
+          godot --headless --path . --script res://tests/bowling_probe.gd
+          godot --headless --fixed-fps 60 --path . --script res://tests/bowling_physics_probe.gd
+          godot --headless --fixed-fps 60 --path . res://tests/bowling_scene_probe.tscn
+
       # A partida sem internet, pelo Bluetooth falso (`tests/fake_ble.gd`). Com
       # `ble://` as mesmas suítes do relay rodam contra o relay em miniatura que o
       # anfitrião leva no próprio aparelho (`net/ble_room.gd`): se as duas

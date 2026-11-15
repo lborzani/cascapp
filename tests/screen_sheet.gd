@@ -45,6 +45,8 @@ const SHOTS := [
 	["res://scenes/pool_match.tscn", "22_sinuca"],
 	["res://scenes/pool_match.tscn", "22b_sinuca_brasileira"],
 	["res://scenes/match.tscn", "24_assistindo"],
+	["res://scenes/bowling_match.tscn", "25_boliche"],
+	["res://scenes/bowling_match.tscn", "25b_boliche_balanco"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -225,6 +227,11 @@ func _next() -> void:
 			# sete numeradas, e a bola da vez anunciada embaixo do placar.
 			Game.pool_format = PoolRules.Format.BRAZILIAN
 			Game.start_hotseat(Game.POOL)
+		"25_boliche", "25b_boliche_balanco":
+			# Três no mesmo aparelho: a cartela com linhas que bastem para julgar a altura
+			# que ela come da pista.
+			Game.start_hotseat(Game.BOWLING)
+			Game.table_size = 3
 		"24_assistindo":
 			# Quem assiste xadrez, com a avaliação ao vivo: barra acima do
 			# tabuleiro e o selo do veredito na casa do último lance.
@@ -345,6 +352,8 @@ func _next() -> void:
 		_scene._refresh()
 	elif shot == "16_naval":
 		_stage_battleship(_scene)
+	elif shot == "25_boliche" or shot == "25b_boliche_balanco":
+		_stage_bowling(_scene, shot == "25b_boliche_balanco")
 	elif shot == "22_sinuca" or shot == "22b_sinuca_brasileira":
 		_stage_pool(_scene)
 	elif shot == "17_ludo":
@@ -536,6 +545,31 @@ func _process(_delta: float) -> void:
 ## partida e não tem uma decisão à vista. Uma tacada de saída espalha as bolas, e
 ## o arrasto congelado é o que põe na foto a coisa que precisa ser julgada — a
 ## linha de mira, o ponto de contato e o anel de força.
+## Boliche com três frames jogados à mão (strike, aberto e spare), o 4 e o 7 em
+## pé para o primeiro jogador, e a mira com efeito. `swing` congela o balanço
+## perto do fundo, com a barra de timing à vista.
+func _stage_bowling(scene: Node, swing: bool) -> void:
+	var rules: BowlingRules = scene._rules
+	var state: MatchState = scene._state
+	for mask in [1023, 0b0011111111, 0b1100000000, 0b0111111111, 0, 951]:
+		rules.apply_move(state, BowlingRules.roll(mask))
+	var view: BowlingView = scene._view
+	view.aim_position = 0.45
+	view.aim_direction = -0.25
+	view.aim_spin = -0.55
+	view.rack(BowlingRules.standing(state))
+	scene._refresh()
+	if swing:
+		view._phase = BowlingView.Phase.FORWARD
+		view._angle = 9.0
+		view._swing = 0.0
+		view._place_preview()
+		view._sync()
+		# Parada de vez: qualquer `_render` (um `resized` do palco, por exemplo)
+		# religaria o `_process`, e o balanço soltaria a bola sozinho antes do print.
+		view.process_mode = Node.PROCESS_MODE_DISABLED
+
+
 func _stage_pool(scene: Node) -> void:
 	scene._rules.trace_every = 0
 	var mine := PoolRules.shootable(scene._state)

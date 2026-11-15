@@ -85,6 +85,7 @@ const GAME_COLORS := {
 	"uno": Color("ff4d7d"),
 	"monopoly": Color("2ed3b7"),
 	"pool": Color("59d36b"),
+	"bowling": Color("4f8bff"),
 }
 
 ## Casas do último lance, sólidas e em dois tons como no protótipo: um limão

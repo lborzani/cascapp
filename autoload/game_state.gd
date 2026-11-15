@@ -14,6 +14,7 @@ const LUDO := &"ludo"
 const MONOPOLY := &"monopoly"
 const UNO := &"uno"
 const POOL := &"pool"
+const BOWLING := &"bowling"
 
 ## Categorias do catálogo, na ordem em que a tela inicial as oferece.
 ##
@@ -29,11 +30,16 @@ const POOL := &"pool"
 const CAT_BOARD := &"tabuleiro"
 const CAT_DICE := &"dados"
 const CAT_CARDS := &"cartas"
+## Bola que rola numa mesa ou numa pista: sinuca e boliche. Nasceu com o boliche,
+## que não é peça, dado nem carta — e com ele a sinuca deixou de ser a exceção
+## guardada em "Tabuleiro".
+const CAT_SPORT := &"esporte"
 
 const CATEGORIES := [
 	{"id": CAT_BOARD, "label": "Tabuleiro"},
 	{"id": CAT_DICE, "label": "Dados"},
 	{"id": CAT_CARDS, "label": "Cartas"},
+	{"id": CAT_SPORT, "label": "Esporte"},
 ]
 
 ## Catálogo: o que a tela de escolha mostra, na ordem em que mostra.
@@ -194,13 +200,9 @@ const GAMES := [
 		"bot_levels": false,
 		"visible": true,
 	},
-	# Sinuca em `CAT_BOARD`, e a escolha merece uma linha.
-	#
-	# O corte das categorias é pelo que o jogador reconhece de fora, e não pela
-	# família de regras: uma mesa de sinuca é uma superfície marcada onde se movem
-	# peças, que é a mesma resposta que xadrez, damas e batalha naval dão. Uma
-	# categoria nova só para ela seria uma categoria
-	# por jogo, que é o mesmo que categoria nenhuma.
+	# Sinuca em `CAT_SPORT`, junto do boliche. Morou em "Tabuleiro" enquanto era a
+	# única bola do catálogo: uma categoria só para ela seria uma categoria por
+	# jogo, que é o mesmo que categoria nenhuma.
 	#
 	# `bot_levels` falso pelo motivo dos outros: o adversário daqui não é busca — é
 	# simular um punhado de tacadas candidatas e ficar com a melhor. Não há
@@ -209,7 +211,7 @@ const GAMES := [
 	{
 		"id": POOL,
 		"title": "Sinuca",
-		"category": CAT_BOARD,
+		"category": CAT_SPORT,
 		"icon": Board.Kind.CUE,
 		"scene": "res://scenes/pool_match.tscn",
 		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
@@ -218,6 +220,25 @@ const GAMES := [
 		# Deitado pelo motivo mais literal do catálogo: a mesa é duas vezes mais
 		# larga que alta. Em retrato ela ocuparia um terço da tela.
 		"landscape": true,
+		"visible": true,
+	},
+	# Boliche em retrato: a pista sobe a tela. De 2 a 4 na mesa; no solo, as
+	# cadeiras que sobram são máquina, como em Metrópole. Sem rede por enquanto
+	# (a partida online é a Fase 5 do plano).
+	#
+	# `bot_levels` falso: o bot é o mesmo arremesso de quem joga com um erro
+	# sorteado no timing, e não uma busca com profundidade para regular.
+	{
+		"id": BOWLING,
+		"title": "Boliche",
+		"category": CAT_SPORT,
+		"icon": Board.Kind.PIN,
+		"scene": "res://scenes/bowling_match.tscn",
+		"modes": [Mode.HOTSEAT, Mode.SOLO],
+		"clock": false,
+		"players": 2,
+		"players_range": [2, BowlingRules.MAX_SEATS],
+		"bot_levels": false,
 		"visible": true,
 	},
 ]
@@ -655,6 +676,10 @@ func make_ruleset(id: StringName = game_id) -> Ruleset:
 			var pool := PoolRules.new()
 			pool.format = pool_format
 			return pool
+		BOWLING:
+			var bowling := BowlingRules.new()
+			bowling.seats = players_of(BOWLING)
+			return bowling
 		_:
 			return ChessRules.new()
 
