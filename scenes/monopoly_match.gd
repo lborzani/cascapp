@@ -62,7 +62,7 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Largura da coluna da esquerda, na base deitada de 768. Larga o bastante para
 ## "M 1500" e um nome curto; estreita o bastante para o tabuleiro continuar sendo
 ## o assunto da tela.
-const RAIL_WIDTH := 136
+const RAIL_WIDTH := 168
 ## Folga do painel flutuante em relação ao canto.
 const PANEL_MARGIN := 10
 ## Largura do painel de escritura.
@@ -80,11 +80,11 @@ const PANEL_WIDTH := MonopolyPanel.WIDTH
 ## tabela de aluguel, a frase de uma casa de evento — e a barra carrega dois dados
 ## e um botão. Amarrar as duas ao mesmo número obrigava a escolher entre um painel
 ## apertado e uma barra larga à toa, e as duas escolhas custam tabuleiro.
-const BAR_WIDTH := 168
+const BAR_WIDTH := 230
 ## Altura da barra de ação, embaixo do painel. O painel ocupa o que sobra: assim
 ## os dois nunca se atropelam numa tela mais baixa, e não há dois números a somar
 ## certo à mão.
-const BAR_HEIGHT := 112
+const BAR_HEIGHT := 64
 ## Largura do botão de recentrar, no canto de baixo à esquerda do palco.
 const RECENTER_WIDTH := 92
 
@@ -352,27 +352,29 @@ func _build_layout() -> void:
 		card.dense(seats >= 5)
 		_cards.append(card)
 
-	# Trocar mora na coluna, e não na barra de ações.
-	#
-	# A barra responde "o que esta fase pede de você", e some e reaparece a cada
-	# rolagem. Propor uma troca não é o que a fase pede — é uma coisa que se pode
-	# fazer em quase qualquer ponto do próprio turno, e que abre outra tela em vez
-	# de jogar um lance. Na barra ela também não caberia: a fase da cadeia já
-	# oferece três botões nos 112 de altura.
-	#
-	# Lado a lado com "Sair", e não empilhado: seis faixas de jogador mais dois
-	# botões em coluna não cabem nos 416 de altura da base deitada, e o que sobra
-	# de fora é o último — que era justamente a saída da partida.
-	var foot := HBoxContainer.new()
-	foot.add_theme_constant_override("separation", 4)
-	_rail.add_child(foot)
-
+	# Trocar mora na barra de cima, ao lado da pílula da vez, como no protótipo: é
+	# uma coisa que se pode fazer em quase qualquer ponto do próprio turno, e não
+	# o que a fase pede.
 	_trade_button = Button.new()
 	_trade_button.text = "Trocar"
-	MonopolyPanel.compact(_trade_button)
-	_trade_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trade_button.focus_mode = Control.FOCUS_NONE
+	_trade_button.custom_minimum_size.y = 44
+	_trade_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_trade_button.add_theme_font_override("font", AppTheme.font(800))
+	_trade_button.add_theme_font_size_override("font_size", 14)
+	for state_name: String in ["normal", "hover", "pressed", "focus"]:
+		var plate := AppTheme.box(
+			AppTheme.SURFACE_TOP if state_name == "pressed" else AppTheme.SURFACE_HIGH, AppTheme.RADIUS
+		)
+		plate.content_margin_left = 14
+		plate.content_margin_right = 14
+		_trade_button.add_theme_stylebox_override(state_name, plate)
+	for state_name: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		_trade_button.add_theme_color_override(state_name, AppTheme.TEXT)
 	_trade_button.pressed.connect(_open_trade)
-	foot.add_child(_trade_button)
+	var top_row: Control = _match_bar.help.get_parent()
+	top_row.add_child(_trade_button)
+	top_row.move_child(_trade_button, _match_bar.help.get_index())
 
 	# O mesmo componente dos outros jogos: ícone quadrado, vermelho de aviso, com
 	# a pergunta de confirmação dentro dele. Aqui ele divide o rodapé com o botão
@@ -524,16 +526,19 @@ func _build_bar(stage: Control) -> void:
 		margin.add_theme_constant_override("margin_" + side, 8)
 	bar.add_child(margin)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	# Os dois dados à esquerda e o botão da fase ao lado, como no protótipo. O que
+	# a fase pede por escrito foi para a pílula da barra de cima.
+	var column := HBoxContainer.new()
+	column.add_theme_constant_override("separation", AppTheme.SPACE_S + 2)
 	margin.add_child(column)
 
 	_status = Label.new()
-	_status.add_theme_font_size_override("font_size", 11)
-	_status.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_status)
+	_status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_status.add_theme_font_override("font", AppTheme.font(800))
+	_status.add_theme_font_size_override("font_size", 14)
+	var top_row: Control = _match_bar.help.get_parent()
+	top_row.add_child(_status)
+	top_row.move_child(_status, _match_bar.help.get_index())
 
 	var pair := HBoxContainer.new()
 	pair.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -554,10 +559,12 @@ func _build_bar(stage: Control) -> void:
 		# parava num número que a partida ignorava, e ainda gastava um dos dois
 		# avisos de "dado parou".
 		die.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		die.custom_minimum_size = Vector2(40, 40)
+		die.custom_minimum_size = Vector2(44, 44)
 		_dice.append(die)
 
 	_buttons = VBoxContainer.new()
+	_buttons.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	_buttons.add_theme_constant_override("separation", 4)
 	column.add_child(_buttons)
 
@@ -570,6 +577,7 @@ func _build_bar(stage: Control) -> void:
 ## que ponto do turno a partida está.
 func _update_bar() -> void:
 	_paint_bar()
+	_paint_pill()
 	# Depois de a barra ter os botões da fase, e não antes: é a contagem deles que
 	# decide a altura dela, e é a altura dela que decide onde o painel termina.
 	_fit_panel()
@@ -612,11 +620,11 @@ func _paint_bar() -> void:
 
 	match MonopolyRules.phase_of(_state) as int:
 		MonopolyRules.Phase.ROLL:
-			_status.text = "Vez de %s." % _player_label(actor)
+			_status.text = "%s: role os dados" % _turn_prefix(actor)
 			_bar_button("Rolar", _roll, true)
 		MonopolyRules.Phase.JAILED:
 			_status.text = "%s está na cadeia." % _player_label(actor)
-			_bar_button("Rolar (dupla solta)", _roll, true)
+			_bar_button("Tentar dupla", _roll, true)
 			if MonopolyRules.jail_cards_of(_state, actor) > 0:
 				_bar_button("Usar saída livre", func() -> void: _try(MonopolyRules.Act.USE_CARD))
 			if MonopolyRules.cash_of(_state, actor) >= MonopolyBoard.BAIL:
@@ -656,6 +664,34 @@ func _paint_bar() -> void:
 			_bar_button("Ver a proposta", _open_trade, true)
 
 
+## "Sua vez" quando o aparelho é de uma pessoa só e a vez é dela; o nome no
+## resto — no mesmo aparelho todos são "você".
+func _turn_prefix(actor: int) -> String:
+	if Game.mode != Game.Mode.HOTSEAT and not _is_bot(actor) and _my_turn():
+		return "Sua vez"
+	return _player_label(actor)
+
+
+## A pílula da barra de cima: limão quando a vez pede algo deste aparelho, apagada
+## quando é só aviso. O texto é o que `_paint_bar` escreveu, sem o ponto final —
+## é etiqueta, não frase.
+func _paint_pill() -> void:
+	if _status == null:
+		return
+	_status.text = _status.text.trim_suffix(".")
+	var lit := (
+		_my_turn() and not _busy and not _link_down and not _abandoned
+		and _rules.winner(_state) < 0
+	)
+	var box := AppTheme.box(AppTheme.ACCENT if lit else AppTheme.SURFACE_HIGH, 16)
+	box.content_margin_left = 14
+	box.content_margin_right = 14
+	box.content_margin_top = 5
+	box.content_margin_bottom = 5
+	_status.add_theme_stylebox_override("normal", box)
+	_status.add_theme_color_override("font_color", AppTheme.ACCENT_INK if lit else AppTheme.TEXT_DIM)
+
+
 ## Um botão da barra. `primary` é o que a fase **pede** — rolar, encerrar, comprar
 ## —, e sai em latão pulsando; o resto é alternativa, e fica na cor da superfície.
 ##
@@ -671,6 +707,10 @@ func _bar_button(label: String, action: Callable, primary := false) -> void:
 	# Depois de entrar na árvore: o pulso é um `Tween`, e um nó de fora da árvore
 	# não tem de onde tirar um.
 	if primary:
+		# O da fase é grande, como o "Rolar" do protótipo: é o alvo da vez.
+		button.custom_minimum_size.y = 44
+		button.add_theme_font_override("font", AppTheme.display(700))
+		button.add_theme_font_size_override("font_size", 18 if label.length() <= 6 else 13)
 		MonopolyPanel.highlight(button)
 
 

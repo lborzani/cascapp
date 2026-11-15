@@ -1,82 +1,68 @@
 class_name MonopolyPlayerCard
 extends PanelContainer
 
-## Uma faixa da coluna da esquerda: um jogador, o dinheiro dele e o que ele tem.
+## Uma faixa da coluna da esquerda: um jogador e o dinheiro dele.
 ##
 ## A coluna é a resposta para "como está a partida". Ela fica **sempre visível**,
-## e é por isso que a informação dela é curta: nome, caixa, quantas escrituras.
-## Detalhe de propriedade é pergunta de painel, não de coluna — quem olha para cá
-## quer comparar seis jogadores de relance, e seis blocos de seis linhas não se
-## comparam de relance.
+## e é por isso que a informação dela é curta: a bolacha na cor do peão, o nome e
+## o caixa. Detalhe de propriedade é pergunta de painel, não de coluna — quem olha
+## para cá quer comparar seis jogadores de relance.
 ##
-## A cor é a mesma que tinge o peão no tabuleiro ([monopoly_face.gd]), e é o único
-## elo entre a coluna e o que se vê em cima do tampo: sem ela, achar o próprio
-## peão exigiria contar assentos.
+## A cor da bolacha é a mesma que tinge o peão no tabuleiro ([monopoly_face.gd]),
+## e é o único elo entre a coluna e o que se vê em cima do tampo.
+##
+## ## O dinheiro não muda em silêncio
+##
+## Quando o caixa muda, um selo "+ M 220" (limão) ou "− M 220" (coral) aparece no
+## canto e some. O número novo sozinho obrigava a lembrar o antigo para saber o
+## que aconteceu — e aluguel é o acontecimento mais frequente do jogo.
 
 ## A faixa foi tocada: quem olha quer ver as propriedades deste jogador.
-##
-## O cartão não sabe o que fazer com isso — quem abre o painel é a cena. Ele só
-## diz que foi escolhido, como o cartão de jogo do menu.
 signal chosen(player: int)
 
-## Faixa vertical de cor na borda esquerda. Vertical e não um ponto: ela precisa
-## sobreviver ao cartão inteiro ficando esmaecido quando não é a vez.
-const STRIPE := 5
-
-## Corpos e folgas nos dois tamanhos: mesa curta e mesa cheia.
-##
-## Seis faixas não cabem nos 416 de altura da base deitada no tamanho normal —
-## cada cartão pede uns 55 pixels de conteúdo, e seis mais os botões do rodapé
-## passam de 400. Encolher os corpos e as margens resolve sem tirar informação de
-## ninguém, que é o que uma rolagem faria: a coluna existe justamente para os
-## jogadores serem **comparados de relance**, e o que sai da tela não se compara.
+## Corpos nos dois tamanhos: mesa curta e mesa cheia. Seis faixas não cabem nos
+## 416 de altura da base deitada no tamanho normal.
 const SIZES := {
-	false: {"name": 12, "cash": 15, "detail": 10, "pad": 5},
-	true: {"name": 11, "cash": 13, "detail": 9, "pad": 2},
+	false: {"name": 13, "cash": 19, "pad": 6, "coaster": 36},
+	true: {"name": 11, "cash": 15, "pad": 2, "coaster": 28},
 }
+## Quanto o selo de diferença fica na tela.
+const DELTA_HOLD := 1.6
 
-var _stripe: ColorRect = null
+var _coaster: Coaster = null
 var _name: Label = null
 var _cash: Label = null
-var _detail: Label = null
+var _delta: Label = null
 var _margin: MarginContainer = null
-## Assento que este cartão desenha. Guardado porque o toque precisa dizer **de
-## quem** ele foi, e o cartão só descobre isso quando é preenchido.
 var _player := -1
+## O caixa do último desenho. -1 antes do primeiro: a partida nascendo não é
+## dinheiro mudando de mão.
+var _last_cash := -1
+var _delta_tween: Tween = null
 
 
 func _ready() -> void:
 	# O cartão inteiro é o alvo, e por isso os containers de dentro deixam o toque
-	# passar: um `MarginContainer` com o filtro padrão recebe o evento antes desta
-	# faixa e o engole sem deixar rastro.
+	# passar.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	_margin = MarginContainer.new()
-	_margin.add_theme_constant_override("margin_left", AppTheme.SPACE_S)
+	_margin.add_theme_constant_override("margin_left", AppTheme.SPACE_S + 2)
 	_margin.add_theme_constant_override("margin_right", AppTheme.SPACE_S)
 	_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_margin)
-	var margin := _margin
 
-	# A faixa vive **dentro** do layout, como primeira coluna de um `HBox`.
-	#
-	# A primeira versão a deixava solta e ancorada à esquerda, e ela cobriu o
-	# cartão inteiro: `PanelContainer` estica todos os filhos para preencher, e
-	# ignora âncora. Um filho solto ali não é um filho posicionado — é um filho
-	# em cima de todos os outros.
 	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	line.add_theme_constant_override("separation", AppTheme.SPACE_S + 2)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(line)
+	_margin.add_child(line)
 
-	_stripe = ColorRect.new()
-	_stripe.custom_minimum_size.x = STRIPE
-	_stripe.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	line.add_child(_stripe)
+	_coaster = Coaster.new()
+	_coaster.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	line.add_child(_coaster)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 0)
+	column.add_theme_constant_override("separation", -2)
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -84,17 +70,21 @@ func _ready() -> void:
 
 	_name = Label.new()
 	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_name.clip_text = true
+	_name.add_theme_font_override("font", AppTheme.font(800))
 	column.add_child(_name)
 
 	_cash = Label.new()
-	# Em mono, e amarelo: é o placar desta partida, e os algarismos precisam
-	# alinhar entre as seis faixas para "quem tem mais" ser respondido de relance.
-	_cash.add_theme_font_override("font", AppTheme.mono(600))
+	_cash.add_theme_font_override("font", AppTheme.display(600))
 	column.add_child(_cash)
 
-	_detail = Label.new()
-	_detail.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
-	column.add_child(_detail)
+	_delta = Label.new()
+	_delta.visible = false
+	_delta.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_delta.add_theme_font_override("font", AppTheme.font(800))
+	_delta.add_theme_font_size_override("font_size", 11)
+	_delta.add_theme_color_override("font_color", AppTheme.ACCENT_INK)
+	line.add_child(_delta)
 
 	dense(false)
 
@@ -106,24 +96,29 @@ func _gui_input(event: InputEvent) -> void:
 		chosen.emit(_player)
 
 
-## Aperta o cartão para caber numa mesa cheia.
-##
-## Chamado pela cena, que é quem sabe de quantos é a mesa — o cartão desenha um
-## jogador e não conhece os outros. Escrito depois de `add_child` como tudo o mais
-## aqui: os rótulos só existem a partir do `_ready`.
+## Aperta o cartão para caber numa mesa cheia. Escrito depois de `add_child`: os
+## rótulos só existem a partir do `_ready`.
 func dense(value: bool) -> void:
 	var step: Dictionary = SIZES[value]
 	_name.add_theme_font_size_override("font_size", int(step["name"]))
 	_cash.add_theme_font_size_override("font_size", int(step["cash"]))
-	_detail.add_theme_font_size_override("font_size", int(step["detail"]))
 	_margin.add_theme_constant_override("margin_top", int(step["pad"]))
 	_margin.add_theme_constant_override("margin_bottom", int(step["pad"]))
+	_coaster.custom_minimum_size = Vector2.ONE * float(step["coaster"])
 
 
-## Preenche a faixa a partir do estado. Recebe tudo pronto em vez de guardar uma
-## referência ao `MatchState`: o cartão não sabe as regras do jogo, só desenha o
-## que lhe dizem, e é o que permite a mesma faixa servir a um bot, a um humano e
-## a quem já quebrou.
+## "M 1.340": o milhar com ponto, como o dinheiro se escreve aqui.
+static func money(value: int) -> String:
+	var digits := str(absi(value))
+	var grouped := ""
+	while digits.length() > 3:
+		grouped = "." + digits.right(3) + grouped
+		digits = digits.left(digits.length() - 3)
+	return "%sM %s%s" % ["−" if value < 0 else "", digits, grouped]
+
+
+## Preenche a faixa a partir do estado. Recebe tudo pronto: o cartão não sabe as
+## regras do jogo, só desenha o que lhe dizem.
 func show_player(
 	state: MatchState, player: int, is_turn: bool, label: String
 ) -> void:
@@ -131,58 +126,69 @@ func show_player(
 	var color: Color = MonopolyFace.PLAYER_COLORS[player % MonopolyFace.PLAYER_COLORS.size()]
 	var out := MonopolyRules.is_out(state, player)
 
-	_stripe.color = Color(color, 0.35 if out else 1.0)
-	# Fundo preenchido só na vez. Seis cartões acesos competiriam entre si, e a
-	# pergunta que a coluna responde primeiro é "de quem é a vez".
-	var style: StyleBox = AppTheme.box(Color(color, 0.20), AppTheme.RADIUS, Color(color, 0.9), 2)
-	if not is_turn:
-		# Quem espera fica em contorno de giz, como as etiquetas dos outros jogos.
-		style = AppTheme.framed(Color(AppTheme.SURFACE, 0.72), AppTheme.LINE_SOFT)
-	# As folgas do tema saem.
-	#
-	# `AppTheme.box` embute 18 de lado e 14 em cima e embaixo, e está certo: ela
-	# foi escrita para painel de menu, onde o ar em volta do conteúdo é o que faz
-	# a tela respirar. Numa faixa de coluna esses 28 verticais são mais altura que
-	# o próprio conteúdo — seis faixas passavam dos 416 da base deitada e a última
-	# saía da tela junto com os botões do rodapé. Os 36 horizontais eram o motivo
-	# de a coluna nascer mais larga que os 136 que ela pede.
-	#
-	# Quem dá a folga aqui é o `MarginContainer` de dentro, que é o que o modo
-	# apertado ajusta.
+	# Quem joga sobe um degrau de superfície e ganha a borda limão, como as
+	# etiquetas dos outros jogos; quem espera fica na superfície base.
+	var style := (
+		AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS_LARGE, AppTheme.ACCENT, 2)
+		if is_turn else AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE)
+	)
+	# As folgas do tema saem: quem dá a folga é o `MarginContainer` de dentro, que
+	# é o que o modo apertado ajusta.
 	style.content_margin_left = 0
 	style.content_margin_right = 0
 	style.content_margin_top = 0
 	style.content_margin_bottom = 0
 	add_theme_stylebox_override("panel", style)
 
-	_name.text = label
+	_coaster.player_name = label
+	_coaster.fill = Color(color, 0.4 if out else 1.0)
+	_coaster.ring = Color(color, 0.0)
+	_coaster.turn = is_turn and not out
+
+	# O que é especial do jogador vai no nome, como no protótipo ("Ana · na
+	# cadeia"). A carta de saída livre também: é a única coisa que se guarda neste
+	# jogo, e o botão de usá-la só existe na fase da cadeia.
+	var parts := PackedStringArray([label])
+	if not out and MonopolyRules.in_jail(state, player):
+		parts.append("na cadeia")
+	var kept := MonopolyRules.jail_cards_of(state, player)
+	if not out and kept > 0:
+		parts.append("saída livre" if kept == 1 else "%d saídas livres" % kept)
+	_name.text = " · ".join(parts)
 	_name.add_theme_color_override(
-		"font_color", AppTheme.TEXT_DIM if out else AppTheme.TEXT
+		"font_color", AppTheme.ACCENT if is_turn and not out else AppTheme.TEXT_DIM
 	)
 
 	if out:
 		_cash.text = "quebrou"
 		_cash.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
-		_detail.text = ""
+		_last_cash = -1
 		return
 
-	_cash.text = "M %d" % MonopolyRules.cash_of(state, player)
-	_cash.add_theme_color_override(
-		"font_color", AppTheme.ACCENT if is_turn else Color(AppTheme.ACCENT, 0.7)
-	)
+	var cash := MonopolyRules.cash_of(state, player)
+	_cash.text = money(cash)
+	_cash.add_theme_color_override("font_color", AppTheme.TEXT)
+	if _last_cash >= 0 and cash != _last_cash:
+		_flash(cash - _last_cash)
+	_last_cash = cash
 
-	var deeds := MonopolyRules.deeds_of(state, player).size()
-	var parts := PackedStringArray([
-		"%d escritura%s" % [deeds, "" if deeds == 1 else "s"]
-	])
-	if MonopolyRules.in_jail(state, player):
-		parts.append("na cadeia")
-	# A carta de saída livre é a única coisa que se **guarda** neste jogo, e até
-	# aqui ela não aparecia em lugar nenhum: o jogador tirava a carta, via o texto
-	# dela uma vez, e depois tinha de lembrar que a tinha. Pior, o botão "Usar
-	# saída livre" só existe na fase da cadeia — então a única prova de que ela
-	# estava na mão aparecia depois de já ser tarde para contar com ela.
-	var kept := MonopolyRules.jail_cards_of(state, player)
-	if kept > 0:
-		parts.append("%d saída livre" % kept if kept == 1 else "%d saídas livres" % kept)
-	_detail.text = " · ".join(parts)
+
+## O selo da diferença: entra, fica o bastante para ser lido e sai.
+func _flash(change: int) -> void:
+	var gain := change > 0
+	_delta.text = "%s M %s" % ["+" if gain else "−", money(absi(change)).trim_prefix("M ")]
+	var pill := AppTheme.box(AppTheme.ACCENT if gain else AppTheme.DANGER, 11)
+	pill.content_margin_left = 7
+	pill.content_margin_right = 7
+	pill.content_margin_top = 2
+	pill.content_margin_bottom = 2
+	_delta.add_theme_stylebox_override("normal", pill)
+	if _delta_tween != null:
+		_delta_tween.kill()
+	_delta.visible = true
+	_delta.modulate.a = 0.0
+	_delta_tween = create_tween()
+	_delta_tween.tween_property(_delta, "modulate:a", 1.0, 0.2)
+	_delta_tween.tween_interval(DELTA_HOLD)
+	_delta_tween.tween_property(_delta, "modulate:a", 0.0, 0.4)
+	_delta_tween.tween_callback(func() -> void: _delta.visible = false)
