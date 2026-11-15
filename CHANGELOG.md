@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.47
+
+- Jogo novo: boliche em 3D, com os pinos caindo de verdade. Mire, escolha o efeito e toque de novo para soltar a bola no ponto verde do balanço.
+- De 2 a 4 jogadores no mesmo celular, ou contra a máquina. A partida online do boliche vem numa próxima versão.
+- Boliche e sinuca agora ficam juntos na categoria Esporte.
+
 ## 1.45
 
 - Visual novo no app inteiro: cores mais vivas, cada jogo com a sua cor e botões que afundam ao toque.

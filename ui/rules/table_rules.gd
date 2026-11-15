@@ -31,6 +31,13 @@ static func for_game(id: StringName, options: Dictionary) -> Array[Dictionary]:
 			return _uno(options)
 		&"pool":
 			return _pool(options)
+		&"bowling":
+			return [
+				_row("Frames", "10"),
+				_row("Bolas por frame", "até 2"),
+				_row("Strike ou spare no décimo", "bolas extras"),
+				_row("Pinos", "física de verdade"),
+			]
 	return []
 
 

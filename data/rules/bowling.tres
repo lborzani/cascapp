@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="GameRulesDoc" format=3]
+
+[ext_resource type="Script" path="res://ui/rules/game_rules_doc.gd" id="1_doc"]
+
+[resource]
+script = ExtResource("1_doc")
+title = "Boliche"
+objective = "Fazer mais pontos em dez frames, derrubando os dez pinos com até duas bolas por frame."
+steps = PackedStringArray("Arraste a bola para os lados para escolher de onde ela sai.", "Arraste na pista, acima da bola, para mirar. A linha mostra o caminho.", "No trilho acima do botão, escolha o efeito: a bola curva para esse lado no fim da pista.", "Toque em Jogar: a bola recua e volta. Toque de novo para soltar quando o marcador passar pelo verde.", "Soltar cedo puxa a bola para a esquerda, soltar tarde empurra para a direita, e os dois tiram força.")
+notes = PackedStringArray("Strike (X): os dez na primeira bola. Vale 10 mais as duas bolas seguintes.", "Spare (/): os dez com as duas bolas do frame. Vale 10 mais a bola seguinte.", "No décimo frame, quem faz strike ou spare ganha bolas extras para fechar a conta.", "Jogo perfeito: doze strikes seguidos, 300 pontos.", "Contra a máquina, as cadeiras que sobram jogam sozinhas.")
