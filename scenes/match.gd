@@ -134,9 +134,6 @@ var _coin_toss: CoinToss = null
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	# Entrada curta: troca de tela sem corte seco.
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	var column: VBoxContainer = %Board.get_parent().get_parent()
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	%Board.get_parent().size_flags_vertical = Control.SIZE_FILL
@@ -816,6 +813,26 @@ func _run_premove() -> void:
 # --- game flow ---------------------------------------------------------------
 
 
+## As peças tomadas voam do tabuleiro até a fileira da etiqueta de quem
+## capturou, saindo quando a peça que captura chega na casa.
+func _fly_captures(taken: Array, mover: int) -> void:
+	if taken.is_empty():
+		return
+	var card: PlayerTag = %BottomTag if _bottom_side() == mover else %TopTag
+	if not card.is_visible_in_tree():
+		return
+	var land := card.get_global_transform() * Vector2(
+		card.size.x * 0.55, card.size.y * 0.5 + PlayerTag.CAPTURED_Y
+	)
+	var board_to_screen := _board.get_global_transform()
+	for entry in taken:
+		var rect := _board.rect_of(int(entry[0]))
+		PieceFlight.launch(
+			self, int(entry[1]), board_to_screen * rect.get_center(), land,
+			rect.size.x, PlayerTag.CAPTURED_SIZE, _board.remaining_animation() * 0.7
+		)
+
+
 func _play(move: Move, broadcast: bool) -> void:
 	# As peças capturadas somem do estado ao aplicar o lance; a animação precisa
 	# saber o que havia ali para poder mostrá-las desaparecendo.
@@ -836,7 +853,8 @@ func _play(move: Move, broadcast: bool) -> void:
 	# A proposta de empate valia para a posição de antes.
 	_clear_draw_offer()
 	_board.last_move = move.path.duplicate()
-	_board.play_move(move.path, taken)
+	_board.play_move(move.path, taken, move.promotion != 0)
+	_fly_captures(taken, mover)
 	_selection.clear()
 	# A peça erguida para o plano era da posição de antes. Sobrevivendo ao lance
 	# do oponente, a marca ficava na casa mesmo com ele capturando ali — e o

@@ -89,9 +89,12 @@ var photo: Texture2D = null:
 
 @export var active := false:
 	set(value):
+		var gained := value and not active
 		active = value
 		if _coaster != null:
 			_coaster.turn = value
+		if gained:
+			Motion.nudge(self)
 		queue_redraw()
 
 ## O estado vermelho da etiqueta: xeque no xadrez, uma carta na mão no Uno. O
@@ -157,8 +160,31 @@ var clock_text := "":
 ## nesse ponto o número deixa de ser informação e passa a ser urgência.
 var clock_urgent := false:
 	set(value):
+		if value == clock_urgent:
+			return
 		clock_urgent = value
+		_sync_beat()
 		queue_redraw()
+
+## O pulso do relógio nos últimos segundos, de 0 a 1. Cor parada não chama o
+## olho de volta para o relógio; um relógio que bate chama.
+var _beat := 0.0:
+	set(value):
+		_beat = value
+		queue_redraw()
+var _beat_tween: Tween = null
+
+
+func _sync_beat() -> void:
+	if _beat_tween != null:
+		_beat_tween.kill()
+		_beat_tween = null
+	_beat = 0.0
+	if not clock_urgent or not is_inside_tree():
+		return
+	_beat_tween = create_tween().set_loops()
+	_beat_tween.tween_property(self, "_beat", 1.0, 0.25).set_trans(Tween.TRANS_SINE)
+	_beat_tween.tween_property(self, "_beat", 0.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 ## Modo mesa: a etiqueta de quem está do outro lado do aparelho é lida de lá.
 ##
@@ -185,6 +211,8 @@ func _init() -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_ENTER_TREE and clock_urgent:
+		_sync_beat.call_deferred()
 	if what == NOTIFICATION_RESIZED:
 		_apply_rotation()
 		_layout()
@@ -321,6 +349,9 @@ func _draw_clock() -> void:
 	if active:
 		fill = AppTheme.DANGER if clock_urgent else AppTheme.ACCENT
 		ink = AppTheme.ACCENT_INK
+		if clock_urgent:
+			fill = fill.lightened(0.25 * _beat)
+			box = box.grow(2.0 * _beat)
 	draw_style_box(AppTheme.box(fill, AppTheme.RADIUS if shape == Shape.STRIP else 8), box)
 	var baseline := box.position.y + box.size.y * 0.5 \
 		+ (font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5

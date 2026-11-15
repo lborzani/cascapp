@@ -102,8 +102,6 @@ func _ready() -> void:
 	# Deitado, como Metrópole. Quem desgira é `Game.reset_to_menu()`, por onde
 	# toda saída passa.
 	Orientation.to_landscape(get_tree())
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	_state = _rules.initial_state()
 	_board.state = _state

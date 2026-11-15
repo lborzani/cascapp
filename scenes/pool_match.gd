@@ -65,8 +65,6 @@ func _ready() -> void:
 	# literal de todos: a mesa é duas vezes mais larga que alta. Em retrato ela
 	# ocuparia um terço da tela com faixa preta em cima e embaixo.
 	Orientation.to_landscape(get_tree())
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	_adopt_rules()
 	_state = _rules.initial_state()

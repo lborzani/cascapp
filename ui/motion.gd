@@ -17,6 +17,11 @@ const PRESS_SCALE := 0.96
 const ENTER_TIME := 0.28
 ## Troca de aba, véu, o que só aparece.
 const FADE_TIME := 0.18
+## Quanto a tela nova sobe ao entrar, em pixels da base.
+const ENTER_RISE := 14.0
+## O empurrão de quem acabou de ganhar a vez.
+const NUDGE_TIME := 0.3
+const NUDGE_SCALE := 1.05
 
 
 ## O botão encolhe ao ser apertado e volta ao soltar.
@@ -42,6 +47,19 @@ static func pop(control: Control) -> Tween:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(control, "modulate:a", 1.0, FADE_TIME)
 	return tween
+
+
+## Cresce um pouco e volta: "agora é você". A troca de vez era só uma borda
+## mudando de um cartão para o outro, e passava sem ninguém ver.
+static func nudge(control: Control) -> void:
+	if not control.is_inside_tree():
+		return
+	control.pivot_offset = control.size * 0.5
+	var tween := control.create_tween()
+	tween.tween_property(control, "scale", Vector2.ONE * NUDGE_SCALE, NUDGE_TIME * 0.4) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, NUDGE_TIME * 0.6) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 static func fade_in(item: CanvasItem) -> Tween:

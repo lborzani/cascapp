@@ -33,9 +33,6 @@ var _invite_card: PanelContainer = null
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	# Entrada curta: troca de tela sem corte seco.
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	Net.opponent_joined.connect(_on_opponent_joined)
 	# Mesa de mais de dois: a partida começa quando **enche**, não quando o
 	# primeiro chega. Os dois sinais existem porque respondem coisas diferentes.

@@ -58,6 +58,11 @@ var _move_duration := 0.0
 var _target_time := 1.0
 var _drawn_targets := PackedInt32Array()
 var _drawn_captures := PackedInt32Array()
+## A peça que acabou de ser promovida cresce e assenta, com um anel limão que
+## abre: a promoção trocava a peça em silêncio, e é o lance mais raro do jogo.
+var _pop_square := Board.NO_SQUARE
+var _pop_time := POP_TIME
+const POP_TIME := 0.4
 
 
 func _ready() -> void:
@@ -71,13 +76,17 @@ func _ready() -> void:
 ##
 ## Vale principalmente pelo lance do oponente: sem isto, ele chega teleportado e
 ## o jogador não vê o que foi jogado.
-func play_move(path: PackedInt32Array, taken: Array) -> void:
+func play_move(path: PackedInt32Array, taken: Array, promoted := false) -> void:
 	if path.size() < 2:
 		return
 	_move_path = path.duplicate()
 	_move_taken = taken
 	_move_duration = MOVE_STEP * (path.size() - 1)
 	_move_time = 0.0
+	if promoted:
+		_pop_square = path[path.size() - 1]
+		# Negativo: o pop começa quando a peça chega.
+		_pop_time = -_move_duration
 	_update_processing()
 	queue_redraw()
 
@@ -103,6 +112,8 @@ func _process(delta: float) -> void:
 			cancel_animation()
 	if _target_time < TARGET_GROW:
 		_target_time += delta
+	if _pop_time < POP_TIME:
+		_pop_time += delta
 	_update_processing()
 	queue_redraw()
 
@@ -110,6 +121,7 @@ func _process(delta: float) -> void:
 func _update_processing() -> void:
 	set_process(
 		check_square != Board.NO_SQUARE or _move_duration > 0.0 or _target_time < TARGET_GROW
+		or _pop_time < POP_TIME
 	)
 
 
@@ -164,7 +176,15 @@ func _draw() -> void:
 			continue
 		var rect := rect_of(square)
 		var piece := state.squares[square]
-		PieceRenderer.draw_piece(self, piece, rect.get_center(), _cell, 1.0, 1.0, _turned(piece))
+		var grow := 1.0
+		if square == _pop_square and _pop_time >= 0.0 and _pop_time < POP_TIME:
+			var t := _pop_time / POP_TIME
+			grow = 1.0 + 0.35 * sin(t * PI)
+			draw_arc(
+				rect.get_center(), _cell * (0.4 + 0.5 * t), 0.0, TAU, 32,
+				Color(AppTheme.ACCENT, 1.0 - t), maxf(2.0, _cell * 0.08 * (1.0 - t)), true
+			)
+		PieceRenderer.draw_piece(self, piece, rect.get_center(), _cell, 1.0, grow, _turned(piece))
 		if doomed.has(square):
 			_draw_cross(rect)
 	if preview_from != Board.NO_SQUARE and preview_to != Board.NO_SQUARE and preview_to != dragged:

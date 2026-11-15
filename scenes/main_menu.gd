@@ -45,8 +45,6 @@ func _ready() -> void:
 	Patcher.confirm()
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	Game.reset_to_menu()
 	if _resume_pending_scan():
 		return

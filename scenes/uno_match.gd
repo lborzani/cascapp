@@ -117,8 +117,6 @@ func _ready() -> void:
 	# no retrato é `Game.reset_to_menu()`, por onde toda saída passa.
 	Orientation.to_sensor(get_tree())
 	get_window().size_changed.connect(_on_window_resized)
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	_adopt_rules()
 	_state = _rules.initial_state()

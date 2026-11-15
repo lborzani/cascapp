@@ -27,8 +27,6 @@ var _training: TrainingPanel = null
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	%NameEdit.max_length = Prefs.NAME_LIMIT
 	# Campo vazio quando ainda não há escolha, com o padrão só no placeholder: um
