@@ -24,7 +24,6 @@ signal action_pressed
 ## O botão de amigos da saudação do menu.
 signal friends_pressed
 
-const RULE_ALPHA := 0.07
 
 var title := "":
 	set(value):
@@ -191,9 +190,8 @@ func _draw_online_dot() -> void:
 		_friends.draw_circle(Vector2(17.0, _friends.size.y * 0.5), 5.0, AppTheme.ACCENT)
 
 
-## O fio que separa a barra do conteúdo. Um pixel a 7% de branco: ele existe para
-## a rolagem ter onde terminar, e não para ser visto.
-func _draw() -> void:
-	draw_rect(
-		Rect2(0.0, size.y - 1.0, size.x, 1.0), Color(1.0, 1.0, 1.0, RULE_ALPHA)
-	)
+## Título de aba, grande como no protótipo ("Online"): sem voltar à esquerda, ele
+## é a única coisa da barra.
+func headline() -> void:
+	_label.add_theme_font_override("font", AppTheme.display(700))
+	_label.add_theme_font_size_override("font_size", 30)

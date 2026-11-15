@@ -84,9 +84,13 @@ func _draw() -> void:
 ## espaço para não dizer nada.
 func _title() -> String:
 	var name := str(Game.entry_of(game_id).get("title", "Partida"))
+	# "Ludo com Maria", como no protótipo: quem procura partida escolhe pela
+	# pessoa. "com" e não "da/do": o app não sabe o gênero de ninguém.
+	if watchers < 0 and not host_name.is_empty():
+		return "%s com %s" % [name, host_name]
 	if not Game.supports_clock(game_id) or clock_label.is_empty():
 		return name
-	return "%s • %s" % [name, clock_label]
+	return "%s · %s" % [name, clock_label]
 
 
 ## A lotação só aparece onde ela é uma pergunta. Numa sala de dois, "1/2" diz o
@@ -111,15 +115,17 @@ func _title() -> String:
 func _detail() -> String:
 	if watchers >= 0:
 		var who := host_name if not host_name.is_empty() else "código %s" % code
-		return "%s • %d assistindo" % [who, watchers] if watchers > 0 else "%s • ao vivo" % who
+		return "%s · %d assistindo" % [who, watchers] if watchers > 0 else "%s · ao vivo" % who
+	var parts := PackedStringArray()
+	# Com o dono no título, o ritmo desce para cá ("3 + 2 · há 1 min").
+	if not host_name.is_empty() and Game.supports_clock(game_id) and not clock_label.is_empty():
+		parts.append(clock_label)
 	if seats > 2:
-		var table := "%d de %d jogadores" % [taken, seats]
-		if host_name.is_empty():
-			return "%s • %s" % [table, _age_text()]
-		return "%s • %s" % [host_name, table]
-	if host_name.is_empty():
-		return "código %s • %s" % [code, _age_text()]
-	return "%s • %s" % [host_name, _age_text()]
+		parts.append("%d de %d lugares" % [taken, seats])
+	elif host_name.is_empty():
+		parts.append("código %s" % code)
+	parts.append(_age_text())
+	return " · ".join(parts)
 
 
 ## Minutos bastam. Uma sala aberta há 3 minutos e uma aberta há 3 minutos e meio

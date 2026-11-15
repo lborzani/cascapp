@@ -59,6 +59,35 @@ func _ready() -> void:
 	get_tree().scene_changed.connect(_enter_scene)
 
 
+## Ao entrar numa partida, a cor do jogo cobre a tela e sobe, revelando a mesa —
+## a troca de cena do protótipo (320 ms). É a única passagem que muda de lugar
+## de verdade: do cardápio para a mesa de um jogo.
+const COVER_TIME := 0.32
+var _cover: ColorRect = null
+
+
+func _cover_if_match(scene: Control) -> void:
+	var entry: Dictionary = Game.entry_of(Game.game_id)
+	if scene.scene_file_path.is_empty() or str(entry.get("scene", "")) != scene.scene_file_path:
+		return
+	if _cover == null:
+		var layer := CanvasLayer.new()
+		layer.layer = 100
+		add_child(layer)
+		_cover = ColorRect.new()
+		_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# Âncoras antes do `add_child`.
+		_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
+		layer.add_child(_cover)
+	_cover.color = AppTheme.GAME_COLORS.get(String(Game.game_id), AppTheme.SURFACE)
+	_cover.visible = true
+	_cover.position.y = 0.0
+	var tween := _cover.create_tween()
+	tween.tween_property(_cover, "position:y", -_cover.size.y, COVER_TIME) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_callback(func() -> void: _cover.visible = false)
+
+
 ## Toda tela entra do mesmo jeito: sobe um pouco e acende.
 ##
 ## Era um fade de 0,16 s escrito em oito cenas (e esquecido nas outras). Aqui
@@ -68,6 +97,7 @@ func _enter_scene() -> void:
 	var scene := get_tree().current_scene as Control
 	if scene == null:
 		return
+	_cover_if_match(scene)
 	scene.modulate.a = 0.0
 	var tween := scene.create_tween().set_parallel()
 	tween.tween_property(scene, "modulate:a", 1.0, Motion.ENTER_TIME)

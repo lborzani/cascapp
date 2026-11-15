@@ -112,12 +112,16 @@ func _draw() -> void:
 	)
 
 
-## Quantos jogam: uma faixa ("2 a 6") onde a mesa varia, um número onde é fixa.
+## Quantos jogam, curto como no protótipo: "2 a 6" onde a mesa varia, "até 4"
+## onde as cadeiras vazias viram bot (Ludo), "2 jogadores" onde é fixa.
 func _players_text() -> String:
 	var span := Game.players_range(game_id)
-	if span.is_empty():
-		return "%d jogadores" % Game.players_of(game_id)
-	return "%d a %d jogadores" % [int(span[0]), int(span[1])]
+	if not span.is_empty():
+		return "%d a %d" % [int(span[0]), int(span[1])]
+	var seats := Game.players_of(game_id)
+	if game_id == Game.LUDO:
+		return "até %d" % seats
+	return "%d jogadores" % seats
 
 
 ## Cheia quando é favorito, vazada quando não é. Vazada e não ausente: uma estrela

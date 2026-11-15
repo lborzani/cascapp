@@ -1203,6 +1203,7 @@ func _reveal_card(which: int, index: int) -> void:
 func _refresh() -> void:
 	if _match_status != null:
 		_match_status.rounds = _rules.rounds_played(_state)
+		_match_status.round_limit = MonopolyRules.limit_of(_state)
 	var turn := MonopolyRules.turn_of(_state)
 	var actor := MonopolyRules.actor_of(_state)
 	var champion := _rules.winner(_state)

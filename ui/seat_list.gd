@@ -21,6 +21,9 @@ const SEAT_COLORS: Array[Color] = [
 const ROW_HEIGHT := 60.0
 
 var capacity := 2
+## O jogo da sala. No Ludo cada lugar já é uma cor do tabuleiro, e a lista usa a
+## mesma cor e diz o nome dela ("Esperando alguém · azul"), como no protótipo.
+var game_id := &""
 var local_seat := 0
 ## Quem abriu a sala. No relay é sempre o assento 0.
 var host_seat := 0
@@ -39,15 +42,27 @@ func is_taken(seat: int) -> bool:
 func title_of(seat: int) -> String:
 	if seat == local_seat:
 		return "Você"
-	return "Jogador %d" % (seat + 1) if is_taken(seat) else "Esperando alguém"
+	if is_taken(seat):
+		return "Jogador %d" % (seat + 1)
+	return _with_color("Esperando alguém", seat)
 
 
 func detail_of(seat: int) -> String:
 	if not is_taken(seat):
 		return ""
-	if seat == host_seat:
-		return "Abriu a sala"
-	return "Chegou"
+	return _with_color("Abriu a sala" if seat == host_seat else "Chegou", seat)
+
+
+func color_of(seat: int) -> Color:
+	if game_id == &"ludo":
+		return LudoView.COLORS[seat % LudoView.COLORS.size()]
+	return SEAT_COLORS[seat % SEAT_COLORS.size()]
+
+
+func _with_color(text: String, seat: int) -> String:
+	if game_id != &"ludo":
+		return text
+	return "%s · %s" % [text, LudoRules.color_name(seat).to_lower()]
 
 
 ## Refaz as linhas. Chamado quando a lotação muda ou quando alguém senta.
@@ -59,7 +74,7 @@ func refresh() -> void:
 		child.queue_free()
 	for seat in capacity:
 		var row := Row.new()
-		row.color = SEAT_COLORS[seat % SEAT_COLORS.size()]
+		row.color = color_of(seat)
 		row.taken = is_taken(seat)
 		row.mine = seat == local_seat
 		row.number = seat + 1
@@ -90,14 +105,30 @@ class Row:
 		pulse.tween_property(self, "modulate:a", 0.45, 0.8)
 		pulse.tween_property(self, "modulate:a", 1.0, 0.8)
 
+	## Contorno tracejado de cantos redondos: o lugar existe, mas ainda não tem
+	## ninguém. Os cantos saem inteiros; só os lados são tracejados.
+	func _dashed(box: Rect2, radius: float, color: Color) -> void:
+		var width := 2.0
+		var r := radius
+		var rect := box.grow(-width * 0.5)
+		var top_left := rect.position
+		var bottom_right := rect.end
+		var dash := 7.0
+		draw_dashed_line(top_left + Vector2(r, 0), Vector2(bottom_right.x - r, top_left.y), color, width, dash)
+		draw_dashed_line(Vector2(top_left.x + r, bottom_right.y), bottom_right - Vector2(r, 0), color, width, dash)
+		draw_dashed_line(top_left + Vector2(0, r), Vector2(top_left.x, bottom_right.y - r), color, width, dash)
+		draw_dashed_line(Vector2(bottom_right.x, top_left.y + r), bottom_right - Vector2(0, r), color, width, dash)
+		draw_arc(top_left + Vector2(r, r), r, PI, PI * 1.5, 10, color, width, true)
+		draw_arc(Vector2(bottom_right.x - r, top_left.y + r), r, PI * 1.5, TAU, 10, color, width, true)
+		draw_arc(bottom_right - Vector2(r, r), r, 0.0, PI * 0.5, 10, color, width, true)
+		draw_arc(Vector2(top_left.x + r, bottom_right.y - r), r, PI * 0.5, PI, 10, color, width, true)
+
 	func _draw() -> void:
 		var box := Rect2(Vector2.ZERO, size)
 		if taken:
 			draw_style_box(AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), box)
 		else:
-			draw_style_box(
-				AppTheme.framed(Color(0, 0, 0, 0), AppTheme.SURFACE_TOP, AppTheme.RADIUS_LARGE), box
-			)
+			_dashed(box, float(AppTheme.RADIUS_LARGE), AppTheme.SURFACE_TOP)
 		var center := Vector2(12.0 + 20.0, size.y * 0.5)
 		draw_circle(center, 20.0, color if taken else Color(color, 0.45))
 		if taken:

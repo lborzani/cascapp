@@ -49,7 +49,11 @@ extends Control
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Tamanho de uma etiqueta de cor. Fixo, e não medido: ela é posicionada à mão ao
 ## lado do tabuleiro, e um tamanho que muda com o texto faria o canto dançar.
-const TAG_SIZE := Vector2(176, PlayerTag.HEIGHT_TAG)
+const TAG_SIZE := Vector2(176, 56)
+## O vão entre a etiqueta e a moldura do tabuleiro, e a largura abaixo da qual
+## o nome deixa de caber.
+const TAG_GAP := 8.0
+const TAG_MIN_WIDTH := 120.0
 ## Pausa entre o dado parar e o que ele causa — o lance automático, ou a vez
 ## passando.
 ##
@@ -687,16 +691,21 @@ func _build_tags() -> void:
 ## empurram para a esquerda, os da direita para a direita. Se não couber fora do
 ## tabuleiro — tela estreita —, ela encosta na borda em vez de sumir.
 func _place_tags() -> void:
+	# Do lado de fora da moldura, nunca por cima dela: a etiqueta encolhe até o
+	# vão que sobra entre a borda da tela e o tabuleiro.
+	var frame := _board.board_rect()
 	for player in _tags.size():
 		var tag: PlayerTag = _tags[player]
 		var yard := _board.yard_rect(player)
 		var on_left: bool = LudoView.YARD[player].x == 0
-		var x := yard.position.x - TAG_SIZE.x - 10.0 if on_left else yard.end.x + 10.0
-		tag.size = TAG_SIZE
+		var room := frame.position.x - TAG_GAP if on_left else _board.size.x - frame.end.x - TAG_GAP
+		var width := clampf(room, TAG_MIN_WIDTH, TAG_SIZE.x)
+		var x := frame.position.x - TAG_GAP - width if on_left else frame.end.x + TAG_GAP
+		tag.size = Vector2(width, TAG_SIZE.y)
 		tag.position = Vector2(
-			clampf(x, 0.0, maxf(0.0, _board.size.x - TAG_SIZE.x)),
+			clampf(x, 0.0, maxf(0.0, _board.size.x - width)),
 			clampf(
-				yard.position.y + (yard.size.y - TAG_SIZE.y) * 0.5,
+				yard.get_center().y - TAG_SIZE.y * 0.5,
 				0.0, maxf(0.0, _board.size.y - TAG_SIZE.y)
 			)
 		)

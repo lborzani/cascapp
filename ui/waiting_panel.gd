@@ -135,6 +135,7 @@ func show_room(
 	var seats := maxi(capacity, 2)
 	_count.text = "%d de %d" % [mini(maxi(present.size(), 1), seats), seats]
 	_seats.capacity = seats
+	_seats.game_id = Game.game_id
 	_seats.local_seat = maxi(local_seat, 0)
 	_seats.present = present
 	_seats.refresh()

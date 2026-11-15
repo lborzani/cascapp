@@ -294,17 +294,25 @@ layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "Quero jogar a próxima"
 
-[node name="ReviewButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox"]
+[node name="ResultFoot" type="HBoxContainer" parent="ResultLayer/Center/Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ReviewButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox/ResultFoot"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_type_variation = &"GhostButton"
 text = "Revisar partida"
+clip_text = true
 
-[node name="ResultExitButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox" unique_id=866953306]
+[node name="ResultExitButton" type="Button" parent="ResultLayer/Center/Panel/Margin/VBox/ResultFoot" unique_id=866953306]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_type_variation = &"GhostButton"
-text = "Voltar ao menu"
+text = "Menu"
+clip_text = true

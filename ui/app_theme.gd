@@ -69,6 +69,9 @@ const PAPER := Color("f7f5ff")
 const PAPER_INK := Color("15122b")
 const DANGER := Color("ff5c7a")
 const DANGER_SOFT := Color("ff5c7a", 0.18)
+## Coral claro, para texto de ação que custa caro sobre a mesa ("Desistir"): o
+## coral cheio é alerta, e um botão que só pode ser apertado não é alerta.
+const DANGER_LIGHT := Color("ff8fa3")
 const SUCCESS := Color("59d36b")
 const SUCCESS_SOFT := Color("59d36b", 0.16)
 
@@ -84,11 +87,12 @@ const GAME_COLORS := {
 	"pool": Color("59d36b"),
 }
 
-## Casas do último lance. Um amarelo-esverdeado, vizinho do limão sem ser ele:
+## Casas do último lance, sólidas e em dois tons como no protótipo: um limão
+## claro na casa clara e um oliva vivo na escura. Vizinhos do limão sem ser ele —
 ## o limão cheio quer dizer "é aqui que você age", e um lance que já aconteceu é
-## exatamente o que não se pode mais mudar. Sobre o tabuleiro violeta o verde de
-## antes virava cinza; este continua cor.
-const LAST_MOVE := Color("d9f060")
+## o que não se pode mais mudar. Translúcido sobre o violeta, virava cinza.
+const LAST_MOVE := Color("ddf08a")
+const LAST_MOVE_DARK := Color("a9c94a")
 
 ## Lance planejado para a vez seguinte. Ciano, e deliberadamente não o limão: um
 ## plano é o contrário de "aja aqui" — é o que ainda não aconteceu. Ciano e não

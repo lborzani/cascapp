@@ -85,6 +85,12 @@ func _draw() -> void:
 				_draw_splash(rect_of(square), _grown(square))
 			BattleshipRules.Shot.HIT:
 				_draw_hit(rect_of(square), _grown(square))
+				if square == _fresh and _fresh_t < 1.0:
+					# O acerto estoura em coral, como no protótipo.
+					draw_arc(
+						rect_of(square).get_center(), _cell * (0.3 + 0.45 * _fresh_t), 0.0, TAU, 32,
+						Color(AppTheme.DANGER, 1.0 - _fresh_t), maxf(2.0, _cell * 0.1 * (1.0 - _fresh_t)), true
+					)
 
 	if aim != Board.NO_SQUARE:
 		# Um anel limão que respira: é o "aqui vai o tiro", à espera do botão.

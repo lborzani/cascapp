@@ -24,6 +24,28 @@ var _training: TrainingPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
+## O lápis no canto da foto, como no protótipo: diz que tocar ali troca a foto.
+func _add_edit_badge() -> void:
+	var badge := Control.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.custom_minimum_size = Vector2(28, 28)
+	badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	badge.offset_left = -26
+	badge.offset_top = -26
+	badge.offset_right = 2
+	badge.offset_bottom = 2
+	badge.draw.connect(func() -> void:
+		var center := badge.size * 0.5
+		badge.draw_circle(center, 14.0, AppTheme.PAPER)
+		# Um lápis em diagonal: corpo e ponta.
+		var a := center + Vector2(-5.0, 5.0)
+		var b := center + Vector2(5.0, -5.0)
+		badge.draw_line(a, b, AppTheme.PAPER_INK, 3.0, true)
+		badge.draw_line(a, a + Vector2(-2.0, 2.0), AppTheme.PAPER_INK, 2.0, true)
+	)
+	%Avatar.add_child(badge)
+
+
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
@@ -51,6 +73,7 @@ func _ready() -> void:
 	_switch("Planejar lance (premove)", "Só no xadrez online", Prefs.premove_on(), Prefs.set_premove)
 
 	%Avatar.ring = AppTheme.ACCENT
+	_add_edit_badge()
 	%Version.text = "Versão %s" % AppVersion.text()
 	for state: String in ["font_color", "font_hover_color"]:
 		%NewsButton.add_theme_color_override(state, AppTheme.ACCENT)

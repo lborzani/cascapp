@@ -63,6 +63,7 @@ func _ready() -> void:
 	# lotação, em `_refresh_seats`.
 	%Title.text = "Sala de %s" % Game.game_title()
 	%Seats.capacity = Game.players_of()
+	%Seats.game_id = Game.game_id
 	%Seats.local_seat = 0
 	_setup_host()
 	_refresh_seats()
@@ -286,7 +287,19 @@ func _dress_band() -> void:
 		dark.content_margin_right = 8
 		for state: String in ["normal", "hover", "pressed"]:
 			button.add_theme_stylebox_override(state, dark)
-	%BackButton.add_theme_font_size_override("font_size", 22)
+	# A seta das outras telas, desenhada, e não o caractere "<": a mesma forma do
+	# voltar das partidas.
+	%BackButton.text = ""
+	%BackButton.custom_minimum_size = Vector2(44, 44)
+	%BackButton.draw.connect(func() -> void:
+		var center: Vector2 = %BackButton.size * 0.5
+		var reach := 7.0
+		%BackButton.draw_polyline(PackedVector2Array([
+			center + Vector2(reach * 0.6, -reach),
+			center + Vector2(-reach * 0.6, 0.0),
+			center + Vector2(reach * 0.6, reach),
+		]), AppTheme.TEXT, 3.0, true)
+	)
 
 
 ## Chama um amigo que está online para esta sala. Sem ninguém online (ou sem

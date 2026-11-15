@@ -104,6 +104,7 @@ func _fill_games() -> void:
 	for id in Game.games_in():
 		if not ids.has(id):
 			ids.append(id)
+	_show_count(ids.size())
 	if ids.is_empty():
 		_add_hint("Nenhum jogo disponível neste aparelho.")
 		return
@@ -127,6 +128,22 @@ func _fill_games() -> void:
 	%GameList.add_child(grid)
 	for id in ids:
 		grid.add_child(_tile(id))
+
+
+## "7 na mesa", à direita do título, como no protótipo.
+func _show_count(count: int) -> void:
+	var header: Control = %CatalogTitle.get_parent()
+	var label: Label = header.get_node_or_null(^"Count")
+	if label == null:
+		label = Label.new()
+		label.name = "Count"
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_override("font", AppTheme.font(700))
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
+		header.add_child(label)
+	label.visible = count > 0
+	label.text = "%d na mesa" % count
 
 
 func _tile(id: StringName) -> GameTile:
