@@ -25,6 +25,7 @@ var _failures := 0
 func _ready() -> void:
 	await _probe_game_picker()
 	await _probe_favorite()
+	await _probe_tile_star()
 	await _probe_rejoin_offer()
 	await _probe_game_sheet()
 	await _probe_formats()
@@ -153,6 +154,70 @@ func _probe_favorite() -> void:
 
 	card.queue_free()
 	await get_tree().process_frame
+
+
+## A estrela do bloco é um botão dentro do botão do jogo, e os dois moram numa
+## lista que rola — onde o Nav deixa o toque do botão passar para a lista. Passando,
+## o toque na estrela chegava também ao bloco e abria a folha do jogo junto.
+##
+## Pelo viewport, e não pelo `_gui_input` de um nó: o defeito está no caminho que o
+## evento percorre entre os nós, e só o envio de verdade passa por ele.
+func _probe_tile_star() -> void:
+	print("estrela do bloco")
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(10, 10)
+	scroll.size = Vector2(300, 300)
+	add_child(scroll)
+	var tile := GameTile.new()
+	tile.game_id = Game.CHESS
+	tile.custom_minimum_size = Vector2(240, 120)
+	scroll.add_child(tile)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var stars := [0]
+	var opens := [0]
+	tile.favorite_toggled.connect(func() -> void: stars[0] += 1)
+	tile.pressed.connect(func() -> void: opens[0] += 1)
+	await _push_tap(tile._star.get_global_rect().get_center())
+	_equals(stars[0], 1, "tocar na estrela favorita")
+	_equals(opens[0], 0, "e não abre a folha do jogo junto")
+	await _push_tap(tile.get_global_rect().get_center() + Vector2(40, 20))
+	_equals(opens[0], 1, "o resto do bloco continua abrindo a folha")
+	_equals(stars[0], 1, "sem mexer na estrela")
+
+	# O mesmo defeito no X do cartão de voltar: fechar o cartão retomava a partida.
+	tile.queue_free()
+	var card := ResumeCard.new()
+	card.game_id = Game.CHESS
+	card.code = "ABC123"
+	scroll.add_child(card)
+	# Depois do add_child: o _ready do cartão escreve a própria altura mínima.
+	card.custom_minimum_size.x = 280.0
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var resumes := [0]
+	var closes := [0]
+	card.resume_pressed.connect(func(_id: StringName, _code: String) -> void: resumes[0] += 1)
+	card.dismissed.connect(func() -> void: closes[0] += 1)
+	await _push_tap(card._close.get_global_rect().get_center())
+	_equals(closes[0], 1, "o X fecha o cartão de voltar")
+	_equals(resumes[0], 0, "e não retoma a partida junto")
+
+	scroll.queue_free()
+	await get_tree().process_frame
+
+
+## Um toque de verdade: aperta e solta no mesmo ponto, pela fila de entrada.
+func _push_tap(at: Vector2) -> void:
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.pressed = pressed
+		event.position = at
+		event.global_position = at
+		get_viewport().push_input(event, true)
+		await get_tree().process_frame
 
 
 func _touch(at: Vector2) -> InputEventScreenTouch:
