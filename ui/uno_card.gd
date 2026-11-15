@@ -68,6 +68,25 @@ const BACK_SPOT := AppTheme.DANGER
 
 const SHADOW := Color(0, 0, 0, 0.45)
 
+## As formas cheias da carta são **textura**, e não polígono.
+##
+## Polígono na Godot não tem antialiasing, e o MSAA 2D do projeto não chega a
+## esse desenho: a carta girada no leque saía com a borda em degrau. Um traço
+## suavizado por cima do contorno ajudava pouco. As formas viraram SVG em
+## `assets/uno/`, rasterizadas grandes na importação e com mipmaps; desenhadas
+## pequenas e giradas, a filtragem da textura suaviza a borda. A cor continua
+## sendo parâmetro: as texturas são brancas e o desenho as tinge.
+##
+## Cada SVG tem uma folga transparente em volta da forma, para a borda do quad
+## cair no transparente e não na forma.
+const CARD_TEX := preload("res://assets/uno/card.svg")
+const OVAL_TEX := preload("res://assets/uno/oval.svg")
+const WILD_TEX := preload("res://assets/uno/wild.svg")
+## Folga do `card.svg` em volta do retângulo, em fração da altura dele.
+const CARD_PAD := 0.04
+## O disco dos SVGs redondos tem raio 100 numa caixa de 216.
+const DISC_PAD := 1.08
+
 ## Quanto do fundo entra na carta que não pode ser jogada.
 ##
 ## Um **véu da cor do fundo por cima**, e não transparência. A transparência era a
@@ -142,7 +161,7 @@ static func draw_card(
 	# Corpo chapado e o símbolo claro com sombra de tinta, como no protótipo. A
 	# oval só no curinga: ali ela é o desenho que diz "qualquer cor".
 	if UnoRules.is_wild(card_code):
-		_oval(canvas, height, alpha, card_code)
+		_oval(canvas, height, alpha, Transform2D(rotation, center))
 		if UnoRules.value_of_card(card_code) == UnoRules.WILD_FOUR:
 			# Miolo escuro atrás do "+4": claro direto sobre o amarelo some.
 			canvas.draw_circle(Vector2.ZERO, height * GLYPH_SIZE * 0.44, _fade(WILD_BODY, alpha), true, -1.0, true)
@@ -175,9 +194,7 @@ static func draw_back(
 	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(BACK_BODY, opacity))
 	# Escuro com a mancha coral no meio: nenhuma carta de frente é assim, então
 	# a mão de um adversário não parece uma mão de cartas vermelhas.
-	fill(canvas,
-		_ellipse(height * ASPECT * 0.30, height * 0.27, 0.0), _fade(BACK_SPOT, opacity)
-	)
+	_disc(canvas, OVAL_TEX, Vector2(height * ASPECT * 0.30, height * 0.27), _fade(BACK_SPOT, opacity))
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -186,8 +203,8 @@ static func draw_back(
 ## O preenchimento de polígono da Godot não tem antialiasing, e o MSAA 2D do
 ## projeto não chega a ele nas capturas nem no aparelho: carta girada no leque
 ## saía com a borda em degrau. Um traço de 1 px suavizado, na mesma cor, por cima
-## do contorno faz a transição que faltava. Toda forma cheia de carta passa por
-## aqui — corpo, moldura, oval, verso, setas.
+## do contorno faz a transição que faltava. Ficou para as formas pequenas que
+## não são textura: as setas do inverte e as do anel da mesa.
 static func fill(canvas: CanvasItem, points: PackedVector2Array, color: Color) -> void:
 	if points.size() < 3:
 		return
@@ -222,61 +239,28 @@ static func _fade(color: Color, alpha: float) -> Color:
 ## lados — encolher só a largura deixaria a moldura fina em cima e grossa ao lado.
 static func _rounded(canvas: CanvasItem, height: float, scale: float, color: Color) -> void:
 	var half := Vector2(height * ASPECT, height) * 0.5 * scale
-	fill(canvas, rounded_rect(half, height * CORNER * scale), color)
+	round_rect(canvas, Vector2.ZERO, half, color)
 
 
-static func rounded_rect(half: Vector2, radius: float, steps := 8) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	var inner := Vector2(maxf(half.x - radius, 0.0), maxf(half.y - radius, 0.0))
-	var corners := [
-		Vector2(inner.x, inner.y), Vector2(-inner.x, inner.y),
-		Vector2(-inner.x, -inner.y), Vector2(inner.x, -inner.y),
-	]
-	for index in corners.size():
-		var pivot: Vector2 = corners[index]
-		var start := index * PI * 0.5
-		for step in steps + 1:
-			var angle := start + (PI * 0.5) * (float(step) / steps)
-			points.append(pivot + Vector2(cos(angle), sin(angle)) * radius)
-	return points
+## O retângulo de cantos redondos da carta, da textura, centrado em `center` com
+## meias-medidas `half`. Público para a mesa desenhar o monte e o tapete na mesma
+## forma.
+static func round_rect(canvas: CanvasItem, center: Vector2, half: Vector2, color: Color) -> void:
+	var pad := Vector2.ONE * half.y * 2.0 * CARD_PAD
+	canvas.draw_texture_rect(CARD_TEX, Rect2(center - half - pad, (half + pad) * 2.0), false, color)
 
 
-static func _ellipse(half_x: float, half_y: float, tilt: float, segments := 44) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	var turn := Transform2D(tilt, Vector2.ZERO)
-	for index in segments:
-		var angle := TAU * index / segments
-		points.append(turn * Vector2(cos(angle) * half_x, sin(angle) * half_y))
-	return points
+## Um disco da textura esticado nas meias-medidas `half`: vira a elipse.
+static func _disc(canvas: CanvasItem, texture: Texture2D, half: Vector2, color: Color) -> void:
+	var outer := half * DISC_PAD
+	canvas.draw_texture_rect(texture, Rect2(-outer, outer * 2.0), false, color)
 
 
-## A oval do meio. No curinga ela é quatro quartos coloridos em vez de papel — é
-## o desenho que diz "esta carta é de qualquer cor", e dizer isso com a palavra
-## "curinga" escrita obrigaria a ler o que se pode ver.
-static func _oval(canvas: CanvasItem, height: float, alpha: float, card_code: int) -> void:
-	var half_x := height * OVAL_HALF.x
-	var half_y := height * OVAL_HALF.y
-	if not UnoRules.is_wild(card_code):
-		fill(canvas, _ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
-		return
-
-	fill(canvas, _ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
-	# Os quartos saem do recorte da própria elipse contra quatro quadrantes, e não
-	# de arcos calculados à mão: assim eles acompanham a inclinação da oval de
-	# graça, e nenhum dos quatro pode ficar com um sinal trocado.
-	var oval := _ellipse(half_x * 0.86, half_y * 0.86, OVAL_TILT)
-	var reach := maxf(half_x, half_y) * 2.0
-	for quadrant in COLORS.size():
-		var sign_x := 1.0 if quadrant == 0 or quadrant == 3 else -1.0
-		var sign_y := -1.0 if quadrant < 2 else 1.0
-		var mask := PackedVector2Array([
-			Vector2.ZERO,
-			Vector2(sign_x * reach, 0.0),
-			Vector2(sign_x * reach, sign_y * reach),
-			Vector2(0.0, sign_y * reach),
-		])
-		for shard in Geometry2D.intersect_polygons(oval, mask):
-			fill(canvas, shard, _fade(COLORS[quadrant], alpha))
+static func _oval(canvas: CanvasItem, height: float, alpha: float, base: Transform2D) -> void:
+	var half := Vector2(height * OVAL_HALF.x, height * OVAL_HALF.y)
+	canvas.draw_set_transform_matrix(base * Transform2D(OVAL_TILT, Vector2.ZERO))
+	_disc(canvas, WILD_TEX, half, Color(1, 1, 1, alpha))
+	canvas.draw_set_transform_matrix(base)
 
 
 ## O símbolo grande, no meio. Desenhado duas vezes por `draw_card`: em tinta e

@@ -46,6 +46,8 @@ var _clock := 0.0
 
 
 func _ready() -> void:
+	# Cartas em textura: mipmaps para a redução não serrilhar (ver UnoCardArt).
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(false)
 
