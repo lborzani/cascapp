@@ -770,4 +770,6 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ART, "pool.blend"))
 
 
-main()
+# O boliche (`art/bowling/build_bowling.py`) importa as funções daqui sem rodar a sinuca.
+if __name__ == "__main__":
+    main()
