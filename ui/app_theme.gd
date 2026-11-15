@@ -105,12 +105,12 @@ const BOARD_FRAME := Color("2d2757")
 ## Mar da batalha naval. As casas de um mar são todas iguais em função, e o
 ## contraste entre as duas é mínimo de propósito, só o bastante para a grade se
 ## contar com o olho. Fica como estava antes do tema.
-const WATER := Color("223a4d")
-const WATER_ALT := Color("27414f")
+const WATER := Color("1b6393")
+const WATER_ALT := Color("17557f")
 ## Casco visível — o próprio, ou o inimigo depois de afundado.
-const HULL := Color("8fa3b0")
+const HULL := Color("f7f5ff")
 ## Tiro n'água: a casa está gasta, não vale mais nada.
-const SPLASH := Color("6f8899")
+const SPLASH := Color("f7f5ff")
 
 const RADIUS := 14
 ## Folhas e cartões grandes.

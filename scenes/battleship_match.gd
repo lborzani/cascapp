@@ -52,6 +52,9 @@ var _rematch_refused := false
 @onready var _own: WatersView = %OwnWaters
 @onready var _place: WatersView = %PlaceWaters
 @onready var _banner: Banner = %Banner
+## A linha que diz o que fazer e o botão que atira na casa mirada.
+var _hint: Label = null
+var _fire: Button = null
 
 
 func _ready() -> void:
@@ -64,6 +67,7 @@ func _ready() -> void:
 	_own.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place.own = true
 	_enemy.square_tapped.connect(_on_enemy_tapped)
+	_build_fire_row()
 	_place.square_tapped.connect(_on_place_tapped)
 
 	%RotateButton.pressed.connect(_rotate)
@@ -199,6 +203,45 @@ func _on_enemy_tapped(square: int) -> void:
 		return
 	_aim = Board.NO_SQUARE
 	_play(chosen, true)
+
+
+## Embaixo de tudo, a dica e o botão "Atirar em D5". O segundo toque na mesma
+## casa continua atirando; o botão é o mesmo gesto, onde o polegar alcança e
+## dizendo em que casa o tiro vai.
+func _build_fire_row() -> void:
+	var column: Control = _own.get_parent().get_parent()
+	_hint = Label.new()
+	_hint.theme_type_variation = &"Hint"
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(_hint)
+	_fire = Button.new()
+	_fire.theme_type_variation = &"PrimaryButton"
+	_fire.custom_minimum_size.y = 60
+	_fire.focus_mode = Control.FOCUS_NONE
+	_fire.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M + 2)
+	_fire.pressed.connect(func() -> void:
+		if _aim != Board.NO_SQUARE:
+			_on_enemy_tapped(_aim)
+	)
+	column.add_child(_fire)
+
+
+func _refresh_fire_row() -> void:
+	if _fire == null:
+		return
+	var firing := _phase == Phase.FIRING and not _disconnected
+	_fire.visible = firing
+	_hint.visible = firing
+	if not firing:
+		return
+	if not _my_turn():
+		_fire.disabled = true
+		_fire.text = "Vez do oponente"
+		_hint.text = "Espere o tiro dele no seu mar."
+		return
+	_fire.disabled = _aim == Board.NO_SQUARE
+	_fire.text = "Atirar em %s" % Board.square_name(_aim) if _aim != Board.NO_SQUARE else "Escolha uma casa"
+	_hint.text = "Toque numa casa para mirar." if _aim == Board.NO_SQUARE else "Toque de novo ou no botão para atirar."
 
 
 func _legal_shot(square: int) -> Move:
@@ -460,6 +503,7 @@ func _refresh_firing() -> void:
 	_enemy.aim = _aim
 	_own.fleet = BattleshipRules.fleet_of(_state, me)
 	_own.shots = BattleshipRules.shots_of(_state, them)
+	_refresh_fire_row()
 
 	if _phase == Phase.OVER:
 		return
@@ -492,7 +536,14 @@ func _refresh_cards() -> void:
 			else (theirs if not theirs.is_empty() else "Oponente")
 		)
 		view.active = playing and not over and _state.side_to_move == side
-		view.subtitle = _fleet_status(side)
+		# O cartão de baixo divide a largura com o mapa: lá as bolinhas bastam, e o
+		# texto cortaria ("Sua vez · 4 na…").
+		view.subtitle = _fleet_status(side) if side != me else ""
+		# Os navios de pé como bolinhas, cheias as que ainda flutuam: o placar da
+		# partida de relance, como no protótipo.
+		if BattleshipRules.ready(_state):
+			view.pips = BattleshipRules.SHIPS.size()
+			view.pips_filled = BattleshipRules.ships_afloat(_state, side)
 
 
 ## Quantos navios daquele lado ainda flutuam. É informação pública — afundar é

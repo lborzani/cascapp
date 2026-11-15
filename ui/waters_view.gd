@@ -28,6 +28,7 @@ var fleet := PackedInt32Array():
 ## Tiros dados **neste** mar, em códigos de `BattleshipRules.Shot`.
 var shots := PackedInt32Array():
 	set(value):
+		_catch_fresh(shots, value)
 		shots = value
 		queue_redraw()
 
@@ -41,7 +42,18 @@ var own := false:
 var aim := Board.NO_SQUARE:
 	set(value):
 		aim = value
+		_sync_process()
 		queue_redraw()
+
+## O último tiro deste mar e o quanto da animação dele já passou (0 a 1). O
+## tiro novo estoura em vez de aparecer pronto: água faz uma onda que abre, e
+## o acerto cresce passando do tamanho e assenta.
+var _fresh := Board.NO_SQUARE
+var _fresh_t := 1.0
+## Relógio da mira, que pulsa enquanto espera o "Atirar".
+var _pulse := 0.0
+
+const FRESH_TIME := 0.45
 
 ## Coordenadas na moldura. Saem no mar pequeno: com a casa em ~13px a letra fica
 ## menor que o traço dela, e uma coordenada ilegível é ruído com aparência de
@@ -70,17 +82,58 @@ func _draw() -> void:
 	for square in Board.SQUARE_COUNT:
 		match _shot_at(square):
 			BattleshipRules.Shot.MISS:
-				_draw_splash(rect_of(square))
+				_draw_splash(rect_of(square), _grown(square))
 			BattleshipRules.Shot.HIT:
-				_draw_hit(rect_of(square))
+				_draw_hit(rect_of(square), _grown(square))
 
 	if aim != Board.NO_SQUARE:
-		var rect := rect_of(aim)
-		draw_rect(rect, Color(AppTheme.ACCENT, 0.22))
-		draw_rect(rect.grow(-2.0), Color(AppTheme.ACCENT, 0.9), false, maxf(2.0, _cell * 0.06))
+		# Um anel limão que respira: é o "aqui vai o tiro", à espera do botão.
+		var center := rect_of(aim).get_center()
+		var breath := 0.86 + 0.14 * (0.5 + 0.5 * cos(_pulse * TAU / 0.9))
+		draw_arc(center, _cell * 0.36 * breath, 0.0, TAU, 32, AppTheme.ACCENT, maxf(3.0, _cell * 0.09), true)
 
 	if labels:
 		draw_coordinates()
+
+
+## Acha a casa que ganhou tiro entre o desenho anterior e este. Um só por vez:
+## numa troca maior (o estado inteiro chegou de uma vez, numa reconexão) não há
+## "o último tiro", e nada anima.
+func _catch_fresh(before: PackedInt32Array, after: PackedInt32Array) -> void:
+	if before.size() != after.size():
+		return
+	var changed := Board.NO_SQUARE
+	for square in after.size():
+		if before[square] != after[square]:
+			if changed != Board.NO_SQUARE:
+				return
+			changed = square
+	if changed == Board.NO_SQUARE:
+		return
+	_fresh = changed
+	_fresh_t = 0.0
+	_sync_process()
+
+
+func _sync_process() -> void:
+	set_process(aim != Board.NO_SQUARE or _fresh_t < 1.0)
+
+
+func _process(delta: float) -> void:
+	_pulse += delta
+	if _fresh_t < 1.0:
+		_fresh_t = minf(1.0, _fresh_t + delta / FRESH_TIME)
+	_sync_process()
+	queue_redraw()
+
+
+## Quanto o tiro desta casa já cresceu: 1 para os antigos, a curva do salto
+## para o que acabou de cair.
+func _grown(square: int) -> float:
+	if square != _fresh or _fresh_t >= 1.0:
+		return 1.0
+	var t := _fresh_t
+	return 1.0 + 0.35 * sin(t * PI) - (1.0 - t) * (1.0 - t) * 0.8
 
 
 func _kind_at(square: int) -> int:
@@ -164,21 +217,26 @@ static func _hull_texture(part: String) -> Texture2D:
 	return _hull_cache[part]
 
 
-## Tiro n'água: um ponto apagado. Pequeno de propósito — ele só precisa dizer
-## "já tentei aqui", e um marcador forte em 40 casas gastas cobriria o mar.
-func _draw_splash(rect: Rect2) -> void:
-	draw_circle(rect.get_center(), _cell * 0.16, Color(AppTheme.SPLASH, 0.85))
-
-
-## Acerto: cruz vermelha cheia. É o único evento do jogo que muda alguma coisa, e
-## precisa ser encontrado de relance num mar cheio de pontos apagados.
-func _draw_hit(rect: Rect2) -> void:
-	var inset := rect.grow(-_cell * 0.26)
-	var width := _cell * 0.13
-	draw_line(inset.position, inset.position + inset.size, AppTheme.DANGER, width)
-	draw_line(
-		inset.position + Vector2(inset.size.x, 0),
-		inset.position + Vector2(0, inset.size.y),
-		AppTheme.DANGER,
-		width
+## Tiro n'água: um anel claro e fino. Discreto de propósito — ele só precisa
+## dizer "já tentei aqui", e um marcador forte em 40 casas gastas cobriria o mar.
+func _draw_splash(rect: Rect2, grown := 1.0) -> void:
+	draw_arc(
+		rect.get_center(), _cell * 0.15 * maxf(grown, 0.2), 0.0, TAU, 24,
+		Color(AppTheme.SPLASH, 0.6), maxf(2.0, _cell * 0.06), true
 	)
+
+
+## Acerto: um losango coral com sombra embaixo. É o único evento do jogo que
+## muda alguma coisa, e precisa ser encontrado de relance num mar de anéis.
+func _draw_hit(rect: Rect2, grown := 1.0) -> void:
+	var center := rect.get_center()
+	var half := _cell * 0.27 * maxf(grown, 0.2)
+	var diamond := PackedVector2Array([
+		center + Vector2(0, -half), center + Vector2(half, 0),
+		center + Vector2(0, half), center + Vector2(-half, 0),
+	])
+	var shadow := PackedVector2Array()
+	for point in diamond:
+		shadow.append(point + Vector2(0, _cell * 0.06))
+	draw_colored_polygon(shadow, AppTheme.DANGER.darkened(0.35))
+	draw_colored_polygon(diamond, AppTheme.DANGER)

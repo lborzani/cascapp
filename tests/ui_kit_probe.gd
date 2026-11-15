@@ -86,7 +86,7 @@ func _probe_palette() -> void:
 	_equals(AppTheme.BOARD_LIGHT, Color("e9e4ff"), "casa clara do tabuleiro é violeta")
 	_equals(AppTheme.BOARD_DARK, Color("8672e0"), "e a escura também")
 	_equals(AppTheme.BOARD_FRAME, AppTheme.SURFACE_HIGH, "moldura do tabuleiro é um degrau de superfície")
-	_equals(AppTheme.WATER, Color("223a4d"), "o mar não mudou")
+	_equals(AppTheme.WATER, Color("1b6393"), "o mar é o azul do protótipo")
 	_equals(AppTheme.LAST_MOVE, Color("d9f060"), "o último lance é amarelo-esverdeado")
 	_equals(AppTheme.PREMOVE, Color("39c6ff"), "o lance planejado é ciano")
 	var text_pairs := [
