@@ -28,14 +28,17 @@ const FRAMES := 10
 const PINS := 10
 const ALL_PINS := (1 << PINS) - 1
 
-## `path = [ROLL, máscara, posição, direção, efeito, timing]`. A máscara tem um bit
-## por pino (bit 0 = pino 1). Os quatro parâmetros vão em milésimos, de -1000 a
-## 1000; o que cada um significa é da física (`ui/bowling_lane.gd`).
+## `path = [ROLL, máscara, posição, direção, efeito, timing, força]`. A máscara tem
+## um bit por pino (bit 0 = pino 1). Os cinco parâmetros vão em milésimos, de -1000
+## a 1000 (a força de 0 a 1000); o que cada um significa é da física
+## (`ui/bowling_lane.gd`). A força entrou na 1.48; o boliche ainda não joga em
+## rede, então não há lance de 6 casas guardado em lugar nenhum para aceitar.
 const ROLL := 0
 const KIND_AT := 0
 const MASK_AT := 1
 const PARAMS_AT := 2
-const PATH_SIZE := 6
+const PARAM_COUNT := 5
+const PATH_SIZE := PARAMS_AT + PARAM_COUNT
 const PARAM_SCALE := 1000
 
 # --- chaves de `meta` ---------------------------------------------------------
@@ -209,11 +212,13 @@ static func _digit(pins: int) -> String:
 	return "-" if pins == 0 else str(pins)
 
 
-## Lance a partir da máscara e dos parâmetros (cada um de -1 a 1).
-static func roll(mask: int, params := PackedFloat32Array([0, 0, 0, 0])) -> Move:
+## Lance a partir da máscara e dos parâmetros (cada um de -1 a 1). Os que faltam
+## vão como zero.
+static func roll(mask: int, params := PackedFloat32Array()) -> Move:
 	var move := Move.new()
 	move.path = PackedInt32Array([ROLL, mask])
-	for value in params:
+	for i in PARAM_COUNT:
+		var value := params[i] if i < params.size() else 0.0
 		move.path.append(int(roundf(clampf(value, -1.0, 1.0) * PARAM_SCALE)))
 	return move
 

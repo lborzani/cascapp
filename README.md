@@ -1182,9 +1182,14 @@ máquina e no mesmo aparelho; a partida online vem depois.
   máquina de pinos repõe os que ficaram em pé no lugar exato, e o segundo
   arremesso começa igual nos dois lados.
 - **Controles** (`ui/bowling_view.gd`): arrastar a bola escolhe de onde ela sai,
-  arrastar na pista mira, o trilho escolhe o efeito, e o botão começa o balanço.
-  O segundo toque solta: no verde sai como mirado, cedo puxa para a esquerda,
-  tarde empurra para a direita.
+  arrastar na pista mira, e o trilho escolhe o efeito. Segurar o botão é a força
+  (a bola recua mais), soltar o dedo começa a volta, e um toque solta: no verde
+  sai como mirado, cedo puxa para a esquerda, tarde empurra para a direita. Sem o
+  toque a bola não sai, e a mira volta.
+- **O óleo é atrito da bola, não da pista.** A pista é uma caixa só; com duas
+  (óleo e seco), a quina entre elas jogava a bola para cima. A Godot usa o menor
+  atrito do contato, então a bola começa com o atrito do óleo e passa ao cheio
+  depois dos 40 pés.
 
 ### Transporte: uma sala, e só
 

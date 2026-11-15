@@ -11,6 +11,10 @@ extends SceneTree
 ## bola no bolso derruba quase tudo, bola na canaleta não derruba nada, efeito
 ## curva para o lado certo e só no seco, a jogada acaba sozinha, e a máquina
 ## repõe os pinos no lugar exato.
+##
+## Não se cobra a mesma máscara para a mesma jogada: cada pista nova ganha IDs de
+## corpo novos na Jolt, e a ordem dos contatos muda. O lance carrega a máscara
+## (ver `BowlingRules`), então nada depende dessa igualdade.
 
 const DEADLINE := 120.0
 const FPS := 60
@@ -33,7 +37,6 @@ func _run() -> void:
 	await _test_gutter()
 	await _test_hook()
 	await _test_settles_and_rack()
-	await _test_same_twice()
 
 	if _failures == 0:
 		print("OK — física do boliche consistente.")
@@ -57,6 +60,8 @@ func _test_launch() -> void:
 	var late := BowlingLane.launch(PackedFloat32Array([0, 0, 0, 1]))
 	_check(early["velocity"].x < 0.0 and late["velocity"].x > 0.0, "cedo puxa para a esquerda, tarde empurra para a direita")
 	_check(early["velocity"].length() < BowlingLane.FULL_SPEED, "e errar o timing tira força")
+	var weakest := BowlingLane.launch(PackedFloat32Array([0, 0, 0, 0, 0]))
+	_check(is_equal_approx(weakest["velocity"].length(), BowlingLane.MIN_SPEED), "força zero sai na velocidade mínima")
 
 
 func _test_spots() -> void:
@@ -100,6 +105,19 @@ func _test_hook() -> void:
 	_check(absf(straight["pins_x"]) < 0.01, "sem efeito vai reto")
 	var late_curve := absf(right["pins_x"] - right["oil_x"])
 	_check(late_curve > absf(right["oil_x"]) * 2.0, "a curva aparece depois do óleo")
+	# A física não pula: o "pulinho" da 1.47 era da câmera (ver `bowling_scene_probe`).
+	for run: Dictionary in [left, right, straight]:
+		_check(run["lift"] < 0.005, "a bola não sai do chão na pista (subiu %.1f mm em z = %.2f)" % [run["lift"] * 1000.0, run["lift_z"]])
+
+	print("força")
+	var weak := await _throw(PackedFloat32Array([0, 0, 0, 0, 0.2]))
+	print("  velocidade no fim do óleo: fraca %.2f m/s, cheia %.2f m/s" % [weak["speed"], straight["speed"]])
+	_check(weak["speed"] < straight["speed"] - 2.0, "pouca força chega bem mais devagar")
+	_check(absf(weak["pins_x"]) < 0.01, "e reta do mesmo jeito")
+	# O pulinho da 1.47 aparecia com meia força, logo depois do fim do óleo.
+	for power: float in [0.2, 0.35, 0.5, 0.65, 0.8]:
+		var run := await _throw(PackedFloat32Array([0, 0, 0, 0, power]))
+		_check(run["lift"] < 0.005, "com força %.2f a bola não sai do chão (subiu %.1f mm em z = %.2f)" % [power, run["lift"] * 1000.0, run["lift_z"]])
 
 
 func _test_settles_and_rack() -> void:
@@ -126,15 +144,6 @@ func _test_settles_and_rack() -> void:
 	lane.free()
 
 
-func _test_same_twice() -> void:
-	print("mesma jogada duas vezes")
-	var params := PackedFloat32Array([0.4, -0.15, -0.6, 0.1])
-	var first := await _throw(params)
-	var second := await _throw(params)
-	_check(first["mask"] != 0, "a jogada de teste derruba alguma coisa (%d pinos)" % BowlingRules.pin_count(first["mask"]))
-	_equals(second["mask"], first["mask"], "dá a mesma máscara no mesmo aparelho")
-
-
 # --- apoio --------------------------------------------------------------------
 
 
@@ -145,12 +154,20 @@ func _throw(params: PackedFloat32Array) -> Dictionary:
 	root.add_child(lane)
 	lane.rack(BowlingRules.ALL_PINS)
 	lane.throw(params)
-	var track := {"oil_x": NAN, "pins_x": NAN}
+	var track := {"oil_x": NAN, "pins_x": NAN, "lift": 0.0, "lift_z": 0.0, "speed": NAN}
 	var frames := 0
 	while lane.rolling and _alive():
 		await physics_frame
 		frames += 1
 		var at := lane.ball.global_position
+		# Quanto a bola sai do chão antes dos pinos, em cima da pista (não na canaleta).
+		if at.z > -(BowlingLane.HEAD_PIN - 0.5) and absf(at.x) < BowlingLane.LANE_W * 0.5 and frames > 3:
+			var lift := at.y - BowlingLane.BALL_R
+			if lift > track["lift"]:
+				track["lift"] = lift
+				track["lift_z"] = at.z
+		if is_nan(track["speed"]) and at.z <= -BowlingLane.OIL_LEN:
+			track["speed"] = lane.ball.linear_velocity.length()
 		if is_nan(track["oil_x"]) and at.z <= -BowlingLane.OIL_LEN:
 			track["oil_x"] = at.x
 		if is_nan(track["pins_x"]) and at.z <= -(BowlingLane.HEAD_PIN - 0.3):
