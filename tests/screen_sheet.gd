@@ -379,12 +379,11 @@ func _next() -> void:
 		# montagem, e o anel do impacto dura menos que isso — sem congelar, a
 		# foto sairia sempre do instante seguinte ao que ela quer mostrar.
 		board.set_process(false)
-		_scene._status("Vermelho tirou 6.")
+		_scene._status("1 peão pode andar.")
 	elif shot == "17b_ludo_bots":
 		# Solo: você é o vermelho e as outras três cores são máquina. O print
 		# responde se dá para saber quem é quem antes da primeira vez chegar.
 		_stage_ludo(_scene)
-		_scene._status("Vez do Verde (bot).")
 		_scene._update_tags()
 	elif shot == "11_arrasto":
 		_play_opening(_scene)
@@ -600,7 +599,7 @@ func _stage_ludo(scene: Node) -> void:
 	scene._dice.value = 3
 	scene._dice.enabled = false
 	scene._update_tags()
-	scene._status("Vermelho tirou 3. Escolha o peão.")
+	scene._status("%d peões podem andar." % scene._movable_tokens().size())
 
 
 func _stage_battleship(scene: Node) -> void:

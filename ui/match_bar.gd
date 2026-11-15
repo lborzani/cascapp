@@ -174,11 +174,10 @@ func _apply_size() -> void:
 	_title.add_theme_font_size_override(
 		"font_size", AppTheme.SIZE_DISPLAY_M + (0 if compact else 2)
 	)
-	# Em pé, a faixa de contexto vai embaixo do título, à esquerda. Deitada, ao
-	# lado dele, encostada à direita.
+	# Em pé, a faixa de contexto vai embaixo do título. Deitada, logo ao lado dele.
 	_words.vertical = not compact
 	_words.add_theme_constant_override("separation", AppTheme.SPACE_M if compact else -3)
-	status.alignment = FlowContainer.ALIGNMENT_END if compact else FlowContainer.ALIGNMENT_BEGIN
+	status.alignment = FlowContainer.ALIGNMENT_BEGIN
 
 
 ## Sem fundo próprio e sem fio: a barra é a parte de cima da tela, e quem a

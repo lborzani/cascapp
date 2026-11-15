@@ -324,11 +324,13 @@ static func _style_buttons(theme: Theme) -> void:
 	theme.set_type_variation("PrimaryButton", "Button")
 	for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
 		theme.set_color(state, "PrimaryButton", ACCENT_INK)
-	theme.set_color("font_disabled_color", "PrimaryButton", Color(ACCENT_INK, 0.6))
+	theme.set_color("font_disabled_color", "PrimaryButton", TEXT_DIM)
 	theme.set_stylebox("normal", "PrimaryButton", plate(ACCENT, ACCENT_EDGE))
 	theme.set_stylebox("hover", "PrimaryButton", plate(ACCENT.lightened(0.08), ACCENT_EDGE))
 	theme.set_stylebox("pressed", "PrimaryButton", plate(ACCENT.darkened(0.08), ACCENT_EDGE, true))
-	theme.set_stylebox("disabled", "PrimaryButton", plate(Color(ACCENT, 0.35), Color(ACCENT_EDGE, 0.35)))
+	# Desligado vira placa lilás, como no protótipo: limão apagado ainda lia como
+	# convite.
+	theme.set_stylebox("disabled", "PrimaryButton", plate(SURFACE_TOP, SURFACE_TOP))
 
 	# Escolha dentro de um grupo (o ritmo do relógio). A marcada é clara com tinta
 	# escura, e não limão: o limão cheio é a ação principal da tela, e existe uma só.
