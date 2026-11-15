@@ -197,6 +197,23 @@ static func draw_art(
 				face, Vector2(center.x - unit, center.y + font_size * 0.36), "8",
 				HORIZONTAL_ALIGNMENT_CENTER, unit * 2.0, font_size, hole
 			)
+		"bowling":
+			# Um pino e, na frente dele, a bola com os três furos.
+			var pin := center + Vector2(unit * 0.38, -unit * 0.05)
+			var body := PackedVector2Array()
+			for side: float in [1.0, -1.0]:
+				var outline := [Vector2(0.13, -0.45), Vector2(0.30, -0.1), Vector2(0.42, 0.25), Vector2(0.38, 0.6), Vector2(0.24, 0.95)]
+				if side < 0.0:
+					outline.reverse()
+				for point: Vector2 in outline:
+					body.append(pin + Vector2(point.x * side, point.y) * unit)
+			canvas.draw_colored_polygon(body, ink)
+			canvas.draw_circle(pin + Vector2(0.0, -0.72) * unit, unit * 0.27, ink)
+			var ball := center + Vector2(-unit * 0.45, unit * 0.42)
+			canvas.draw_circle(ball, unit * 0.62, hole)
+			canvas.draw_circle(ball, unit * 0.52, ink)
+			for spot: Vector2 in [Vector2(-0.2, -0.22), Vector2(0.06, -0.3), Vector2(-0.08, 0.04)]:
+				canvas.draw_circle(ball + spot * unit, unit * 0.08, hole)
 		_:
 			# Xadrez, e qualquer jogo que ainda não tenha desenho: a peça dele em
 			# silhueta, inclinada.

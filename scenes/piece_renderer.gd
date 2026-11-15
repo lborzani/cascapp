@@ -74,6 +74,7 @@ const TEXTURE_NAMES := {
 	# grade do menu. O leque é o que diz "baralho".
 	Board.Kind.CARD: "card",
 	Board.Kind.CUE: "cue",
+	Board.Kind.PIN: "pin",
 }
 const TEXTURE_DIR := "res://assets/pieces"
 

@@ -82,6 +82,7 @@ const GAME_COLORS := {
 	"uno": Color("ff4d7d"),
 	"monopoly": Color("2ed3b7"),
 	"pool": Color("59d36b"),
+	"bowling": Color("4f8bff"),
 }
 
 ## Casas do último lance. Um amarelo-esverdeado, vizinho do limão sem ser ele:
