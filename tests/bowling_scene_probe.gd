@@ -29,6 +29,7 @@ func _ready() -> void:
 	await _probe_swing_and_throw()
 	await _probe_full_game()
 	await _probe_bot()
+	await _probe_online()
 
 	_done = true
 	if _failures == 0:
@@ -204,6 +205,76 @@ func _probe_bot() -> void:
 	_check(not bot.is_empty(), "a máquina arremessa sozinha (%s)" % [bot])
 	print("  bot derrubou %s" % [bot])
 	_equals(BowlingRules.turn_of(scene._state), 0, "e devolve a vez")
+	scene.free()
+
+
+## Em rede, pelos sinais do `Net` (sem relay: o caminho do relay é do
+## `bowling_net_smoke`). Este aparelho é o assento 1 de uma mesa de dois.
+func _probe_online() -> void:
+	print("em rede")
+	Game.start_hotseat(Game.BOWLING)
+	Game.mode = Game.Mode.ONLINE
+	Net.connected = true
+	Net.local_seat = 1
+	Net.seats = 2
+	Net.bot_seats = PackedInt32Array()
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	var scene := await _open()
+	_equals(BowlingRules.seats_of(scene._state), 2, "a mesa tem o tamanho da sala")
+	_check(not scene._view.enabled, "na vez do outro a pista não aceita mira")
+	_check(scene._hint.text.begins_with("Ana"), "e a dica diz de quem é a vez (%s)" % scene._hint.text)
+	_check(not scene._again.visible, "em rede não há jogar de novo")
+
+	# O arremesso da Ana chega: a pista o repete e vale a máscara recebida (9 pinos),
+	# não o que a física daqui der.
+	var params := PackedFloat32Array([0.3, 0.0, 0.0, 0.0, 1.0])
+	Net.move_received.emit({"p": BowlingRules.roll(0b0111111111, params).path, "n": 0, "seat": 0})
+	_check(scene._busy and scene._view._phase == BowlingView.Phase.ROLLING, "o arremesso de fora é repetido na pista")
+	var frames := 0
+	while scene._busy and frames < 1200:
+		await get_tree().process_frame
+		frames += 1
+	_equals(BowlingRules.rolls_of(scene._state, 0), PackedInt32Array([9]), "e entra na cartela com o que veio pela rede")
+	var armed := 0
+	for pin in BowlingRules.PINS:
+		if scene._view.lane.pins[pin] != null:
+			armed |= 1 << pin
+	_equals(armed, 0b1000000000, "a máquina arma o que o estado manda (só o 10)")
+
+	# Fora da vez, ou de quem não tem a vez, não entra.
+	Net.move_received.emit({"p": BowlingRules.roll(0b1000000000).path, "n": 1, "seat": 1})
+	await _frames(3)
+	_equals(scene._state.ply, 1, "arremesso de quem não tem a vez é recusado")
+
+	Net.move_received.emit({"p": BowlingRules.roll(0).path, "n": 1, "seat": 0})
+	frames = 0
+	while (scene._busy or scene._state.ply < 2) and frames < 1200:
+		await get_tree().process_frame
+		frames += 1
+	_equals(BowlingRules.turn_of(scene._state), 1, "o frame da Ana fechou e a vez é daqui")
+	_check(scene._view.enabled, "e a pista aceita mira")
+
+	# Reconexão: o histórico chega e a cartela é refeita sem física.
+	var history: Array[Dictionary] = []
+	var rules: BowlingRules = scene._rules
+	var rebuilt := rules.initial_state()
+	for mask: int in [0b0111111111, 0, 0b1111111111, 0b0000000111]:
+		var move := BowlingRules.roll(mask)
+		var checked := rules.validate(rebuilt, move.path)
+		rules.apply_move(rebuilt, checked)
+		history.append(checked.to_dict())
+	Net.sync_received.emit(history, [])
+	_equals(scene._state.ply, 4, "o histórico refaz a partida")
+	_equals(BowlingRules.rolls_of(scene._state, 1), PackedInt32Array([10]), "com o strike daqui")
+	_equals(BowlingRules.standing(scene._state), 0b1111111000, "e os pinos em pé do frame da Ana")
+	_check(not scene._view.enabled, "a vez voltou para a Ana")
+
+	Net.opponent_left.emit()
+	_check(scene._abandoned and not scene._view.enabled, "o outro saiu: a partida para")
+
+	Net.connected = false
+	Net.local_seat = 0
+	Net.player_names = {}
 	scene.free()
 
 

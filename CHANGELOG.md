@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.50
+
+- Boliche online: jogue de 2 a 4 pela internet ou por Bluetooth. Todo mundo vê o arremesso de cada um na própria pista, e quem cair volta para a mesma partida.
+- Mesa online que não encher completa com a máquina, como nos outros jogos.
+
 ## 1.49
 
 - Boliche: a bola rola lisa depois do lançamento, sem engasgar.

@@ -9,6 +9,20 @@ extends Control
 ##
 ## Solo é a mesa com um humano só: você é o assento 0 e as outras cadeiras são
 ## máquina, como em Metrópole. No mesmo aparelho, de 2 a 4 se revezam por frame.
+##
+## ## Em rede
+##
+## Quem arremessa roda a física e manda o lance (máscara e parâmetros) antes de
+## aplicá-lo, como os outros jogos. Os outros aparelhos repetem o arremesso na
+## própria pista para ver a jogada, e no fim **vale a máscara recebida**, não a
+## que a física daqui deu: a Jolt não dá o mesmo resultado bit a bit em dois
+## aparelhos. A máquina de pinos arma o que o estado manda, então a próxima bola
+## começa igual em todo lado, mesmo que a repetição tenha divergido.
+##
+## Os lances de fora entram numa fila, um por vez, porque cada um leva o tempo da
+## jogada inteira. Reconexão e entrada no meio refazem a cartela pelo histórico,
+## sem física. Cadeira vazia é máquina, e só um aparelho (`Net.bot_driver`) joga
+## por ela.
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## O tempo de ler "Strike!" com os pinos ainda caídos, antes de a máquina limpar.
@@ -29,6 +43,12 @@ var _bot_pending := false
 ## Parâmetros do arremesso em curso, até a física dizer o que caiu.
 var _pending := PackedFloat32Array()
 var _bot_seats := PackedInt32Array()
+var _link_down := false
+var _abandoned := false
+## Lances de outros aparelhos esperando a vez de serem repetidos na pista.
+var _incoming: Array[Dictionary] = []
+var _draining := false
+var _again: Button = null
 
 var _view: BowlingView = null
 var _card: BowlingCard = null
@@ -42,7 +62,9 @@ var _result_header: ResultHeader = null
 
 func _ready() -> void:
 	theme = AppTheme.shared()
-	_rules.seats = Game.players_of(Game.BOWLING)
+	var online := Game.mode == Game.Mode.ONLINE
+	# Em rede, o tamanho da mesa é o da sala, que veio de quem a abriu.
+	_rules.seats = maxi(2, Net.seats) if online else Game.players_of(Game.BOWLING)
 	_state = _rules.initial_state()
 	_build()
 
@@ -53,9 +75,27 @@ func _ready() -> void:
 	if Game.mode == Game.Mode.SOLO:
 		for seat in range(1, BowlingRules.seats_of(_state)):
 			_bot_seats.append(seat)
+	if online:
+		Game.local_seat = Net.local_seat
+		_bot_seats = Net.bot_seats
+		Net.move_received.connect(_on_remote_move)
+		Net.opponent_left.connect(_on_opponent_left)
+		Net.seat_left.connect(_on_seat_left)
+		Net.seat_returned.connect(_on_seat_returned)
+		Net.link_lost.connect(_on_link_lost)
+		Net.link_restored.connect(_on_link_restored)
+		Net.sync_received.connect(_apply_sync)
+		Net.names_changed.connect(_refresh)
+		Net.bots_changed.connect(_adopt_bot_seats)
+		# Revanche é de dois; numa mesa de até quatro quem quer jogar de novo abre
+		# outra sala, como no Uno.
+		_again.visible = false
 
 	_view.rack(BowlingRules.ALL_PINS)
 	_refresh()
+	# Quem entrou numa partida em curso recebeu o histórico antes desta cena
+	# existir, e ele ficou guardado esperando.
+	Net.claim_sync()
 
 
 # --- montagem -----------------------------------------------------------------
@@ -162,25 +202,38 @@ func _build_overlay() -> void:
 	out.pressed.connect(_leave)
 	buttons.add_child(out)
 
-	var again := Button.new()
-	again.text = "Jogar de novo"
-	again.theme_type_variation = &"PrimaryButton"
-	again.pressed.connect(_restart)
-	buttons.add_child(again)
+	_again = Button.new()
+	_again.text = "Jogar de novo"
+	_again.theme_type_variation = &"PrimaryButton"
+	_again.pressed.connect(_restart)
+	buttons.add_child(_again)
 
 
 # --- a vez --------------------------------------------------------------------
 
 
 func _can_act() -> bool:
+	var turn := BowlingRules.turn_of(_state)
 	return (
-		not _busy and not BowlingRules.game_over(_state)
-		and not _is_bot(BowlingRules.turn_of(_state))
+		not _busy and not _link_down and not _abandoned
+		and not BowlingRules.game_over(_state) and not _is_bot(turn)
+		and (Game.mode != Game.Mode.ONLINE or turn == Game.local_seat)
 	)
 
 
 func _is_bot(seat: int) -> bool:
 	return _bot_seats.has(seat)
+
+
+## Este aparelho joga pelas máquinas: no solo sempre; em rede só o
+## `Net.bot_driver`, para a mesma vez não ganhar dois arremessos.
+func _drives_bots() -> bool:
+	return Game.mode != Game.Mode.ONLINE or Net.drives_bots()
+
+
+## Quem pode mandar o lance desta cadeira: ela mesma, ou quem dirige as máquinas.
+func _sender_for(seat: int) -> int:
+	return Net.bot_driver() if _is_bot(seat) else seat
 
 
 func _on_released(params: PackedFloat32Array) -> void:
@@ -206,9 +259,13 @@ func _on_settled(mask: int) -> void:
 	_play(move)
 
 
-func _play(move: Move) -> void:
+func _play(move: Move, from_network := false) -> void:
 	var seat := BowlingRules.turn_of(_state)
 	var before := BowlingRules.standing(_state)
+	# Sai antes de ser aplicado: `ply` é o índice dele, e é o que o torna
+	# idempotente do outro lado numa reconexão.
+	if not from_network and Game.mode == Game.Mode.ONLINE:
+		Net.send_move({"p": move.path, "pr": 0}, _state.ply)
 	_rules.apply_move(_state, move)
 	_card.state = _state
 	_announce(seat, before, BowlingRules.mask_of(move))
@@ -244,7 +301,10 @@ func _run_bot() -> void:
 	_bot_pending = true
 	await get_tree().create_timer(BOT_THINK).timeout
 	_bot_pending = false
-	if not is_inside_tree() or _busy or not _is_bot(BowlingRules.turn_of(_state)) or BowlingRules.game_over(_state):
+	if (
+		not is_inside_tree() or _busy or _link_down or _abandoned or not _drives_bots()
+		or not _is_bot(BowlingRules.turn_of(_state)) or BowlingRules.game_over(_state)
+	):
 		return
 	_busy = true
 	_pending = bot_params()
@@ -264,6 +324,118 @@ static func bot_params() -> PackedFloat32Array:
 		clampf(randfn(0.0, BOT_TIMING_SPREAD), -1.0, 1.0),
 		randf_range(0.75, 1.0),
 	])
+
+
+# --- rede ---------------------------------------------------------------------
+
+
+func _on_remote_move(data: Dictionary) -> void:
+	if _abandoned:
+		return
+	_incoming.append({
+		"n": int(data.get("n", -1)),
+		"p": PackedInt32Array(data.get("p", [])),
+		"seat": int(data.get("seat", -1)),
+	})
+	_drain_incoming()
+
+
+## Repete os lances de fora, um por vez: cada um é a jogada inteira na pista, e
+## só depois dela o lance entra na cartela.
+func _drain_incoming() -> void:
+	if _draining or _busy or _abandoned or _incoming.is_empty():
+		return
+	_draining = true
+	while not _incoming.is_empty() and not _abandoned and is_inside_tree():
+		var entry: Dictionary = _incoming.pop_front()
+		var index := int(entry["n"])
+		if index >= 0 and index < _state.ply:
+			continue
+		if index > _state.ply:
+			# Falta lance no meio: pedir o histórico é mais barato que adivinhar.
+			Net.send_sync(_state.history, [])
+			break
+		var turn := BowlingRules.turn_of(_state)
+		if int(entry["seat"]) != _sender_for(turn):
+			push_warning("Arremesso do assento %d recusado: a vez é de %d." % [entry["seat"], turn])
+			continue
+		var move := _rules.validate(_state, entry["p"])
+		if move == null:
+			push_warning("Arremesso de rede recusado pelas regras: %s" % [entry["p"]])
+			continue
+		_busy = true
+		_view.enabled = false
+		_view.ball_color = _seat_color(turn)
+		_view.throw(BowlingRules.params_of(move))
+		await _view.settled
+		# Um histórico pode ter chegado no meio da jogada e refeito a partida.
+		if not is_inside_tree() or _abandoned or _state.ply != index:
+			break
+		await _play(move, true)
+	_draining = false
+
+
+## Reconexão: refaz a partida pelo histórico, sem física, e arma o que ficou em pé.
+func _apply_sync(moves: Array, _clocks: Array) -> void:
+	if moves.size() <= _state.ply:
+		return
+	var rebuilt := _rules.initial_state()
+	for data in moves:
+		var checked := _rules.validate(rebuilt, Move.from_dict(data).path)
+		if checked == null:
+			push_warning("Histórico recebido não bate com as regras; ignorado.")
+			return
+		_rules.apply_move(rebuilt, checked)
+	_state = rebuilt
+	_busy = false
+	_pending = PackedFloat32Array()
+	_incoming.clear()
+	_view.rack(BowlingRules.standing(_state))
+	if BowlingRules.game_over(_state):
+		_finish(BowlingRules.winner_of(_state))
+		return
+	_refresh()
+
+
+func _on_link_lost() -> void:
+	_link_down = true
+	_refresh()
+
+
+func _on_link_restored() -> void:
+	_link_down = false
+	Net.send_sync(_state.history, [])
+	_refresh()
+
+
+func _on_opponent_left() -> void:
+	_abandoned = true
+	_view.enabled = false
+	_banner.show_message("O outro jogador saiu.", Banner.Kind.ALERT, true)
+	_refresh()
+
+
+## Numa mesa de mais de dois, quem sai vira máquina e a partida continua.
+func _on_seat_left(seat: int) -> void:
+	if _abandoned:
+		return
+	var who := _seat_name(seat)
+	_bot_seats = Net.bot_seats
+	_banner.show_message("%s saiu. Uma máquina joga até a volta." % who, Banner.Kind.ALERT)
+	_refresh()
+
+
+func _on_seat_returned(seat: int) -> void:
+	if _abandoned:
+		return
+	_bot_seats = Net.bot_seats
+	_banner.show_message("%s assumiu o lugar da máquina." % _seat_name(seat), Banner.Kind.INFO)
+	_refresh()
+
+
+func _adopt_bot_seats() -> void:
+	_bot_seats = Net.bot_seats
+	_refresh()
 
 
 # --- tela ---------------------------------------------------------------------
@@ -295,7 +467,12 @@ func _refresh() -> void:
 	_hint.add_theme_stylebox_override("normal", pill)
 	_hint.add_theme_color_override("font_color", AppTheme.ACCENT_INK if lit else AppTheme.TEXT_DIM)
 
-	if _is_bot(turn) and not _bot_pending and not _busy and not BowlingRules.game_over(_state):
+	# Arremessos de fora que chegaram com a pista ocupada esperam a vez deles.
+	_drain_incoming()
+	if (
+		_is_bot(turn) and _drives_bots() and not _bot_pending and not _busy
+		and not _link_down and not _abandoned and not BowlingRules.game_over(_state)
+	):
 		_run_bot()
 
 
@@ -304,6 +481,12 @@ func _seat_color(seat: int) -> Color:
 
 
 func _seat_name(seat: int) -> String:
+	if Game.mode == Game.Mode.ONLINE:
+		if _is_bot(seat):
+			return "Máquina %d" % (seat + 1)
+		var theirs := Net.name_of(seat)
+		if not theirs.is_empty():
+			return theirs
 	if Game.mode == Game.Mode.SOLO:
 		if seat == 0:
 			return Prefs.player_name()

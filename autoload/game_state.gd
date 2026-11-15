@@ -223,8 +223,8 @@ const GAMES := [
 		"visible": true,
 	},
 	# Boliche em retrato: a pista sobe a tela. De 2 a 4 na mesa; no solo, as
-	# cadeiras que sobram são máquina, como em Metrópole. Sem rede por enquanto
-	# (a partida online é a Fase 5 do plano).
+	# cadeiras que sobram são máquina, como em Metrópole. Em rede, quem arremessa
+	# manda o que caiu (ver `scenes/bowling_match.gd`).
 	#
 	# `bot_levels` falso: o bot é o mesmo arremesso de quem joga com um erro
 	# sorteado no timing, e não uma busca com profundidade para regular.
@@ -234,7 +234,7 @@ const GAMES := [
 		"category": CAT_SPORT,
 		"icon": Board.Kind.PIN,
 		"scene": "res://scenes/bowling_match.tscn",
-		"modes": [Mode.HOTSEAT, Mode.SOLO],
+		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
 		"clock": false,
 		"players": 2,
 		"players_range": [2, BowlingRules.MAX_SEATS],

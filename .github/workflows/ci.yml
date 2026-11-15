@@ -169,6 +169,7 @@ jobs:
           godot --headless --path . --script res://tests/ludo_net_smoke.gd
           godot --headless --path . --script res://tests/ludo_bots_smoke.gd
           godot --headless --path . --script res://tests/uno_net_smoke.gd
+          godot --headless --path . --script res://tests/bowling_net_smoke.gd
           godot --headless --path . --script res://tests/monopoly_net_smoke.gd
 
       # O caminho pela internet, contra um relay de verdade. É o único teste que
@@ -217,6 +218,7 @@ jobs:
           godot --headless --path . --script res://tests/ludo_net_smoke.gd
           godot --headless --path . --script res://tests/ludo_bots_smoke.gd
           godot --headless --path . --script res://tests/uno_net_smoke.gd
+          godot --headless --path . --script res://tests/bowling_net_smoke.gd
           godot --headless --path . --script res://tests/monopoly_net_smoke.gd
           godot --headless --path . --script res://tests/rejoin_smoke.gd
 

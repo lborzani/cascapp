@@ -1165,8 +1165,15 @@ melhor que uma árvore rasa sobre uma aproximação.
 
 ### Boliche
 
-Dez pinos, dez frames, de 2 a 4 jogadores, em retrato. Por enquanto contra a
-máquina e no mesmo aparelho; a partida online vem depois.
+Dez pinos, dez frames, de 2 a 4 jogadores, em retrato: contra a máquina, no
+mesmo aparelho ou em rede.
+
+- **Em rede** (`scenes/bowling_match.gd`): quem arremessa roda a física e manda o
+  lance antes de aplicá-lo. Os outros aparelhos repetem o arremesso na própria
+  pista, um por vez numa fila, e no fim vale a máscara recebida. Reconexão refaz a
+  cartela pelo histórico, sem física. Cadeira vazia é máquina, dirigida por um
+  aparelho só (`Net.bot_driver`). `tests/bowling_net_smoke.gd` cobre o caminho do
+  lance pelo relay e pelo Bluetooth falso.
 
 - **Regras** (`core/bowling_rules.gd`): strike, spare e as bolas extras do
   décimo frame. O lance é `[ROLL, máscara, posição, direção, efeito, timing]`: a
