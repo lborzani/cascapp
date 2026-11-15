@@ -7,6 +7,16 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.45
+
+- Visual novo no app inteiro: cores mais vivas, cada jogo com a sua cor e botões que afundam ao toque.
+- Jogos, Online e Você foram redesenhados. A folha de cada jogo mostra os modos em cartões, e a aba Online junta o código, as salas abertas e as partidas ao vivo.
+- Fim de partida com selo de vitória, empate ou derrota, tempo e rodadas, e confete quando você ganha.
+- Xadrez e damas: os lances aparecem numa faixa embaixo do tabuleiro, "Propor empate" e "Desistir" ficam na tela, a peça capturada voa para o seu lado e a promoção ganha destaque.
+- Batalha naval: mar azul, mira que pulsa e botão "Atirar" com a casa escolhida.
+- Ludo, Uno, Metrópole e sinuca com mesa nova: botão "Rolar" no Ludo, cartas novas e mesa oval no Uno, aviso de quanto dinheiro entrou ou saiu na Metrópole e placar no alto da sinuca.
+- O relógio pisca nos últimos segundos, e quem ganha a vez recebe um destaque.
+
 ## 1.44
 
 - Sem internet? Agora dá para jogar com quem está do lado pelo Bluetooth. Ao criar a partida, toque em "Sem internet? Jogar por Bluetooth". No outro celular, digite o código e toque em "Entrar sem internet (Bluetooth)", leia o QR ou encoste os dois.
