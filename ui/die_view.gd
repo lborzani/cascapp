@@ -32,7 +32,7 @@ signal rolled(value: int)
 ## Quanto tempo o dado rola antes de parar. Longo o bastante para a rolagem ser
 ## um acontecimento — ela é o único gesto da vez de cada jogador — e curto o
 ## bastante para não virar espera com quatro pessoas na mesa.
-const SPIN := 0.95
+const SPIN := 0.6
 ## Intervalo entre dois números, no começo e no fim da rolagem. A diferença
 ## entre os dois é a desaceleração.
 const FLIP_FIRST := 0.07

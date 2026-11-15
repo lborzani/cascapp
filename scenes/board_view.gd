@@ -63,6 +63,11 @@ var _drawn_captures := PackedInt32Array()
 var _pop_square := Board.NO_SQUARE
 var _pop_time := POP_TIME
 const POP_TIME := 0.4
+## Onde a captura aconteceu: um estouro coral que abre e some quando a peça que
+## captura chega (450 ms, como no protótipo).
+var _burst_squares := PackedInt32Array()
+var _burst_time := BURST_TIME
+const BURST_TIME := 0.45
 
 
 func _ready() -> void:
@@ -83,6 +88,11 @@ func play_move(path: PackedInt32Array, taken: Array, promoted := false) -> void:
 	_move_taken = taken
 	_move_duration = MOVE_STEP * (path.size() - 1)
 	_move_time = 0.0
+	if not taken.is_empty():
+		_burst_squares = PackedInt32Array()
+		for entry in taken:
+			_burst_squares.append(int(entry[0]))
+		_burst_time = -_move_duration
 	if promoted:
 		_pop_square = path[path.size() - 1]
 		# Negativo: o pop começa quando a peça chega.
@@ -114,6 +124,8 @@ func _process(delta: float) -> void:
 		_target_time += delta
 	if _pop_time < POP_TIME:
 		_pop_time += delta
+	if _burst_time < BURST_TIME:
+		_burst_time += delta
 	_update_processing()
 	queue_redraw()
 
@@ -121,7 +133,7 @@ func _process(delta: float) -> void:
 func _update_processing() -> void:
 	set_process(
 		check_square != Board.NO_SQUARE or _move_duration > 0.0 or _target_time < TARGET_GROW
-		or _pop_time < POP_TIME
+		or _pop_time < POP_TIME or _burst_time < BURST_TIME
 	)
 
 
@@ -193,11 +205,25 @@ func _draw() -> void:
 			self, previewed, rect_of(preview_to).get_center(), _cell, 1.0, 1.0, _turned(previewed)
 		)
 
+	_draw_bursts()
 	_draw_targets()
 	_draw_badge()
 	if travelling:
 		_draw_travelling(arriving)
 	_draw_drag()
+
+
+func _draw_bursts() -> void:
+	if _burst_time < 0.0 or _burst_time >= BURST_TIME:
+		return
+	var t := _burst_time / BURST_TIME
+	for square in _burst_squares:
+		var middle := rect_of(square).get_center()
+		draw_circle(middle, _cell * (0.25 + 0.3 * t), Color(AppTheme.DANGER, 0.35 * (1.0 - t)))
+		draw_arc(
+			middle, _cell * (0.3 + 0.45 * t), 0.0, TAU, 32,
+			Color(AppTheme.DANGER, 1.0 - t), maxf(2.0, _cell * 0.1 * (1.0 - t)), true
+		)
 
 
 ## Verdadeiro para a peça que pertence a quem está do outro lado do aparelho.
@@ -253,7 +279,8 @@ func _draw_travelling(arriving: int) -> void:
 ## está, a vazia é de onde ela veio.
 func _draw_last_move() -> void:
 	for square in last_move:
-		draw_rect(rect_of(square), Color(AppTheme.LAST_MOVE, 0.6))
+		var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
+		draw_rect(rect_of(square), AppTheme.LAST_MOVE_DARK if dark else AppTheme.LAST_MOVE)
 
 
 ## O rei em xeque pulsa em vez de ficar com um fundo vermelho fixo. Movimento é

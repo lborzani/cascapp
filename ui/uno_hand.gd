@@ -39,7 +39,7 @@ extends Control
 signal card_tapped(card: int)
 
 ## Quanto a carta jogável sobe.
-const LIFT := 0.09
+const LIFT := 0.18
 ## Passo máximo entre cartas, em larguras de carta. Menos que 1 sempre: elas
 ## **precisam** se cobrir, senão o leque vira fila e a mão grande estoura a tela.
 const MAX_STEP := 0.72
@@ -48,7 +48,10 @@ const MAX_STEP := 0.72
 ## Pequena de propósito. Começou em 0.30 e a mão ficava com as pontas deitadas o
 ## bastante para o canto pequeno delas apontar para fora da tela — e o canto é a
 ## única coisa que se lê de uma carta coberta.
-const SPREAD := 0.14
+const SPREAD := 0.5
+## Quanto as pontas do leque descem, em fração da altura da carta: o arco de uma
+## mão segurada pelo meio, como no protótipo.
+const ARC := 0.08
 
 var cards := PackedInt32Array():
 	set(value):
@@ -99,7 +102,7 @@ func _draw() -> void:
 
 func _layout() -> void:
 	_spots.clear()
-	_card_height = minf(size.y * 0.90, size.x * 0.20 / UnoCardArt.ASPECT)
+	_card_height = minf(size.y * 0.80, size.x * 0.20 / UnoCardArt.ASPECT)
 	var count := cards.size()
 	if count == 0:
 		return
@@ -124,9 +127,11 @@ func _layout() -> void:
 	var base := size.y * 0.5 + _card_height * LIFT * 0.5
 	for index in count:
 		var offset := index - (count - 1) * 0.5
-		var angle := (offset / maxf(count - 1, 1.0)) * spread
+		var reach := offset / maxf((count - 1) * 0.5, 1.0)
+		var angle := reach * spread * 0.5
 		var lift := -_card_height * LIFT if (enabled and _is_playable(cards[index])) else 0.0
-		_spots.append(Transform2D(angle, Vector2(size.x * 0.5 + offset * step, base + lift)))
+		var drop := reach * reach * _card_height * ARC
+		_spots.append(Transform2D(angle, Vector2(size.x * 0.5 + offset * step, base + lift + drop)))
 
 
 ## Onde uma carta da mão está agora, em coordenadas globais e girada como no

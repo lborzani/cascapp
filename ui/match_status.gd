@@ -63,6 +63,26 @@ var counts_rounds := true:
 		counts_rounds = value
 		_refresh_rounds()
 
+## A palavra da contagem: "Rodada" na maioria, "Lance" no xadrez e nas damas. A
+## faixa mostra a rodada **em curso** ("Rodada 9"), como no protótipo, e não as
+## que já fecharam.
+var round_word := "Rodada":
+	set(value):
+		round_word = value
+		_refresh_rounds()
+## Limite de rodadas da mesa (Metrópole por rodadas): "Rodada 8 de 20". Zero é
+## sem limite.
+var round_limit := 0:
+	set(value):
+		round_limit = value
+		_refresh_rounds()
+## Um complemento curto no fim da faixa: "contra o bot Médio".
+var note := "":
+	set(value):
+		note = value
+		_refresh_note()
+var _note: Label = null
+
 ## Código da sala, ou vazio fora de uma partida em rede.
 var code := "":
 	set(value):
@@ -106,8 +126,10 @@ func _ready() -> void:
 	add_theme_constant_override("h_separation", 12)
 	add_theme_constant_override("v_separation", AppTheme.SPACE_XS)
 
-	_clock = _caption()
+	# A rodada antes do relógio: é a resposta para "em que ponto estamos".
 	_rounds = _caption()
+	_clock = _caption()
+	_note = _caption()
 	_watchers = _caption()
 	_queue = _caption()
 
@@ -125,6 +147,7 @@ func _ready() -> void:
 	add_child(_code)
 
 	_refresh_rounds()
+	_refresh_note()
 	_refresh_watchers()
 	_refresh_queue()
 	_refresh_code()
@@ -173,7 +196,18 @@ func _refresh_rounds() -> void:
 	if _rounds == null:
 		return
 	_rounds.visible = counts_rounds
-	_rounds.text = "1 rodada" if rounds == 1 else "%d rodadas" % rounds
+	var current := rounds + 1
+	if round_limit > 0:
+		_rounds.text = "%s %d de %d" % [round_word, mini(current, round_limit), round_limit]
+	else:
+		_rounds.text = "%s %d" % [round_word, current]
+
+
+func _refresh_note() -> void:
+	if _note == null:
+		return
+	_note.visible = not note.is_empty()
+	_note.text = note
 
 
 func _refresh_watchers() -> void:

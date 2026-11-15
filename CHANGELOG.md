@@ -7,7 +7,15 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
-## 1.45
+## 1.46
+
+- Ao entrar numa partida, a cor do jogo cobre a tela e sobe revelando a mesa.
+- Xadrez e damas: o último lance aparece em limão, a faixa de lances começa da esquerda, a captura estoura em coral e a barra mostra "Lance 2 · contra o bot Médio".
+- Batalha naval: o acerto estoura em coral.
+- Fim de partida: quem pede revanche aparece numa linha com a foto, e "Revisar partida" e "Menu" ficam lado a lado.
+- Sala de espera: o lugar vazio fica tracejado, e no Ludo cada lugar diz a cor dele.
+- Online: as salas aparecem como "Ludo com Maria", com lugares e há quanto tempo estão abertas.
+- Botões afundam ao toque, o dado rola mais rápido e a mão do Uno abre em leque.
 
 - Visual novo no app inteiro: cores mais vivas, cada jogo com a sua cor e botões que afundam ao toque.
 - Jogos, Online e Você foram redesenhados. A folha de cada jogo mostra os modos em cartões, e a aba Online junta o código, as salas abertas e as partidas ao vivo.
