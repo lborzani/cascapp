@@ -155,7 +155,7 @@ func _draw_mark(mark: Dictionary, t: float) -> void:
 					lerpf(14.0, 2.0, k), true)
 		&"forbid":
 			var radius: float = mark["radius"] * pop * grow
-			draw_circle(at, radius * 1.15, Color(AppTheme.BACKGROUND, 0.85 * fade))
+			draw_circle(at, radius * 1.15, Color(AppTheme.BACKGROUND, 0.85 * fade), true, -1.0, true)
 			draw_set_transform(at, 0.0, Vector2.ONE)
 			UnoCardArt._skip(self, radius, maxf(radius * 0.2, 2.0), Color(AppTheme.DANGER, fade), Vector2.ZERO)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -145,7 +145,7 @@ static func draw_card(
 		_oval(canvas, height, alpha, card_code)
 		if UnoRules.value_of_card(card_code) == UnoRules.WILD_FOUR:
 			# Miolo escuro atrás do "+4": claro direto sobre o amarelo some.
-			canvas.draw_circle(Vector2.ZERO, height * GLYPH_SIZE * 0.44, _fade(WILD_BODY, alpha))
+			canvas.draw_circle(Vector2.ZERO, height * GLYPH_SIZE * 0.44, _fade(WILD_BODY, alpha), true, -1.0, true)
 	_center_glyph(canvas, card_code, height, _fade(AppTheme.BACKGROUND, alpha), Vector2(0.0, height * 0.03))
 	_center_glyph(canvas, card_code, height, _fade(PAPER, alpha), Vector2.ZERO)
 	_corner_glyphs(canvas, card_code, height, alpha)
@@ -175,10 +175,26 @@ static func draw_back(
 	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(BACK_BODY, opacity))
 	# Escuro com a mancha coral no meio: nenhuma carta de frente é assim, então
 	# a mão de um adversário não parece uma mão de cartas vermelhas.
-	canvas.draw_colored_polygon(
+	fill(canvas,
 		_ellipse(height * ASPECT * 0.30, height * 0.27, 0.0), _fade(BACK_SPOT, opacity)
 	)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Polígono cheio com a borda suavizada.
+##
+## O preenchimento de polígono da Godot não tem antialiasing, e o MSAA 2D do
+## projeto não chega a ele nas capturas nem no aparelho: carta girada no leque
+## saía com a borda em degrau. Um traço de 1 px suavizado, na mesma cor, por cima
+## do contorno faz a transição que faltava. Toda forma cheia de carta passa por
+## aqui — corpo, moldura, oval, verso, setas.
+static func fill(canvas: CanvasItem, points: PackedVector2Array, color: Color) -> void:
+	if points.size() < 3:
+		return
+	canvas.draw_colored_polygon(points, color)
+	var outline := points.duplicate()
+	outline.append(points[0])
+	canvas.draw_polyline(outline, color, 1.0, true)
 
 
 static func width_for(height: float) -> float:
@@ -206,10 +222,10 @@ static func _fade(color: Color, alpha: float) -> Color:
 ## lados — encolher só a largura deixaria a moldura fina em cima e grossa ao lado.
 static func _rounded(canvas: CanvasItem, height: float, scale: float, color: Color) -> void:
 	var half := Vector2(height * ASPECT, height) * 0.5 * scale
-	canvas.draw_colored_polygon(rounded_rect(half, height * CORNER * scale), color)
+	fill(canvas, rounded_rect(half, height * CORNER * scale), color)
 
 
-static func rounded_rect(half: Vector2, radius: float, steps := 5) -> PackedVector2Array:
+static func rounded_rect(half: Vector2, radius: float, steps := 8) -> PackedVector2Array:
 	var points := PackedVector2Array()
 	var inner := Vector2(maxf(half.x - radius, 0.0), maxf(half.y - radius, 0.0))
 	var corners := [
@@ -241,10 +257,10 @@ static func _oval(canvas: CanvasItem, height: float, alpha: float, card_code: in
 	var half_x := height * OVAL_HALF.x
 	var half_y := height * OVAL_HALF.y
 	if not UnoRules.is_wild(card_code):
-		canvas.draw_colored_polygon(_ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
+		fill(canvas, _ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
 		return
 
-	canvas.draw_colored_polygon(_ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
+	fill(canvas, _ellipse(half_x, half_y, OVAL_TILT), _fade(PAPER, alpha))
 	# Os quartos saem do recorte da própria elipse contra quatro quadrantes, e não
 	# de arcos calculados à mão: assim eles acompanham a inclinação da oval de
 	# graça, e nenhum dos quatro pode ficar com um sinal trocado.
@@ -260,7 +276,7 @@ static func _oval(canvas: CanvasItem, height: float, alpha: float, card_code: in
 			Vector2(0.0, sign_y * reach),
 		])
 		for shard in Geometry2D.intersect_polygons(oval, mask):
-			canvas.draw_colored_polygon(shard, _fade(COLORS[quadrant], alpha))
+			fill(canvas, shard, _fade(COLORS[quadrant], alpha))
 
 
 ## O símbolo grande, no meio. Desenhado duas vezes por `draw_card`: em tinta e
@@ -336,9 +352,9 @@ static func _short_label(card_code: int) -> String:
 ## Anel e não disco cheio: cheio ele lê como um ponto grande, e a placa de
 ## proibido — que é o que a carta quer dizer — é justamente o contorno.
 static func _skip(canvas: CanvasItem, radius: float, thickness: float, ink: Color, at: Vector2) -> void:
-	canvas.draw_arc(at, radius, 0.0, TAU, 48, ink, thickness)
+	canvas.draw_arc(at, radius, 0.0, TAU, 48, ink, thickness, true)
 	var reach := Vector2(radius, radius) * 0.78
-	canvas.draw_line(at - reach, at + reach, ink, thickness)
+	canvas.draw_line(at - reach, at + reach, ink, thickness, true)
 
 
 ## O inverte: duas setas em sentidos opostos, uma acima da outra.
@@ -353,11 +369,11 @@ static func _arrow(canvas: CanvasItem, origin: Vector2, span: float, facing: flo
 	var thick := span * 0.13
 	var head := span * 0.40
 	var tip := origin + Vector2(half * facing, 0.0)
-	canvas.draw_colored_polygon(PackedVector2Array([
+	fill(canvas, PackedVector2Array([
 		origin + Vector2(-half * facing, -thick), origin + Vector2(half * facing * 0.35, -thick),
 		origin + Vector2(half * facing * 0.35, thick), origin + Vector2(-half * facing, thick),
 	]), ink)
-	canvas.draw_colored_polygon(PackedVector2Array([
+	fill(canvas, PackedVector2Array([
 		tip,
 		tip + Vector2(-head * facing, -head * 0.72),
 		tip + Vector2(-head * facing, head * 0.72),

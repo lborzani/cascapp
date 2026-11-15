@@ -214,7 +214,9 @@ func _init() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_ENTER_TREE and clock_urgent:
 		_sync_beat.call_deferred()
-	if what == NOTIFICATION_RESIZED:
+	# Também ao entrar na árvore: quem recebe o tamanho antes do `add_child` (as
+	# pílulas do Uno) não ganha outro RESIZED, e a bolacha ficava sem medida.
+	if what == NOTIFICATION_RESIZED or what == NOTIFICATION_ENTER_TREE:
 		_apply_rotation()
 		_layout()
 

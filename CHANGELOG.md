@@ -16,6 +16,7 @@ novidade.
 - Sala de espera: o lugar vazio fica tracejado, e no Ludo cada lugar diz a cor dele.
 - Online: as salas aparecem como "Ludo com Maria", com lugares e há quanto tempo estão abertas.
 - Botões afundam ao toque, o dado rola mais rápido e a mão do Uno abre em leque.
+- Uno: as cartas saem com a borda lisa, sem o serrilhado de antes.
 
 - Visual novo no app inteiro: cores mais vivas, cada jogo com a sua cor e botões que afundam ao toque.
 - Jogos, Online e Você foram redesenhados. A folha de cada jogo mostra os modos em cartões, e a aba Online junta o código, as salas abertas e as partidas ao vivo.

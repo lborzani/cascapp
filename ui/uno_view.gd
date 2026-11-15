@@ -452,7 +452,7 @@ func _draw_deck() -> void:
 	var half := Vector2(UnoCardArt.width_for(_card_height), _card_height) * 0.5
 	var slide := Vector2(1.0, -1.0) * _card_height * 0.045
 	for depth in [2, 1]:
-		draw_colored_polygon(
+		UnoCardArt.fill(self,
 			_shift(UnoCardArt.rounded_rect(half, _card_height * UnoCardArt.CORNER), _deck_center + slide * depth),
 			AppTheme.SURFACE_HIGH if depth == 2 else AppTheme.SURFACE_TOP
 		)
@@ -488,7 +488,7 @@ func _draw_pile() -> void:
 func _draw_mat(center: Vector2, color: Color) -> void:
 	var half := Vector2(_card_height * UnoCardArt.ASPECT, _card_height) * 0.5
 	var grow := Vector2.ONE * _card_height * MAT_GROW
-	draw_colored_polygon(
+	UnoCardArt.fill(self,
 		_shift(
 			UnoCardArt.rounded_rect(half + grow, _card_height * (UnoCardArt.CORNER + MAT_GROW)),
 			center
@@ -506,7 +506,7 @@ func _draw_slot(center: Vector2) -> void:
 func _draw_felt() -> void:
 	var half := Vector2(size.x * 0.47, size.y * 0.36) if _portrait() else Vector2(size.x * 0.40, size.y * 0.47)
 	_felt.draw_set_transform(_table_center(), 0.0, Vector2(half.x / half.y, 1.0))
-	_felt.draw_circle(Vector2.ZERO, half.y, AppTheme.SURFACE)
+	_felt.draw_circle(Vector2.ZERO, half.y, AppTheme.SURFACE, true, -1.0, true)
 	_felt.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -528,7 +528,7 @@ func _draw_ring() -> void:
 		var heading := Vector2(-sin(tip_angle), cos(tip_angle)) * (1.0 if forward else -1.0)
 		var tip := center + Vector2(cos(tip_angle), sin(tip_angle)) * radius
 		var side := Vector2(-heading.y, heading.x) * thick * 1.5
-		_ring.draw_colored_polygon(
+		UnoCardArt.fill(_ring, 
 			PackedVector2Array([tip + heading * thick * 1.6, tip + side, tip - side]),
 			AppTheme.SURFACE_TOP
 		)
