@@ -37,7 +37,7 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Tamanho de uma etiqueta de assento. Fixo, e não medido: elas são posicionadas à
 ## mão sobre a mesa, e um tamanho que muda com o texto faria a mesa dançar a cada
 ## carta comprada.
-const TAG_SIZE := Vector2(156, PlayerTag.HEIGHT_TAG)
+const TAG_SIZE := Vector2(196, PlayerTag.HEIGHT_TAG)
 ## Altura da faixa da mão. A de pé é maior porque ali a mão tem a largura inteira,
 ## e a largura deixa de ser o limite da carta.
 const LANDSCAPE_HAND := 112.0
@@ -901,6 +901,23 @@ func _build_actions() -> void:
 		column.add_child(button)
 		column.move_child(button, %PassButton.get_index())
 		_actions[kind] = button
+		if kind == UnoRules.CALL:
+			_dress_shout(button)
+
+
+## O "UNO!" do protótipo: placa coral, tinta escura, balançando enquanto existe.
+func _dress_shout(button: Button) -> void:
+	button.custom_minimum_size.y = 60
+	button.add_theme_font_size_override("font_size", 26)
+	button.add_theme_stylebox_override("normal", AppTheme.plate(AppTheme.DANGER, Color("c22452")))
+	button.add_theme_stylebox_override("hover", AppTheme.plate(AppTheme.DANGER.lightened(0.08), Color("c22452")))
+	button.add_theme_stylebox_override("pressed", AppTheme.plate(AppTheme.DANGER.darkened(0.08), Color("c22452"), true))
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, AppTheme.ACCENT_INK)
+	button.resized.connect(func() -> void: button.pivot_offset = button.size * 0.5)
+	var wobble := button.create_tween().set_loops()
+	wobble.tween_property(button, "rotation", 0.05, 0.5).set_trans(Tween.TRANS_SINE)
+	wobble.tween_property(button, "rotation", -0.07, 0.5).set_trans(Tween.TRANS_SINE)
 
 
 func _refresh_actions() -> void:
@@ -953,21 +970,42 @@ func _playable_now() -> PackedInt32Array:
 	return codes
 
 
+## A pílula do meio da mesa: o que fazer agora, ou de quem é a vez.
 func _refresh_status() -> void:
+	_table.hint_lit = false
 	if _link_down:
-		%StatusLabel.text = "Conexão instável; tentando voltar…"
+		_table.hint = "Reconectando…"
 		return
 	var seat := UnoRules.turn_of(_state)
 	if not _my_turn():
-		%StatusLabel.text = "Vez de %s." % _seat_name(seat)
+		_table.hint = "Vez de %s" % _seat_name(seat)
 		return
+	_table.hint_lit = true
 	if UnoRules.drew(_state):
-		%StatusLabel.text = "Você comprou. Jogue a carta comprada ou passe."
-		return
-	if _playable_now().is_empty():
-		%StatusLabel.text = "Nada serve. Toque no monte para comprar."
-		return
-	%StatusLabel.text = "Sua vez. Jogue uma carta ou compre."
+		_table.hint = "Jogue a comprada ou passe"
+	elif _playable_now().is_empty():
+		_table.hint = "Nada serve: compre do monte"
+	else:
+		_table.hint = _match_hint()
+
+
+## "Jogue um verde ou um 7": a cor que vale e o valor do topo. Depois de um
+## curinga só a cor — qualquer curinga serve de qualquer jeito.
+func _match_hint() -> String:
+	var color := UnoRules.color_name(UnoRules.active_color(_state)).to_lower()
+	var top := UnoRules.top_card(_state)
+	if top < 0 or UnoRules.is_wild(top):
+		return "Jogue um %s" % color
+	var value := UnoRules.value_of_card(top)
+	var face := str(value)
+	match value:
+		UnoRules.SKIP:
+			face = "pula"
+		UnoRules.REVERSE:
+			face = "inverte"
+		UnoRules.DRAW_TWO:
+			face = "+2"
+	return "Jogue um %s ou um %s" % [color, face]
 
 
 ## Onde cada jogador aparece na mesa: uma etiqueta presa ao leque dele.
@@ -992,7 +1030,9 @@ func _build_tags() -> void:
 
 	for seat in _rules.players():
 		var tag := PlayerTag.new()
-		tag.shape = PlayerTag.Shape.TAG
+		# A sua é a faixa alta do rodapé ("Sua vez · 7 cartas"); as dos outros, a
+		# pílula com o selo da contagem.
+		tag.shape = PlayerTag.Shape.STRIP if seat == Game.local_seat else PlayerTag.Shape.TAG
 		tag.seat_color = UnoView.color_of_seat(seat)
 		if seat == Game.local_seat:
 			%LocalSlot.add_child(tag)
@@ -1026,12 +1066,18 @@ func _refresh_tags() -> void:
 		# cadeira que vira máquina precisar passar a dizer "(bot)".
 		tag.title = _seat_name(seat)
 		tag.active = seat == turn
-		tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held
-		# Uma carta na mão é o aviso mais forte da mesa, e é o que o Uno grita em
-		# voz alta na vida real. Ele ganha o vermelho do app — o mesmo do que custa
-		# caro — e vence o destaque da vez, que é informação mais barata.
-		tag.alert = held == 1
-		tag.alert_text = "1 carta!"
+		if seat == Game.local_seat:
+			tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held
+			# Uma carta na sua mão é o aviso mais forte da mesa: o vermelho do app
+			# vence o destaque da vez.
+			tag.alert = held == 1
+			tag.alert_text = "1 carta!"
+		else:
+			# Nos outros a contagem é o selo da pílula, e uma carta só vira "UNO!"
+			# em coral — o aviso que o Uno grita em voz alta.
+			tag.subtitle = ""
+			tag.badge = "UNO!" if held == 1 else str(held)
+			tag.badge_hot = held == 1
 	_place_tags()
 
 

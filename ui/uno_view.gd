@@ -130,6 +130,26 @@ var can_draw := false:
 var held_top := -1
 var _held_color := 0
 
+## A pílula embaixo das duas cartas do meio: o que fazer agora ("Jogue um verde
+## ou um 7") ou de quem é a vez. Limão quando a vez é de quem segura o aparelho.
+var hint := "":
+	set(value):
+		hint = value
+		queue_redraw()
+var hint_lit := false:
+	set(value):
+		hint_lit = value
+		queue_redraw()
+
+## Uma volta do anel do sentido, em segundos. Devagar: é fundo, não alarme.
+const RING_TURN := 14.0
+## O feltro oval e o anel tracejado moram em dois filhos desenhados **por trás**
+## da mesa. O anel gira pela `rotation` do nó, sem redesenhar a mesa a cada
+## quadro.
+var _felt: Control = null
+var _ring: Control = null
+var _turn := 0.0
+
 
 ## Quanto a seta do sentido está girada. O inverte a faz dar meia volta até
 ## assentar no sentido novo — é o único efeito dele que se vê, já que nenhuma mão
@@ -169,16 +189,43 @@ var _pile_center := Vector2.ZERO
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_felt = _backdrop(_draw_felt)
+	_ring = _backdrop(_draw_ring)
+	set_process(true)
+
+
+func _backdrop(painter: Callable) -> Control:
+	var layer := Control.new()
+	layer.show_behind_parent = true
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Âncoras antes do `add_child`.
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(layer)
+	layer.draw.connect(painter)
+	return layer
+
+
+## O anel gira no sentido em que a vez anda: horário quando ela vai para a
+## esquerda de quem está embaixo, anti-horário depois de um inverte.
+func _process(delta: float) -> void:
+	if state == null or _ring == null:
+		return
+	var way := 1.0 if UnoRules.direction_of(state) > 0 else -1.0
+	_turn = fmod(_turn + delta * TAU / RING_TURN * way, TAU)
+	_ring.pivot_offset = _table_center()
+	_ring.rotation = _turn + spin * way
 
 
 func _draw() -> void:
 	_layout()
 	if state == null:
 		return
-	_draw_direction()
+	_felt.queue_redraw()
+	_ring.queue_redraw()
 	_draw_seats()
 	_draw_deck()
 	_draw_pile()
+	_draw_hint()
 
 
 func _portrait() -> bool:
@@ -350,49 +397,25 @@ func _draw_seats() -> void:
 ##
 ## O nome e o número **não** giram. Eles são texto, e texto de lado obriga a
 ## inclinar o aparelho para ler o que a mesa deveria dizer de relance.
-func _draw_seat(seat: int, center: Vector2, is_turn: bool) -> void:
+func _draw_seat(seat: int, center: Vector2, _is_turn: bool) -> void:
 	var held := UnoRules.hand_size(state, seat)
 	var back_height := _back_height()
 	var shown := mini(held, MAX_BACKS)
 	var step := UnoCardArt.width_for(back_height) * BACK_STEP
 
-	# Uma carta na mão é o aviso mais forte da mesa, e é o que o Uno grita em voz
-	# alta na vida real. Vermelho — a cor que o app já usa para o que custa caro.
-	var alarm := held == 1
-	var tint := color_of_seat(seat)
-	var ink := AppTheme.DANGER if alarm else (AppTheme.TEXT if is_turn else AppTheme.TEXT_DIM)
-
 	# O leque abre ao longo do eixo x **do assento**, que é o raio girado de um
 	# quarto de volta. No lugar de baixo isso dá o leque normal, deitado; nos lados
-	# dá um leque em pé; em cima, um leque de cabeça para baixo — que é como as
-	# cartas de quem está do outro lado da mesa apontam.
+	# dá um leque em pé; em cima, um leque de cabeça para baixo.
+	#
+	# Só os versos: o nome e a contagem moram na pílula do assento, como no
+	# protótipo, e o destaque da vez também.
 	var facing := _angle_of(seat) - PI * 0.5
 	var along := Vector2(cos(facing), sin(facing))
-	var half := Vector2(UnoCardArt.width_for(back_height), back_height) * 0.5
-	var spread := step * maxf(shown - 1, 0) * 0.5
-
-	# A moldura da cor do dono, girada junto com o leque. É o que amarra a mão na
-	# mesa ao nome na coluna da esquerda — sem ela, seis leques idênticos de costas
-	# só se distinguem por posição, e a posição muda de aparelho para aparelho.
-	_draw_seat_mat(center, half + Vector2(spread, 0.0), back_height, facing, tint, is_turn)
-
 	for index in shown:
 		var offset := index - (shown - 1) * 0.5
 		UnoCardArt.draw_back(
 			self, center + along * (offset * step), back_height, facing + offset * 0.06
 		)
-
-	# O número em cima do leque, e **sem o nome ao lado**.
-	#
-	# O nome saiu da mesa e foi para a coluna da esquerda, junto do da cor. Ele
-	# passou por três lugares aqui antes disso — acima do leque, para dentro pelo
-	# raio, e de novo acima — e nenhum resolvia os seis assentos ao mesmo tempo:
-	# um rótulo é uma linha larga e baixa, e numa mesa de seis não há vão largo o
-	# bastante em todas as direções. O que resolve não é achar o vão certo, é o
-	# nome não precisar estar aqui: a cor da moldura já diz de quem é a mão.
-	var disc := back_height * 0.32
-	draw_circle(center, disc, Color(AppTheme.BACKGROUND, 0.88))
-	_text(str(held), center, disc * 1.25, ink)
 
 
 ## Meia extensão do grupo de cartas na direção `axis`.
@@ -409,32 +432,6 @@ static func _extent(axis: Vector2, spread: float, half: Vector2, facing: float) 
 	)
 
 
-## A moldura da cor do dono, atrás do leque e girada com ele.
-##
-## Preenchimento fraco mais borda: só a borda some contra um fundo escuro quando
-## a moldura é fina, e só o preenchimento vira uma mancha sem limite. Na vez do
-## jogador os dois sobem juntos — é o mesmo destaque, mais forte, e não um
-## segundo enfeite que o olho tem de aprender.
-func _draw_seat_mat(
-	center: Vector2, half: Vector2, back_height: float,
-	facing: float, tint: Color, is_turn: bool
-) -> void:
-	var pad := Vector2.ONE * back_height * 0.16
-	var shape := UnoCardArt.rounded_rect(half + pad, back_height * 0.26)
-	var turn := Transform2D(facing, center)
-	var placed := PackedVector2Array()
-	for point in shape:
-		placed.append(turn * point)
-
-	draw_colored_polygon(placed, Color(tint, 0.30 if is_turn else 0.12))
-	var outline := placed.duplicate()
-	outline.append(placed[0])
-	draw_polyline(
-		outline, Color(tint, 1.0 if is_turn else 0.6),
-		maxf(back_height * (0.06 if is_turn else 0.035), 1.5), true
-	)
-
-
 func _name_of(seat: int) -> String:
 	if seat < names.size() and not names[seat].is_empty():
 		return names[seat]
@@ -445,37 +442,40 @@ func _name_of(seat: int) -> String:
 
 
 func _draw_deck() -> void:
-	# O realce vai **por baixo**: por cima ele cobriria a moldura clara da carta,
-	# que é a segunda coisa que se lê nela.
-	if can_draw:
-		_draw_mat(_deck_center, AppTheme.ACCENT)
-
 	if UnoRules.deck_of(state).is_empty() and UnoRules.pile_of(state).size() <= 1:
 		# Baralho e descarte esgotados. O lugar continua marcado — sumir com ele
 		# faria a mesa parecer quebrada em vez de vazia.
 		_draw_slot(_deck_center)
 		return
-	# Três versos empilhados, e não um: um verso sozinho lê como uma carta virada,
-	# e o que está ali é um **monte**.
-	for depth in range(2, -1, -1):
-		var slide := Vector2(-1.0, -1.0) * depth * _card_height * 0.018
-		UnoCardArt.draw_back(self, _deck_center + slide, _card_height)
+	# Duas lâminas atrás, subindo para a direita: é um **monte**, e não uma carta
+	# virada. O verso de cima ganha a moldura limão quando comprar vale.
+	var half := Vector2(UnoCardArt.width_for(_card_height), _card_height) * 0.5
+	var slide := Vector2(1.0, -1.0) * _card_height * 0.045
+	for depth in [2, 1]:
+		draw_colored_polygon(
+			_shift(UnoCardArt.rounded_rect(half, _card_height * UnoCardArt.CORNER), _deck_center + slide * depth),
+			AppTheme.SURFACE_HIGH if depth == 2 else AppTheme.SURFACE_TOP
+		)
+	UnoCardArt.draw_back(
+		self, _deck_center, _card_height, 0.0, 1.0,
+		AppTheme.ACCENT if can_draw else Color(0, 0, 0, 0)
+	)
 
 
 func _draw_pile() -> void:
 	if held_top >= 0:
-		_draw_mat(_pile_center, UnoCardArt.COLORS[_held_color])
+		if UnoRules.is_wild(held_top):
+			_draw_mat(_pile_center, UnoCardArt.COLORS[_held_color])
 		UnoCardArt.draw_card(self, held_top, _pile_center, _card_height)
 		return
 	var top := UnoRules.top_card(state)
 	if top < 0:
 		_draw_slot(_pile_center)
 		return
-	# A cor ativa não é a cor da carta do topo: elas coincidem quase sempre e
-	# discordam justamente depois de um curinga, que é quando a informação importa.
-	# Por isso o tapete é desenhado sempre, e não só nesse caso — um realce que
-	# aparece e some ensina o jogador a procurá-lo.
-	_draw_mat(_pile_center, UnoCardArt.COLORS[UnoRules.active_color(state)])
+	# A cor ativa só difere da carta do topo depois de um curinga, e é só ali que o
+	# tapete aparece. Nas outras a carta já diz a cor, e a pílula embaixo repete.
+	if UnoRules.is_wild(top):
+		_draw_mat(_pile_center, UnoCardArt.COLORS[UnoRules.active_color(state)])
 	UnoCardArt.draw_card(self, top, _pile_center, _card_height)
 
 
@@ -502,47 +502,56 @@ func _draw_slot(center: Vector2) -> void:
 	draw_rect(Rect2(center - half, half * 2.0), AppTheme.BORDER, false, maxf(_card_height * 0.02, 1.0))
 
 
-## O sentido do jogo: um arco em volta do meio da mesa, girando para o lado em
-## que a vez anda.
-##
-## Concêntrico com os assentos de propósito. É o que faz a seta apontar para o
-## **próximo jogador** em vez de para um lado da tela — e é o que dá ao inverte um
-## efeito visível, já que ele não mexe em nenhuma mão.
-func _draw_direction() -> void:
+## O feltro: uma oval clara sob a mesa inteira, como no protótipo.
+func _draw_felt() -> void:
+	var half := Vector2(size.x * 0.47, size.y * 0.36) if _portrait() else Vector2(size.x * 0.40, size.y * 0.47)
+	_felt.draw_set_transform(_table_center(), 0.0, Vector2(half.x / half.y, 1.0))
+	_felt.draw_circle(Vector2.ZERO, half.y, AppTheme.SURFACE)
+	_felt.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## O sentido do jogo: quatro traços num anel em volta do meio, cada um com a ponta
+## para onde a vez anda, girando para o mesmo lado. É o único efeito do inverte
+## que se vê, já que nenhuma mão muda.
+func _draw_ring() -> void:
+	if state == null:
+		return
 	var forward := UnoRules.direction_of(state) > 0
-	var radius := minf(size.y * 0.09, size.x * 0.05)
-	# Rente ao rodapé da mesa, logo acima do leque da mão.
-	#
-	# É o lugar do jogador local no anel, e ele fica vazio — a mão dele é o leque
-	# abaixo desta vista. A seta ali não disputa espaço com assento nenhum, e fica
-	# no caminho do olho que vai da mesa para a própria mão, que é o percurso que
-	# se faz a cada vez.
-	#
-	# Ela nasceu no alto e depois no raio da mesa; nos dois lugares caiu em cima do
-	# contador de um assento. Aqui não há o que atropelar.
-	var center := Vector2(size.x * 0.5, size.y - radius * 1.35)
-	var thickness := maxf(radius * 0.16, 2.0)
-	var ink := Color(AppTheme.TEXT_DIM, 0.75)
+	var center := _table_center()
+	var radius := minf(size.x, size.y) * 0.36 if _portrait() else size.y * 0.40
+	var thick := maxf(radius * 0.04, 3.0)
+	var dash := TAU * 0.17
+	for index in 4:
+		var start := TAU * 0.25 * index
+		_ring.draw_arc(center, radius, start, start + dash, 24, AppTheme.SURFACE_TOP, thick, true)
+		var tip_angle := start + dash if forward else start
+		var heading := Vector2(-sin(tip_angle), cos(tip_angle)) * (1.0 if forward else -1.0)
+		var tip := center + Vector2(cos(tip_angle), sin(tip_angle)) * radius
+		var side := Vector2(-heading.y, heading.x) * thick * 1.5
+		_ring.draw_colored_polygon(
+			PackedVector2Array([tip + heading * thick * 1.6, tip + side, tip - side]),
+			AppTheme.SURFACE_TOP
+		)
 
-	# Quase o anel inteiro: solta no rodapé, a seta é um **ícone**, e um arco curto
-	# solto lê como um risco. Fechando três quartos de volta ela lê como giro.
-	var span := TAU * 0.72
-	var start := (-PI * 0.35 if forward else -PI * 0.65) + spin
-	var sweep := span if forward else -span
-	draw_arc(center, radius, start, start + sweep, 28, ink, thickness, true)
 
-	var tip_angle := start + sweep
-	var tip := center + Vector2(cos(tip_angle), sin(tip_angle)) * radius
-	# Perpendicular ao raio, no sentido da varredura: é o que faz a ponta apontar
-	# para onde a vez anda em vez de para fora do círculo.
-	var heading := Vector2(-sin(tip_angle), cos(tip_angle)) * (1.0 if forward else -1.0)
-	var side := Vector2(-heading.y, heading.x)
-	var head := radius * 0.62
-	draw_colored_polygon(PackedVector2Array([
-		tip + heading * head,
-		tip - heading * head * 0.4 + side * head * 0.6,
-		tip - heading * head * 0.4 - side * head * 0.6,
-	]), ink)
+## A pílula embaixo do monte e do descarte.
+func _draw_hint() -> void:
+	if hint.is_empty():
+		return
+	var font := AppTheme.font(800)
+	var font_size := 13
+	var width := font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + 28.0
+	# Deitada, embaixo das cartas, como no protótipo. De pé, em cima: embaixo
+	# ficam as pílulas dos dois assentos laterais, na mesma altura.
+	var below := _card_height * 0.64 + 13.0
+	var middle := Vector2(_table_center().x, _deck_center.y + (-below if _portrait() else below))
+	var rect := Rect2(middle - Vector2(width * 0.5, 13.0), Vector2(width, 26.0))
+	draw_style_box(AppTheme.box(AppTheme.ACCENT if hint_lit else AppTheme.SURFACE_HIGH, 13), rect)
+	draw_string(
+		font, Vector2(rect.position.x + 14.0, middle.y + 5.0), hint,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
+		AppTheme.ACCENT_INK if hint_lit else AppTheme.TEXT_DIM
+	)
 
 
 # --- utilidades ---------------------------------------------------------------
@@ -553,18 +562,6 @@ static func _shift(points: PackedVector2Array, by: Vector2) -> PackedVector2Arra
 	for point in points:
 		out.append(point + by)
 	return out
-
-
-## Texto centrado no ponto. `draw_string` ancora na linha de base e alinha à
-## esquerda, então centrar de verdade pede a medida da string.
-func _text(label: String, at: Vector2, span: float, ink: Color) -> void:
-	var font := AppTheme.font(600)
-	var points := int(maxf(span, 8.0))
-	var measure := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, points)
-	draw_string(
-		font, at + Vector2(-measure.x * 0.5, points * 0.36),
-		label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, points, ink
-	)
 
 
 func _gui_input(event: InputEvent) -> void:

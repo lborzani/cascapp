@@ -88,9 +88,12 @@ func _draw() -> void:
 	for index in cards.size():
 		var card := cards[index]
 		var spot := _spots[index]
+		var lit := enabled and _is_playable(card)
+		# A que serve ganha a moldura limão, como no protótipo; a outra fica no
+		# escuro. As duas pistas dizem a mesma coisa, de longe e de perto.
 		UnoCardArt.draw_card(
 			self, card, spot.origin, _card_height, spot.get_rotation(),
-			not _is_playable(card) or not enabled
+			not lit, 1.0, AppTheme.ACCENT if lit else Color(0, 0, 0, 0)
 		)
 
 

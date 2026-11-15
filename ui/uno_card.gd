@@ -42,29 +42,31 @@ extends RefCounted
 ## Duplicar a lista é o preço de as duas telas poderem ser afinadas em separado.
 ## Uma constante compartilhada faria um ajuste no Ludo repintar o Uno.
 const COLORS := [
-	Color("cf4b45"),  # vermelho
-	Color("dfa62c"),  # amarelo
-	Color("4e9e5c"),  # verde
-	Color("4176ad"),  # azul
+	Color("ff4d5e"),  # vermelho
+	Color("e0a800"),  # amarelo
+	Color("3dbe5c"),  # verde
+	Color("3b8bff"),  # azul
 ]
 
 ## O corpo do curinga. Quase preto e não preto: preto puro sobre o fundo do app
 ## — que também é quase preto — faz a carta perder a borda e virar um buraco.
-const WILD_BODY := Color("2b2521")
+const WILD_BODY := AppTheme.COASTER
 
 ## A moldura e a oval. É o `TEXT` do tema, e não branco puro: o app inteiro é
 ## quente, e um branco frio no meio de uma mão de cartas denuncia que o desenho
 ## veio de outro lugar.
-const PAPER := Color("f2eae0")
+const PAPER := AppTheme.PAPER
 ## O véu da carta apagada. Fixo, e não o fundo do tema: a carta é desenho
 ## protegido, e o tom do véu faz parte de como ela aparece apagada.
-const VEIL_COLOR := Color("13100e")
+const VEIL_COLOR := AppTheme.COASTER
 
 ## O verso. Vermelho como o baralho de verdade, escurecido para não competir com
 ## uma carta vermelha jogada ao lado dele.
-const BACK_BODY := Color("8f3833")
+const BACK_BODY := AppTheme.BACKGROUND
+## A mancha coral no meio do verso, como no protótipo. Sem palavra nenhuma.
+const BACK_SPOT := AppTheme.DANGER
 
-const SHADOW := Color(0, 0, 0, 0.34)
+const SHADOW := Color(0, 0, 0, 0.45)
 
 ## Quanto do fundo entra na carta que não pode ser jogada.
 ##
@@ -78,7 +80,7 @@ const SHADOW := Color(0, 0, 0, 0.34)
 ## Com o véu, cada forma continua opaca e nítida; o que muda é a distância delas
 ## em relação ao fundo. A carta apagada fica escura e quente como o resto do app,
 ## e o leque volta a ter cartas em vez de uma faixa.
-const DIM_VEIL := 0.52
+const DIM_VEIL := 0.55
 
 ## Proporção da carta de verdade (88 × 58 mm). Tudo aqui é medido em **altura**:
 ## é ela que a linha do leque decide, e a largura sai daqui.
@@ -87,8 +89,8 @@ const ASPECT := 0.66
 ## Frações da altura. Todas relativas, então a mesma função desenha a carta de
 ## 30 px do adversário e a de 300 px da folha de contato.
 const CORNER := 0.085
-const FRAME := 0.055
-const SHADOW_OFFSET := Vector2(0.03, 0.045)
+const FRAME := 0.045
+const SHADOW_OFFSET := Vector2(0.0, 0.04)
 ## Meias-medidas da oval, e o quanto ela deita. Vinte graus é o bastante para
 ## ler como inclinada e pouco o bastante para o algarismo dentro dela continuar
 ## de pé — a oval gira, o número não.
@@ -100,7 +102,7 @@ const SHADOW_OFFSET := Vector2(0.03, 0.045)
 const OVAL_HALF := Vector2(0.25, 0.34)
 const OVAL_TILT := -0.35
 
-const GLYPH_SIZE := 0.44
+const GLYPH_SIZE := 0.42
 const CORNER_GLYPH_SIZE := 0.15
 ## Para dentro o bastante para o canto cair **sobre a cor**, e não sobre a moldura
 ## clara. Papel sobre papel é um canto que não existe, e era assim que a folha de
@@ -116,9 +118,12 @@ const CORNER_INSET := Vector2(0.20, 0.125)
 ## `dim` apaga a carta que não pode ser jogada. Apagar e não esconder: a mão é a
 ## informação do jogador, e sumir com metade dela para dizer "estas não servem"
 ## esconde justamente o que ele precisa para decidir se compra.
+##
+## `rim` troca a moldura clara por outra cor — o limão da carta que pode ser
+## jogada. Transparente é a moldura de sempre.
 static func draw_card(
 	canvas: CanvasItem, card_code: int, center: Vector2, height: float,
-	rotation := 0.0, dim := false, opacity := 1.0
+	rotation := 0.0, dim := false, opacity := 1.0, rim := Color(0, 0, 0, 0)
 ) -> void:
 	if height <= 0.0 or opacity <= 0.0:
 		return
@@ -132,10 +137,17 @@ static func draw_card(
 	# Moldura clara por fora, corpo colorido por dentro. Dois retângulos e não um
 	# contorno traçado: o traço da Godot não acompanha canto arredondado, e a
 	# emenda aparece justamente nos quatro cantos.
-	_rounded(canvas, height, 1.0, _fade(PAPER, alpha))
+	_rounded(canvas, height, 1.0, _fade(PAPER if rim.a <= 0.0 else rim, alpha))
 	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(color, alpha))
-	_oval(canvas, height, alpha, card_code)
-	_center_glyph(canvas, card_code, height, alpha)
+	# Corpo chapado e o símbolo claro com sombra de tinta, como no protótipo. A
+	# oval só no curinga: ali ela é o desenho que diz "qualquer cor".
+	if UnoRules.is_wild(card_code):
+		_oval(canvas, height, alpha, card_code)
+		if UnoRules.value_of_card(card_code) == UnoRules.WILD_FOUR:
+			# Miolo escuro atrás do "+4": claro direto sobre o amarelo some.
+			canvas.draw_circle(Vector2.ZERO, height * GLYPH_SIZE * 0.44, _fade(WILD_BODY, alpha))
+	_center_glyph(canvas, card_code, height, _fade(AppTheme.BACKGROUND, alpha), Vector2(0.0, height * 0.03))
+	_center_glyph(canvas, card_code, height, _fade(PAPER, alpha), Vector2.ZERO)
 	_corner_glyphs(canvas, card_code, height, alpha)
 	# O véu por último: ele afasta a carta inteira do primeiro plano de uma vez, em
 	# vez de cada forma dela ter de saber que está apagada.
@@ -150,7 +162,8 @@ static func draw_card(
 ## **inconfundível** de frente nenhuma, senão uma mão de adversário lida de
 ## relance parece uma mão de cartas vermelhas.
 static func draw_back(
-	canvas: CanvasItem, center: Vector2, height: float, rotation := 0.0, opacity := 1.0
+	canvas: CanvasItem, center: Vector2, height: float, rotation := 0.0, opacity := 1.0,
+	rim := Color(0, 0, 0, 0)
 ) -> void:
 	if height <= 0.0 or opacity <= 0.0:
 		return
@@ -158,15 +171,13 @@ static func draw_back(
 	_rounded(canvas, height, 1.0, _fade(SHADOW, opacity))
 	canvas.draw_set_transform(center, rotation, Vector2.ONE)
 
-	_rounded(canvas, height, 1.0, _fade(PAPER, opacity))
+	_rounded(canvas, height, 1.0, _fade(PAPER if rim.a <= 0.0 else rim, opacity))
 	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(BACK_BODY, opacity))
-	# A oval do verso é vazia e deitada mais, com a palavra dentro. É o que o
-	# baralho de verdade tem, e é o que separa o verso de uma carta vermelha.
+	# Escuro com a mancha coral no meio: nenhuma carta de frente é assim, então
+	# a mão de um adversário não parece uma mão de cartas vermelhas.
 	canvas.draw_colored_polygon(
-		_ellipse(height * OVAL_HALF.x * 1.05, height * OVAL_HALF.y * 0.92, OVAL_TILT),
-		_fade(PAPER, opacity)
+		_ellipse(height * ASPECT * 0.30, height * 0.27, 0.0), _fade(BACK_SPOT, opacity)
 	)
-	_text(canvas, "UNO", height * 0.20, _fade(BACK_BODY, opacity), Vector2.ZERO)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -252,32 +263,27 @@ static func _oval(canvas: CanvasItem, height: float, alpha: float, card_code: in
 			canvas.draw_colored_polygon(shard, _fade(COLORS[quadrant], alpha))
 
 
-## O símbolo grande, no meio da oval.
-##
-## Cor da carta sobre papel nos números e nas ações; papel sobre os quartos
-## coloridos no curinga, porque ali não há uma cor da carta — é essa a graça dela.
-static func _center_glyph(canvas: CanvasItem, card_code: int, height: float, alpha: float) -> void:
+## O símbolo grande, no meio. Desenhado duas vezes por `draw_card`: em tinta e
+## deslocado (a sombra), depois claro no lugar.
+static func _center_glyph(
+	canvas: CanvasItem, card_code: int, height: float, ink: Color, at: Vector2
+) -> void:
 	var value := UnoRules.value_of_card(card_code)
-	var ink := _fade(PAPER if UnoRules.is_wild(card_code) else _body_color(card_code), alpha)
 	var span := height * GLYPH_SIZE
 
 	match value:
 		UnoRules.SKIP:
-			_skip(canvas, span * 0.38, span * 0.12, ink)
+			_skip(canvas, span * 0.38, span * 0.12, ink, at)
 		UnoRules.REVERSE:
-			_reverse(canvas, span * 0.58, ink)
+			_reverse(canvas, span * 0.58, ink, at)
 		UnoRules.DRAW_TWO:
-			_text(canvas, "+2", span * 0.62, ink, Vector2.ZERO)
+			_text(canvas, "+2", span * 0.62, ink, at)
 		UnoRules.WILD:
 			pass
 		UnoRules.WILD_FOUR:
-			# Sobre os quatro quartos coloridos, e por isso com o miolo escuro
-			# atrás: um "+4" claro direto sobre o amarelo some, e sobre o vermelho
-			# vibra. O disco é o que dá a ele um fundo só.
-			canvas.draw_circle(Vector2.ZERO, span * 0.44, _fade(WILD_BODY, alpha))
-			_text(canvas, "+4", span * 0.62, _fade(PAPER, alpha), Vector2.ZERO)
+			_text(canvas, "+4", span * 0.62, ink, at)
 		_:
-			_text(canvas, str(value), span, ink, Vector2.ZERO)
+			_text(canvas, str(value), span, ink, at)
 
 
 ## Os cantos: o mesmo símbolo, pequeno, em cima à esquerda e embaixo à direita.
@@ -329,17 +335,17 @@ static func _short_label(card_code: int) -> String:
 ##
 ## Anel e não disco cheio: cheio ele lê como um ponto grande, e a placa de
 ## proibido — que é o que a carta quer dizer — é justamente o contorno.
-static func _skip(canvas: CanvasItem, radius: float, thickness: float, ink: Color) -> void:
-	canvas.draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, ink, thickness)
+static func _skip(canvas: CanvasItem, radius: float, thickness: float, ink: Color, at: Vector2) -> void:
+	canvas.draw_arc(at, radius, 0.0, TAU, 48, ink, thickness)
 	var reach := Vector2(radius, radius) * 0.78
-	canvas.draw_line(-reach, reach, ink, thickness)
+	canvas.draw_line(at - reach, at + reach, ink, thickness)
 
 
 ## O inverte: duas setas em sentidos opostos, uma acima da outra.
-static func _reverse(canvas: CanvasItem, span: float, ink: Color) -> void:
+static func _reverse(canvas: CanvasItem, span: float, ink: Color, at: Vector2) -> void:
 	var gap := span * 0.30
-	_arrow(canvas, Vector2(0.0, -gap), span, 1.0, ink)
-	_arrow(canvas, Vector2(0.0, gap), span, -1.0, ink)
+	_arrow(canvas, at + Vector2(0.0, -gap), span, 1.0, ink)
+	_arrow(canvas, at + Vector2(0.0, gap), span, -1.0, ink)
 
 
 static func _arrow(canvas: CanvasItem, origin: Vector2, span: float, facing: float, ink: Color) -> void:

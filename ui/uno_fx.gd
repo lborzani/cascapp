@@ -157,7 +157,7 @@ func _draw_mark(mark: Dictionary, t: float) -> void:
 			var radius: float = mark["radius"] * pop * grow
 			draw_circle(at, radius * 1.15, Color(AppTheme.BACKGROUND, 0.85 * fade))
 			draw_set_transform(at, 0.0, Vector2.ONE)
-			UnoCardArt._skip(self, radius, maxf(radius * 0.2, 2.0), Color(AppTheme.DANGER, fade))
+			UnoCardArt._skip(self, radius, maxf(radius * 0.2, 2.0), Color(AppTheme.DANGER, fade), Vector2.ZERO)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		&"shout":
 			var text: String = mark["text"]

@@ -107,6 +107,18 @@ var photo: Texture2D = null:
 		alert_text = value
 		queue_redraw()
 
+## Um selo curto à direita — as cartas na mão no Uno. Com selo a etiqueta vira
+## pílula, como os adversários do protótipo. `badge_hot` pinta de coral (uma
+## carta só: "UNO!").
+@export var badge := "":
+	set(value):
+		badge = value
+		queue_redraw()
+@export var badge_hot := false:
+	set(value):
+		badge_hot = value
+		queue_redraw()
+
 ## Peças que este lado capturou, como inteiros de `Board.piece`. Só na faixa.
 var captured: Array = []:
 	set(value):
@@ -267,6 +279,29 @@ func _draw() -> void:
 		_draw_pips()
 	if not clock_text.is_empty():
 		_draw_clock()
+	if not badge.is_empty():
+		_draw_badge()
+
+
+const BADGE_SIZE := 14
+
+
+func _badge_width() -> float:
+	var text := AppTheme.display(700).get_string_size(badge, HORIZONTAL_ALIGNMENT_LEFT, -1, BADGE_SIZE).x
+	return maxf(28.0, text + 12.0)
+
+
+func _draw_badge() -> void:
+	var width := _badge_width()
+	var rect := Rect2(size.x - width - 9.0, (size.y - 26.0) * 0.5, width, 26.0)
+	draw_style_box(AppTheme.box(AppTheme.DANGER if badge_hot else AppTheme.BACKGROUND, 8), rect)
+	var face := AppTheme.display(700)
+	var text := face.get_string_size(badge, HORIZONTAL_ALIGNMENT_LEFT, -1, BADGE_SIZE).x
+	draw_string(
+		face, Vector2(rect.position.x + (width - text) * 0.5, rect.position.y + 18.0), badge,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, BADGE_SIZE,
+		AppTheme.ACCENT_INK if badge_hot else AppTheme.TEXT
+	)
 
 
 ## O relógio numa pílula: limão cheio com tinta escura em quem joga, escura e
@@ -338,6 +373,8 @@ func _draw_captured(start_x: float) -> void:
 ## Quanto do lado direito está ocupado por placar ou etiqueta de vez. É o que o
 ## texto **não** pode invadir.
 func _right_room() -> float:
+	if not badge.is_empty():
+		return _badge_width() + 18.0
 	if not clock_text.is_empty():
 		return _chip_width()
 	return 10.0
@@ -387,6 +424,8 @@ func _chip_width() -> float:
 ## base, sem borda nenhuma.
 func _background() -> StyleBox:
 	var radius := AppTheme.RADIUS_LARGE if shape == Shape.STRIP else AppTheme.RADIUS
+	if not badge.is_empty():
+		radius = int(size.y * 0.5)
 	if alert:
 		return AppTheme.box(AppTheme.DANGER_SOFT, radius, AppTheme.DANGER, 2)
 	if active:
