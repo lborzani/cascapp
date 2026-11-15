@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.48
+
+- Atualizar pelo app ficou mais simples: depois de baixar a versão nova, o app fecha e abre sozinho nela.
+- Esta versão chega pelo APK; as próximas atualizações já reabrem sozinhas.
+
 ## 1.47
 
 - Tocar na estrela para favoritar um jogo não abre mais a folha do jogo junto.

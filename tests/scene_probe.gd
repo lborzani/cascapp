@@ -2298,7 +2298,9 @@ func _test_update_notice() -> void:
 	var downloaded := FileAccess.open(Patcher.DIR + "99.0.pck", FileAccess.WRITE)
 	downloaded.close()
 	ota._refresh()
-	_equals(button.text, "Fechar o app", "baixado, só falta reabrir")
+	# No desktop o Godot reabre sozinho; no Android, o plugin GodotApp.
+	_check(UpdateGate.can_restart(), "no desktop o app sabe se reabrir")
+	_equals(button.text, "Reabrir o app", "baixado, o botão reabre o app")
 	DirAccess.remove_absolute(Patcher.DIR + "99.0.pck")
 	ota._pck_failed = true
 	ota._refresh()
