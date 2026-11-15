@@ -262,10 +262,17 @@ func _probe_game_picker() -> void:
 	var tiles := _tiles(list)
 	_equals(tiles.size(), shown, "um bloco por jogo visível do catálogo")
 	_equals(tiles[0].game_id, Game.CHESS, "o primeiro bloco é o xadrez")
-	_check(
-		tiles[0].custom_minimum_size.y > tiles[1].custom_minimum_size.y,
-		"com a conta ímpar, o primeiro é o bloco de destaque"
-	)
+	# O destaque depende da paridade do catálogo, que muda a cada jogo novo.
+	if shown % 2 == 1:
+		_check(
+			tiles[0].custom_minimum_size.y > tiles[1].custom_minimum_size.y,
+			"com a conta ímpar, o primeiro é o bloco de destaque"
+		)
+	else:
+		_equals(
+			tiles[0].custom_minimum_size.y, tiles[1].custom_minimum_size.y,
+			"com a conta par, a grade não tem destaque"
+		)
 
 	# A estrela é um segundo alvo dentro do bloco: guarda o jogo sem abrir a folha e
 	# sem refazer a grade debaixo do dedo que acabou de tocar.

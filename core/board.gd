@@ -47,6 +47,8 @@ enum Kind {
 	# iguais em forma e diferentes em cor, e nenhuma delas diz "sinuca" sozinha.
 	# O taco diz.
 	CUE,
+	# boliche: o pino e a bola. Só o rosto do jogo no menu, como o taco.
+	PIN,
 }
 
 const SIZE := 8

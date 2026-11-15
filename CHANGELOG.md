@@ -7,15 +7,35 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
-## 1.48
+## 1.51
 
 - Atualizar pelo app ficou mais simples: depois de baixar a versão nova, o app fecha e abre sozinho nela.
 - Esta versão chega pelo APK; as próximas atualizações já reabrem sozinhas.
 
-## 1.47
+## 1.50
 
+- Boliche online: jogue de 2 a 4 pela internet ou por Bluetooth. Todo mundo vê o arremesso de cada um na própria pista, e quem cair volta para a mesma partida.
+- Mesa online que não encher completa com a máquina, como nos outros jogos.
+
+## 1.49
+
+- Boliche: a bola rola lisa depois do lançamento, sem engasgar.
+- Boliche: a força sobe e desce enquanto você segura o botão. Solte o dedo na força que quiser.
+- Boliche: depois de soltar o dedo, a bola fica balançando até o seu toque, sem lançar sozinha nem voltar para a mira.
 - Tocar na estrela para favoritar um jogo não abre mais a folha do jogo junto.
 - O X do cartão "Voltar para a partida" fecha o cartão sem retomar a partida.
+
+## 1.48
+
+- Boliche: agora você escolhe a força. Segure o botão para a bola recuar mais e sair mais forte, solte o dedo e toque quando o marcador passar no verde.
+- Boliche: a bola não sai mais sozinha. Sem o toque no verde, ela volta para a mira.
+- Boliche: a bola não dá mais aquele pulinho no meio da pista.
+
+## 1.47
+
+- Jogo novo: boliche em 3D, com os pinos caindo de verdade. Mire, escolha o efeito e toque de novo para soltar a bola no ponto verde do balanço.
+- De 2 a 4 jogadores no mesmo celular, ou contra a máquina. A partida online do boliche vem numa próxima versão.
+- Boliche e sinuca agora ficam juntos na categoria Esporte.
 
 ## 1.46
 
@@ -27,6 +47,8 @@ novidade.
 - Online: as salas aparecem como "Ludo com Maria", com lugares e há quanto tempo estão abertas.
 - Botões afundam ao toque, o dado rola mais rápido e a mão do Uno abre em leque.
 - Uno: as cartas saem com a borda lisa, sem o serrilhado de antes.
+
+## 1.45
 
 - Visual novo no app inteiro: cores mais vivas, cada jogo com a sua cor e botões que afundam ao toque.
 - Jogos, Online e Você foram redesenhados. A folha de cada jogo mostra os modos em cartões, e a aba Online junta o código, as salas abertas e as partidas ao vivo.

@@ -1,7 +1,7 @@
 # Jogos de Rolê — multiplayer por código, sem cadastro
 
 Coleção de jogos para celular, hoje com **xadrez**, **damas**, **batalha naval**,
-**Ludo**, **Metrópole**, **Uno** e **sinuca**. Dá para jogar
+**Ludo**, **Metrópole**, **Uno**, **sinuca** e **boliche**. Dá para jogar
 contra um bot, com alguém no mesmo aparelho, ou pela internet: um **abre uma
 sala** e o outro entra digitando o **código de 6 caracteres** — de qualquer
 lugar, cada um na sua rede, um deles em dados móveis se quiser. Também dá para
@@ -1163,6 +1163,46 @@ mesa, em três forças —, **simula cada uma de verdade** numa cópia da mesa, 
 com a que encaçapa o que interessa sem fazer falta. Um passo só, simulado, joga
 melhor que uma árvore rasa sobre uma aproximação.
 
+### Boliche
+
+Dez pinos, dez frames, de 2 a 4 jogadores, em retrato: contra a máquina, no
+mesmo aparelho ou em rede.
+
+- **Em rede** (`scenes/bowling_match.gd`): quem arremessa roda a física e manda o
+  lance antes de aplicá-lo. Os outros aparelhos repetem o arremesso na própria
+  pista, um por vez numa fila, e no fim vale a máscara recebida. Reconexão refaz a
+  cartela pelo histórico, sem física. Cadeira vazia é máquina, dirigida por um
+  aparelho só (`Net.bot_driver`). `tests/bowling_net_smoke.gd` cobre o caminho do
+  lance pelo relay e pelo Bluetooth falso.
+
+- **Regras** (`core/bowling_rules.gd`): strike, spare e as bolas extras do
+  décimo frame. O lance é `[ROLL, máscara, posição, direção, efeito, timing]`: a
+  máscara diz quais pinos caíram, e as regras só contam.
+- **Física de verdade** (`ui/bowling_lane.gd`): pinos e bola são corpos da Jolt.
+  A pista tem óleo nos primeiros 40 pés e o fim seco, então o efeito (giro em
+  volta da direção da bola) quase não curva no óleo e engancha no seco. As
+  medidas são as oficiais, as mesmas de `art/bowling/build_bowling.py`, que gera
+  os modelos.
+- **Por que o lance leva o resultado:** a Jolt não dá o mesmo resultado bit a bit
+  em dois aparelhos, como a física da sinuca dá. Então quem arremessa diz quais
+  pinos caíram; o outro aparelho repete a física só para mostrar a jogada. A
+  máquina de pinos repõe os que ficaram em pé no lugar exato, e o segundo
+  arremesso começa igual nos dois lados.
+- **Controles** (`ui/bowling_view.gd`): arrastar a bola escolhe de onde ela sai,
+  arrastar na pista mira, e o trilho escolhe o efeito. Segurando o botão, a força
+  vai e volta de 0 a 100%, e soltar o dedo a escolhe. Depois a bola balança, indo
+  e voltando até o toque: no verde sai como mirado, antes puxa para a esquerda,
+  depois empurra para a direita. Nenhuma das duas barras trava ou dispara sozinha.
+- **Desenho liso:** a física anda a 60 Hz e a tela do celular a 90 ou 120. O
+  desenho da bola e dos pinos é um filho `top_level`, posto entre os dois últimos
+  quadros de física (`Engine.get_physics_interpolation_fraction`), e a câmera segue
+  esse ponto. Só no boliche: ligar a interpolação do projeto inteiro mexeria nas
+  animações de todos os outros jogos.
+- **O óleo é atrito da bola, não da pista.** A pista é uma caixa só; com duas
+  (óleo e seco), a quina entre elas jogava a bola para cima. A Godot usa o menor
+  atrito do contato, então a bola começa com o atrito do óleo e passa ao cheio
+  depois dos 40 pés.
+
 ### Transporte: uma sala, e só
 
 O anfitrião abre uma **sala** no relay e mostra um código de 6 caracteres. O
@@ -2080,7 +2120,13 @@ godot --headless --path . res://tests/scene_probe.tscn
 godot --headless --path . res://tests/pairing_probe.tscn
 godot --headless --path . res://tests/ludo_probe.tscn
 godot --headless --path . --script res://tests/monopoly_probe.gd
+godot --headless --path . --script res://tests/bowling_probe.gd
+godot --headless --fixed-fps 60 --path . --script res://tests/bowling_physics_probe.gd
+godot --headless --fixed-fps 60 --path . res://tests/bowling_scene_probe.tscn
 ```
+
+As duas do boliche com física rodam com `--fixed-fps 60`: cada quadro anda 1/60 s
+sem esperar o relógio, e a física sai tão rápido quanto a máquina deixa.
 
 O relay tem suíte própria, em Node:
 

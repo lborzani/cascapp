@@ -33,3 +33,7 @@ relay/dist/
 # Renders de aprovação da sinuca 3D: saem de `art/pool/build_pool.py` a cada
 # execução, e são megas de PNG que não entram no jogo.
 /art/pool/renders/
+
+# Renders de aprovação dos modelos (`art/*/build_*.py` refaz todos): megabytes de
+# PNG que só servem para olhar uma vez.
+/art/*/renders/
