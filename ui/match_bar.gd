@@ -130,6 +130,15 @@ func _ready() -> void:
 	_apply_size()
 
 
+## Troca o título e a faixa de contexto por outro nó, no mesmo lugar. É o
+## placar da sinuca, que mora na barra como no protótipo.
+func replace_words(node: Control) -> void:
+	_words.visible = false
+	var row := _words.get_parent()
+	row.add_child(node)
+	row.move_child(node, _words.get_index())
+
+
 ## O `LeaveButton` já fez a pergunta; a barra só repassa a resposta, para a tela
 ## escutar um sinal só e não precisar conhecer o botão de dentro dela.
 func _on_leave_confirmed() -> void:
