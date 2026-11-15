@@ -56,6 +56,7 @@ func _ready() -> void:
 	# voltar ele pareceria um desvio do caminho de escolher jogo, que é
 	# exatamente o que ele não é.
 	%AppBar.title = "Online"
+	%AppBar.headline()
 	# Aba é lugar, e de um lugar não se volta: quem quer outro lugar toca noutra aba.
 	%AppBar.leading = -1
 	%Unavailable.visible = not Net.relay_available()

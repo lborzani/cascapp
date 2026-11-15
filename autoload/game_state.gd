@@ -96,7 +96,7 @@ const GAMES := [
 	},
 	{
 		"id": BATTLESHIP,
-		"title": "Batalha Naval",
+		"title": "Batalha naval",
 		"category": CAT_BOARD,
 		"icon": Board.Kind.BATTLESHIP,
 		"scene": "res://scenes/battleship_match.tscn",

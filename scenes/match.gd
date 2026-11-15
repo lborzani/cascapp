@@ -91,6 +91,10 @@ var _rating_elo := 0
 var _rating_delta := 0
 ## Selo e números do topo do fim de partida, e o confete por cima dele.
 var _result_header: ResultHeader = null
+## "Bia quer revanche": a linha com a bolacha de quem pediu, acima do botão.
+var _invite_row: PanelContainer = null
+var _invite_coaster: Coaster = null
+var _invite_label: Label = null
 ## A faixa de lances embaixo do tabuleiro e a fileira "Propor empate · Desistir".
 var _moves_strip: MoveStrip = null
 var _end_row: HBoxContainer = null
@@ -204,6 +208,9 @@ func _ready() -> void:
 	Game.begin_match()
 	%Bar.bind()
 	_match_status = %Bar.status
+	_match_status.round_word = "Lance"
+	if Game.mode == Game.Mode.SOLO:
+		_match_status.note = "contra o bot %s" % Bot.level_label(Game.game_id, Game.current_bot_level())
 	_match_status.watchers = Net.watcher_count if Game.mode == Game.Mode.ONLINE else 0
 
 	_new_game()
@@ -1139,6 +1146,38 @@ func _on_rated(ratings: Array) -> void:
 ## selo no topo, os números logo depois do texto. O confete cobre a camada toda.
 func _build_result_header() -> void:
 	_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %ResultLayer)
+	_build_invite_row()
+
+
+## A linha do pedido de revanche, como no protótipo: a bolacha de quem pediu e
+## "Bia quer revanche". Escondida até o pedido chegar.
+func _build_invite_row() -> void:
+	_invite_row = PanelContainer.new()
+	var plate := AppTheme.box(AppTheme.BACKGROUND, 16)
+	plate.content_margin_left = 12
+	plate.content_margin_right = 12
+	plate.content_margin_top = 8
+	plate.content_margin_bottom = 8
+	_invite_row.add_theme_stylebox_override("panel", plate)
+	_invite_row.visible = false
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 10)
+	_invite_row.add_child(line)
+	_invite_coaster = Coaster.new()
+	_invite_coaster.custom_minimum_size = Vector2(32, 32)
+	_invite_coaster.fill = AppTheme.GAME_COLORS.get(String(Game.game_id), AppTheme.SURFACE_TOP)
+	_invite_coaster.ring = Color(0, 0, 0, 0)
+	line.add_child(_invite_coaster)
+	_invite_label = Label.new()
+	_invite_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_invite_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_invite_label.add_theme_font_override("font", AppTheme.font(800))
+	_invite_label.add_theme_font_size_override("font_size", 14)
+	_invite_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	line.add_child(_invite_label)
+	var column: Control = %RematchButton.get_parent()
+	column.add_child(_invite_row)
+	column.move_child(_invite_row, %RematchButton.get_index())
 
 
 ## Para quem é a festa. Quem assiste e quem joga no mesmo celular sempre vê o
@@ -1199,7 +1238,7 @@ func _refresh_end_row() -> void:
 		var danger := button.text.contains("esist")
 		if danger:
 			for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
-				button.add_theme_color_override(state, AppTheme.DANGER)
+				button.add_theme_color_override(state, AppTheme.DANGER_LIGHT)
 		button.pressed.connect(_confirm_then.bind(button, option[1]))
 		_end_row.add_child(button)
 
@@ -1536,6 +1575,11 @@ func _start_rematch() -> void:
 ## esperar, ou responder.
 func _refresh_rematch() -> void:
 	var online := Game.mode == Game.Mode.ONLINE
+	if _invite_row != null:
+		_invite_row.visible = _rematch == Rematch.INVITED
+		var who := _opponent_name()
+		_invite_coaster.player_name = who
+		_invite_label.text = "%s quer revanche" % who
 	%RematchDeclineButton.visible = online and _rematch == Rematch.INVITED
 	match _rematch:
 		Rematch.ASKED:
@@ -1544,7 +1588,6 @@ func _refresh_rematch() -> void:
 		Rematch.INVITED:
 			%RematchButton.text = "Aceitar revanche"
 			%RematchButton.disabled = false
-			%ResultDetail.text = "O oponente quer jogar de novo."
 		_:
 			%RematchButton.text = "Jogar de novo"
 			%RematchButton.disabled = false

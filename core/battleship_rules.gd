@@ -56,7 +56,7 @@ func id() -> StringName:
 
 
 func display_name() -> String:
-	return "Batalha Naval"
+	return "Batalha naval"
 
 
 ## `squares` fica vazio a partida inteira. Batalha naval não tem peça que ande

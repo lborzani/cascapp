@@ -75,6 +75,12 @@ func _draw() -> void:
 		x -= width + pill
 		placed.push_front([x, text, index == parts.size() - 1, width])
 		x -= GAP
+	# Coube tudo: a faixa começa da esquerda, como se lê. Só quando falta espaço
+	# ela encosta à direita e deixa o começo da partida sair.
+	if placed.size() == parts.size() and not placed.is_empty():
+		var shift: float = float(placed[0][0]) - PAD
+		for entry in placed:
+			entry[0] = float(entry[0]) - shift
 	for entry in placed:
 		var at: float = entry[0]
 		var last: bool = entry[2]

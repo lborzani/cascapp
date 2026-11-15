@@ -69,6 +69,8 @@ const TOKEN_SIZE := 1.16
 const TOKEN_HOME_SIZE := 0.78
 
 const CELLS := 15
+## A moldura escura em volta das casas, em casas.
+const FRAME := 0.22
 ## Lado do bloco de cor do curral e do quadrado claro de dentro, em células,
 ## centrados no canto de 6x6.
 ##
@@ -340,6 +342,12 @@ func _layout() -> void:
 ## quem sabe onde o canto está é quem desenha o tabuleiro. `_layout()` de novo
 ## porque a medida da casa nasce no primeiro desenho, e a cena pode perguntar
 ## antes disso.
+## O tabuleiro inteiro com a moldura, em pixels: o que nada pode cobrir.
+func board_rect() -> Rect2:
+	_layout()
+	return Rect2(_origin, Vector2.ONE * _cell * CELLS).grow(_cell * FRAME)
+
+
 func yard_rect(player: int) -> Rect2:
 	_layout()
 	var middle := _center(Vector2(YARD[player]) + Vector2(2.5, 2.5))
@@ -497,7 +505,7 @@ func _draw_board() -> void:
 	var board := Rect2(_origin, Vector2.ONE * _cell * CELLS)
 	# Bolacha escura por baixo: as casas são separadas pela fresta entre elas, e
 	# não por contorno — o fundo aparece na fresta.
-	draw_style_box(AppTheme.box(AppTheme.COASTER, int(_cell * 0.9)), board.grow(_cell * 0.22))
+	draw_style_box(AppTheme.box(AppTheme.COASTER, int(_cell * 0.9)), board.grow(_cell * FRAME))
 
 	for player in LudoRules.PLAYERS:
 		_draw_yard(player)

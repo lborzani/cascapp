@@ -13,6 +13,8 @@ extends RefCounted
 ## Toque: o botão afunda.
 const PRESS_TIME := 0.12
 const PRESS_SCALE := 0.96
+## Quanto o botão afunda ao ser apertado, em pixels.
+const PRESS_SINK := 4.0
 ## Folha, gaveta e diálogo entrando.
 const ENTER_TIME := 0.28
 ## Troca de aba, véu, o que só aparece.
@@ -24,17 +26,34 @@ const NUDGE_TIME := 0.3
 const NUDGE_SCALE := 1.05
 
 
-## O botão encolhe ao ser apertado e volta ao soltar.
+## O botão afunda 4 px e encolhe ao ser apertado, e volta ao soltar.
+##
+## O afundar sai da própria escala, com o pivô abaixo do botão: encolher em
+## direção a um ponto 100 px abaixo desce o centro 4 px. Mexer na posição
+## brigaria com o container que posiciona o botão.
 ##
 ## Escala e não cor: a cor já muda pelo tema, e num celular o dedo cobre o botão
 ## — o que se vê é a borda dele recuando.
 static func press(control: Control, down: bool) -> void:
 	if not control.is_inside_tree():
 		return
-	control.pivot_offset = control.size * 0.5
+	if down:
+		if not control.has_meta(&"press_pivot"):
+			control.set_meta(&"press_pivot", control.pivot_offset)
+		control.pivot_offset = Vector2(
+			control.size.x * 0.5, control.size.y * 0.5 + PRESS_SINK / (1.0 - PRESS_SCALE)
+		)
 	var target := Vector2.ONE * (PRESS_SCALE if down else 1.0)
-	control.create_tween().tween_property(control, "scale", target, PRESS_TIME) \
+	var tween := control.create_tween()
+	tween.tween_property(control, "scale", target, PRESS_TIME) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if not down:
+		# Devolve o pivô de quem tinha um (o "UNO!" balança em torno do centro).
+		tween.tween_callback(func() -> void:
+			if is_instance_valid(control) and control.has_meta(&"press_pivot"):
+				control.pivot_offset = control.get_meta(&"press_pivot")
+				control.remove_meta(&"press_pivot")
+		)
 
 
 ## Surge crescendo um pouco além do tamanho e assenta: diálogo, selo, resultado.

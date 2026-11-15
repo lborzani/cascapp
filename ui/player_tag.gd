@@ -204,6 +204,7 @@ var _coaster: Coaster = null
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coaster = Coaster.new()
+	_coaster.custom_minimum_size = Vector2.ZERO
 	_coaster.piece = piece
 	_coaster.fill = seat_color
 	add_child(_coaster)
@@ -213,7 +214,9 @@ func _init() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_ENTER_TREE and clock_urgent:
 		_sync_beat.call_deferred()
-	if what == NOTIFICATION_RESIZED:
+	# Também ao entrar na árvore: quem recebe o tamanho antes do `add_child` (as
+	# pílulas do Uno) não ganha outro RESIZED, e a bolacha ficava sem medida.
+	if what == NOTIFICATION_RESIZED or what == NOTIFICATION_ENTER_TREE:
 		_apply_rotation()
 		_layout()
 
