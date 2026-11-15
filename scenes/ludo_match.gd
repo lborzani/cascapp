@@ -85,8 +85,11 @@ var _bot_seats := PackedInt32Array()
 var _bot_pending := false
 
 var _match_status: MatchStatus = null
+var _result_header: ResultHeader = null
 ## Uma etiqueta por cor, na ordem das cores, pendurada no canto dela do tabuleiro.
 var _tags: Array[PlayerTag] = []
+## A pílula da barra que diz de quem é a vez e o que fazer.
+var _turn_pill: Label = null
 
 @onready var _board: LudoView = %Board
 @onready var _dice: DieView = %Die
@@ -99,8 +102,6 @@ func _ready() -> void:
 	# Deitado, como Metrópole. Quem desgira é `Game.reset_to_menu()`, por onde
 	# toda saída passa.
 	Orientation.to_landscape(get_tree())
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	_state = _rules.initial_state()
 	_board.state = _state
@@ -113,10 +114,16 @@ func _ready() -> void:
 	%AgainButton.pressed.connect(_restart)
 	%OverlayLeaveButton.pressed.connect(_leave)
 	%Overlay.visible = false
+	%RollButton.pressed.connect(_dice.roll)
+	var card := AppTheme.box(AppTheme.SURFACE, 22)
+	for margin in ["content_margin_left", "content_margin_right", "content_margin_top", "content_margin_bottom"]:
+		card.set(margin, 14)
+	%DieCard.add_theme_stylebox_override("panel", card)
 
 	Game.begin_match()
 	%Bar.bind()
 	_match_status = %Bar.status
+	_build_turn_pill()
 
 	if Game.mode == Game.Mode.SOLO:
 		# Solo é a mesa cheia com um humano só: você é o vermelho, as outras três
@@ -183,20 +190,20 @@ func _on_die_rolled(value: int) -> void:
 	# já saiu da árvore — as outras três telas do app guardam depois de cada
 	# espera, e esta guardava só lá dentro, tarde demais.
 	if _pending.size() == 1 and LudoRules.token_of(_pending[0]) == LudoRules.PASS:
-		_status("%s tirou %d e não tem lance." % [_color_name(), value])
+		_status("Nenhum peão pode andar.")
 		await _wait(READ_DIE)
 		if _alive():
 			_play(_pending[0])
 		return
 
 	if _pending.size() == 1:
-		_status("%s tirou %d." % [_color_name(), value])
+		_status("1 peão pode andar.")
 		await _wait(READ_DIE)
 		if _alive():
 			_play(_pending[0])
 		return
 
-	_status("%s tirou %d. Escolha o peão." % [_color_name(), value])
+	_status("%d peões podem andar." % _movable_tokens().size())
 	_refresh()
 
 
@@ -386,7 +393,7 @@ func _run_bot() -> void:
 		_bot_pending = false
 		_advance_turn()
 		return
-	_status("%s tirou %d." % [_color_name(), die])
+	_status("O bot escolhe o peão.")
 	await _wait(READ_DIE)
 	_bot_pending = false
 	if _alive():
@@ -429,6 +436,7 @@ func _on_remote_move(data: Dictionary) -> void:
 			_die = path[0]
 			_dice.value = _die
 			_pending = []
+			_status("")
 			_play(move, true)
 			return
 	push_warning("Lance de rede recusado pelas regras locais: %s" % [path])
@@ -526,13 +534,12 @@ func _refresh() -> void:
 		if _link_down:
 			_status("Conexão instável; tentando voltar…")
 		elif _is_bot(player):
-			_status("Vez do %s (bot)." % _color_name())
-		elif _my_turn() and Game.mode == Game.Mode.ONLINE:
-			_status("Sua vez (%s). Toque no dado." % _color_name())
+			_status("O bot vai rolar.")
 		elif _my_turn():
-			_status("Vez do %s. Toque no dado." % _color_name())
+			_status("Toque no dado ou em Rolar.")
 		else:
-			_status("Vez do %s." % _color_name())
+			_status("Esperando o %s rolar." % _color_name())
+	_sync_turn()
 	_update_tags()
 
 	# A vez da máquina começa sozinha, e só depois de a tela já estar mostrando
@@ -558,6 +565,61 @@ func _movable_tokens() -> PackedInt32Array:
 
 func _status(text: String) -> void:
 	%StatusLabel.text = text
+	_sync_turn()
+
+
+## Quem decide esta vez, para os textos: "Você" quando o aparelho é de uma pessoa
+## só e a vez é dela; o nome da cor no resto — no mesmo aparelho as quatro cores
+## são "você", e a cor é o que separa uma da outra.
+func _who() -> String:
+	if _my_turn() and Game.mode != Game.Mode.HOTSEAT:
+		return "Você"
+	return _color_name()
+
+
+## O cartão do dado e a pílula da barra, lidos do estado da vez.
+func _sync_turn() -> void:
+	if _turn_pill == null:
+		return
+	var mine := _my_turn() and not _link_down
+	%RollButton.disabled = not _dice.enabled
+	if _die > 0:
+		%DieCaption.text = ("%s tirou" % _who()).to_upper()
+	elif mine:
+		%DieCaption.text = "SUA VEZ" if _who() == "Você" else "VEZ DO %s" % _who().to_upper()
+	else:
+		%DieCaption.text = "VEZ DO %s" % _color_name().to_upper()
+
+	var prefix := "Sua vez" if _who() == "Você" else _color_name()
+	if _link_down:
+		_turn_pill.text = "Reconectando…"
+	elif not mine:
+		_turn_pill.text = "Vez do %s%s" % [_color_name(), " (bot)" if _is_bot(LudoRules.turn_of(_state)) else ""]
+	elif _pending.size() > 1:
+		_turn_pill.text = "%s: escolha um peão" % prefix
+	elif _die > 0:
+		_turn_pill.text = "%s tirou %d" % [prefix, _die]
+	else:
+		_turn_pill.text = "%s: role o dado" % prefix
+	var fill := AppTheme.ACCENT if mine else AppTheme.SURFACE_HIGH
+	var box := AppTheme.box(fill, 16)
+	box.content_margin_left = 14
+	box.content_margin_right = 14
+	box.content_margin_top = 5
+	box.content_margin_bottom = 5
+	_turn_pill.add_theme_stylebox_override("normal", box)
+	_turn_pill.add_theme_color_override("font_color", AppTheme.ACCENT_INK if mine else AppTheme.TEXT_DIM)
+
+
+## A pílula mora na barra, logo antes do `?`.
+func _build_turn_pill() -> void:
+	_turn_pill = Label.new()
+	_turn_pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_turn_pill.add_theme_font_override("font", AppTheme.font(800))
+	_turn_pill.add_theme_font_size_override("font_size", 14)
+	var row: Control = %Bar.help.get_parent()
+	row.add_child(_turn_pill)
+	row.move_child(_turn_pill, %Bar.help.get_index())
 
 
 func _color_name() -> String:
@@ -668,7 +730,17 @@ func _finish(champion: int) -> void:
 	_dice.enabled = false
 	%OverlayTitle.text = "%s venceu" % LudoRules.color_name(champion)
 	%OverlaySubtitle.text = "Quatro peões em casa."
+	if _result_header == null:
+		_result_header = ResultHeader.attach(%OverlayTitle, %OverlaySubtitle, %Overlay)
 	%Overlay.visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_result_header.celebrate(
+		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+			[ResultHeader.duration_since(Game.match_started_at), "duração"],
+			[str(_match_status.rounds), "rodadas"],
+		]
+	)
 
 
 func _restart() -> void:

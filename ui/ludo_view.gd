@@ -136,7 +136,7 @@ const YARD_SPOTS := [
 ## amarela do tabuleiro de caixa clareiam demais e brigam com o latão da ação,
 ## então são as mesmas famílias puxadas para o tom que o tema já usa.
 const COLORS := [
-	Color("c9524d"), Color("5f9e63"), Color("d9a441"), Color("4b7fb5"),
+	Color("ff4d7d"), Color("59d36b"), Color("ffc229"), Color("39c6ff"),
 ]
 ## Uma silhueta por assento, e não quatro vezes o mesmo peão tingido.
 ##
@@ -495,7 +495,9 @@ func _draw() -> void:
 
 func _draw_board() -> void:
 	var board := Rect2(_origin, Vector2.ONE * _cell * CELLS)
-	draw_rect(board, AppTheme.BOARD_FRAME)
+	# Bolacha escura por baixo: as casas são separadas pela fresta entre elas, e
+	# não por contorno — o fundo aparece na fresta.
+	draw_style_box(AppTheme.box(AppTheme.COASTER, int(_cell * 0.9)), board.grow(_cell * 0.22))
 
 	for player in LudoRules.PLAYERS:
 		_draw_yard(player)
@@ -505,13 +507,13 @@ func _draw_board() -> void:
 		# responde "por onde eu entro" sem nenhuma legenda.
 		var owner := index / LudoRules.START_STEP
 		var is_start := index % LudoRules.START_STEP == 0
-		var fill := Color(COLORS[owner], 0.85) if is_start else AppTheme.BOARD_LIGHT
+		var fill: Color = COLORS[owner] if is_start else AppTheme.PAPER
 		_draw_cell(cell, fill)
 		if not is_start and LudoRules.is_safe(index):
 			_draw_star(cell)
 	for player in LudoRules.PLAYERS:
 		for cell in HOME_PATH[player]:
-			_draw_cell(cell, Color(COLORS[player], 0.55))
+			_draw_cell(cell, COLORS[player])
 	_draw_center()
 
 
@@ -522,9 +524,7 @@ func _draw_board() -> void:
 ## Mais escuro e mais grosso do que era: o peão passou a transbordar a casa, e um
 ## contorno fraco desaparecia embaixo dele justamente onde a contagem importa.
 func _draw_cell(cell: Vector2i, fill: Color) -> void:
-	var rect := _rect(cell).grow(-_cell * 0.04)
-	draw_rect(rect, fill)
-	draw_rect(rect, Color(0, 0, 0, 0.38), false, maxf(1.0, _cell * 0.055))
+	draw_rect(_rect(cell).grow(-_cell * 0.035), fill)
 
 
 ## Estrela da casa segura. Um losango, e não uma estrela de cinco pontas: em 22
@@ -546,34 +546,21 @@ func _draw_star(cell: Vector2i) -> void:
 ## contraste entre os dois é o que faz "peão na base" ser lido de longe.
 func _draw_yard(player: int) -> void:
 	var middle := _center(Vector2(YARD[player]) + Vector2(2.5, 2.5))
-	var block := yard_rect(player)
-	draw_rect(block, Color(COLORS[player], 0.85))
-	# Contorno escuro: o bloco deixou de encostar nas bordas do canto, e sem a
-	# linha ele flutuava sobre o fundo do tabuleiro em vez de ser uma peça dele.
-	draw_rect(block, Color(0, 0, 0, 0.35), false, maxf(1.0, _cell * 0.05))
+	# O canto inteiro na cor, e o pátio escuro dentro: o peão parado na base fica
+	# claro sobre escuro, como no protótipo.
+	var corner := Rect2(_origin + Vector2(YARD[player]) * _cell, Vector2.ONE * _cell * 6.0)
+	draw_rect(corner.grow(-_cell * 0.035), COLORS[player])
 	var inner := Rect2(
 		middle - Vector2.ONE * _cell * YARD_INNER * 0.5, Vector2.ONE * _cell * YARD_INNER
 	)
-	draw_rect(inner, Color(AppTheme.BOARD_LIGHT, 0.92))
+	draw_style_box(AppTheme.box(AppTheme.SURFACE_HIGH, int(_cell * 0.4)), inner)
 
 
-## O centro é a chegada das quatro cores, então é dividido em quatro triângulos
-## que apontam para os donos.
+## O centro é a chegada: um quadrado escuro, onde os peões que chegaram aparecem
+## na cor deles. Cada um continua do lado por onde a reta final da cor entra.
 func _draw_center() -> void:
-	var middle := _center(CENTER)
-	var half := _cell * 1.5
-	var corners := [
-		Vector2(-half, -half), Vector2(half, -half), Vector2(half, half), Vector2(-half, half),
-	]
-	# Cada triângulo aponta para a reta final da sua cor: esquerda, topo,
-	# direita, base — a mesma ordem em que as cores jogam.
-	var edges := [[3, 0], [0, 1], [1, 2], [2, 3]]
-	for player in LudoRules.PLAYERS:
-		var edge: Array = edges[player]
-		draw_colored_polygon(
-			PackedVector2Array([middle, middle + corners[edge[0]], middle + corners[edge[1]]]),
-			Color(COLORS[player], 0.9)
-		)
+	var half := Vector2.ONE * _cell * 1.5
+	draw_rect(Rect2(_center(CENTER) - half, half * 2.0).grow(-_cell * 0.035), AppTheme.BACKGROUND)
 
 
 ## Os parados primeiro, os que estão em movimento por cima. Um peão andando
@@ -669,19 +656,23 @@ func _draw_token(player: int, token: int, is_turn: bool) -> void:
 		scale *= 1.06
 	var radius := _cell * scale * 0.5
 	var playable := is_turn and movable.has(token)
-
 	if playable:
-		# Halo que respira. Sai do próprio tamanho do peão, então acompanha
-		# qualquer tabuleiro sem número solto nenhum.
-		var beat := 0.5 + 0.5 * sin(_pulse / 1.2 * TAU)
-		draw_circle(
-			middle, radius * (1.25 + 0.16 * beat), Color(AppTheme.ACCENT, 0.22 + 0.16 * beat)
-		)
+		# O peão que pode andar pula no lugar: um contorno parado some num
+		# tabuleiro colorido, um peão pulando é achado sem ser procurado.
+		middle.y -= _cell * 0.16 * (0.5 + 0.5 * sin(_pulse / 1.2 * TAU))
+
+	# Ficha do protótipo: disco da cor, borda de tinta e uma sombra embaixo que
+	# o descola da casa — inclusive da casa da própria cor, na reta final.
+	var disc := radius * 0.74
+	draw_circle(middle + Vector2(0, _cell * 0.09), disc, AppTheme.BACKGROUND)
+	draw_circle(middle, disc, COLORS[player])
+	draw_arc(middle, disc, 0.0, TAU, 32, AppTheme.BACKGROUND, maxf(2.0, _cell * 0.08), true)
 	# `is_turn` junto: `picked` é um índice de peão, e sem a cor ele acendia o
-	# peão de mesmo número das **quatro** cores — três anéis amarelos em peças
-	# que ninguém tinha tocado.
-	if is_turn and token == picked:
-		draw_arc(middle, radius * 1.15, 0.0, TAU, 28, AppTheme.ACCENT, maxf(2.0, _cell * 0.07), true)
+	# peão de mesmo número das **quatro** cores.
+	if playable or (is_turn and token == picked):
+		draw_arc(
+			middle, disc + _cell * 0.1, 0.0, TAU, 32, AppTheme.ACCENT, maxf(2.0, _cell * 0.09), true
+		)
 
 	# Disco claro por baixo **só na reta final**.
 	#
@@ -694,11 +685,11 @@ func _draw_token(player: int, token: int, is_turn: bool) -> void:
 	# A regra é a mesma de sempre: um recurso que resolve um caso não deve aparecer
 	# nos outros. O que dá contorno ao peão em toda casa é o traço do próprio
 	# desenho, e ele já existe.
-	if _on_home_stretch(player, token):
-		draw_circle(middle, radius * 0.92, Color(AppTheme.BOARD_LIGHT, 0.85))
+	# A silhueta de peça, em tinta, dentro da ficha: a segunda leitura de quem
+	# não separa as cores. O protótipo tem só o disco; a forma fica por isso.
 	PieceRenderer.draw_piece(
 		self, Board.piece(Board.Side.WHITE, TOKEN_KINDS[player % TOKEN_KINDS.size()]),
-		middle, _cell * scale, 1.0, 1.0, false, COLORS[player], spin
+		middle, _cell * scale * 0.62, 1.0, 1.0, false, AppTheme.BACKGROUND, spin
 	)
 	_draw_stack_count(player, token, middle, radius)
 

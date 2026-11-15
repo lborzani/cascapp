@@ -88,9 +88,12 @@ func _draw() -> void:
 	for index in cards.size():
 		var card := cards[index]
 		var spot := _spots[index]
+		var lit := enabled and _is_playable(card)
+		# A que serve ganha a moldura limão, como no protótipo; a outra fica no
+		# escuro. As duas pistas dizem a mesma coisa, de longe e de perto.
 		UnoCardArt.draw_card(
 			self, card, spot.origin, _card_height, spot.get_rotation(),
-			not _is_playable(card) or not enabled
+			not lit, 1.0, AppTheme.ACCENT if lit else Color(0, 0, 0, 0)
 		)
 
 
@@ -124,6 +127,20 @@ func _layout() -> void:
 		var angle := (offset / maxf(count - 1, 1.0)) * spread
 		var lift := -_card_height * LIFT if (enabled and _is_playable(cards[index])) else 0.0
 		_spots.append(Transform2D(angle, Vector2(size.x * 0.5 + offset * step, base + lift)))
+
+
+## Onde uma carta da mão está agora, em coordenadas globais e girada como no
+## leque. É de lá que a jogada sai voando. Sem a carta na mão, o meio do leque.
+func spot_of(card: int) -> Transform2D:
+	_layout()
+	var index := cards.find(card)
+	var local := _spots[index] if index >= 0 else Transform2D(0.0, size * 0.5)
+	return Transform2D(local.get_rotation(), get_global_transform() * local.origin)
+
+
+func card_height() -> float:
+	_layout()
+	return _card_height
 
 
 func _is_playable(card: int) -> bool:

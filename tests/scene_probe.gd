@@ -599,13 +599,15 @@ func _test_rated_result() -> void:
 	_check(scene._reported, "o abandono do outro vai para o relay")
 	scene._show_overlay("O oponente saiu", "A partida foi encerrada no lance 0.", false)
 	Net.rated.emit([{"seat": 1, "elo": 1180, "delta": -20}, {"seat": 0, "elo": 1220, "delta": 20}])
-	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "o painel mostra o nosso Elo novo")
+	_check(str(scene._result_stats()).contains("1220"), "o painel mostra o nosso Elo novo")
+	_check(str(scene._result_stats()).contains("Elo +20"), "com a variação")
 	_equals(Account.elo, 1220, "e a conta fica com ele")
 	scene._show_overlay("O oponente saiu", "De novo.", false)
-	_check(_node(scene, "%ResultDetail").text.ends_with("Elo 1220 (+20)"), "e ele continua lá quando o painel reabre")
+	_check(str(scene._result_stats()).contains("1220"), "e ele continua lá quando o painel reabre")
 
 	scene._new_game()
 	_check(not scene._reported and scene._rating_text.is_empty(), "a revanche começa sem relato nem Elo")
+	_check(not str(scene._result_stats()).contains("1220"), "e sem o bloco de Elo")
 	Account.elo = 0
 	scene.queue_free()
 	await get_tree().process_frame
@@ -971,7 +973,7 @@ func _test_match_history() -> void:
 	add_child(settings)
 	await get_tree().process_frame
 	var button: Button = settings.get_node("%HistoryButton")
-	_equals(button.text, "Histórico de partidas (1)", "a tela Você conta as partidas")
+	_equals(button.get_meta(&"detail"), "1 partida", "a tela Você conta as partidas")
 	button.pressed.emit()
 	var panel: HistoryPanel = settings._history
 	_check(panel != null, "o botão abre o histórico")
@@ -1056,7 +1058,7 @@ func _test_training_panel() -> void:
 	add_child(settings)
 	await get_tree().process_frame
 	var button: Button = settings.get_node("%TrainingButton")
-	_equals(button.text, "Treino", "sem desafio vencido, o botão não conta nada")
+	_equals(button.get_meta(&"detail"), "Nada para hoje", "sem desafio vencido, o botão não conta nada")
 	button.pressed.emit()
 	var panel: TrainingPanel = settings._training
 	_check(not panel._challenge.visible and panel._empty.visible, "baralho vazio mostra o aviso")
@@ -1078,7 +1080,7 @@ func _test_training_panel() -> void:
 	broken["due"] = -1
 	Prefs.set_training([mate, later, broken])
 	settings._refresh_games()
-	_equals(button.text, "Treino (2 para hoje)", "o botão conta o que vence hoje")
+	_equals(button.get_meta(&"detail"), "2 desafios hoje", "o botão conta o que vence hoje")
 	button.pressed.emit()
 	panel = settings._training
 	_equals(Prefs.training().size(), 2, "cartão que não se refaz sai do baralho")
@@ -1099,7 +1101,7 @@ func _test_training_panel() -> void:
 	settings.go_back()
 	await get_tree().process_frame
 	_check(not is_instance_valid(panel), "voltar fecha o treino")
-	_equals(button.text, "Treino", "e o botão é recontado")
+	_equals(button.get_meta(&"detail"), "Nada para hoje", "e o botão é recontado")
 
 	mate["due"] = 0
 	Prefs.set_training([mate])
@@ -2657,8 +2659,12 @@ func _test_friends_drawer() -> bool:
 	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
 	add_child(menu)
 	await get_tree().process_frame
-	var button: IconButton = menu.find_child("FriendsButton", true, false)
+	var button: Button = menu.find_child("FriendsButton", true, false)
 	_check(button != null, "a saudação do menu tem o botão de amigos")
+	if button != null:
+		# A pílula conta quem está online sem abrir a gaveta, e sem ninguém diz só "Amigos".
+		var expected := "%d online" % Friends.online.size() if not Friends.online.is_empty() else "Amigos"
+		_equals(button.text, expected, "e ele diz quantos estão online")
 	if button != null:
 		button.pressed.emit()
 	await get_tree().process_frame

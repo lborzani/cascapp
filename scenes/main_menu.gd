@@ -4,21 +4,19 @@ extends Control
 ##
 ## ## O que a tela é
 ##
-## O cabeçalho com o logo e o nome de quem está jogando, os favoritos em cartão
-## grande, o catálogo inteiro em cardápio de lousa, e as abas na base. Escolher um
-## jogo não troca de tela: sobe a **folha do jogo** por cima desta, com o modo e os
-## ajustes. A tela de modos que existia entre as duas saiu.
+## O cabeçalho com o logo e o nome de quem está jogando, o cartão de voltar para a
+## partida guardada (quando há uma), a grade de jogos e as abas na base. Escolher
+## um jogo não troca de tela: sobe a **folha do jogo** por cima desta, com o modo
+## e os ajustes.
 ##
-## ## Cardápio, e não grade
+## ## Grade de blocos na cor do jogo
 ##
-## Foi lista, depois grade de três colunas. A grade mostra mais jogos na mesma
-## altura e cobra por isso onde dói: num cartão de 118 px "Batalha Naval" quebra em
-## duas linhas de quatro letras e a peça vira mancha. O cardápio devolve o nome
-## inteiro, alinha a lotação à direita como um preço e dá a faixa toda ao dedo — e
-## é o que a tela faz de verdade: listar o que tem.
+## Foi lista, grade de três colunas e cardápio em linhas. A grade de três
+## quebrava "Batalha Naval" em duas linhas; o cardápio lia bem e não convidava.
+## Duas colunas resolvem os dois: o nome cabe inteiro, e cada jogo tem cor e
+## tamanho de coisa que se quer tocar (`GameTile`).
 ##
-## Os favoritos continuam acima, em cartão: lá o cartão é atalho, e a estrela
-## adianta o caminho sem esconder nada.
+## Os favoritos vêm na frente da grade, e a estrela mora no canto do bloco.
 ##
 ## ## Para onde esta tela leva
 ##
@@ -33,8 +31,8 @@ const SETTINGS_SCENE := "res://scenes/settings.tscn"
 
 ## Duas colunas de favorito: o cartão precisa de largura para a peça aparecer, e
 ## três deles num celular de 432 px voltariam ao problema da grade.
-const FAV_COLUMNS := 2
-const FAV_HEIGHT := 132.0
+## Altura do bloco de destaque, o primeiro da grade quando a conta é ímpar.
+const FEATURED_HEIGHT := 116.0
 
 var _leaving := false
 var _sheet: GameSheet = null
@@ -47,8 +45,6 @@ func _ready() -> void:
 	Patcher.confirm()
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	Game.reset_to_menu()
 	if _resume_pending_scan():
 		return
@@ -59,15 +55,17 @@ func _ready() -> void:
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
+	# A pílula dos amigos acompanha quem está online, sem abrir a gaveta.
+	var count_online := func() -> void: %AppBar.set_online(Friends.online.size())
+	Friends.changed.connect(count_online)
+	count_online.call()
+
 	%Tabs.current = AppTabs.GAMES
 	# Sem servidor de partidas não há sala para procurar. A aba continua lá,
 	# apagada: uma aba que some parece uma aba que foi removida.
 	if not Net.relay_available():
 		%Tabs.disabled = [AppTabs.ONLINE] as Array[StringName]
 	%Tabs.picked.connect(_go_tab)
-
-	%Categories.setup(ChipBar.category_items())
-	%Categories.selected.connect(_filter)
 
 	_sheet = GameSheet.new()
 	add_child(_sheet)
@@ -92,100 +90,56 @@ func _ready() -> void:
 
 
 ## A coleção inteira vem de `Game.GAMES`, e não de cartões desenhados na cena.
+##
+## Uma grade de blocos, sem filtro nem categoria: a coleção cabe numa tela, e um
+## filtro para sete jogos esconde mais do que acha. Os favoritos vêm primeiro, na
+## ordem em que foram guardados.
 func _fill_games() -> void:
-	# `remove_child` antes do `queue_free`: o segundo só apaga no fim do quadro, e
-	# entre trocar de filtro e o quadro acabar a tela teria as seções velhas por
-	# baixo das novas.
-	for parent: Node in [%Favorites, %GameList]:
-		for child in parent.get_children():
-			parent.remove_child(child)
-			child.queue_free()
+	# `remove_child` antes do `queue_free`: o segundo só apaga no fim do quadro.
+	for child in %GameList.get_children():
+		%GameList.remove_child(child)
+		child.queue_free()
 
-	var filter: StringName = %Categories.current
-	%Favorites.visible = filter == ChipBar.ALL and not Game.favorite_games().is_empty()
-	if %Favorites.visible:
-		_fill_favorites()
-
-	if filter == ChipBar.FAVORITES:
-		var starred := Game.favorite_games()
-		if starred.is_empty():
-			_add_hint("Nenhum favorito ainda.\nToque na estrela de um jogo para guardá-lo aqui.")
-			return
-		_add_rows(starred)
-		return
-	if filter != ChipBar.ALL:
-		_add_rows(Game.games_in(filter))
+	var ids: Array[StringName] = Game.favorite_games()
+	for id in Game.games_in():
+		if not ids.has(id):
+			ids.append(id)
+	if ids.is_empty():
+		_add_hint("Nenhum jogo disponível neste aparelho.")
 		return
 
-	# Em "Todos", o cardápio vem **por categoria**: sete linhas seguidas são sete
-	# linhas a comparar, e em blocos a comparação é dentro do bloco — que é a
-	# pergunta que o jogador faz ("qual jogo de tabuleiro eu quero?").
-	#
-	# Os favoritos continuam aqui embaixo também, porque o cardápio é o catálogo:
-	# uma lista que esconde o que está favoritado é uma lista incompleta. Em cima
-	# eles são atalho, e a forma diferente evita a leitura de "dois jogos iguais".
-	for entry: Dictionary in Game.CATEGORIES:
-		var ids: Array[StringName] = []
-		for id in Game.games_in():
-			if Game.category_of(id) == entry["id"]:
-				ids.append(id)
-		if ids.is_empty():
-			continue
-		_add_caption(str(entry["label"]))
-		_add_rows(ids)
-
-
-func _fill_favorites() -> void:
-	var caption := Label.new()
-	caption.text = "Favoritos"
-	caption.theme_type_variation = &"SectionHeader"
-	%Favorites.add_child(caption)
-
+	# Com a conta ímpar, o primeiro ocupa a largura toda: a grade de duas colunas
+	# fecha sem buraco, e o jogo mais querido ganha o bloco maior.
+	if ids.size() % 2 == 1:
+		var featured := _tile(ids.pop_front())
+		featured.custom_minimum_size.y = FEATURED_HEIGHT
+		# O destaque diz por que é destaque, e no xadrez o Elo de quem joga.
+		if featured.favorite:
+			featured.tag = "Seu favorito"
+			if featured.game_id == Game.CHESS and Account.elo > 0:
+				featured.tag += " · Elo %d" % Account.elo
+		%GameList.add_child(featured)
 	var grid := GridContainer.new()
-	grid.columns = FAV_COLUMNS
+	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", AppTheme.SPACE_M)
 	grid.add_theme_constant_override("v_separation", AppTheme.SPACE_M)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	%Favorites.add_child(grid)
-	for id in Game.favorite_games():
-		var card := GameChoice.new()
-		card.custom_minimum_size = Vector2(0, FAV_HEIGHT)
-		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.title = Game.game_title(id)
-		card.piece = Game.piece_of(id)
-		card.art_id = id
-		card.unavailable = not Game.playable(id)
-		card.favoritable = true
-		card.favorite = true
-		card.chosen.connect(_open_sheet.bind(id))
-		card.favorite_toggled.connect(_toggle_favorite.bind(id))
-		grid.add_child(card)
-
-
-func _add_rows(ids: Array[StringName]) -> void:
+	%GameList.add_child(grid)
 	for id in ids:
-		var row := CatalogRow.new()
-		row.game_id = id
-		row.favorite = Prefs.is_favorite(id)
-		row.unavailable = not Game.playable(id)
-		row.chosen.connect(_open_sheet.bind(id))
-		row.favorite_toggled.connect(_toggle_favorite.bind(id, row))
-		%GameList.add_child(row)
+		grid.add_child(_tile(id))
 
 
-## Rótulo de seção dentro do cardápio. Nasce aqui e não na cena porque as seções
-## vêm e vão com o filtro: em "Cartas" não há o que separar.
-func _add_caption(text: String) -> void:
-	var label := Label.new()
-	label.text = text
-	label.theme_type_variation = &"Caption"
-	label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-	label.custom_minimum_size.y = 30.0
-	%GameList.add_child(label)
+func _tile(id: StringName) -> GameTile:
+	var tile := GameTile.new()
+	tile.game_id = id
+	tile.favorite = Prefs.is_favorite(id)
+	tile.unavailable = not Game.playable(id)
+	tile.pressed.connect(_open_sheet.bind(id))
+	tile.favorite_toggled.connect(_toggle_favorite.bind(id, tile))
+	return tile
 
 
-## O que dizer quando o filtro não tem jogo nenhum — hoje, só a lista de favoritos
-## vazia. Uma tela em branco parece defeito; uma frase explica o que falta fazer.
+## O que dizer quando não há jogo nenhum. Uma tela em branco parece defeito; uma frase explica o que falta fazer.
 func _add_hint(text: String) -> void:
 	var label := Label.new()
 	label.text = text
@@ -197,21 +151,12 @@ func _add_hint(text: String) -> void:
 	%GameList.add_child(label)
 
 
-func _filter(_id: StringName) -> void:
-	_fill_games()
-
-
-## A estrela acende ou apaga na hora; o cardápio **não** se reordena.
+## A estrela acende ou apaga na hora; a grade **não** se reordena.
 ##
-## Reordenar aqui tiraria a linha de baixo do dedo que acabou de tocá-la. A ordem
-## nova vale a partir da próxima vez que a tela for montada, que é trocar de filtro
-## ou voltar para cá — e é aí que o favorito aparece no cartão de cima.
-func _toggle_favorite(id: StringName, row: CatalogRow = null) -> void:
-	var marked := Prefs.toggle_favorite(id)
-	if row != null:
-		row.favorite = marked
-	else:
-		_fill_games()
+## Reordenar aqui tiraria o bloco de baixo do dedo que acabou de tocá-lo. A ordem
+## nova vale a partir da próxima vez que a tela for montada.
+func _toggle_favorite(id: StringName, tile: GameTile) -> void:
+	tile.favorite = Prefs.toggle_favorite(id)
 	Sound.play(Sound.Cue.TAP)
 
 
@@ -358,8 +303,8 @@ func _offer_rejoin() -> void:
 		Prefs.forget_rejoin()
 		card.queue_free()
 	)
-	# Irmão do cardápio, e não filho dele: a lista é refeita a cada troca de
-	# filtro, e o cartão sumiria no primeiro toque nela.
+	# Irmão da grade, e não filho dela: a grade é refeita quando os favoritos
+	# mudam, e o cartão sumiria junto.
 	%Content.add_child(card)
 	%Content.move_child(card, 0)
 

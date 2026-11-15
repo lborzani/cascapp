@@ -64,8 +64,11 @@ func _ready() -> void:
 	pressed.connect(ask)
 
 
-static func _box(fill: float) -> StyleBoxFlat:
-	return AppTheme.box(Color(AppTheme.DANGER, fill), AppTheme.RADIUS, AppTheme.DANGER, 1)
+## Neutro, e não vermelho: era o único elemento colorido da barra, e o olho ia
+## para "sair" antes de ir para o jogo. O que custa caro é a confirmação, e é lá
+## que o vermelho mora.
+static func _box(lift: float) -> StyleBoxFlat:
+	return AppTheme.box(AppTheme.SURFACE_HIGH.lightened(lift), AppTheme.RADIUS)
 
 
 # --- a confirmação ------------------------------------------------------------
@@ -199,35 +202,14 @@ var _layer: Control = null
 var extras := Callable()
 
 
-## Porta com seta saindo, desenhada por código como o resto do app.
-##
-## Três traços e um triângulo: o batente em U aberto para a direita, a haste da
-## seta e a ponta. Em 20 px de desenho, qualquer detalhe a mais vira borrão — o
-## que precisa sobreviver é a leitura "alguma coisa saindo de alguma coisa".
+## Uma seta para trás, o mesmo sinal de "voltar" do resto do app. Era uma porta
+## com seta saindo, em vermelho; o gesto é o mesmo, e a pergunta "quer sair?" já
+## diz que aqui voltar custa a partida.
 func _draw() -> void:
-	var span := minf(size.x, size.y) * GLYPH
 	var center := size * 0.5
-	var ink := AppTheme.DANGER
-	var thick := maxf(span * 0.13, 1.5)
-
-	# O batente ocupa a metade esquerda, aberto para o lado por onde se sai.
-	var half := span * 0.5
-	var left := center.x - half
-	var mid := center.x - half * 0.05
+	var reach := minf(size.x, size.y) * 0.16
 	draw_polyline(PackedVector2Array([
-		Vector2(mid, center.y - half),
-		Vector2(left, center.y - half),
-		Vector2(left, center.y + half),
-		Vector2(mid, center.y + half),
-	]), ink, thick, true)
-
-	# A seta atravessa a abertura, e a ponta passa da borda do batente: é o que
-	# faz o desenho dizer "saindo" em vez de "entrando".
-	var tip := Vector2(center.x + half * 0.95, center.y)
-	draw_line(Vector2(center.x - half * 0.35, center.y), tip - Vector2(thick, 0.0), ink, thick, true)
-	var head := span * 0.30
-	draw_colored_polygon(PackedVector2Array([
-		tip,
-		tip + Vector2(-head, -head * 0.62),
-		tip + Vector2(-head, head * 0.62),
-	]), ink)
+		center + Vector2(reach * 0.6, -reach),
+		center + Vector2(-reach * 0.6, 0.0),
+		center + Vector2(reach * 0.6, reach),
+	]), AppTheme.TEXT, 3.0, true)

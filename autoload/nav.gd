@@ -56,6 +56,24 @@ var _served_frame := -1
 func _ready() -> void:
 	get_tree().quit_on_go_back = false
 	get_tree().node_added.connect(_let_scroll_through)
+	get_tree().scene_changed.connect(_enter_scene)
+
+
+## Toda tela entra do mesmo jeito: sobe um pouco e acende.
+##
+## Era um fade de 0,16 s escrito em oito cenas (e esquecido nas outras). Aqui
+## vale para todas, inclusive as que ainda não existem, e o ritmo mora em
+## [Motion] como o resto do movimento do app.
+func _enter_scene() -> void:
+	var scene := get_tree().current_scene as Control
+	if scene == null:
+		return
+	scene.modulate.a = 0.0
+	var tween := scene.create_tween().set_parallel()
+	tween.tween_property(scene, "modulate:a", 1.0, Motion.ENTER_TIME)
+	tween.tween_property(scene, "position:y", scene.position.y, Motion.ENTER_TIME) \
+		.from(scene.position.y + Motion.ENTER_RISE) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 ## Botão dentro de lista que rola deixa o arrasto passar para a lista.
@@ -78,7 +96,16 @@ func _let_scroll_through(node: Node) -> void:
 		scroll.scroll_deadzone = SCROLL_DEADZONE
 		return
 	var button := node as BaseButton
-	if button == null or button.mouse_filter != Control.MOUSE_FILTER_STOP:
+	if button == null:
+		return
+	# Todo botão afunda no toque. Aqui pelo mesmo motivo do arrasto: botão novo
+	# já nasce com isso. Quem desenha o próprio aperto marca `no_press`.
+	# A marca evita ligar duas vezes o botão que sai da árvore e volta.
+	if not button.has_meta(&"no_press") and not button.has_meta(&"press_bound"):
+		button.set_meta(&"press_bound", true)
+		button.button_down.connect(Motion.press.bind(button, true))
+		button.button_up.connect(Motion.press.bind(button, false))
+	if button.mouse_filter != Control.MOUSE_FILTER_STOP:
 		return
 	var parent := button.get_parent()
 	while parent != null:

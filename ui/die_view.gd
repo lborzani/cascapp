@@ -272,18 +272,15 @@ func _draw() -> void:
 	var rect := Rect2((size - Vector2.ONE * side) * 0.5 + _offset, Vector2.ONE * side)
 	rect = rect.grow(-side * 0.06)
 
-	# Dado de papel: face creme e pontos de tinta, o mesmo papel da comanda e da
-	# escritura. Parado, ele recua para o tom do balcão — um dado claro que não se
-	# pode rolar chamaria o dedo para um alvo morto.
-	var box := StyleBoxFlat.new()
-	box.set_corner_radius_all(int(side * 0.22))
-	box.bg_color = AppTheme.PAPER if enabled else AppTheme.SURFACE_HIGH
-	box.border_color = Color(tint, 1.0 if enabled else 0.35)
-	box.set_border_width_all(3)
-	if enabled and value == 0 and _morph >= 1.0:
-		box.shadow_color = Color(tint, 0.22)
-		box.shadow_size = int(side * 0.12)
-	draw_style_box(box, rect)
+	# Dado claro com a base lilás embaixo, como no protótipo. Sem número e sem
+	# poder rolar ele recua para o tom da mesa — um dado claro que não se pode
+	# rolar chamaria o dedo para um alvo morto. Com número ele fica claro: é o
+	# resultado que todo mundo lê.
+	var lit := enabled or value != 0 or _previous != 0
+	var radius := int(side * 0.24)
+	if lit:
+		draw_style_box(AppTheme.box(AppTheme.TEXT_DIM, radius), Rect2(rect.position + Vector2(0, side * 0.06), rect.size))
+	draw_style_box(AppTheme.box(AppTheme.PAPER if lit else AppTheme.SURFACE_HIGH, radius), rect)
 
 	if value == 0 and _previous == 0:
 		# Sem face: o ponto único no meio é o alvo, e some assim que houver
@@ -297,7 +294,7 @@ func _draw() -> void:
 	var leaving: Array = FACES.get(_previous, [])
 	var arriving: Array = FACES.get(value, [])
 	var pip := side * 0.075
-	var color := AppTheme.PAPER_INK if enabled else Color(AppTheme.TEXT, 0.35)
+	var color := AppTheme.PAPER_INK if lit else Color(AppTheme.TEXT, 0.35)
 
 	for slot in SLOTS.size():
 		var was := 1.0 if leaving.has(slot) else 0.0
@@ -307,8 +304,10 @@ func _draw() -> void:
 			continue
 		# O ponto encolhe e desaparece ao mesmo tempo: só o tamanho deixaria um
 		# ponto minúsculo cravado na face, e só o alfa daria um fantasma.
+		# O ponto do meio sai na cor da vez: é o que diz de quem é o dado.
+		var ink := tint if slot == 6 and lit else color
 		draw_circle(
 			rect.position + SLOTS[slot] * rect.size,
 			pip * presence,
-			Color(color, color.a * presence)
+			Color(ink, ink.a * presence)
 		)

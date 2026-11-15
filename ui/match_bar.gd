@@ -21,7 +21,7 @@ extends PanelContainer
 ## ligar em `pressed` sairia sem perguntar.
 signal leave_confirmed
 
-const HEIGHT := 52.0
+const HEIGHT := 56.0
 const HEIGHT_COMPACT := 42.0
 
 ## Barra de tela deitada: mais baixa, com o título menor. O tabuleiro de uma tela
@@ -54,6 +54,9 @@ var leave: LeaveButton = null
 var help: Button = null
 
 var _title: Label = null
+## O título e, embaixo dele, a faixa de contexto. Deitada, os dois ficam lado a
+## lado: a barra não tem altura para duas linhas.
+var _words: BoxContainer = null
 
 
 func _init() -> void:
@@ -66,23 +69,25 @@ func _init() -> void:
 	# da mão que joga, e é o mesmo canto em que todo aplicativo põe "voltar".
 	leave.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	leave.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	leave.custom_minimum_size = Vector2(38, 38)
+	leave.custom_minimum_size = Vector2(44, 44)
 	leave.confirmed.connect(_on_leave_confirmed)
 	row.add_child(leave)
 
+	_words = BoxContainer.new()
+	_words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_words)
+
 	_title = Label.new()
-	_title.theme_type_variation = &"SectionHeader"
 	_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_title.add_theme_font_override("font", AppTheme.display(600))
 	_title.text = title
-	row.add_child(_title)
+	_words.add_child(_title)
 
 	status = MatchStatus.new()
-	# Ela toma a sobra da linha em vez de um espaçador tomar: um `HFlowContainer`
-	# com a largura mínima dele quebra em duas linhas para caber, e a barra cresce
-	# para acomodar a quebra — numa tela deitada isso é mesa perdida.
 	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(status)
+	_words.add_child(status)
 
 	# O `?` antes das ações do jogo, e sempre no mesmo lugar: é a porta das regras
 	# em todas as partidas, e quem aprendeu onde ela fica num jogo acha no outro.
@@ -90,24 +95,22 @@ func _init() -> void:
 	help.text = "?"
 	help.tooltip_text = "Regras desta mesa"
 	help.focus_mode = Control.FOCUS_NONE
-	help.custom_minimum_size = Vector2(38, 38)
+	help.custom_minimum_size = Vector2(44, 44)
 	help.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	help.add_theme_font_override("font", AppTheme.display(900))
-	help.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M)
-	help.add_theme_color_override("font_color", AppTheme.ACCENT)
-	help.add_theme_color_override("font_hover_color", AppTheme.ACCENT)
-	help.add_theme_color_override("font_pressed_color", AppTheme.TEXT)
+	help.add_theme_font_override("font", AppTheme.display(700))
+	help.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M + 2)
+	# Neutro como o de sair: os dois são moldura, e a cor da tela é do jogo.
+	for state_name: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		help.add_theme_color_override(state_name, AppTheme.TEXT_DIM)
 	for state_name: String in ["normal", "hover", "pressed", "focus"]:
-		# Uma bolacha: o objeto redondo do tema, com o anel de latão.
-		var disc := AppTheme.box(
-			AppTheme.ACCENT_SOFT if state_name == "pressed" else AppTheme.COASTER,
-			19, AppTheme.GOLD, 2
+		var square := AppTheme.box(
+			AppTheme.SURFACE_TOP if state_name == "pressed" else AppTheme.SURFACE_HIGH, AppTheme.RADIUS
 		)
-		disc.content_margin_left = 0
-		disc.content_margin_right = 0
-		disc.content_margin_top = 0
-		disc.content_margin_bottom = 0
-		help.add_theme_stylebox_override(state_name, disc)
+		square.content_margin_left = 0
+		square.content_margin_right = 0
+		square.content_margin_top = 0
+		square.content_margin_bottom = 0
+		help.add_theme_stylebox_override(state_name, square)
 	help.pressed.connect(func() -> void: open_rules())
 	row.add_child(help)
 
@@ -120,13 +123,20 @@ func _init() -> void:
 	_apply_skin()
 
 
-## A faixa de contexto encosta à direita, e não no meio.
-##
 ## Aqui e não no `_init`: o `_ready` do `MatchStatus` centraliza — o certo quando a
-## faixa é a linha inteira de uma coluna, o errado quando ela divide a linha com um
-## título — e ele roda depois, quando a barra entra na árvore.
+## faixa é a linha inteira de uma coluna, o errado dentro da barra — e ele roda
+## depois, quando a barra entra na árvore.
 func _ready() -> void:
-	status.alignment = FlowContainer.ALIGNMENT_END
+	_apply_size()
+
+
+## Troca o título e a faixa de contexto por outro nó, no mesmo lugar. É o
+## placar da sinuca, que mora na barra como no protótipo.
+func replace_words(node: Control) -> void:
+	_words.visible = false
+	var row := _words.get_parent()
+	row.add_child(node)
+	row.move_child(node, _words.get_index())
 
 
 ## O `LeaveButton` já fez a pergunta; a barra só repassa a resposta, para a tela
@@ -168,21 +178,24 @@ static func create(bar_title := "") -> MatchBar:
 
 func _apply_size() -> void:
 	custom_minimum_size = Vector2(0, HEIGHT_COMPACT if compact else HEIGHT)
-	if _title != null:
-		_title.add_theme_font_size_override(
-			"font_size", AppTheme.SIZE_DISPLAY_M - (2 if compact else 0)
-		)
+	if _title == null:
+		return
+	_title.add_theme_font_size_override(
+		"font_size", AppTheme.SIZE_DISPLAY_M + (0 if compact else 2)
+	)
+	# Em pé, a faixa de contexto vai embaixo do título. Deitada, logo ao lado dele.
+	_words.vertical = not compact
+	_words.add_theme_constant_override("separation", AppTheme.SPACE_M if compact else -3)
+	status.alignment = FlowContainer.ALIGNMENT_BEGIN
 
 
-## Fundo e um fio embaixo: a barra precisa se separar do que vem depois sem virar
-## um bloco. O fio é a beirada do balcão.
+## Sem fundo próprio e sem fio: a barra é a parte de cima da tela, e quem a
+## separa do jogo é o espaço. Só fica translúcida sobre o tabuleiro 3D.
 func _apply_skin() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(AppTheme.BACKGROUND, 0.72) if translucent else AppTheme.SURFACE
-	style.border_width_bottom = 1
-	style.border_color = AppTheme.LINE_SOFT
-	style.content_margin_left = AppTheme.SPACE_M
-	style.content_margin_right = AppTheme.SPACE_M
+	style.bg_color = Color(AppTheme.BACKGROUND, 0.72 if translucent else 1.0)
+	style.content_margin_left = AppTheme.SPACE_L
+	style.content_margin_right = AppTheme.SPACE_L
 	style.content_margin_top = AppTheme.SPACE_XS
 	style.content_margin_bottom = AppTheme.SPACE_XS
 	add_theme_stylebox_override("panel", style)

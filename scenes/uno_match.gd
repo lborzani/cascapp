@@ -37,7 +37,11 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Tamanho de uma etiqueta de assento. Fixo, e não medido: elas são posicionadas à
 ## mão sobre a mesa, e um tamanho que muda com o texto faria a mesa dançar a cada
 ## carta comprada.
-const TAG_SIZE := Vector2(156, PlayerTag.HEIGHT_TAG)
+const TAG_SIZE := Vector2(196, PlayerTag.HEIGHT_TAG)
+## Altura da faixa da mão. A de pé é maior porque ali a mão tem a largura inteira,
+## e a largura deixa de ser o limite da carta.
+const LANDSCAPE_HAND := 112.0
+const PORTRAIT_HAND := 150.0
 
 ## Espera antes de o bot jogar. Ele não pensa, mas precisa parecer que decidiu:
 ## sem a pausa a vez dele acontece entre dois quadros, e o jogador vê a mão do
@@ -73,6 +77,7 @@ const _ACTION_STYLE := {
 
 var _rules := UnoRules.new()
 var _state: MatchState
+var _result_header: ResultHeader = null
 var _busy := false
 ## Alguém saiu para valer, ou o link caiu. Nos dois casos a mesa para de aceitar
 ## toque — a diferença é que o segundo pode voltar.
@@ -99,18 +104,19 @@ var _actions := {}
 @onready var _table: UnoView = %Table
 @onready var _hand: UnoHand = %Hand
 @onready var _banner: Banner = %Toast
+@onready var _fx: UnoFx = %Fx
 
 
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	# Deitado, como Ludo e Metrópole — e aqui por um motivo próprio: a mesa é um
-	# anel de até seis jogadores em volta do monte, e em retrato ele fica com
-	# metade da largura enquanto o leque da mão, que é onde se toca, fica com uma
-	# faixa. Quem desgira é `Game.reset_to_menu()`, por onde toda saída passa.
-	Orientation.to_landscape(get_tree())
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
+	# Dos dois jeitos, conforme o aparelho estiver. O anel em volta do monte cabe
+	# deitado e de pé — o que não cabia em retrato era a fileira de cartões de
+	# antes —, então a mesa segue o celular em vez de obrigar a girá-lo. O giro
+	# chega como janela de outro formato, e a base acompanha. Quem trava de volta
+	# no retrato é `Game.reset_to_menu()`, por onde toda saída passa.
+	Orientation.to_sensor(get_tree())
+	get_window().size_changed.connect(_on_window_resized)
 
 	_adopt_rules()
 	_state = _rules.initial_state()
@@ -123,6 +129,8 @@ func _ready() -> void:
 	# As etiquetas seguem o leque de cada assento, e o leque segue o tamanho da
 	# mesa: girar o aparelho move os dois.
 	_table.resized.connect(_place_tags)
+	resized.connect(_fit_layout)
+	_fit_layout()
 	%AgainButton.pressed.connect(_restart)
 	%OverlayLeaveButton.pressed.connect(_leave)
 	%Overlay.visible = false
@@ -173,7 +181,43 @@ func _ready() -> void:
 ## por onde toda saída passa — este é a rede de segurança de quem for liberado por
 ## outro caminho, que é o que a folha de prints faz a cada foto.
 func _exit_tree() -> void:
+	# Desligados **antes** de desgirar: trocar a base também avisa `size_changed`, e
+	# ainda ligado o aviso caía em `fit`, que lia a janela deitada e deitava de novo.
+	# E a cena inteira muda de tamanho junto — refazer o rodapé de uma cena que já
+	# está sendo desmontada é procurar nós que não existem mais.
+	if get_window().size_changed.is_connected(_on_window_resized):
+		get_window().size_changed.disconnect(_on_window_resized)
+	if resized.is_connected(_fit_layout):
+		resized.disconnect(_fit_layout)
 	Orientation.reset(get_tree())
+
+
+## Deitado, o rodapé é uma linha só: a etiqueta local, o leque e os botões. De pé
+## essa linha dá ao leque um quarto da largura, e uma mão de dez cartas vira uma
+## mancha. Então a mão desce para uma linha própria, com a largura inteira, e a
+## etiqueta e os botões ficam na faixa de cima, dividindo a largura entre os dois.
+func _fit_layout() -> void:
+	var portrait := size.y > size.x
+	var bottom: Container = %LocalSlot.get_parent()
+	var row: Container = bottom.get_parent()
+	var actions: Control = %PassButton.get_parent()
+	if portrait and _hand.get_parent() == bottom:
+		bottom.remove_child(_hand)
+		row.add_child(_hand)
+	elif not portrait and _hand.get_parent() == row:
+		row.remove_child(_hand)
+		bottom.add_child(_hand)
+		bottom.move_child(_hand, %LocalSlot.get_index() + 1)
+	# De pé a mão tem a largura toda, e a altura é o que deixa a carta crescer: a
+	# conta do leque pega a menor das duas medidas.
+	_hand.custom_minimum_size.y = PORTRAIT_HAND if portrait else LANDSCAPE_HAND
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL if portrait else Control.SIZE_FILL
+
+
+## Um método da cena, e não `Orientation.fit` ligado direto: a ligação morre com
+## a cena, e o menu não sai trocando de base a cada giro depois de a partida acabar.
+func _on_window_resized() -> void:
+	Orientation.fit(get_tree())
 
 
 ## Semente e regra da casa. No solo as duas saem do menu e do sorteio local; em
@@ -249,13 +293,19 @@ func _on_pass() -> void:
 ## vizinho já cresceu e as mãos já trocaram de dono, e não há como saber o que
 ## aconteceu — nem a quem.
 func _play(move: Move, from_network := false) -> void:
-	_busy = true
-	_hand.enabled = false
-	_table.can_draw = false
-
 	var seat := UnoRules.turn_of(_state)
 	var before := _hand_sizes()
 	var kind := UnoRules.kind_of(move)
+	# De onde a carta sai e o que o descarte mostrava, lidos **antes** de tudo: a
+	# mão ainda está acesa e a carta ainda está nela, e é desse lugar que o dedo
+	# lembra de tê-la tirado.
+	var launch := _launch_of(seat, move)
+	var top := UnoRules.top_card(_state)
+	var color := UnoRules.active_color(_state)
+
+	_busy = true
+	_hand.enabled = false
+	_table.can_draw = false
 
 	# O lance sai antes de ser aplicado: `_state.ply` é o índice dele, e depois de
 	# aplicar já é o do próximo. É o mesmo `n` que o torna idempotente do outro
@@ -265,6 +315,7 @@ func _play(move: Move, from_network := false) -> void:
 
 	_rules.apply_move(_state, move)
 	Sound.play(Sound.Cue.CARD if kind == UnoRules.PLAY else Sound.Cue.TAP)
+	var flight := _animate(seat, move, before, launch, top, color)
 	_refresh_table()
 
 	# A pausa de leitura não vale para as ações livres.
@@ -278,7 +329,10 @@ func _play(move: Move, from_network := false) -> void:
 	var pause := AFTER_MOVE
 	if told:
 		pause = BOT_QUICK if _is_free_action(kind) else READ_EFFECT
-	await _wait(pause)
+	# O voo corre **dentro** da pausa, e não depois dela: a pausa já era o tempo de
+	# ver o lance, e somar as duas deixaria cada vez de bot mais lenta sem mostrar
+	# nada a mais.
+	await _wait(maxf(pause, flight))
 	if not _alive():
 		return
 
@@ -288,6 +342,135 @@ func _play(move: Move, from_network := false) -> void:
 		_finish(champion)
 		return
 	_refresh()
+
+
+## De onde sai a carta de um lance: da mão, se for nossa; do leque do assento, se
+## for de outro. Junto vai a altura dela lá, que é de onde o voo cresce ou encolhe.
+func _launch_of(seat: int, move: Move) -> Dictionary:
+	if seat == Game.local_seat and UnoRules.kind_of(move) == UnoRules.PLAY:
+		return {"at": _hand.spot_of(UnoRules.card_of(move)), "height": _hand.card_height()}
+	return {"at": _table.seat_spot(seat), "height": _table.back_height()}
+
+
+## Os voos e as marcas do lance, e quanto tempo até o último voo pousar.
+##
+## A carta jogada voa até o descarte, e o que ela faz aparece quando pousa: o
+## inverte gira a seta, o pula põe a placa em quem perdeu a vez, o curinga espalha
+## a cor, o 7 e o 0 trocam as mãos de lugar. Qualquer lance que não é jogar e fez
+## uma mão crescer é compra — comprar, engolir a pilha, a dúvida e a denúncia —, e
+## cada carta a mais sai do monte para quem a recebeu.
+##
+## Só os voos contam no tempo devolvido. As marcas (anel, placa, grito) se apagam
+## sozinhas por cima da vez seguinte: esperar por elas deixaria cada UNO! de bot
+## meio segundo mais lento.
+func _animate(
+	seat: int, move: Move, before: Array, launch: Dictionary, top: int, color: int
+) -> float:
+	var kind := UnoRules.kind_of(move)
+	if kind == UnoRules.CALL:
+		_fx.shout(_seat_point(seat), "UNO!")
+		return 0.0
+	if kind == UnoRules.PLAY:
+		var card := UnoRules.card_of(move)
+		var spot: Transform2D = launch["at"]
+		var lands := _fx.fly(
+			card, spot.origin, _table.pile_point(), launch["height"], _table.card_height(),
+			0.0, spot.get_rotation(), seat != Game.local_seat
+		)
+		_table.hold_pile(top, color)
+		get_tree().create_timer(lands).timeout.connect(_table.release_pile)
+		if seat == Game.local_seat:
+			# Só a carta jogada sai da mão agora. A troca do 7 e a rodada do 0 chegam
+			# com os voos delas: a mão não vira outra no meio do voo da carta.
+			var left := _hand.cards.duplicate()
+			var index := left.find(card)
+			if index >= 0:
+				left.remove_at(index)
+				_hand.cards = left
+		return maxf(lands, _card_effect(seat, move, lands))
+
+	var last := 0.0
+	for other in UnoRules.seats_of(_state):
+		var grew: int = UnoRules.hand_size(_state, other) - int(before[other])
+		if grew <= 0:
+			continue
+		var gap := UnoFx.draw_gap(grew)
+		for index in grew:
+			last = maxf(last, _fx.fly(
+				-1, _table.deck_point(), _seat_point(other), _table.card_height(),
+				_seat_height(other), index * gap, 0.0, false, &"draw"
+			))
+	if last > 0.0:
+		# A carta comprada entra na mão quando chega, e não quando a vez termina.
+		get_tree().create_timer(last).timeout.connect(_show_local_hand)
+	return last
+
+
+## O que a carta faz, desenhado a partir do pouso dela. Devolve quando termina o
+## último voo que ela causou (só o 7 e o 0 voam), ou zero.
+func _card_effect(seat: int, move: Move, lands: float) -> float:
+	var card := UnoRules.card_of(move)
+	var count := UnoRules.seats_of(_state)
+	var forward := UnoRules.direction_of(_state)
+	if UnoRules.is_wild(card):
+		_fx.ring(_table.pile_point(), UnoCardArt.COLORS[UnoRules.active_color(_state)], lands)
+	match UnoRules.value_of_card(card):
+		UnoRules.REVERSE:
+			_table.spin_direction()
+		UnoRules.SKIP:
+			var skipped := posmod(seat + forward, count)
+			_fx.forbid(_seat_point(skipped), _table.card_height() * 0.32, lands)
+	# A troca e a rodada só existem com a regra da casa, e não acontecem na última
+	# carta: quem esvaziou a mão venceu, e as mãos ficam onde estão.
+	if not UnoRules.sevens_on(_state) or UnoRules.is_wild(card) or _rules.winner(_state) >= 0:
+		return 0.0
+	match UnoRules.value_of_card(card):
+		UnoRules.SEVEN:
+			var target := UnoRules.target_of(move)
+			if target < 0:
+				return 0.0
+			return _pass_hands([[seat, target], [target, seat]], lands, &"swap")
+		UnoRules.ZERO:
+			var legs := []
+			for other in count:
+				legs.append([other, posmod(other + forward, count)])
+			return _pass_hands(legs, lands, &"rotate")
+	return 0.0
+
+
+## Mãos mudando de dono: alguns versos voam de cada assento para o que recebe a
+## mão dele. Três no máximo por perna — é o gesto de entregar o leque, e não a
+## contagem, que já está escrita no assento.
+func _pass_hands(legs: Array, delay: float, tag: StringName) -> float:
+	var last := delay
+	for leg in legs:
+		var from: int = leg[0]
+		var to: int = leg[1]
+		for index in clampi(UnoRules.hand_size(_state, to), 1, 3):
+			last = maxf(last, _fx.fly(
+				-1, _seat_point(from), _seat_point(to), _seat_height(from), _seat_height(to),
+				delay + index * UnoFx.DRAW_GAP, 0.0, false, tag
+			))
+	get_tree().create_timer(last).timeout.connect(_show_local_hand)
+	return last
+
+
+## Onde fica a mão de um assento na tela: o leque da mesa, ou a nossa mão.
+func _seat_point(seat: int) -> Vector2:
+	if seat == Game.local_seat:
+		return _hand.get_global_rect().get_center()
+	return _table.seat_spot(seat).origin
+
+
+func _seat_height(seat: int) -> float:
+	return _hand.card_height() if seat == Game.local_seat else _table.back_height()
+
+
+## Uma **cópia** da mão. Vetor empacotado passa por referência, e o leque segurando
+## o mesmo vetor do estado mudava sozinho a cada `apply_move` — a carta comprada
+## entrava na mão antes de o voo chegar.
+func _show_local_hand() -> void:
+	_hand.cards = UnoRules.hand_of(_state, Game.local_seat).duplicate()
 
 
 ## O aviso do que o lance causou, ou falso quando não houve o que contar.
@@ -399,6 +582,9 @@ func _alive() -> bool:
 ## telas para isso seriam duas telas para manter alinhadas com o tema.
 func _ask(options: Array[Move], title: String, by_color: bool) -> void:
 	%ChoiceTitle.text = title
+	# De pé, os alvos do 7 vão um embaixo do outro: cinco nomes com a contagem ao
+	# lado não cabem lado a lado em 432 px. As quatro cores cabem, e ficam em linha.
+	%ChoiceRow.vertical = not by_color and size.y > size.x
 	for child in %ChoiceRow.get_children():
 		child.queue_free()
 
@@ -683,7 +869,7 @@ func _refresh_table() -> void:
 
 
 func _refresh_hand() -> void:
-	_hand.cards = UnoRules.hand_of(_state, Game.local_seat)
+	_show_local_hand()
 	_hand.playable = _playable_now()
 	_hand.enabled = _can_act()
 	%PassButton.visible = _can_act() and _move_of_kind(UnoRules.PASS) != null
@@ -713,6 +899,23 @@ func _build_actions() -> void:
 		column.add_child(button)
 		column.move_child(button, %PassButton.get_index())
 		_actions[kind] = button
+		if kind == UnoRules.CALL:
+			_dress_shout(button)
+
+
+## O "UNO!" do protótipo: placa coral, tinta escura, balançando enquanto existe.
+func _dress_shout(button: Button) -> void:
+	button.custom_minimum_size.y = 60
+	button.add_theme_font_size_override("font_size", 26)
+	button.add_theme_stylebox_override("normal", AppTheme.plate(AppTheme.DANGER, Color("c22452")))
+	button.add_theme_stylebox_override("hover", AppTheme.plate(AppTheme.DANGER.lightened(0.08), Color("c22452")))
+	button.add_theme_stylebox_override("pressed", AppTheme.plate(AppTheme.DANGER.darkened(0.08), Color("c22452"), true))
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, AppTheme.ACCENT_INK)
+	button.resized.connect(func() -> void: button.pivot_offset = button.size * 0.5)
+	var wobble := button.create_tween().set_loops()
+	wobble.tween_property(button, "rotation", 0.05, 0.5).set_trans(Tween.TRANS_SINE)
+	wobble.tween_property(button, "rotation", -0.07, 0.5).set_trans(Tween.TRANS_SINE)
 
 
 func _refresh_actions() -> void:
@@ -765,21 +968,42 @@ func _playable_now() -> PackedInt32Array:
 	return codes
 
 
+## A pílula do meio da mesa: o que fazer agora, ou de quem é a vez.
 func _refresh_status() -> void:
+	_table.hint_lit = false
 	if _link_down:
-		%StatusLabel.text = "Conexão instável; tentando voltar…"
+		_table.hint = "Reconectando…"
 		return
 	var seat := UnoRules.turn_of(_state)
 	if not _my_turn():
-		%StatusLabel.text = "Vez de %s." % _seat_name(seat)
+		_table.hint = "Vez de %s" % _seat_name(seat)
 		return
+	_table.hint_lit = true
 	if UnoRules.drew(_state):
-		%StatusLabel.text = "Você comprou. Jogue a carta comprada ou passe."
-		return
-	if _playable_now().is_empty():
-		%StatusLabel.text = "Nada serve. Toque no monte para comprar."
-		return
-	%StatusLabel.text = "Sua vez. Jogue uma carta ou compre."
+		_table.hint = "Jogue a comprada ou passe"
+	elif _playable_now().is_empty():
+		_table.hint = "Nada serve: compre do monte"
+	else:
+		_table.hint = _match_hint()
+
+
+## "Jogue um verde ou um 7": a cor que vale e o valor do topo. Depois de um
+## curinga só a cor — qualquer curinga serve de qualquer jeito.
+func _match_hint() -> String:
+	var color := UnoRules.color_name(UnoRules.active_color(_state)).to_lower()
+	var top := UnoRules.top_card(_state)
+	if top < 0 or UnoRules.is_wild(top):
+		return "Jogue um %s" % color
+	var value := UnoRules.value_of_card(top)
+	var face := str(value)
+	match value:
+		UnoRules.SKIP:
+			face = "pula"
+		UnoRules.REVERSE:
+			face = "inverte"
+		UnoRules.DRAW_TWO:
+			face = "+2"
+	return "Jogue um %s ou um %s" % [color, face]
 
 
 ## Onde cada jogador aparece na mesa: uma etiqueta presa ao leque dele.
@@ -804,7 +1028,9 @@ func _build_tags() -> void:
 
 	for seat in _rules.players():
 		var tag := PlayerTag.new()
-		tag.shape = PlayerTag.Shape.TAG
+		# A sua é a faixa alta do rodapé ("Sua vez · 7 cartas"); as dos outros, a
+		# pílula com o selo da contagem.
+		tag.shape = PlayerTag.Shape.STRIP if seat == Game.local_seat else PlayerTag.Shape.TAG
 		tag.seat_color = UnoView.color_of_seat(seat)
 		if seat == Game.local_seat:
 			%LocalSlot.add_child(tag)
@@ -838,12 +1064,18 @@ func _refresh_tags() -> void:
 		# cadeira que vira máquina precisar passar a dizer "(bot)".
 		tag.title = _seat_name(seat)
 		tag.active = seat == turn
-		tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held
-		# Uma carta na mão é o aviso mais forte da mesa, e é o que o Uno grita em
-		# voz alta na vida real. Ele ganha o vermelho do app — o mesmo do que custa
-		# caro — e vence o destaque da vez, que é informação mais barata.
-		tag.alert = held == 1
-		tag.alert_text = "1 carta!"
+		if seat == Game.local_seat:
+			tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held
+			# Uma carta na sua mão é o aviso mais forte da mesa: o vermelho do app
+			# vence o destaque da vez.
+			tag.alert = held == 1
+			tag.alert_text = "1 carta!"
+		else:
+			# Nos outros a contagem é o selo da pílula, e uma carta só vira "UNO!"
+			# em coral — o aviso que o Uno grita em voz alta.
+			tag.subtitle = ""
+			tag.badge = "UNO!" if held == 1 else str(held)
+			tag.badge_hot = held == 1
 	_place_tags()
 
 
@@ -912,7 +1144,17 @@ func _finish(champion: int) -> void:
 	%OverlayTitle.text = "Você venceu" if champion == Game.local_seat else \
 		"%s venceu" % _seat_name(champion)
 	%OverlaySubtitle.text = "Ficou sem cartas na mão."
+	if _result_header == null:
+		_result_header = ResultHeader.attach(%OverlayTitle, %OverlaySubtitle, %Overlay)
 	%Overlay.visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_result_header.celebrate(
+		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+			[ResultHeader.duration_since(Game.match_started_at), "duração"],
+			[str(_state.ply), "jogadas"],
+		]
+	)
 
 
 func _restart() -> void:

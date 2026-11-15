@@ -86,6 +86,17 @@ var _recorded_game := {}
 var _reported := false
 ## O que o relay disse do Elo desta partida, para o painel; vazio até lá.
 var _rating_text := ""
+## O Elo novo e a variação, quando o relay os mandou. Zero é "ainda não".
+var _rating_elo := 0
+var _rating_delta := 0
+## Selo e números do topo do fim de partida, e o confete por cima dele.
+var _result_header: ResultHeader = null
+## A faixa de lances embaixo do tabuleiro e a fileira "Propor empate · Desistir".
+var _moves_strip: MoveStrip = null
+var _end_row: HBoxContainer = null
+## O botão que pede um segundo toque para confirmar, e quando o pedido vence.
+var _armed: Button = null
+var _armed_until := 0
 var _review: ReviewPanel = null
 ## Avaliação ao vivo; só existe para quem assiste xadrez.
 var _live: LiveReview = null
@@ -123,9 +134,6 @@ var _coin_toss: CoinToss = null
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	# Entrada curta: troca de tela sem corte seco.
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 	var column: VBoxContainer = %Board.get_parent().get_parent()
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	%Board.get_parent().size_flags_vertical = Control.SIZE_FILL
@@ -187,6 +195,8 @@ func _ready() -> void:
 	%NextUpButton.pressed.connect(_on_next_up_pressed)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
+	_build_result_header()
+	_build_move_strip()
 
 	# A barra sabe o nome do jogo, o relógio da partida e o código da sala, mas só
 	# depois de `begin_match()`: é ele que decide se esta partida começa agora ou
@@ -221,6 +231,8 @@ func _new_game() -> void:
 	_recorded_game = {}
 	_reported = false
 	_rating_text = ""
+	_rating_elo = 0
+	_rating_delta = 0
 	_state = _ruleset.initial_state()
 	_selection.clear()
 	_hint = ""
@@ -567,6 +579,9 @@ func _tick_bot(delta: float) -> void:
 ## mover, então quase todo plano nasceria ilegal, e um recurso que falha na
 ## maioria das vezes atrapalha mais do que ajuda.
 func _premove_allowed() -> bool:
+	# Aba Você › "Planejar lance (premove)".
+	if not Prefs.premove_on():
+		return false
 	return (
 		Game.mode == Game.Mode.ONLINE
 		and Net.connected
@@ -798,6 +813,26 @@ func _run_premove() -> void:
 # --- game flow ---------------------------------------------------------------
 
 
+## As peças tomadas voam do tabuleiro até a fileira da etiqueta de quem
+## capturou, saindo quando a peça que captura chega na casa.
+func _fly_captures(taken: Array, mover: int) -> void:
+	if taken.is_empty():
+		return
+	var card: PlayerTag = %BottomTag if _bottom_side() == mover else %TopTag
+	if not card.is_visible_in_tree():
+		return
+	var land := card.get_global_transform() * Vector2(
+		card.size.x * 0.55, card.size.y * 0.5 + PlayerTag.CAPTURED_Y
+	)
+	var board_to_screen := _board.get_global_transform()
+	for entry in taken:
+		var rect := _board.rect_of(int(entry[0]))
+		PieceFlight.launch(
+			self, int(entry[1]), board_to_screen * rect.get_center(), land,
+			rect.size.x, PlayerTag.CAPTURED_SIZE, _board.remaining_animation() * 0.7
+		)
+
+
 func _play(move: Move, broadcast: bool) -> void:
 	# As peças capturadas somem do estado ao aplicar o lance; a animação precisa
 	# saber o que havia ali para poder mostrá-las desaparecendo.
@@ -818,7 +853,8 @@ func _play(move: Move, broadcast: bool) -> void:
 	# A proposta de empate valia para a posição de antes.
 	_clear_draw_offer()
 	_board.last_move = move.path.duplicate()
-	_board.play_move(move.path, taken)
+	_board.play_move(move.path, taken, move.promotion != 0)
+	_fly_captures(taken, mover)
 	_selection.clear()
 	# A peça erguida para o plano era da posição de antes. Sobrevivendo ao lance
 	# do oponente, a marca ficava na casa mesmo com ele capturando ali — e o
@@ -903,7 +939,11 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	%ResultTitle.text = title
 	# O painel reabre (convite de revanche, oponente que sai); o Elo que já
 	# chegou não pode sumir dele.
-	%ResultDetail.text = detail if _rating_text.is_empty() else "%s\n%s" % [detail, _rating_text]
+	%ResultDetail.text = detail
+	# Abandono e saída não têm vencedor decidido no tabuleiro: o cartão fica só
+	# com o texto, sem selo nem números.
+	_result_header.visible = _winner != NO_RESULT
+	_result_header.show_result(_result_mood(), _result_stats())
 	_record_game(title, detail)
 	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
 	allow_rematch = allow_rematch and not Net.is_spectator
@@ -919,6 +959,8 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	# parecer que acabou três vezes.
 	if not %ResultLayer.visible:
 		Sound.play(Sound.Cue.WIN)
+		if _winner != NO_RESULT and _result_mood() == ResultHeader.Mood.WIN:
+			_result_header.confetti.burst()
 	%ResultLayer.visible = true
 	_banner.hide_message()
 	# Depois do texto: um convite que chegou enquanto a animação do último lance
@@ -1088,7 +1130,100 @@ func _on_rated(ratings: Array) -> void:
 			var delta := int(entry.get("delta", 0))
 			Account.elo = elo
 			_rating_text = "Elo %d (%s%d)" % [elo, "+" if delta >= 0 else "", delta]
-			%ResultDetail.text = "%s\n%s" % [%ResultDetail.text, _rating_text]
+			_rating_elo = elo
+			_rating_delta = delta
+			_result_header.set_stats(_result_stats())
+
+
+## O selo e a fileira de números entram no cartão de fim que a cena já tem: o
+## selo no topo, os números logo depois do texto. O confete cobre a camada toda.
+func _build_result_header() -> void:
+	_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %ResultLayer)
+
+
+## Para quem é a festa. Quem assiste e quem joga no mesmo celular sempre vê o
+## troféu: alguém da mesa venceu. Contra o bot e online, depende do lado.
+func _result_mood() -> ResultHeader.Mood:
+	if _winner == -1:
+		return ResultHeader.Mood.DRAW
+	if Net.is_spectator or Game.mode == Game.Mode.HOTSEAT:
+		return ResultHeader.Mood.WIN
+	return ResultHeader.Mood.WIN if _winner == Game.local_side else ResultHeader.Mood.LOSS
+
+
+## Duração, lances e — quando o relay já mandou — o Elo, com a variação acesa.
+func _result_stats() -> Array:
+	var stats: Array = [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(ceili(_state.ply / 2.0)), "lances"],
+	]
+	if _rating_elo > 0:
+		stats.push_front([
+			str(_rating_elo), "Elo %s%d" % ["+" if _rating_delta >= 0 else "", _rating_delta],
+			_rating_delta >= 0,
+		])
+	return stats
+
+
+## A faixa de lances logo embaixo do tabuleiro, e embaixo do cartão de baixo a
+## fileira com o que encerra a partida — as mesmas opções do diálogo de sair.
+func _build_move_strip() -> void:
+	var column: Control = %Board.get_parent().get_parent()
+	_moves_strip = MoveStrip.new()
+	column.add_child(_moves_strip)
+	column.move_child(_moves_strip, %Board.get_parent().get_index() + 1)
+	_end_row = HBoxContainer.new()
+	_end_row.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	column.add_child(_end_row)
+	column.move_child(_end_row, %QueueButton.get_index())
+
+
+## Um botão por opção do diálogo de sair (`_end_options`), com o mesmo rótulo e a
+## mesma ação. Somem quando a partida não tem mais o que encerrar.
+func _refresh_end_row() -> void:
+	if _end_row == null:
+		return
+	for child in _end_row.get_children():
+		_end_row.remove_child(child)
+		child.queue_free()
+	_armed = null
+	var options := _end_options()
+	_end_row.visible = not options.is_empty()
+	for option: Array in options:
+		var button := Button.new()
+		button.text = str(option[0])
+		button.theme_type_variation = &"GhostButton"
+		button.custom_minimum_size.y = 52
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.focus_mode = Control.FOCUS_NONE
+		var danger := button.text.contains("esist")
+		if danger:
+			for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+				button.add_theme_color_override(state, AppTheme.DANGER)
+		button.pressed.connect(_confirm_then.bind(button, option[1]))
+		_end_row.add_child(button)
+
+
+## Desistir e empatar encerram a partida, e o botão fica a um dedo do cartão:
+## o primeiro toque pede o segundo ("Toque de novo"), que vale por 3 s.
+func _confirm_then(button: Button, action: Callable) -> void:
+	var now := Time.get_ticks_msec()
+	if _armed == button and now <= _armed_until:
+		_armed = null
+		action.call()
+		_refresh_end_row()
+		return
+	if _armed != null and is_instance_valid(_armed):
+		_armed.text = str(_armed.get_meta(&"label", _armed.text))
+	button.set_meta(&"label", button.text)
+	button.text = "Toque de novo"
+	_armed = button
+	_armed_until = now + 3000
+	get_tree().create_timer(3.0).timeout.connect(func() -> void:
+		if is_instance_valid(button) and _armed == button:
+			button.text = str(button.get_meta(&"label"))
+			_armed = null
+	)
 
 
 ## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
@@ -1677,8 +1812,14 @@ func _refresh_last_move() -> void:
 
 	# Quem some é o Control que contém a linha, e não a linha: um filho invisível
 	# de `VBoxContainer` deixa de contar altura, e é a altura que precisa sumir.
-	%TopLastMoveSlot.visible = _top_last_move.has_move()
+	# Fora do modo mesa a faixa de lances responde a mesma pergunta, e mais: a linha
+	# de cima só fica para o tabuleiro dividido, onde cada lado precisa da dele.
+	%TopLastMoveSlot.visible = _top_last_move.has_move() and _table_mode
 	%BottomLastMoveSlot.visible = _bottom_last_move.has_move()
+	_moves_strip.visible = not _table_mode
+	_moves_strip.moves = _notation
+	_moves_strip.check = _board.check_square != Board.NO_SQUARE
+	_refresh_end_row()
 	_fit_board()
 
 

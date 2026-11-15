@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://dddge7juoch1d"
-path="res://.godot/imported/AtkinsonHyperlegible-Bold.ttf-88b8e4bce39666c760f25dd9a57aebce.fontdata"
+uid="uid://b1jhetbxrwujm"
+path="res://.godot/imported/Nunito-Variable.ttf-6f6325d3224193810a20dd678ce56bea.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/AtkinsonHyperlegible-Bold.ttf"
-dest_files=["res://.godot/imported/AtkinsonHyperlegible-Bold.ttf-88b8e4bce39666c760f25dd9a57aebce.fontdata"]
+source_file="res://assets/fonts/Nunito-Variable.ttf"
+dest_files=["res://.godot/imported/Nunito-Variable.ttf-6f6325d3224193810a20dd678ce56bea.fontdata"]
 
 [params]
 

@@ -29,9 +29,15 @@ func _ready() -> void:
 	Game.uno_sevens = true
 
 	await _probe_opening()
+	await _probe_orientation()
 	await _probe_table_seats()
-	await _probe_hand_hit()
+	# A faixa da mão deitada e a de pé: a de pé é mais larga e mais alta, e o passo
+	# do leque muda junto.
+	await _probe_hand_hit(Vector2(408.0, 112.0))
+	await _probe_hand_hit(Vector2(408.0, 150.0))
 	await _probe_playing()
+	await _probe_leave_mid_flight()
+	await _probe_effects()
 	await _probe_draw_then_pass()
 	await _probe_wild()
 	await _probe_seven()
@@ -117,6 +123,46 @@ func _probe_opening() -> void:
 	scene.free()
 
 
+## A mesa segue o aparelho: o giro chega como janela de outro formato, e a base de
+## escala troca junto — sem ela, deitar o celular encolhe a UI inteira.
+##
+## E a ligação morre com a cena. Viva depois dela, o menu trocaria de base a cada
+## giro e abriria deitado.
+func _probe_orientation() -> void:
+	print("retrato e paisagem")
+	var window := get_window()
+	var original := window.size
+	var scene := await _open()
+
+	window.size = Vector2i(768, 432)
+	await get_tree().process_frame
+	_equals(window.content_scale_size, Vector2i(768, 432), "janela deitada, base deitada")
+	window.size = Vector2i(432, 768)
+	await get_tree().process_frame
+	_equals(window.content_scale_size, Vector2i(432, 768), "janela de pé, base de pé")
+	_check(
+		scene._hand.get_parent() != scene.get_node("%LocalSlot").get_parent(),
+		"de pé, a mão desce para uma linha própria"
+	)
+	window.size = Vector2i(768, 432)
+	await get_tree().process_frame
+	_check(
+		scene._hand.get_parent() == scene.get_node("%LocalSlot").get_parent(),
+		"e deitada volta para o rodapé, entre a etiqueta e os botões"
+	)
+
+	scene.free()
+	_equals(window.content_scale_size, Vector2i(432, 768), "sair da partida volta ao retrato")
+	window.size = Vector2i(800, 400)
+	await get_tree().process_frame
+	_equals(
+		window.content_scale_size, Vector2i(432, 768),
+		"e depois dela a janela gira sem mexer na base"
+	)
+	window.size = original
+	await get_tree().process_frame
+
+
 ## Os assentos ficam em volta, na **ordem de jogo** a partir do local — e não na
 ## ordem de índice.
 ##
@@ -172,10 +218,10 @@ func _probe_table_seats() -> void:
 ## toque jogaria a carta e a mão mudaria no meio do laço — o teste passaria a
 ## medir o efeito do toque anterior em vez do acerto do seguinte. Foi assim que
 ## este teste falhou da primeira vez, e o leque estava certo.
-func _probe_hand_hit() -> void:
-	print("toque no leque")
+func _probe_hand_hit(area: Vector2) -> void:
+	print("toque no leque (%dx%d)" % [area.x, area.y])
 	var hand := UnoHand.new()
-	hand.size = Vector2(408.0, 150.0)
+	hand.size = area
 	add_child(hand)
 	await get_tree().process_frame
 
@@ -221,6 +267,15 @@ func _probe_hand_hit() -> void:
 	var last: Vector2 = hand._spots[hand._spots.size() - 1].origin
 	_check(last.x < hand.size.x, "e a última carta continua dentro da tela")
 
+	# Vinte cartas: a mão grande inteira cabe, com a borda da última dentro.
+	var many := PackedInt32Array()
+	for each in 20:
+		many.append(UnoRules.card(UnoRules.CardColor.BLUE, each % 10))
+	hand.cards = many
+	hand._layout()
+	var edge: float = hand._spots[19].origin.x + UnoCardArt.width_for(hand._card_height) * 0.5
+	_check(edge <= hand.size.x, "uma mão de vinte cabe inteira na largura")
+
 	hand.free()
 
 
@@ -235,7 +290,17 @@ func _probe_playing() -> void:
 	_check(scene.get_node("%Table").can_draw, "e o monte acende junto, porque comprar é legal")
 
 	scene._on_card_tapped(three)
+	# Durante o voo: a carta já saiu da mão, mas o descarte ainda mostra o topo
+	# antigo — senão a carta apareceria duas vezes, pousada e a caminho.
+	_check(scene._fx.busy(), "a carta jogada sai voando")
+	_equals(scene._hand.cards, PackedInt32Array([stranger]), "e deixa a mão na hora")
+	_equals(
+		scene._table.held_top, UnoRules.card(UnoRules.CardColor.RED, 5),
+		"enquanto o descarte segura o topo antigo"
+	)
 	await get_tree().create_timer(0.6).timeout
+	_check(not scene._fx.busy(), "o voo termina dentro da pausa da vez")
+	_equals(scene._table.held_top, -1, "e o descarte passa a mostrar a carta nova")
 	_equals(
 		UnoRules.top_card(scene._state), three, "a carta jogada vai para o descarte"
 	)
@@ -244,6 +309,69 @@ func _probe_playing() -> void:
 		"e sai da mão"
 	)
 	_check(not scene._hand.enabled, "a mão fecha quando a vez não é mais nossa")
+	scene.free()
+
+
+## Sair com a carta no ar. A camada morre com a cena, e o relógio que soltaria o
+## descarte dispara depois — sobre uma mesa que já não existe. Sem erro é o teste:
+## o runner acusa qualquer SCRIPT ERROR.
+func _probe_leave_mid_flight() -> void:
+	print("sair no meio do voo")
+	var scene := await _open()
+	var three := UnoRules.card(UnoRules.CardColor.RED, 3)
+	await _rig(scene, [[three, three]], UnoRules.card(UnoRules.CardColor.RED, 5))
+	scene._on_card_tapped(three)
+	_check(scene._fx.busy(), "a carta está no ar")
+	scene.free()
+	await get_tree().create_timer(0.6).timeout
+	_check(true, "e a cena saiu sem erro")
+
+
+## Cada lance produz o seu efeito, e só o seu. Contado pela `UnoFx` (`played`),
+## porque o efeito em si é desenho — e o que pode quebrar sem ninguém ver é o
+## efeito do pula saindo no 7, ou nenhum saindo no curinga.
+func _probe_effects() -> void:
+	print("efeitos de cada lance")
+	var red := UnoRules.CardColor.RED
+	var top := UnoRules.card(red, 5)
+	var filler := UnoRules.card(UnoRules.CardColor.BLUE, 9)
+	var cases := [
+		["número comum", UnoRules.card(red, 3), {}],
+		["pula", UnoRules.card(red, UnoRules.SKIP), {&"forbid": 1}],
+		["curinga", UnoRules.card(UnoRules.CardColor.WILD, UnoRules.WILD), {&"ring": 1}],
+		["7", UnoRules.card(red, 7), {&"swap": 1}],
+		["0", UnoRules.card(red, 0), {&"rotate": 1}],
+	]
+	for case in cases:
+		var scene := await _open()
+		var card: int = case[1]
+		await _rig(scene, [[card, filler, filler]], top)
+		scene._play(scene._moves_for_card(card)[0])
+		var played: Dictionary = scene._fx.played
+		_equals(int(played.get(&"play", 0)), 1, "%s: a carta voa" % case[0])
+		for kind: StringName in [&"forbid", &"ring", &"swap", &"rotate", &"shout"]:
+			var want: Dictionary = case[2]
+			_equals(
+				int(played.get(kind, 0)) > 0, want.has(kind),
+				"%s: %s %s" % [case[0], kind, "sai" if want.has(kind) else "não sai"]
+			)
+		scene.free()
+
+	# O inverte não é marca: ele gira a seta que a mesa já desenha.
+	var scene := await _open()
+	var reverse := UnoRules.card(red, UnoRules.REVERSE)
+	await _rig(scene, [[reverse, filler, filler]], top)
+	scene._play(scene._moves_for_card(reverse)[0])
+	_check(scene._table._spin_tween != null and scene._table._spin_tween.is_valid(),
+		"inverte: a seta do sentido gira")
+	scene.free()
+
+	# Gritar UNO: o grito salta, e nada voa.
+	scene = await _open()
+	await _rig(scene, [[UnoRules.card(red, 3), filler]], top)
+	scene._play(scene._move_of_kind(UnoRules.CALL))
+	_equals(int(scene._fx.played.get(&"shout", 0)), 1, "UNO!: o grito salta do assento")
+	_equals(int(scene._fx.played.get(&"play", 0)), 0, "e nenhuma carta voa")
 	scene.free()
 
 
@@ -262,7 +390,10 @@ func _probe_draw_then_pass() -> void:
 	_check(scene._hand.playable.is_empty(), "nada serve antes de comprar")
 
 	scene._on_deck_tapped()
+	_check(scene._fx.busy(), "a compra sai voando do monte")
+	_equals(scene._hand.cards.size(), 1, "e a carta só entra na mão quando chega")
 	await get_tree().create_timer(0.6).timeout
+	_equals(scene._hand.cards.size(), 2, "chegou, está na mão")
 	_equals(UnoRules.turn_of(scene._state), 0, "comprar carta que serve não passa a vez")
 	_check(scene.get_node("%PassButton").visible, "e o botão de passar aparece")
 	_equals(

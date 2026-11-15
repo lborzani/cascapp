@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://qd63ksifkknx"
-path="res://.godot/imported/BigShouldersDisplay-Variable.ttf-83bb5b4668d7856f90f62c2c59aa5b99.fontdata"
+uid="uid://dcudt81fhsasf"
+path="res://.godot/imported/Fredoka-Variable.ttf-be82ba9dfdb46f07e2455d8b62d90c28.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/BigShouldersDisplay-Variable.ttf"
-dest_files=["res://.godot/imported/BigShouldersDisplay-Variable.ttf-83bb5b4668d7856f90f62c2c59aa5b99.fontdata"]
+source_file="res://assets/fonts/Fredoka-Variable.ttf"
+dest_files=["res://.godot/imported/Fredoka-Variable.ttf-be82ba9dfdb46f07e2455d8b62d90c28.fontdata"]
 
 [params]
 

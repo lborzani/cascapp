@@ -8,9 +8,9 @@ extends Control
 ## gaveta, que é onde uma função se esconde de quem não sabe que ela existe. Na
 ## base, os três lugares do app estão sempre à vista e ao alcance.
 ##
-## Desenhada inteira aqui, com as três áreas de toque calculadas da largura, em vez
-## de três botões: o que cada aba mostra é um ícone de traço e uma palavra, e um
-## `Button` com filho desenhado por cima seria dois nós brigando pelo mesmo toque.
+## Uma pílula solta do chão, com a aba aberta preenchida de limão. Desenhada
+## inteira aqui, com as três áreas de toque calculadas da largura, em vez de três
+## botões: a pílula é um desenho só, e o toque vale na faixa toda, margem incluída.
 ##
 ## Quem navega é a tela. A barra só diz qual aba foi tocada — é o que permite a
 ## mesma barra servir às três cenas sem saber para onde cada uma leva. O som do
@@ -25,9 +25,14 @@ const YOU := &"you"
 const ROUTES: Array[StringName] = [GAMES, ONLINE, YOU]
 const LABELS := {GAMES: "Jogos", ONLINE: "Online", YOU: "Você"}
 
-const HEIGHT := 64.0
-const ICON := 22.0
-const LABEL_SIZE := 14
+const HEIGHT := 80.0
+## A pílula dentro da faixa: recuada dos lados e do chão.
+const PILL_HEIGHT := 60.0
+const PILL_SIDE := 20.0
+const PILL_BOTTOM := 12.0
+## Folga entre a pílula e o preenchimento da aba aberta.
+const INSET := 6.0
+const LABEL_SIZE := 16
 ## Opacidade de uma aba que não pode ser aberta neste build — Online sem servidor.
 ## Apagada e não escondida: uma aba que some parece uma aba que foi removida.
 const DISABLED_ALPHA := 0.35
@@ -73,42 +78,23 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), AppTheme.COASTER)
-	# O fio de cima é tracejado, como a linha de giz do resto do tema.
-	draw_dashed_line(Vector2(0, 0.75), Vector2(size.x, 0.75), AppTheme.LINE_SOFT, 1.5, 6.0)
-	var width := size.x / ROUTES.size()
-	var face := AppTheme.display(900)
+	var pill := Rect2(
+		PILL_SIDE, size.y - PILL_BOTTOM - PILL_HEIGHT, size.x - PILL_SIDE * 2.0, PILL_HEIGHT
+	)
+	draw_style_box(AppTheme.box(AppTheme.SURFACE_HIGH, int(PILL_HEIGHT * 0.5)), pill)
+	var width := pill.size.x / ROUTES.size()
+	var face := AppTheme.display(600)
 	for index in ROUTES.size():
 		var route := ROUTES[index]
-		var ink := AppTheme.ACCENT if route == current else AppTheme.TEXT_DIM
+		var slot := Rect2(pill.position.x + width * index, pill.position.y, width, pill.size.y)
+		var ink := AppTheme.TEXT_DIM
+		if route == current:
+			ink = AppTheme.ACCENT_INK
+			var chosen := slot.grow(-INSET)
+			draw_style_box(AppTheme.box(AppTheme.ACCENT, int(chosen.size.y * 0.5)), chosen)
 		if route in disabled:
 			ink = Color(ink, DISABLED_ALPHA)
-		var center_x := width * (index + 0.5)
-		_draw_icon(route, Vector2(center_x, size.y * 0.38), ink)
 		draw_string(
-			face, Vector2(width * index, size.y * 0.84), String(LABELS[route]).to_upper(),
-			HORIZONTAL_ALIGNMENT_CENTER, width, LABEL_SIZE, ink
+			face, Vector2(slot.position.x, slot.get_center().y + LABEL_SIZE * 0.36),
+			String(LABELS[route]), HORIZONTAL_ALIGNMENT_CENTER, width, LABEL_SIZE, ink
 		)
-
-
-func _draw_icon(route: StringName, center: Vector2, ink: Color) -> void:
-	var half := ICON * 0.5
-	match route:
-		GAMES:
-			# Quatro ladrilhos: a coleção.
-			var cell := ICON * 0.42
-			for dx: float in [-1.0, 1.0]:
-				for dy: float in [-1.0, 1.0]:
-					var origin := center + Vector2(dx, dy) * (ICON * 0.25) - Vector2(cell, cell) * 0.5
-					draw_rect(Rect2(origin, Vector2(cell, cell)), ink, false, 2.0)
-		ONLINE:
-			# Três arcos de sinal e o ponto de onde saem.
-			var base := center + Vector2(0, half * 0.85)
-			for step in 3:
-				var radius := half * (0.45 + 0.4 * step)
-				draw_arc(base, radius, -PI * 0.78, -PI * 0.22, 16, ink, 2.0, true)
-			draw_circle(base, 2.0, ink)
-		YOU:
-			# Cabeça e ombros.
-			draw_arc(center + Vector2(0, -half * 0.35), half * 0.42, 0.0, TAU, 20, ink, 2.0, true)
-			draw_arc(center + Vector2(0, half * 0.95), half * 0.8, PI * 1.12, PI * 1.88, 16, ink, 2.0, true)

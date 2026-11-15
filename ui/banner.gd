@@ -158,4 +158,4 @@ func _foreground() -> Color:
 ## resto do tema, e escuro porque o aviso aparece **sobre** o tabuleiro — um fundo
 ## claro ali seria um buraco na mesa.
 func _style() -> StyleBox:
-	return AppTheme.dashed(AppTheme.COASTER, Color(_foreground(), 0.85), 20, 1.5)
+	return AppTheme.framed(AppTheme.COASTER, Color(_foreground(), 0.85), 20)

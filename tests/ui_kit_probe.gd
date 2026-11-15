@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Os componentes base do tema Boteco, sem autoload e sem GPU.
+## Os componentes base do tema Mesa Viva, sem autoload e sem GPU.
 ##
 ##   godot --headless --path . --script res://tests/ui_kit_probe.gd
 ##
@@ -23,7 +23,6 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	_probe_fonts()
-	_probe_dashed()
 	_probe_palette()
 	_probe_theme()
 	_probe_coaster()
@@ -51,18 +50,21 @@ func _probe_fonts() -> void:
 	var bold := AppTheme.font(700)
 	var display := AppTheme.display()
 	var mono := AppTheme.mono()
+	var wght := TextServerManager.get_primary_interface().name_to_tag("wght")
 	_check(
-		body is FontFile and body.resource_path.ends_with("AtkinsonHyperlegible-Regular.ttf"),
-		"corpo é a Atkinson Hyperlegible"
+		body is FontVariation and (body as FontVariation).base_font.resource_path.ends_with("Nunito-Variable.ttf"),
+		"corpo é a Nunito"
 	)
 	_check(
-		bold is FontFile and bold.resource_path.ends_with("AtkinsonHyperlegible-Bold.ttf"),
-		"e o negrito é o arquivo negrito"
+		int((bold as FontVariation).variation_opentype.get(wght, 0))
+			> int((body as FontVariation).variation_opentype.get(wght, 0)),
+		"e o negrito pesa mais que o corpo"
 	)
-	_check(display is FontVariation, "display é uma variação da Big Shoulders")
-	if display is FontVariation:
-		var tag := TextServerManager.get_primary_interface().name_to_tag("wght")
-		_equals(int((display as FontVariation).variation_opentype.get(tag, 0)), 900, "no peso 900")
+	_check(
+		display is FontVariation and (display as FontVariation).base_font.resource_path.ends_with("Fredoka-Variable.ttf"),
+		"display é uma variação da Fredoka"
+	)
+	_equals(int((display as FontVariation).variation_opentype.get(wght, 0)), 700, "no peso mais alto que ela tem")
 	_check(
 		mono is FontFile and mono.resource_path.ends_with("IBMPlexMono-SemiBold.ttf"),
 		"mono é a IBM Plex Mono"
@@ -79,14 +81,14 @@ func _probe_fonts() -> void:
 
 func _probe_palette() -> void:
 	print("paleta")
-	_equals(AppTheme.BACKGROUND, Color("17211c"), "fundo é a lousa")
-	_equals(AppTheme.ACCENT, Color("f2c029"), "destaque é o amarelo de cadeira")
-	_equals(AppTheme.BOARD_LIGHT, Color("e9d8b8"), "casa clara do tabuleiro não mudou")
-	_equals(AppTheme.BOARD_DARK, Color("8a5b3c"), "casa escura não mudou")
-	_equals(AppTheme.BOARD_FRAME, Color("241d18"), "moldura do tabuleiro ainda não mudou")
-	_equals(AppTheme.WATER, Color("223a4d"), "o mar não mudou")
-	_equals(AppTheme.LAST_MOVE, Color("6fbf73"), "o último lance não mudou")
-	_equals(AppTheme.PREMOVE, Color("6f9fd8"), "o lance planejado não mudou")
+	_equals(AppTheme.BACKGROUND, Color("15122b"), "fundo é a noite")
+	_equals(AppTheme.ACCENT, Color("c8f53c"), "destaque é o limão")
+	_equals(AppTheme.BOARD_LIGHT, Color("e9e4ff"), "casa clara do tabuleiro é violeta")
+	_equals(AppTheme.BOARD_DARK, Color("8672e0"), "e a escura também")
+	_equals(AppTheme.BOARD_FRAME, AppTheme.SURFACE_HIGH, "moldura do tabuleiro é um degrau de superfície")
+	_equals(AppTheme.WATER, Color("1b6393"), "o mar é o azul do protótipo")
+	_equals(AppTheme.LAST_MOVE, Color("d9f060"), "o último lance é amarelo-esverdeado")
+	_equals(AppTheme.PREMOVE, Color("39c6ff"), "o lance planejado é ciano")
 	var text_pairs := [
 		["TEXT", AppTheme.TEXT, "BACKGROUND", AppTheme.BACKGROUND],
 		["TEXT_DIM", AppTheme.TEXT_DIM, "BACKGROUND", AppTheme.BACKGROUND],
@@ -99,6 +101,9 @@ func _probe_palette() -> void:
 	for pair: Array in text_pairs:
 		var ratio := AppTheme.contrast(pair[1], pair[3])
 		_check(ratio >= 4.5, "%s sobre %s legível como texto (%.1f:1)" % [pair[0], pair[2], ratio])
+	# As duas casas têm de se distinguir entre si, e a marca do último lance da casa.
+	_check(AppTheme.contrast(AppTheme.BOARD_LIGHT, AppTheme.BOARD_DARK) >= 3.0, "casa clara e escura se distinguem")
+	_check(AppTheme.LAST_MOVE != AppTheme.ACCENT, "o último lance não é a cor de ação")
 	var line := AppTheme.contrast(AppTheme.BACKGROUND.blend(AppTheme.LINE), AppTheme.BACKGROUND)
 	_check(line >= 3.0, "LINE contorna coisa tocável (%.1f:1)" % line)
 
@@ -115,13 +120,13 @@ func _probe_theme() -> void:
 	for variation: String in ["Card", "QuietCard"]:
 		_equals(String(theme.get_type_variation_base(variation)), "PanelContainer", "%s é variação de painel" % variation)
 	_check(theme.get_font("font", "Button") == AppTheme.display(900), "botão fala com a voz do letreiro")
-	_equals(theme.get_color("font_color", "PrimaryButton"), AppTheme.ACCENT_INK, "placa amarela com tinta escura")
+	_equals(theme.get_color("font_color", "PrimaryButton"), AppTheme.ACCENT_INK, "placa limão com tinta escura")
 	var plate := theme.get_stylebox("normal", "PrimaryButton") as StyleBoxFlat
 	_check(plate != null and plate.border_width_bottom == AppTheme.PLATE_EDGE, "a placa tem a borda de baixo")
 	var pressed := theme.get_stylebox("pressed", "PrimaryButton") as StyleBoxFlat
 	_check(pressed != null and pressed.border_width_bottom == 0, "e afunda quando pressionada")
-	_check(theme.get_stylebox("normal", "GhostButton") is StyleBoxDashed, "botão secundário é tracejado")
-	_check(theme.get_stylebox("panel", "QuietCard") is StyleBoxDashed, "painel quieto também")
+	var ghost := theme.get_stylebox("normal", "GhostButton") as StyleBoxFlat
+	_check(ghost != null and ghost.bg_color == AppTheme.SURFACE_HIGH, "botão secundário é um degrau de superfície")
 	_check(theme.get_font("font", "PairingCode") == AppTheme.mono(600), "código da sala em mono")
 	_equals(theme.get_color("font_color", "SegmentSelected"), AppTheme.ACCENT_INK, "segmento marcado com tinta escura")
 	_equals(theme.default_font_size, AppTheme.SIZE_BODY, "corpo em 16")
@@ -137,36 +142,37 @@ func _probe_coaster() -> void:
 	_equals(Coaster.initial_of("7 Belo"), "7", "número vale")
 	_equals(Coaster.ink_for(AppTheme.COASTER), AppTheme.TEXT, "tinta clara sobre a bolacha escura")
 	_equals(Coaster.ink_for(AppTheme.PAPER), AppTheme.PAPER_INK, "tinta escura sobre papel")
-	_equals(Coaster.ink_for(AppTheme.ACCENT), AppTheme.PAPER_INK, "e sobre o amarelo")
+	_equals(Coaster.ink_for(AppTheme.ACCENT), AppTheme.PAPER_INK, "e sobre o limão")
 	var coaster := Coaster.new()
 	_equals(coaster.fill, AppTheme.COASTER, "bolacha escura por padrão")
-	_equals(coaster.ring, AppTheme.GOLD, "com anel de chopp")
+	_equals(coaster.ring, AppTheme.GOLD, "com o anel neutro")
 	_check(coaster.custom_minimum_size.x >= 40.0, "e no mínimo 40 de largura")
 	_equals(coaster.mouse_filter, Control.MOUSE_FILTER_IGNORE, "não rouba o toque de quem a contém")
 	coaster.free()
 
 
 func _probe_paper() -> void:
-	print("papel")
+	print("cartão de diálogo")
 	var host := Control.new()
 	host.theme = AppTheme.shared()
 	root.add_child(host)
 	var paper := PaperCard.new()
 	host.add_child(paper)
 	var plain := Label.new()
-	var caption := Label.new()
-	caption.theme_type_variation = &"Caption"
 	var title := Label.new()
 	title.theme_type_variation = &"Title"
 	paper.add_child(plain)
-	paper.add_child(caption)
 	paper.add_child(title)
 	var box := paper.get_theme_stylebox("panel") as StyleBoxFlat
-	_check(box != null and box.bg_color == AppTheme.PAPER, "fundo de papel")
-	_equals(plain.get_theme_color("font_color"), AppTheme.PAPER_INK, "texto sobre papel em tinta escura")
-	_equals(caption.get_theme_color("font_color"), Color(AppTheme.PAPER_INK, 0.72), "a legenda não herda o cinza da lousa")
-	_equals(title.get_theme_color("font_color"), AppTheme.PAPER_INK, "nem o título, o giz")
-	_check(title.get_theme_font("font") == AppTheme.display(900), "mas continua com a voz de letreiro do tema")
+	_check(box != null and box.bg_color == AppTheme.SURFACE, "o cartão de diálogo é escuro, da família da tela")
+	_equals(plain.get_theme_color("font_color"), AppTheme.TEXT, "com o texto claro do tema")
+	_check(title.get_theme_font("font") == AppTheme.display(900), "e o título na voz de letreiro")
+	var deed := PaperCard.paper_box()
+	_check(deed.bg_color == AppTheme.PAPER, "o papel claro continua existindo para a escritura")
+	_equals(
+		PaperCard.paper_theme().get_color("font_color", "Label"), AppTheme.PAPER_INK,
+		"com a tinta escura dele"
+	)
 	paper.size = Vector2(200, 100)
 	paper.tilt_degrees = -1.2
 	_check(paper.pivot_offset.is_equal_approx(Vector2(100, 50)), "gira em torno do próprio centro")
@@ -183,7 +189,7 @@ func _probe_segments() -> void:
 	control.setup(PackedStringArray(["Online", "Neste aparelho", "Contra bot"]), 0)
 	_equals(control.segment_count(), 3, "um segmento por opção")
 	_equals(control.current, 0, "começa no pedido")
-	_equals(control._buttons[0].text, "ONLINE", "rótulo em maiúsculas, voz de letreiro")
+	_equals(control._buttons[0].text, "Online", "rótulo como foi escrito, sem caixa alta")
 	_equals(control._buttons[0].theme_type_variation, &"SegmentSelected", "o marcado é o preenchido")
 	_equals(control._buttons[1].theme_type_variation, &"Segment", "e os outros não")
 	control._buttons[2].pressed.emit()
@@ -228,7 +234,7 @@ func _probe_scene_palette() -> void:
 func _probe_tabs() -> void:
 	print("abas")
 	var tabs := AppTabs.new()
-	tabs.size = Vector2(432, 64)
+	tabs.size = Vector2(432, AppTabs.HEIGHT)
 	tabs.current = AppTabs.GAMES
 	root.add_child(tabs)
 	var heard: Array[StringName] = []
@@ -254,31 +260,28 @@ func _probe_tabs() -> void:
 	var theme := AppTheme.build()
 	_equals(String(theme.get_type_variation_base("Hint")), "Label", "Hint é variação de rótulo")
 	_equals(theme.get_font_size("font_size", "Hint"), AppTheme.SIZE_BODY_S, "a dica em 14, legível")
-	_equals(theme.get_color("font_color", "Hint"), AppTheme.TEXT_DIM, "e em giz apagado")
+	_equals(theme.get_color("font_color", "Hint"), AppTheme.TEXT_DIM, "e na cor de apoio")
 
 
 func _probe_seats() -> void:
-	print("mesa de espera")
-	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 0), PI * 0.5), "o lugar de quem olha é embaixo")
-	_check(is_equal_approx(SeatTable.seat_angle(2, 4, 2), PI * 0.5), "mesmo quando ele é o assento 2")
-	_check(is_equal_approx(SeatTable.seat_angle(3, 4, 2), PI), "o seguinte fica à esquerda")
-	_check(is_equal_approx(SeatTable.seat_angle(0, 4, 2), PI * 1.5), "o de frente fica em cima")
-	_check(is_equal_approx(SeatTable.seat_angle(1, 4, 2), 0.0), "e o último à direita")
-	var table := SeatTable.new()
-	table.size = Vector2(300, 240)
-	root.add_child(table)
-	table.capacity = 4
-	table.local_seat = 0
-	table.present = PackedInt32Array([0, 1])
-	table.refresh()
-	_equals(table.find_children("*", "Coaster", true, false).size(), 4, "uma bolacha por cadeira")
-	_equals(table.label_of(0), "Você", "a sua cadeira diz você")
-	_equals(table.label_of(1), "Chegou", "a de quem já sentou diz que chegou")
-	_equals(table.label_of(3), "Esperando", "e a vazia continua esperando")
-	table.capacity = 6
-	table.refresh()
-	_equals(table.find_children("*", "Coaster", true, false).size(), 6, "trocar a lotação refaz a mesa")
-	table.free()
+	print("lugares da sala de espera")
+	var seats := SeatList.new()
+	root.add_child(seats)
+	seats.capacity = 4
+	seats.local_seat = 2
+	seats.present = PackedInt32Array([0, 2])
+	seats.refresh()
+	_equals(seats.get_child_count(), 4, "uma linha por lugar")
+	_equals(seats.title_of(2), "Você", "o seu lugar diz você")
+	_equals(seats.detail_of(0), "Abriu a sala", "o assento 0 é de quem abriu")
+	_equals(seats.title_of(0), "Jogador 1", "e quem já sentou tem número")
+	_equals(seats.title_of(3), "Esperando alguém", "o vazio continua esperando")
+	_equals(seats.detail_of(3), "", "sem segunda linha")
+	_check(seats.is_taken(2) and not seats.present.has(1), "o local conta como sentado mesmo antes de o relay confirmar")
+	seats.capacity = 6
+	seats.refresh()
+	_equals(seats.get_child_count(), 6, "trocar a lotação refaz a lista")
+	seats.free()
 
 
 func _probe_code_input() -> void:
@@ -458,35 +461,7 @@ func _probe_rules_page() -> void:
 	stage.free()
 
 
-func _probe_dashed() -> void:
-	print("tracejado")
-	var rounded := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 40), 10.0)
-	_equals(rounded.size(), 4 * (StyleBoxDashed.CORNER_STEPS + 1), "um arco de pontos por canto")
-	_check(rounded[0].is_equal_approx(Vector2(90, 0)), "o contorno começa no fim da aresta de cima")
-	var inside := true
-	for point in rounded:
-		inside = inside and Rect2(0, 0, 100, 40).grow(0.001).has_point(point)
-	_check(inside, "e nenhum ponto sai do retângulo")
-	var clamped := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 40), 50.0)
-	_check(clamped[0].is_equal_approx(Vector2(80, 0)), "raio maior que meia altura é limitado a ela")
-	var square := StyleBoxDashed.outline_points(Rect2(0, 0, 100, 100), 0.0)
-	_equals(square.size(), 4, "sem raio, um ponto por canto")
-	var dashes := StyleBoxDashed.dash_segments(square, 10.0, 10.0)
-	_equals(dashes.size() % 2, 0, "os traços vêm em pares")
-	_check(absf(_drawn(dashes) - 200.0) < 0.01, "metade do perímetro desenhada com traço e vão iguais (obtido %.2f)" % _drawn(dashes))
-	var longest := 0.0
-	for i in range(0, dashes.size(), 2):
-		longest = maxf(longest, dashes[i].distance_to(dashes[i + 1]))
-	_check(longest <= 10.0001, "nenhum traço maior que o pedido")
-	var solid := StyleBoxDashed.dash_segments(square, 10.0, 0.0)
-	_check(absf(_drawn(solid) - 400.0) < 0.01, "sem vão, o contorno inteiro")
 
-
-static func _drawn(segments: PackedVector2Array) -> float:
-	var total := 0.0
-	for i in range(0, segments.size(), 2):
-		total += segments[i].distance_to(segments[i + 1])
-	return total
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:

@@ -16,7 +16,6 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 
 var _waiting: WaitingPanel = null
-var _sheet: GameSheet = null
 var _leaving := false
 
 
@@ -36,8 +35,6 @@ func _on_give_up() -> void:
 func _ready() -> void:
 	# Window.theme não desce para os Controls; o tema entra pela raiz da cena.
 	theme = AppTheme.shared()
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	%JoinPanel.failed.connect(_show_error)
 	%JoinPanel.waiting.connect(_on_waiting)
@@ -66,12 +63,11 @@ func _ready() -> void:
 	%Tabs.current = AppTabs.ONLINE
 	%Tabs.picked.connect(_go_tab)
 
-	# A folha do jogo também mora aqui: a fileira de "Criar sala" abre a mesma folha
-	# do cardápio, já em Online.
-	_sheet = GameSheet.new()
-	add_child(_sheet)
-	_sheet.confirmed.connect(_launch)
-	%JoinPanel.create_requested.connect(_create_room)
+	# Criar sala é pela folha de um jogo, e os jogos moram na outra aba.
+	%JoinPanel.create_requested.connect(func() -> void:
+		Sound.play(Sound.Cue.TAP)
+		_back_to_menu()
+	)
 
 	# Um QR lido antes de o Android recolher o app: a tela inicial recuperou o
 	# payload e mandou junto, e o pareamento continua como se tivesse acabado de
@@ -116,18 +112,6 @@ func _show_error(message: String) -> void:
 	%Toast.show_message(message, Banner.Kind.DANGER)
 
 
-func _create_room(id: StringName) -> void:
-	Sound.play(Sound.Cue.TAP)
-	_sheet.open(id, Game.Mode.ONLINE)
-
-
-func _launch(mode: int) -> void:
-	if _leaving:
-		return
-	_leaving = true
-	GameSheet.launch(get_tree(), mode)
-
-
 func _go_tab(route: StringName) -> void:
 	Sound.play(Sound.Cue.TAP)
 	match route:
@@ -145,13 +129,9 @@ func _open_settings() -> void:
 	get_tree().change_scene_to_file(SETTINGS_SCENE)
 
 
-## As camadas primeiro: a folha do jogo, depois a espera de uma sala — desistir da
-## espera larga a cadeira que o servidor já reservou. Sem camada nenhuma, volta
-## para a coleção de jogos.
+## A camada primeiro: a espera de uma sala — desistir dela larga a cadeira que o
+## servidor já reservou. Sem camada nenhuma, volta para a coleção de jogos.
 func go_back() -> void:
-	if _sheet != null and _sheet.is_open():
-		_sheet.close()
-		return
 	if _waiting != null and _waiting.visible:
 		_on_give_up()
 		return

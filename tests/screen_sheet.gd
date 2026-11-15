@@ -128,6 +128,8 @@ func _next() -> void:
 	# Os favoritos também são do aparelho: só o print deles os tem, e sempre os
 	# mesmos quatro, um de cada categoria.
 	Prefs.forget_favorites()
+	# E o último modo de cada jogo também.
+	Prefs.forget_modes()
 	if shot == "01e_favoritos":
 		for id in [Game.CHESS, Game.LUDO, Game.UNO, Game.POOL]:
 			Prefs.toggle_favorite(id)
@@ -271,8 +273,7 @@ func _next() -> void:
 		# ausentes, e o print mostraria uma tela que nenhum aparelho vê. O que
 		# precisa ser julgado aqui é o cartão cheio, com os três caminhos.
 		panel.get_node("%ScanButton").visible = true
-		panel.get_node("%NfcHint").visible = true
-		panel.get_node("%Hint").visible = false
+		panel.get_node("%BluetoothButton").visible = true
 	elif shot == "06_capturas" or shot == "07_material":
 		_play_opening(_scene)
 		if shot == "07_material":
@@ -314,6 +315,8 @@ func _next() -> void:
 		# recebido, com aceitar e recusar. É o caso que responde se três botões
 		# ainda cabem no painel.
 		_play_opening(_scene)
+		# Com vencedor decidido, para o print mostrar o selo e os números.
+		_scene._winner = Board.Side.WHITE
 		_scene._show_overlay("Brancas venceram", "Você venceu em 10 lances.", true)
 		_scene._on_rematch_requested()
 	elif shot == "10_planejado":
@@ -376,12 +379,11 @@ func _next() -> void:
 		# montagem, e o anel do impacto dura menos que isso — sem congelar, a
 		# foto sairia sempre do instante seguinte ao que ela quer mostrar.
 		board.set_process(false)
-		_scene._status("Vermelho tirou 6.")
+		_scene._status("1 peão pode andar.")
 	elif shot == "17b_ludo_bots":
 		# Solo: você é o vermelho e as outras três cores são máquina. O print
 		# responde se dá para saber quem é quem antes da primeira vez chegar.
 		_stage_ludo(_scene)
-		_scene._status("Vez do Verde (bot).")
 		_scene._update_tags()
 	elif shot == "11_arrasto":
 		_play_opening(_scene)
@@ -597,7 +599,7 @@ func _stage_ludo(scene: Node) -> void:
 	scene._dice.value = 3
 	scene._dice.enabled = false
 	scene._update_tags()
-	scene._status("Vermelho tirou 3. Escolha o peão.")
+	scene._status("%d peões podem andar." % scene._movable_tokens().size())
 
 
 func _stage_battleship(scene: Node) -> void:

@@ -9,16 +9,21 @@ extends Button
 ## jogando no seu lugar. Voltar exigia lembrar o código de seis letras que só
 ## apareceu na tela de quem abriu.
 ##
-## O cartão inteiro é o toque de voltar, como o `RoomCard` — de quem ele copia o
-## desenho de propósito: é uma sala, e a lista de salas já ensinou como ela se
-## parece. O que muda é a borda na cor de destaque, porque esta não é uma sala
-## qualquer, e o `X` à direita no lugar da seta: quem não quer voltar precisa de um
-## jeito de dizer isso que não seja esperar quatro horas o cartão sumir sozinho.
+## O cartão inteiro é o toque de voltar. Fica no topo da tela inicial, com o
+## ladrilho na cor do jogo e uma linha em limão dizendo que a partida segue — é a
+## única coisa da tela que tem prazo. O `X` à direita existe porque quem não quer
+## voltar precisa de um jeito de dizer isso que não seja esperar quatro horas o
+## cartão sumir sozinho.
+##
+## Não diz de quem é a vez: isso só a mesa sabe, e o cartão é montado sem rede.
+## O que ele sabe de verdade é o jogo, a sala e há quanto tempo a cadeira ficou.
 
 signal resume_pressed(game_id: StringName, code: String)
 signal dismissed
 
-const HEIGHT := 72.0
+const HEIGHT := 84.0
+const PAD := 12.0
+const ICON := 60.0
 
 var game_id := &"chess"
 var code := ""
@@ -30,7 +35,8 @@ var _close: IconButton = null
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(0, HEIGHT)
-	theme_type_variation = &"PrimaryButton"
+	# Sem caixa do tema: o cartão desenha a própria superfície.
+	theme_type_variation = &"IconButton"
 	text = ""
 	focus_mode = Control.FOCUS_NONE
 	pressed.connect(func() -> void: resume_pressed.emit(game_id, code))
@@ -40,8 +46,7 @@ func _ready() -> void:
 	# para o toque não o repassa ao pai.
 	_close = IconButton.new()
 	_close.kind = IconButton.Kind.CLOSE
-	# Tinta escura: o X mora na placa amarela, e o cinza do tema sumiria nela.
-	_close.tint = Color(AppTheme.ACCENT_INK, 0.75)
+	_close.tint = AppTheme.TEXT_DIM
 	_close.mouse_filter = Control.MOUSE_FILTER_STOP
 	_close.pressed.connect(func() -> void: dismissed.emit())
 	add_child(_close)
@@ -58,21 +63,25 @@ func _place_close() -> void:
 
 
 func _draw() -> void:
-	var pad := 16.0
-	var piece_size := size.y * 0.58
-	PieceRenderer.draw_piece(
-		self, Game.piece_of(game_id), Vector2(pad + piece_size * 0.5, size.y * 0.5), piece_size
-	)
+	draw_style_box(AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), Rect2(Vector2.ZERO, size))
+	# O mesmo ladrilho dos blocos da grade: o cartão é da família deles, deitado.
+	var tile := Rect2(PAD, (size.y - ICON) * 0.5 - 2.0, ICON, ICON)
+	GameTile.draw_badge(self, game_id, tile)
 
-	var text_x := pad + piece_size + 14.0
+	var text_x := tile.end.x + PAD
 	var text_width := maxf(40.0, size.x - text_x - IconButton.SIZE - 20.0)
+	var middle := size.y * 0.5
 	draw_string(
-		AppTheme.display(900), Vector2(text_x, size.y * 0.5 - 2.0), _title().to_upper(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 20, AppTheme.ACCENT_INK
+		AppTheme.font(700), Vector2(text_x, middle - 16.0), _status(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 12, AppTheme.ACCENT
 	)
 	draw_string(
-		AppTheme.font(400), Vector2(text_x, size.y * 0.5 + 18.0), _detail(),
-		HORIZONTAL_ALIGNMENT_LEFT, text_width, 13, Color(AppTheme.ACCENT_INK, 0.75)
+		AppTheme.display(600), Vector2(text_x, middle + 6.0), _title(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 19, AppTheme.TEXT
+	)
+	draw_string(
+		AppTheme.font(500), Vector2(text_x, middle + 25.0), _detail(),
+		HORIZONTAL_ALIGNMENT_LEFT, text_width, 13, AppTheme.TEXT_DIM
 	)
 
 
@@ -82,5 +91,19 @@ func _title() -> String:
 
 ## O código vai junto porque é o que os outros jogadores veem na tela deles: quem
 ## volta e diz "entrei no DK4P2Q" está falando a mesma língua da mesa.
+func _status() -> String:
+	return "EM ANDAMENTO · SALA %s" % code
+
+
 func _detail() -> String:
-	return "Partida em andamento • sala %s" % code
+	return "Você saiu %s" % ago(int(Time.get_unix_time_from_system()) - saved_at)
+
+
+## Há quanto tempo, em palavras: o cartão some sozinho em algumas horas, e
+## "há 3 h" diz ao jogador se ainda vale a pena voltar.
+static func ago(seconds: int) -> String:
+	if seconds < 90:
+		return "agora há pouco"
+	if seconds < 3600:
+		return "há %d min" % int(round(seconds / 60.0))
+	return "há %d h" % int(round(seconds / 3600.0))

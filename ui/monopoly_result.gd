@@ -22,6 +22,7 @@ const SHADE := 0.72
 
 var _panel: PaperCard = null
 var _title: Label = null
+var _header: ResultHeader = null
 var _subtitle: Label = null
 var _table: VBoxContainer = null
 var _again: Button = null
@@ -47,8 +48,7 @@ func _ready() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	# O resultado em papel, como o fim de partida dos outros jogos — e aqui ele é
-	# o extrato final do banco, que é papel no jogo de verdade.
+	# O mesmo cartão de diálogo do fim de partida dos outros jogos.
 	_panel = PaperCard.new()
 	_panel.custom_minimum_size = Vector2(340, 0)
 	center.add_child(_panel)
@@ -69,7 +69,7 @@ func _ready() -> void:
 
 	_subtitle = Label.new()
 	_subtitle.add_theme_font_size_override("font_size", 11)
-	_subtitle.add_theme_color_override("font_color", Color(AppTheme.PAPER_INK, 0.62))
+	_subtitle.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_subtitle)
@@ -107,7 +107,7 @@ func _ready() -> void:
 ## para "Bot 2" ser "Bot 2" nos dois lugares — quem sabe quais cadeiras são
 ## máquina e qual nome está guardado no aparelho é a cena da partida.
 func show_winner(
-	state: MatchState, champion: int, labeler: Callable, allow_again: bool
+	state: MatchState, champion: int, labeler: Callable, allow_again: bool, rounds := 0
 ) -> void:
 	var by_rounds := MonopolyRules.limit_of(state) > 0
 	_title.text = "%s venceu" % labeler.call(champion)
@@ -118,7 +118,15 @@ func show_winner(
 	)
 	_fill_table(state, labeler, champion)
 	_again.visible = allow_again
+	if _header == null:
+		_header = ResultHeader.attach(_title, _subtitle, self)
 	visible = true
+	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	_header.celebrate(ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(rounds), "rodadas"],
+	])
 
 
 ## O fim que ninguém escolheu: a mesa se desfez em rede.
@@ -131,6 +139,8 @@ func show_abandoned(message: String) -> void:
 	for child in _table.get_children():
 		child.queue_free()
 	_again.visible = false
+	if _header != null:
+		_header.visible = false
 	visible = true
 
 
@@ -165,8 +175,8 @@ func _fill_table(state: MatchState, labeler: Callable, champion: int) -> void:
 		)
 		row.add_child(stripe)
 
-		# Tinta, e não giz: a tabela está no papel.
-		var tint := Color(AppTheme.PAPER_INK, 0.6) if out or player != champion else AppTheme.PAPER_INK
+		# Quem venceu em texto cheio; os outros, na cor de apoio.
+		var tint := AppTheme.TEXT_DIM if out or player != champion else AppTheme.TEXT
 		var name_label := Label.new()
 		name_label.text = labeler.call(player)
 		name_label.add_theme_font_size_override("font_size", 12)

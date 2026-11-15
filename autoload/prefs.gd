@@ -85,6 +85,32 @@ static func set_sound(value: bool) -> void:
 	_file().save(PATH)
 
 
+## Mostrar as casas para onde a peça escolhida pode ir. **Ligado** por padrão:
+## é o que ensina o jogo a quem está começando. Quem joga de olho fechado desliga.
+const TARGETS_KEY := "show_targets"
+## Planejar o lance na vez do outro (premove), no xadrez online. **Ligado** por
+## padrão, como sempre foi; o interruptor é para quem toca sem querer.
+const PREMOVE_KEY := "premove"
+
+
+static func show_targets() -> bool:
+	return bool(_file().get_value(SECTION, TARGETS_KEY, true))
+
+
+static func set_show_targets(value: bool) -> void:
+	_file().set_value(SECTION, TARGETS_KEY, value)
+	_file().save(PATH)
+
+
+static func premove_on() -> bool:
+	return bool(_file().get_value(SECTION, PREMOVE_KEY, true))
+
+
+static func set_premove(value: bool) -> void:
+	_file().set_value(SECTION, PREMOVE_KEY, value)
+	_file().save(PATH)
+
+
 static func set_haptics(value: bool) -> void:
 	_file().set_value(SECTION, HAPTICS_KEY, value)
 	_file().save(PATH)
@@ -150,6 +176,28 @@ static func toggle_favorite(id: StringName) -> bool:
 ## Esquece todos os favoritos. Como `forget_welcome()`, não há caminho no app que
 ## chegue aqui: quem chama é o teste que precisa da lista na ordem do catálogo e a
 ## folha de prints que fotografa a tela recém-instalada.
+## O último modo em que cada jogo foi jogado, para a folha abrir nele.
+##
+## Por jogo, e não um modo só para o app: quem joga xadrez contra o bot costuma
+## jogar Uno em sala. -1 quando o jogo nunca foi jogado neste aparelho.
+const MODES_SECTION := "last_mode"
+
+
+static func last_mode(id: StringName) -> int:
+	return int(_file().get_value(MODES_SECTION, String(id), -1))
+
+
+static func remember_mode(id: StringName, mode: int) -> void:
+	_file().set_value(MODES_SECTION, String(id), mode)
+	_file().save(PATH)
+
+
+static func forget_modes() -> void:
+	if _file().has_section(MODES_SECTION):
+		_file().erase_section(MODES_SECTION)
+		_file().save(PATH)
+
+
 static func forget_favorites() -> void:
 	if _file().has_section_key(SECTION, FAVORITES_KEY):
 		_file().erase_section_key(SECTION, FAVORITES_KEY)

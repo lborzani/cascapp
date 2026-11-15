@@ -1,8 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scenes/settings.gd" id="1_settings"]
 [ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
-[ext_resource type="Script" path="res://ui/app_bar.gd" id="2_bar"]
 [ext_resource type="Script" path="res://ui/app_tabs.gd" id="7_tabs"]
 [ext_resource type="Script" path="res://ui/coaster.gd" id="8_coaster"]
 
@@ -22,7 +21,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.0901961, 0.129412, 0.109804, 1)
+color = Color(0.0823529, 0.0705882, 0.168627, 1)
 
 [node name="Safe" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -37,12 +36,8 @@ script = ExtResource("9_safe")
 layout_mode = 2
 theme_override_constants/separation = 0
 
-[node name="AppBar" type="MarginContainer" parent="Safe/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("2_bar")
-
 [node name="Scroll" type="ScrollContainer" parent="Safe/VBox"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
@@ -51,7 +46,7 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
+theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 24
 
@@ -62,108 +57,102 @@ theme_override_constants/separation = 16
 
 [node name="Profile" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 16
 
-[node name="Avatar" type="Control" parent="Safe/VBox/Scroll/Pad/Content/Profile"]
+[node name="PhotoButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content/Profile"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(72, 72)
+custom_minimum_size = Vector2(84, 84)
 layout_mode = 2
 size_flags_vertical = 4
+tooltip_text = "Trocar foto"
+focus_mode = 0
+theme_type_variation = &"IconButton"
+
+[node name="Avatar" type="Control" parent="Safe/VBox/Scroll/Pad/Content/Profile/PhotoButton"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("8_coaster")
 
 [node name="NameColumn" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content/Profile"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 
 [node name="NameSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content/Profile/NameColumn"]
 layout_mode = 2
-theme_type_variation = &"SectionHeader"
-text = "Seu nome"
+theme_type_variation = &"Caption"
+text = "SEU NOME NAS MESAS"
 
 [node name="NameEdit" type="LineEdit" parent="Safe/VBox/Scroll/Pad/Content/Profile/NameColumn"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
 placeholder_text = "Você"
 
-[node name="Preview" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Preview" type="Label" parent="Safe/VBox/Scroll/Pad/Content/Profile/NameColumn"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Caption"
 autowrap_mode = 3
 
-[node name="PhotoButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 48)
-layout_mode = 2
-text = "Escolher foto"
-
-[node name="FeedbackSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
-layout_mode = 2
-theme_type_variation = &"SectionHeader"
-text = "Som e vibração"
-
-[node name="Switches" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Stats" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 10
 
-[node name="Storage" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Shortcuts" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
 layout_mode = 2
-theme_type_variation = &"Caption"
-text = "Fica guardado só neste aparelho."
-autowrap_mode = 3
+theme_override_constants/separation = 10
 
-[node name="SaveButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="HistoryButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content/Shortcuts"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 54)
+custom_minimum_size = Vector2(0, 76)
 layout_mode = 2
-theme_type_variation = &"PrimaryButton"
-text = "Salvar"
+size_flags_horizontal = 3
+focus_mode = 0
+theme_type_variation = &"IconButton"
 
-[node name="GamesSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
-layout_mode = 2
-theme_type_variation = &"SectionHeader"
-text = "Partidas"
-
-[node name="FriendsButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="TrainingButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content/Shortcuts"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 76)
 layout_mode = 2
-theme_type_variation = &"GhostButton"
-text = "Amigos"
+size_flags_horizontal = 3
+focus_mode = 0
+theme_type_variation = &"IconButton"
 
-[node name="HistoryButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+[node name="SwitchCard" type="PanelContainer" parent="Safe/VBox/Scroll/Pad/Content"]
 layout_mode = 2
-theme_type_variation = &"GhostButton"
-text = "Histórico de partidas"
+theme_type_variation = &"Card"
 
-[node name="TrainingButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
-layout_mode = 2
-theme_type_variation = &"GhostButton"
-text = "Treino"
-
-[node name="AboutSection" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
-layout_mode = 2
-theme_type_variation = &"SectionHeader"
-text = "Sobre este build"
-
-[node name="StatusLabel" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="Switches" type="VBoxContainer" parent="Safe/VBox/Scroll/Pad/Content/SwitchCard"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"Caption"
-autowrap_mode = 3
+theme_override_constants/separation = 0
+
+[node name="About" type="HBoxContainer" parent="Safe/VBox/Scroll/Pad/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Version" type="Label" parent="Safe/VBox/Scroll/Pad/Content/About"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Hint"
+
+[node name="NewsButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content/About"]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 0
+text = "Novidades"
+flat = true
 
 [node name="UpdateButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 theme_type_variation = &"GhostButton"
 text = "Procurar atualização"
@@ -175,18 +164,17 @@ layout_mode = 2
 theme_type_variation = &"Hint"
 autowrap_mode = 3
 
-[node name="NewsButton" type="Button" parent="Safe/VBox/Scroll/Pad/Content"]
+[node name="StatusLabel" type="Label" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-theme_type_variation = &"GhostButton"
-text = "Novidades"
+theme_type_variation = &"Caption"
+autowrap_mode = 3
 
 [node name="StockfishLicense" type="LinkButton" parent="Safe/VBox/Scroll/Pad/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
-theme_override_colors/font_color = Color(0.94902, 0.752941, 0.160784, 1)
+theme_override_colors/font_color = Color(0.784314, 0.960784, 0.235294, 1)
 theme_override_font_sizes/font_size = 14
 text = "Stockfish 15.1 · GPLv3 · código-fonte"
 uri = "https://github.com/official-stockfish/Stockfish/tree/sf_15.1"

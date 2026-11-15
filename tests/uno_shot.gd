@@ -2,10 +2,10 @@ extends Node
 
 ## Um print da partida de Uno, para julgar a tela sem jogar.
 ##
-##   godot --path . res://tests/uno_shot.tscn
+##   godot --path . res://tests/uno_shot.tscn -- --seats=6 --size=432x768
 ##
-## Salva em user://uno_screen.png. A posição é escrita à mão e não sorteada: o que
-## se quer ver é a mão grande, o curinga, o +4 e a carta apagada convivendo — e um
+## Salva em user://uno_screen_<assentos>_<largura>x<altura>.png. A posição é
+## escrita à mão e não sorteada: o que se quer ver é a mão grande, o curinga, o +4 e a carta apagada convivendo — e um
 ## baralho sorteado dá isso uma vez em muitas.
 
 const Stage := preload("res://tests/shot_stage.gd")
@@ -13,9 +13,18 @@ const Stage := preload("res://tests/shot_stage.gd")
 
 func _ready() -> void:
 	Game.start_solo(Game.UNO)
+	# `-- --seats=N` troca a mesa, para julgar o anel de dois a seis.
 	Game.table_size = 6
+	# `-- --size=LxA` troca o palco: deitado (padrão) ou em pé.
+	var physical := Vector2i(768, 432)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seats="):
+			Game.table_size = int(arg.trim_prefix("--seats="))
+		elif arg.begins_with("--size="):
+			var parts := arg.trim_prefix("--size=").split("x")
+			physical = Vector2i(int(parts[0]), int(parts[1]))
 	Game.uno_sevens = true
-	var stage := Stage.make(self, Vector2i(768, 432))
+	var stage := Stage.make(self, physical)
 	var scene := preload("res://scenes/uno_match.tscn").instantiate()
 	stage.add_child(scene)
 	await get_tree().process_frame
@@ -48,6 +57,9 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
-	Stage.save(stage, "user://uno_screen.png")
-	print("ok — user://uno_screen.png")
+	var shot := "user://uno_screen_%d_%dx%d.png" % [
+		Game.table_size, physical.x, physical.y
+	]
+	Stage.save(stage, shot)
+	print("ok — %s" % shot)
 	get_tree().quit()

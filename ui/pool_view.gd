@@ -707,6 +707,7 @@ func _draw() -> void:
 	_draw_aim()
 	_draw_shooter_ring()
 	if _cue_showing():
+		_draw_panels()
 		_draw_power_bar()
 		_draw_spin_icon()
 	if _spin_open and _cue_showing():
@@ -728,11 +729,49 @@ func _draw_shooter_ring() -> void:
 	)
 
 
-## Uma bola branca com o ponto vermelho de onde o taco vai bater.
+## Os dois cartões do protótipo atrás dos controles: "FORÇA" em volta da barra e
+## "EFEITO" em volta da bolinha, com o efeito escolhido escrito embaixo.
+func _draw_panels() -> void:
+	var font := AppTheme.font(800)
+	var bar := _bar_rect()
+	var power := Rect2(bar.position - Vector2(11.0, 24.0), bar.size + Vector2(22.0, 32.0))
+	draw_style_box(AppTheme.box(AppTheme.SURFACE, 18), power)
+	_caption("FORÇA", Vector2(power.get_center().x, power.position.y + 15.0), font)
+
+	var icon := _spin_icon_center()
+	var spin := Rect2(
+		Vector2(icon.x - 40.0, icon.y - SPIN_ICON - 24.0), Vector2(80.0, SPIN_ICON * 2.0 + 64.0)
+	)
+	draw_style_box(AppTheme.box(AppTheme.SURFACE, 18), spin)
+	_caption("EFEITO", Vector2(icon.x, spin.position.y + 15.0), font)
+	var words := spin_name().split(" ")
+	for line in words.size():
+		var word: String = words[line]
+		var wide := font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		draw_string(
+			font, Vector2(icon.x - wide * 0.5, icon.y + SPIN_ICON + 20.0 + line * 13.0), word,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, AppTheme.TEXT
+		)
+
+
+func _caption(text: String, at: Vector2, font: Font) -> void:
+	var wide := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+	draw_string(font, at - Vector2(wide * 0.5, 0.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, AppTheme.TEXT_DIM)
+
+
+## O efeito escolhido em palavras, pelo eixo que domina.
+func spin_name() -> String:
+	if _spin.length() < 0.2:
+		return "Sem efeito"
+	if absf(_spin.y) >= absf(_spin.x):
+		return "Seguida" if _spin.y > 0.0 else "Puxada"
+	return "Lateral direita" if _spin.x > 0.0 else "Lateral esquerda"
+
+
+## Uma bola clara, com a base lilás, e o ponto coral de onde o taco vai bater.
 func _draw_cue_face(center: Vector2, radius: float, crosshair: bool) -> void:
-	draw_circle(center + Vector2(radius * 0.06, radius * 0.08), radius, Color(0, 0, 0, 0.35))
-	draw_circle(center, radius, Color("f2efe8"))
-	draw_arc(center, radius, 0.0, TAU, 48, Color(0, 0, 0, 0.35), maxf(1.0, radius * 0.04), true)
+	draw_circle(center + Vector2(0.0, radius * 0.1), radius, AppTheme.TEXT_DIM)
+	draw_circle(center, radius, AppTheme.PAPER)
 	if crosshair:
 		var ink := Color(0, 0, 0, 0.18)
 		draw_line(center - Vector2(radius, 0.0), center + Vector2(radius, 0.0), ink, 1.5, true)
@@ -740,7 +779,7 @@ func _draw_cue_face(center: Vector2, radius: float, crosshair: bool) -> void:
 		draw_arc(center, radius * 0.5, 0.0, TAU, 40, ink, 1.5, true)
 	# Altura para cima na bola é para cima na tela.
 	var dot := center + Vector2(_spin.x, -_spin.y) * radius
-	draw_circle(dot, maxf(3.0, radius * 0.14), Color("c62f2f"))
+	draw_circle(dot, maxf(3.0, radius * 0.18), AppTheme.DANGER)
 
 
 ## A bolinha ao lado da mesa: mostra o efeito escolhido e abre o seletor.
@@ -771,16 +810,13 @@ func _draw_spin_picker() -> void:
 func _draw_power_bar() -> void:
 	var bar := _bar_rect()
 	var round_box := StyleBoxFlat.new()
-	round_box.bg_color = Color(0, 0, 0, 0.45)
-	round_box.border_color = Color(AppTheme.TEXT, 0.35)
-	round_box.set_border_width_all(2)
+	round_box.bg_color = AppTheme.BACKGROUND
 	round_box.set_corner_radius_all(int(BAR_WIDTH * 0.5))
 	draw_style_box(round_box, bar)
 	if _power > 0.0:
 		var fill := Rect2(bar.position, Vector2(bar.size.x, bar.size.y * _power)).grow(-4.0)
-		var heat := Color("5f9e63").lerp(Color("d9c341"), minf(1.0, _power * 2.0))
-		if _power > 0.5:
-			heat = Color("d9c341").lerp(Color("c9524d"), (_power - 0.5) * 2.0)
+		# Limão, como no protótipo; perto do máximo esquenta para o coral.
+		var heat := AppTheme.ACCENT.lerp(AppTheme.DANGER, clampf((_power - 0.75) * 4.0, 0.0, 1.0))
 		var lit := StyleBoxFlat.new()
 		lit.bg_color = heat
 		lit.set_corner_radius_all(int(BAR_WIDTH * 0.5) - 4)

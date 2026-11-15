@@ -2,75 +2,56 @@
 
 [ext_resource type="Script" path="res://ui/join_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://ui/code_input.gd" id="2_code"]
-[ext_resource type="Script" path="res://ui/chip_bar.gd" id="3_chips"]
 
 [node name="JoinPanel" type="VBoxContainer"]
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 script = ExtResource("1_panel")
 
-[node name="CodeCaption" type="Label" parent="."]
+[node name="CodeCard" type="PanelContainer" parent="."]
 layout_mode = 2
-theme_type_variation = &"Caption"
-text = "ENTRAR COM CÓDIGO"
+theme_type_variation = &"Card"
 
-[node name="CodeInput" type="Control" parent="."]
+[node name="CodeBox" type="VBoxContainer" parent="CodeCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CodeCaption" type="Label" parent="CodeCard/CodeBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Tem um código de sala?"
+
+[node name="CodeInput" type="Control" parent="CodeCard/CodeBox"]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("2_code")
 
-[node name="CodeRow" type="HBoxContainer" parent="."]
+[node name="CodeRow" type="HBoxContainer" parent="CodeCard/CodeBox"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ScanButton" type="Button" parent="CodeRow"]
+[node name="Hint" type="Label" parent="CodeCard/CodeBox/CodeRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_type_variation = &"Hint"
+text = "Entra sozinho na sexta letra."
+autowrap_mode = 3
+
+[node name="ScanButton" type="Button" parent="CodeCard/CodeBox/CodeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
 theme_type_variation = &"GhostButton"
 text = "Ler QR"
 
-[node name="WatchButton" type="Button" parent="CodeRow"]
+[node name="BluetoothButton" type="Button" parent="CodeCard/CodeBox/CodeRow"]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_vertical = 4
 theme_type_variation = &"GhostButton"
-text = "Assistir"
-
-[node name="JoinButton" type="Button" parent="CodeRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"PrimaryButton"
-text = "Entrar"
-
-[node name="NfcHint" type="Label" parent="."]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Hint"
-text = "Encoste os aparelhos para entrar por NFC — ele já está ligado."
-autowrap_mode = 3
-
-[node name="Hint" type="Label" parent="."]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Hint"
-autowrap_mode = 3
-
-[node name="CreateCaption" type="Label" parent="."]
-unique_name_in_owner = true
-layout_mode = 2
-theme_type_variation = &"Caption"
-text = "CRIAR SALA"
-
-[node name="CreateScroll" type="ScrollContainer" parent="."]
-unique_name_in_owner = true
-layout_mode = 2
-vertical_scroll_mode = 0
-
-[node name="CreateRow" type="HBoxContainer" parent="CreateScroll"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 8
+text = "Bluetooth"
 
 [node name="RoomsHeader" type="HBoxContainer" parent="."]
 layout_mode = 2
@@ -84,22 +65,18 @@ theme_type_variation = &"SectionHeader"
 text = "Salas abertas"
 vertical_alignment = 1
 
-[node name="RefreshButton" type="Button" parent="RoomsHeader"]
+[node name="CreateLink" type="Button" parent="RoomsHeader"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 8
-theme_type_variation = &"GhostButton"
-text = "Atualizar"
-
-[node name="GameFilter" type="Button" parent="."]
-unique_name_in_owner = true
-layout_mode = 2
-script = ExtResource("3_chips")
+focus_mode = 0
+text = "Criar a minha"
+flat = true
 
 [node name="RoomRows" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
 [node name="RoomsEmpty" type="Label" parent="RoomRows"]
 unique_name_in_owner = true
@@ -110,9 +87,19 @@ autowrap_mode = 3
 [node name="RoomsRequest" type="HTTPRequest" parent="."]
 unique_name_in_owner = true
 
-[node name="LiveCaption" type="Label" parent="."]
+[node name="LiveCaption" type="HBoxContainer" parent="."]
 unique_name_in_owner = true
 visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LiveDot" type="Control" parent="LiveCaption"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(12, 12)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="LiveLabel" type="Label" parent="LiveCaption"]
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
 text = "Ao vivo"
@@ -120,7 +107,7 @@ text = "Ao vivo"
 [node name="LiveRows" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
 [node name="LiveRequest" type="HTTPRequest" parent="."]
 unique_name_in_owner = true

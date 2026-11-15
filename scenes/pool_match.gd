@@ -29,10 +29,10 @@ const AFTER_SHOT := 0.35
 ## simulados —, mas sem a pausa a vez dele acontece entre dois quadros.
 const BOT_THINK := 0.7
 ## Largura da etiqueta de cada jogador no placar, na base deitada de 768.
-const TAG_WIDTH := 190.0
+const TAG_WIDTH := 140.0
 ## As bolinhas do placar: raio e passo, em pixels da base.
-const TROPHY_RADIUS := 9.0
-const TROPHY_STEP := 22.0
+const TROPHY_RADIUS := 8.0
+const TROPHY_STEP := 19.0
 
 var _rules := PoolRules.new()
 var _state: MatchState = null
@@ -50,9 +50,12 @@ var _hint: Label = null
 var _tags: Array[PlayerTag] = []
 ## Ao lado de cada etiqueta, as bolas que aquele assento já tirou da mesa.
 var _trays: Array[Control] = []
+## "3 : 1" entre as duas etiquetas.
+var _score: Label = null
 var _bar: MatchBar = null
 var _overlay: Control = null
 var _overlay_title: Label = null
+var _result_header: ResultHeader = null
 var _again: Button = null
 
 
@@ -62,8 +65,6 @@ func _ready() -> void:
 	# literal de todos: a mesa é duas vezes mais larga que alta. Em retrato ela
 	# ocuparia um terço da tela com faixa preta em cima e embaixo.
 	Orientation.to_landscape(get_tree())
-	modulate.a = 0.0
-	create_tween().tween_property(self, "modulate:a", 1.0, 0.16)
 
 	_adopt_rules()
 	_state = _rules.initial_state()
@@ -142,44 +143,40 @@ func _build() -> void:
 	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	pad.add_child(column)
 
-	# O placar: "Jogador 1 VS Jogador 2", e junto de cada um as bolas que ele já
-	# tirou da mesa. Em cima e não numa coluna ao lado: a mesa é duas vezes mais
-	# larga que alta, e a largura toda da tela é dela.
+	# O placar mora na barra, no lugar do título, como no protótipo: as duas
+	# etiquetas, as bolas que cada um já tirou da mesa encostadas nela, e "3 : 1"
+	# no meio. A altura toda debaixo da barra fica para a mesa.
 	var scoreboard := HBoxContainer.new()
 	scoreboard.alignment = BoxContainer.ALIGNMENT_CENTER
-	scoreboard.add_theme_constant_override("separation", 20)
-	column.add_child(scoreboard)
+	scoreboard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scoreboard.add_theme_constant_override("separation", 8)
+	_bar.replace_words(scoreboard)
 	for seat in 2:
-		# Cada lado é a etiqueta e, logo embaixo, a fileira das bolas dele: o
-		# placar todo fica junto no meio, e não espalhado pelas duas pontas.
-		var side := VBoxContainer.new()
-		side.add_theme_constant_override("separation", 4)
 		var tag := PlayerTag.new()
 		tag.shape = PlayerTag.Shape.TAG
-		# Alta o bastante para a bolacha (mínimo de 40, a 78% da altura) caber
-		# dentro: na altura padrão da etiqueta deitada ela vazava pela borda.
+		# Alta o bastante para a bolacha (mínimo de 40, a 78% da altura) caber.
 		tag.custom_minimum_size = Vector2(TAG_WIDTH, 52.0)
+		tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_tags.append(tag)
-		side.add_child(tag)
 		var tray := Control.new()
-		tray.custom_minimum_size = Vector2(TAG_WIDTH, TROPHY_RADIUS * 2.0 + 2.0)
+		tray.custom_minimum_size = Vector2(TROPHY_STEP * 5.0, 52.0)
 		tray.draw.connect(_draw_trophies.bind(tray, seat))
 		_trays.append(tray)
-		side.add_child(tray)
-		scoreboard.add_child(side)
+		# Espelhado: as bolas ficam do lado de dentro, perto do placar.
+		for node: Control in ([tag, tray] if seat == 0 else [tray, tag]):
+			scoreboard.add_child(node)
 		if seat == 0:
-			var versus := Label.new()
-			versus.text = "VS"
-			versus.theme_type_variation = &"SectionHeader"
-			versus.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			scoreboard.add_child(versus)
+			_score = Label.new()
+			_score.add_theme_font_override("font", AppTheme.display(700))
+			_score.add_theme_font_size_override("font_size", 22)
+			_score.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			scoreboard.add_child(_score)
 
-	# A instrução logo abaixo do placar: ela responde "o que eu faço agora", e é
-	# logo depois de saber de quem é a vez que se pergunta isso.
+	# A instrução numa pílula logo acima da mesa: limão quando é com você.
 	_hint = Label.new()
-	_hint.theme_type_variation = &"Hint"
-	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_hint.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_hint.add_theme_font_override("font", AppTheme.font(800))
+	_hint.add_theme_font_size_override("font_size", 13)
 	column.add_child(_hint)
 
 	var stage := Control.new()
@@ -439,7 +436,15 @@ func _on_opponent_left() -> void:
 func _refresh() -> void:
 	_view.state = _state
 	_view.enabled = _can_act()
-	_hint.text = _rules.status_hint(_state)
+	_hint.text = _rules.status_hint(_state).trim_suffix(".")
+	var lit := _can_act()
+	var pill := AppTheme.box(AppTheme.ACCENT if lit else AppTheme.SURFACE_HIGH, 13)
+	pill.content_margin_left = 14
+	pill.content_margin_right = 14
+	pill.content_margin_top = 4
+	pill.content_margin_bottom = 4
+	_hint.add_theme_stylebox_override("normal", pill)
+	_hint.add_theme_color_override("font_color", AppTheme.ACCENT_INK if lit else AppTheme.TEXT_DIM)
 	_refresh_cards()
 
 	if (
@@ -460,7 +465,22 @@ func _refresh_cards() -> void:
 		tag.active = seat == turn
 		tag.title = _seat_name(seat)
 		tag.subtitle = _seat_detail(seat)
+		# Mata-mata: cinco casas, que é o que cada um tem de tirar. Brasileira: a
+		# fileira cresce com o que entrou.
+		var slots := maxi(
+			PoolRules.trophies(_state, seat).size(),
+			PoolRules.KNOCKOUT_PER_GROUP if not PoolRules.has_cue_ball(_state) else 3
+		)
+		_trays[seat].custom_minimum_size.x = TROPHY_STEP * slots + 2.0
 		_trays[seat].queue_redraw()
+	# O placar do meio: pontos na brasileira, bolas tiradas no mata-mata.
+	var counts := []
+	for seat in 2:
+		counts.append(
+			PoolRules.score_of(_state, seat) if PoolRules.has_cue_ball(_state)
+			else PoolRules.trophies(_state, seat).size()
+		)
+	_score.text = "%d : %d" % counts
 
 
 ## As bolas que o assento já tirou da mesa, encostadas na etiqueta dele: à
@@ -477,7 +497,7 @@ func _draw_trophies(tray: Control, seat: int) -> void:
 	# ninguém ter de ler um número.
 	if not PoolRules.has_cue_ball(_state):
 		for index in PoolRules.KNOCKOUT_PER_GROUP:
-			tray.draw_arc(slot.call(index), TROPHY_RADIUS, 0.0, TAU, 20, Color(AppTheme.TEXT, 0.25), 1.5, true)
+			tray.draw_circle(slot.call(index), TROPHY_RADIUS, AppTheme.SURFACE_HIGH)
 	for index in taken.size():
 		var ball := taken[index]
 		var at: Vector2 = slot.call(index)
@@ -538,7 +558,17 @@ func _finish(champion: int) -> void:
 		_overlay_title.text = "Empate"
 	else:
 		_overlay_title.text = "%s venceu" % _seat_name(champion)
+	if _result_header == null:
+		_result_header = ResultHeader.attach(_overlay_title, _overlay_title, _overlay)
 	_overlay.visible = true
+	var mood := ResultHeader.Mood.DRAW
+	if champion != -2:
+		var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+		mood = ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS
+	_result_header.celebrate(mood, [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(_state.ply), "tacadas"],
+	])
 
 
 func _restart() -> void:

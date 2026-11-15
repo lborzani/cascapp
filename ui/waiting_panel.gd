@@ -1,16 +1,16 @@
 class_name WaitingPanel
 extends Control
 
-## O que está acontecendo enquanto a sala não abre.
+## O que está acontecendo enquanto a sala não abre, do lado de quem entrou.
 ##
 ## Antes isto era uma linha de texto embaixo da lista: "Na sala: 4 de 4
 ## jogadores." Ela diz o número e não diz **em que partida** você entrou — e é
 ## justamente essa a dúvida de quem digitou um código de seis letras que alguém
-## mandou por mensagem. Xadrez ou Ludo? Com relógio? Já começou?
+## mandou por mensagem. Xadrez ou Ludo? Já começou?
 ##
-## A espera também é o único momento do app em que não há o que tocar, e uma tela
-## sem resposta com uma linha de texto pequena lê como travada. Um painel que
-## ocupa a tela responde "estou esperando, e é isto que estou esperando".
+## É a mesma tela de quem abriu a sala (`scenes/pairing.tscn`), vista do outro
+## lado: a faixa na cor do jogo com o código, um lugar por linha, e no rodapé o
+## botão — que aqui fica apagado, porque quem começa é quem abriu.
 ##
 ## ## Ele sai por um botão, e o botão desiste de verdade
 ##
@@ -21,12 +21,13 @@ extends Control
 ## Desistiu de entrar. Quem escuta larga a sala.
 signal cancelled
 
-const PANEL_WIDTH := 320
-
+var _band: PanelContainer = null
 var _title: Label = null
-var _detail: Label = null
-var _seats: SeatTable = null
+var _count: Label = null
+var _code: Label = null
+var _seats: SeatList = null
 var _hint: Label = null
+var _start: Button = null
 
 
 ## As âncoras são escritas por quem monta, antes do `add_child` — mesma armadilha
@@ -35,58 +36,77 @@ func _ready() -> void:
 	visible = false
 
 	var shade := ColorRect.new()
-	shade.color = Color(AppTheme.BACKGROUND, 0.88)
+	shade.color = AppTheme.BACKGROUND
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(shade)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	var shell := VBoxContainer.new()
+	shell.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shell.add_theme_constant_override("separation", 0)
+	add_child(shell)
 
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(PANEL_WIDTH, 0)
-	panel.add_theme_stylebox_override("panel", AppTheme.box(
-		AppTheme.SURFACE, AppTheme.RADIUS_LARGE, AppTheme.BORDER, 1
-	))
-	center.add_child(panel)
+	_band = PanelContainer.new()
+	shell.add_child(_band)
+	var top := VBoxContainer.new()
+	top.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	_band.add_child(top)
+	var row := HBoxContainer.new()
+	top.add_child(row)
+	_title = _ink_label(AppTheme.display(700), 22)
+	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_title)
+	_count = _ink_label(AppTheme.font(800), AppTheme.SIZE_CAPTION + 1)
+	row.add_child(_count)
+	var caption := _ink_label(AppTheme.font(800), AppTheme.SIZE_CAPTION + 1)
+	caption.text = "VOCÊ ENTROU NA SALA"
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	top.add_child(caption)
+	_code = _ink_label(AppTheme.display(700), 56)
+	_code.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	top.add_child(_code)
 
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
-	panel.add_child(margin)
+	var body := MarginContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top"]:
+		body.add_theme_constant_override("margin_" + side, AppTheme.SCREEN_PAD)
+	shell.add_child(body)
+	# Um lugar por linha, no lugar do número: "2 de 4" responde "falta muito?" e
+	# não responde "quem já está aqui?".
+	_seats = SeatList.new()
+	body.add_child(_seats)
 
+	var footer := MarginContainer.new()
+	for side in ["left", "right", "bottom"]:
+		footer.add_theme_constant_override("margin_" + side, AppTheme.SCREEN_PAD)
+	shell.add_child(footer)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	margin.add_child(column)
-
-	_title = Label.new()
-	_title.theme_type_variation = &"Title"
-	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_title)
-
-	_detail = Label.new()
-	_detail.theme_type_variation = &"Subtitle"
-	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(_detail)
-
-	# As cadeiras no lugar do número. "2 de 4" responde "falta muito?" e não
-	# responde "quem já está aqui?" — e é a segunda pergunta que faz esperar valer.
-	_seats = SeatTable.new()
-	column.add_child(_seats)
-
+	column.add_theme_constant_override("separation", 10)
+	footer.add_child(column)
 	_hint = Label.new()
-	_hint.theme_type_variation = &"Caption"
+	_hint.theme_type_variation = &"Hint"
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_hint)
-
+	_start = Button.new()
+	_start.theme_type_variation = &"PrimaryButton"
+	_start.custom_minimum_size.y = 60
+	_start.disabled = true
+	column.add_child(_start)
 	var cancel := Button.new()
 	cancel.text = "Desistir"
 	cancel.theme_type_variation = &"GhostButton"
-	cancel.custom_minimum_size.y = 44
+	cancel.custom_minimum_size.y = 48
 	cancel.pressed.connect(func() -> void: cancelled.emit())
 	column.add_child(cancel)
+
+
+func _ink_label(face: Font, font_size: int) -> Label:
+	var label := Label.new()
+	label.add_theme_font_override("font", face)
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", AppTheme.ACCENT_INK)
+	return label
 
 
 ## Mostra a espera. `taken` e `capacity` vêm do relay, que os conhece assim que a
@@ -97,20 +117,34 @@ func _ready() -> void:
 func show_room(
 	game_id: StringName, code: String, present: PackedInt32Array, capacity: int, local_seat: int
 ) -> void:
+	var color: Color = AppTheme.GAME_COLORS.get(String(game_id), AppTheme.SURFACE_HIGH)
+	var band := AppTheme.box(color, 0)
+	band.corner_radius_bottom_left = 32
+	band.corner_radius_bottom_right = 32
+	band.border_width_bottom = 6
+	band.border_color = color.darkened(0.3)
+	band.content_margin_left = AppTheme.SCREEN_PAD
+	band.content_margin_right = AppTheme.SCREEN_PAD
+	band.content_margin_top = AppTheme.SPACE_XL
+	band.content_margin_bottom = AppTheme.SPACE_XL
+	_band.add_theme_stylebox_override("panel", band)
+
 	var title := Game.game_title(game_id)
-	_title.text = title if not title.is_empty() else "Partida"
-	_detail.text = "Sala %s" % code
-	_seats.capacity = maxi(capacity, 2)
+	_title.text = "Sala de %s" % title if not title.is_empty() else "Sala"
+	_code.text = code
+	var seats := maxi(capacity, 2)
+	_count.text = "%d de %d" % [mini(maxi(present.size(), 1), seats), seats]
+	_seats.capacity = seats
 	_seats.local_seat = maxi(local_seat, 0)
 	_seats.present = present
 	_seats.refresh()
 	if capacity > 2:
-		_hint.text = (
-			"Esperando a mesa encher." if present.size() < capacity
-			else "Mesa cheia. Entrando na partida…"
-		)
+		var full := present.size() >= capacity
+		_hint.text = "Mesa cheia." if full else "Quem abriu a sala começa quando quiser."
+		_start.text = "Entrando na partida…" if full else "Esperando a mesa encher"
 	else:
-		_hint.text = "Esperando o anfitrião abrir a partida."
+		_hint.text = "A partida começa assim que quem abriu a sala estiver pronto."
+		_start.text = "Esperando quem abriu a sala"
 	visible = true
 
 

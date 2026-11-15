@@ -51,6 +51,24 @@ static func to_landscape(tree: SceneTree) -> void:
 	_set_base(tree, _landscape_size())
 
 
+## Deixa o aparelho girar livre, para o jogo que funciona dos dois jeitos.
+##
+## Girar continua sendo duas coisas: a orientação solta aqui, e a base acompanha
+## em [method fit], que quem chama liga ao `size_changed` da janela — o giro chega
+## como uma janela de outro formato, e é o único aviso que existe dele.
+static func to_sensor(tree: SceneTree) -> void:
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR)
+	fit(tree)
+
+
+## A base com o formato da janela: deitada se a janela é mais larga que alta.
+static func fit(tree: SceneTree) -> void:
+	if tree == null or tree.root == null:
+		return
+	var window := tree.root.size
+	_set_base(tree, _landscape_size() if window.x > window.y else _portrait_size())
+
+
 ## Volta ao retrato do projeto. Chamado de `Game.reset_to_menu()`, que é por onde
 ## toda saída de partida passa — pôr isto em cada `_leave()` seria uma tela nova
 ## esquecendo um dia, e o menu abrindo deitado sem ninguém entender por quê.

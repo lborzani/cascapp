@@ -1,12 +1,20 @@
 class_name PaperCard
 extends PanelContainer
 
-## Papel sobre a mesa: a comanda com o código da sala, a escritura de Metrópole.
+## O cartão de diálogo do app: fim de partida, revanche, placar final.
 ##
-## Três objetos do app são papel, e só eles. O que eles dividem não é só o fundo
-## claro: é a tinta. Tudo o que o tema pinta de giz sobre a lousa — rótulo,
-## legenda, título — precisa virar tinta escura aqui dentro, e isso vem de um tema
-## próprio, que desce para os filhos antes do tema do app.
+## Nasceu como papel creme (a comanda do tema antigo), e o nome ficou. Hoje a
+## **instância** é um cartão escuro da família do resto da tela, com o canto bem
+## redondo, e entra crescendo (`Motion.pop`) toda vez que aparece: os seis jogos
+## terminam neste mesmo cartão, então é aqui que o fim de partida ganha a mesma
+## cara em todos.
+##
+## O papel claro continua existindo para o que é papel **dentro de um jogo** — a
+## escritura da Metrópole —, pelas funções estáticas `paper_box()` e
+## `paper_theme()`. Quem instancia a classe não recebe mais nenhum dos dois.
+
+## Canto do cartão de diálogo.
+const DIALOG_RADIUS := 28
 
 @export var tilt_degrees := 0.0:
 	set(value):
@@ -20,9 +28,29 @@ static var _paper_theme: Theme = null
 
 
 func _init() -> void:
-	add_theme_stylebox_override("panel", paper_box())
-	theme = paper_theme()
+	add_theme_stylebox_override("panel", dialog_box())
 	resized.connect(_apply_tilt)
+	visibility_changed.connect(_on_visibility_changed)
+
+
+## Entra com o salto do tema sempre que aparece na tela. Em `visibility_changed`
+## e não em quem mostra: são seis telas mostrando este cartão de seis jeitos, e a
+## entrada tem de ser a mesma em todas.
+func _on_visibility_changed() -> void:
+	if is_visible_in_tree():
+		Motion.pop(self)
+
+
+static func dialog_box() -> StyleBoxFlat:
+	var style := AppTheme.box(AppTheme.SURFACE, DIALOG_RADIUS)
+	# A borda de baixo dos blocos e botões: o cartão é da mesma família.
+	style.border_width_bottom = 6
+	style.border_color = AppTheme.COASTER
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 24
+	style.content_margin_bottom = 20
+	return style
 
 
 func _apply_tilt() -> void:
@@ -106,9 +134,9 @@ static func _paper_buttons(theme: Theme) -> void:
 	theme.set_stylebox("pressed", "SuccessSolidButton", AppTheme.plate(AppTheme.SUCCESS.darkened(0.08), success_edge, true))
 
 	var ghost_line := Color(AppTheme.PAPER_INK, 0.55)
-	theme.set_stylebox("normal", "GhostButton", AppTheme.dashed(Color(0, 0, 0, 0), ghost_line))
-	theme.set_stylebox("hover", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.06), ghost_line))
-	theme.set_stylebox("pressed", "GhostButton", AppTheme.dashed(Color(AppTheme.PAPER_INK, 0.12), AppTheme.PAPER_INK))
+	theme.set_stylebox("normal", "GhostButton", AppTheme.framed(Color(0, 0, 0, 0), ghost_line))
+	theme.set_stylebox("hover", "GhostButton", AppTheme.framed(Color(AppTheme.PAPER_INK, 0.06), ghost_line))
+	theme.set_stylebox("pressed", "GhostButton", AppTheme.framed(Color(AppTheme.PAPER_INK, 0.12), AppTheme.PAPER_INK))
 
 	var danger := AppTheme.DANGER.darkened(0.35)
 	theme.set_stylebox("normal", "DangerButton", AppTheme.box(Color(0, 0, 0, 0), AppTheme.RADIUS, danger, 2))

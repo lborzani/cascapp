@@ -111,16 +111,20 @@ func _draw() -> void:
 	for index in LENGTH:
 		var origin := Vector2((box.x + GAP) * index, 0.0)
 		var rect := Rect2(origin, box)
-		draw_rect(rect, AppTheme.PAPER)
-		# A casa em que o dedo está ganha o contorno amarelo: é onde a próxima
+		# Casa cheia sobe um degrau de superfície; a vazia fica no fundo.
+		var filled := index < code.length()
+		var here := index == mini(code.length(), LENGTH - 1) and _edit.has_focus()
+		# A casa em que o dedo está ganha o contorno limão: é onde a próxima
 		# letra cai, e é a única coisa desta tela que responde ao teclado.
-		if index == mini(code.length(), LENGTH - 1) and _edit.has_focus():
-			draw_rect(rect, AppTheme.ACCENT, false, 2.0)
+		draw_style_box(AppTheme.box(
+			AppTheme.SURFACE_HIGH if filled or here else AppTheme.COASTER,
+			AppTheme.RADIUS, AppTheme.ACCENT, 2 if here else 0
+		), rect)
 		if index >= code.length():
 			continue
 		var glyph := code[index]
 		var width := face.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1.0, CHAR_SIZE).x
 		draw_string(
 			face, origin + Vector2((box.x - width) * 0.5, box.y * 0.5 + CHAR_SIZE * 0.36),
-			glyph, HORIZONTAL_ALIGNMENT_LEFT, -1.0, CHAR_SIZE, AppTheme.PAPER_INK
+			glyph, HORIZONTAL_ALIGNMENT_LEFT, -1.0, CHAR_SIZE, AppTheme.TEXT
 		)

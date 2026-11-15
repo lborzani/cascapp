@@ -4,8 +4,12 @@ extends Control
 ## A folha do jogo: como jogar este jogo, numa camada só.
 ##
 ## Eram duas telas — a dos modos e o diálogo de ajustes por cima dela —, e três
-## toques entre escolher o jogo e começar. Aqui o modo são abas no topo da folha,
-## os ajustes **daquele modo** ficam logo abaixo, e um botão termina.
+## toques entre escolher o jogo e começar. Aqui o modo é um cartão por opção no
+## topo da folha (`ModeCard`), os ajustes **daquele modo** ficam logo abaixo, e um botão termina.
+##
+## A folha abre no modo em que o jogo foi jogado da última vez (`Prefs.last_mode`),
+## e na primeira vez no que começa na hora: contra o bot. Jogo repetido são dois
+## toques — o bloco e o botão.
 ##
 ## Cada seção aparece só onde significa alguma coisa: damas não pergunta ritmo,
 ## uma partida contra o bot não pergunta quem pode entrar, e o Ludo não pergunta
@@ -19,7 +23,10 @@ extends Control
 signal confirmed(mode: int)
 signal closed
 
-const SLIDE := 0.22
+const SLIDE := 0.26
+## Canto de cima da folha: bem redondo, para ela ler como camada e não como tela.
+const SHEET_RADIUS := 32
+const ICON := 60.0
 const PAIRING_SCENE := "res://scenes/pairing.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 
@@ -32,8 +39,9 @@ var _slider: Control = null
 var _scrim: ColorRect = null
 var _title: Label = null
 var _meta: Label = null
-var _icon: Coaster = null
-var _segments: SegmentedControl = null
+var _icon: Control = null
+## Um cartão por modo, na ordem de `_modes`.
+var _mode_box: VBoxContainer = null
 var _modes: Array[int] = []
 var _sections := {}
 var _players: HBoxContainer = null
@@ -53,10 +61,10 @@ var _rules_link: Button = null
 ## perguntas separadas: o catálogo aceita o modo, e o aparelho consegue executá-lo
 ## (uma sala precisa de servidor).
 static func modes_for(id: StringName) -> Array[int]:
-	# A sala primeiro, porque é a que precisa de decisão (código, quem entra); o
-	# resto começa na hora. Lista aqui dentro e não em constante: `Game` é autoload,
-	# e autoload não entra em constante.
-	var order: Array[int] = [Game.Mode.ONLINE, Game.Mode.HOTSEAT, Game.Mode.SOLO]
+	# Do que começa na hora para o que precisa de mais gente: bot, mesmo celular,
+	# sala. Lista aqui dentro e não em constante: `Game` é autoload, e autoload não
+	# entra em constante.
+	var order: Array[int] = [Game.Mode.SOLO, Game.Mode.HOTSEAT, Game.Mode.ONLINE]
 	var available: Array[int] = []
 	for candidate in order:
 		if Game.mode_available(candidate, id):
@@ -107,10 +115,8 @@ func _init() -> void:
 	_panel.anchor_bottom = 1.0
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	var style := AppTheme.box(AppTheme.SURFACE, 0)
-	style.corner_radius_top_left = AppTheme.RADIUS_LARGE
-	style.corner_radius_top_right = AppTheme.RADIUS_LARGE
-	style.border_width_top = 2
-	style.border_color = AppTheme.LINE_SOFT
+	style.corner_radius_top_left = SHEET_RADIUS
+	style.corner_radius_top_right = SHEET_RADIUS
 	style.content_margin_left = AppTheme.SCREEN_PAD
 	style.content_margin_right = AppTheme.SCREEN_PAD
 	style.content_margin_top = AppTheme.SPACE_M
@@ -133,9 +139,11 @@ func _build_body() -> VBoxContainer:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", AppTheme.SPACE_M)
 	body.add_child(header)
-	_icon = Coaster.new()
-	_icon.custom_minimum_size = Vector2(54, 54)
+	# O ladrilho na cor do jogo, com o mesmo ícone do bloco que abriu a folha.
+	_icon = Control.new()
+	_icon.custom_minimum_size = Vector2(ICON, ICON + AppTheme.PLATE_EDGE)
 	_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_icon.draw.connect(_draw_icon)
 	header.add_child(_icon)
 	var words := VBoxContainer.new()
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -152,20 +160,18 @@ func _build_body() -> VBoxContainer:
 	# "Como jogar" no cabeçalho, ao lado do nome: é a pergunta de quem abriu a
 	# folha de um jogo que não conhece, e ela vem antes de escolher o modo.
 	_rules_link = Button.new()
-	_rules_link.text = "Como jogar"
-	_rules_link.flat = true
+	_rules_link.text = "Regras"
+	_rules_link.theme_type_variation = &"GhostButton"
 	_rules_link.focus_mode = Control.FOCUS_NONE
 	_rules_link.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_rules_link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
-	for state_name: String in ["font_color", "font_hover_color"]:
-		_rules_link.add_theme_color_override(state_name, AppTheme.ACCENT)
-	_rules_link.add_theme_color_override("font_pressed_color", AppTheme.TEXT)
+	_rules_link.add_theme_font_override("font", AppTheme.font(800))
+	_rules_link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
 	_rules_link.pressed.connect(open_rules)
 	header.add_child(_rules_link)
 
-	_segments = SegmentedControl.new()
-	_segments.selected.connect(_on_segment)
-	body.add_child(_segments)
+	_mode_box = VBoxContainer.new()
+	_mode_box.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	body.add_child(_mode_box)
 
 	_players = HBoxContainer.new()
 	_players.add_theme_constant_override("separation", AppTheme.SPACE_S)
@@ -202,8 +208,12 @@ func _build_body() -> VBoxContainer:
 
 	_start = Button.new()
 	_start.theme_type_variation = &"PrimaryButton"
-	_start.custom_minimum_size.y = 52
-	_start.pressed.connect(func() -> void: confirmed.emit(mode))
+	_start.custom_minimum_size.y = 60
+	_start.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M + 2)
+	_start.pressed.connect(func() -> void:
+		Prefs.remember_mode(game_id, mode)
+		confirmed.emit(mode)
+	)
 	body.add_child(_start)
 	return body
 
@@ -240,17 +250,24 @@ func is_open() -> bool:
 func open(id: StringName, preferred_mode := -1) -> void:
 	game_id = id
 	Game.game_id = id
-	_title.text = Game.game_title(id).to_upper()
+	_title.text = Game.game_title(id)
 	_meta.text = _meta_text(id)
-	_icon.piece = Game.piece_of(id)
+	_icon.queue_redraw()
 	_rules_link.visible = GameRulesDoc.load_for(id) != null
 	_modes = modes_for(id)
 
-	var labels := PackedStringArray()
+	_clear(_mode_box)
 	for candidate in _modes:
-		labels.append(_mode_label(candidate, id))
-	_segments.setup(labels, 0)
-	_segments.visible = _modes.size() > 1
+		var card := ModeCard.new()
+		var words := _mode_words(candidate, id)
+		card.badge = words[0]
+		card.badge_color = words[1]
+		card.title = words[2]
+		card.detail = words[3]
+		card.pressed.connect(select_mode.bind(candidate))
+		_mode_box.add_child(card)
+	# Um modo só não é escolha: o cartão sairia marcado e sozinho.
+	_mode_box.visible = _modes.size() > 1
 	_unavailable.visible = _modes.is_empty()
 	_start.disabled = _modes.is_empty()
 
@@ -261,9 +278,15 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_build_sides()
 	_build_visibility()
 
-	var wanted := preferred_mode if preferred_mode in _modes else (
-		_modes[0] if not _modes.is_empty() else Game.Mode.HOTSEAT
-	)
+	# Quem pediu um modo manda (o convite de amigo pede Online); depois vem o
+	# último modo deste jogo; e na primeira vez, o primeiro da lista.
+	var wanted := Game.Mode.HOTSEAT
+	if preferred_mode in _modes:
+		wanted = preferred_mode
+	elif Prefs.last_mode(id) in _modes:
+		wanted = Prefs.last_mode(id)
+	elif not _modes.is_empty():
+		wanted = _modes[0]
 	select_mode(wanted)
 
 	if visible:
@@ -285,9 +308,8 @@ func close() -> void:
 
 func select_mode(chosen: int) -> void:
 	mode = chosen
-	var index := _modes.find(chosen)
-	if index >= 0:
-		_segments.set_current(index)
+	for index in _mode_box.get_child_count():
+		(_mode_box.get_child(index) as ModeCard).chosen = _modes[index] == chosen
 	var online := chosen == Game.Mode.ONLINE
 	var solo := chosen == Game.Mode.SOLO
 	# Nível e cor só existem onde há escolha: o bot do Ludo é uma heurística fixa,
@@ -299,23 +321,30 @@ func select_mode(chosen: int) -> void:
 	_section("level").visible = tunable
 	_section("side").visible = tunable
 	_section("visibility").visible = online
-	_start.text = ("Criar sala" if online else "Começar").to_upper()
+	# O botão diz o que vai acontecer, com as palavras do cartão escolhido.
+	_start.text = "Criar sala" if online else ("Jogar contra o bot" if solo else "Jogar aqui")
 
 
-func _on_segment(index: int) -> void:
-	if index < 0 or index >= _modes.size():
-		return
-	select_mode(_modes[index])
-
-
-func _mode_label(candidate: int, id: StringName) -> String:
+## O selo, a cor dele, o nome e a linha de um modo: [selo, cor, título, detalhe].
+func _mode_words(candidate: int, id: StringName) -> Array:
+	var many := Game.players_of(id) > 2
 	match candidate:
 		Game.Mode.ONLINE:
-			return "Online"
+			return ["Sala", AppTheme.GAME_COLORS["battleship"], "Online", "Cria uma sala e chama por código"]
 		Game.Mode.SOLO:
-			return "Contra bots" if Game.players_of(id) > 2 else "Contra bot"
+			return [
+				"Bot", AppTheme.GAME_COLORS["chess"],
+				"Contra bots" if many else "Contra o bot", "Começa na hora, sem esperar ninguém",
+			]
 		_:
-			return "Aqui"
+			return [
+				"1x1" if not many else "Mesa", AppTheme.GAME_COLORS["ludo"],
+				"No mesmo celular", "Passa o aparelho a cada jogada",
+			]
+
+
+func _draw_icon() -> void:
+	GameTile.draw_badge(_icon, game_id, Rect2(0.0, 0.0, ICON, ICON))
 
 
 func _meta_text(id: StringName) -> String:
