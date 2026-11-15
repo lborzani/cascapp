@@ -85,7 +85,7 @@ func _draw() -> void:
 	var radius := diameter * 0.5
 	if turn and _halo > 0.0:
 		draw_arc(
-			center, radius + _halo * 8.0, 0.0, TAU, 48,
+			center, radius + _halo * maxf(3.0, diameter * 0.12), 0.0, TAU, 48,
 			Color(AppTheme.ACCENT, 0.5 * (1.0 - _halo)), 3.0, true
 		)
 	var ring_width := maxf(2.0, diameter * RING_RATIO)

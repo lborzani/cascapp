@@ -204,6 +204,7 @@ var _coaster: Coaster = null
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coaster = Coaster.new()
+	_coaster.custom_minimum_size = Vector2.ZERO
 	_coaster.piece = piece
 	_coaster.fill = seat_color
 	add_child(_coaster)
