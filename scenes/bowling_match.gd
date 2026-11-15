@@ -109,6 +109,8 @@ func _build() -> void:
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.released.connect(_on_released)
 	_view.settled.connect(_on_settled)
+	_view.swing_missed.connect(func() -> void:
+		_banner.show_message("A bola voltou. Toque quando o marcador passar no verde.", Banner.Kind.ALERT))
 	stage.add_child(_view)
 
 	_banner = Banner.new()
@@ -202,7 +204,7 @@ func _on_settled(mask: int) -> void:
 	_pending = PackedFloat32Array()
 	if move == null:
 		# Não acontece com a pista armada pelo estado; se acontecer, a vez não trava.
-		move = BowlingRules.roll(0, PackedFloat32Array([0, 0, 0, 0]))
+		move = BowlingRules.roll(0)
 	_play(move)
 
 
@@ -252,7 +254,7 @@ func _run_bot() -> void:
 
 
 ## O arremesso do bot: sai da direita com um gancho leve para a esquerda, mira
-## no bolso (entre o 1 e o 3) e erra o timing como gente erra.
+## no bolso (entre o 1 e o 3), joga forte e erra o timing como gente erra.
 static func bot_params() -> PackedFloat32Array:
 	var spot := randf_range(0.2, 0.45)
 	var spin := randf_range(-0.5, -0.1)
@@ -262,6 +264,7 @@ static func bot_params() -> PackedFloat32Array:
 	return PackedFloat32Array([
 		spot, clampf(direction, -1.0, 1.0), spin,
 		clampf(randfn(0.0, BOT_TIMING_SPREAD), -1.0, 1.0),
+		randf_range(0.75, 1.0),
 	])
 
 

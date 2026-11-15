@@ -53,7 +53,7 @@ func _probe_opening() -> void:
 	var scene := await _open()
 	_equals(BowlingRules.seats_of(scene._state), 3, "a mesa tem o tamanho escolhido no menu")
 	_check(scene._view.enabled, "e a pista aceita mira")
-	_check(scene._view._button.visible and scene._view._button.text == "Jogar", "com o botão de jogar à vista")
+	_check(scene._view._button.visible and scene._view._button.text == "Segure para jogar", "com o botão de jogar à vista")
 	_check(scene._card.custom_minimum_size.y > BowlingCard.ROW * 2.5, "a cartela tem uma linha por jogador")
 	_check(scene._hint.text.begins_with("Jogador 1"), "a dica diz de quem é a vez (%s)" % scene._hint.text)
 	var standing := 0
@@ -99,27 +99,59 @@ func _probe_swing_and_throw() -> void:
 	var scene := await _open()
 	var view: BowlingView = scene._view
 	var got := []
+	var missed := []
 	view.released.connect(func(p: PackedFloat32Array) -> void: got.append(p))
-	view._button.pressed.emit()
-	_check(view._phase == BowlingView.Phase.BACK and view._button.text == "Soltar!", "o botão começa o balanço")
-	# Espera a bola voltar e passar perto do fundo do balanço.
+	view.swing_missed.connect(func() -> void: missed.append(true))
+
+	# Sem o toque a bola não sai (na 1.47 ela saía sozinha no fim da volta).
+	view._button.button_down.emit()
+	await _frames(12)
+	view._button.button_up.emit()
 	var frames := 0
-	while not (view._phase == BowlingView.Phase.FORWARD and view._angle < 4.0) and frames < 300:
+	while view._phase != BowlingView.Phase.AIM and frames < 200:
 		await get_tree().process_frame
 		frames += 1
-	view._button.pressed.emit()
-	_equals(got.size(), 1, "o segundo toque solta")
+	_check(got.is_empty() and BowlingRules.rolls_of(scene._state, 0).is_empty(), "sem o toque no verde a bola não sai")
+	_equals(missed.size(), 1, "e o balanço avisa que voltou")
+	_check(view.enabled and not scene._busy and view._button.text == "Segure para jogar", "com a mira de volta")
+
+	# Segurar meio segundo dá meia força.
+	view._button.button_down.emit()
+	_check(view._phase == BowlingView.Phase.HOLD and view._button.text == "Solte o dedo", "segurar o botão junta força")
+	await _frames(30)
+	_check(absf(view._power - 0.5) < 0.06, "meio segundo segurando é meia força (%.2f)" % view._power)
+	_check(view._angle > BowlingView.MIN_BACKSWING, "e a bola recua (%.0f°)" % view._angle)
+	view._button.button_up.emit()
+	_check(view._phase == BowlingView.Phase.FORWARD and view._button.text == "Toque no verde!", "soltar o dedo começa a volta")
+	frames = 0
+	while not (view._phase == BowlingView.Phase.FORWARD and view._angle < 3.0) and frames < 300:
+		await get_tree().process_frame
+		frames += 1
+	# O toque na pista, longe do botão, também solta.
+	_tap(view, Vector2(view.size.x * 0.5, view.size.y * 0.3))
+	_equals(got.size(), 1, "o toque solta a bola")
 	if got.is_empty():
 		scene.free()
 		return
 	var timing: float = got[0][3]
 	_check(absf(timing) < 0.35, "soltar perto do fundo dá timing perto de zero (%.2f)" % timing)
+	_check(absf(got[0][4] - 0.5) < 0.06, "e a força vai no lance (%.2f)" % got[0][4])
 	_check(not view.enabled and scene._busy, "com a bola rolando ninguém mexe")
 
+	# A bola só sobe na tela enquanto rola: a câmera não pode fazê-la descer e
+	# voltar (o "pulinho" da 1.47).
+	var highest := INF
+	var dip := 0.0
 	frames = 0
 	while BowlingRules.rolls_of(scene._state, 0).is_empty() and frames < 900:
 		await get_tree().process_frame
 		frames += 1
+		var ball := view.lane.ball
+		if ball != null and ball.global_position.z > -(BowlingLane.HEAD_PIN - 0.6) and frames > 20:
+			var y := view._to_screen(ball.global_position).y
+			highest = minf(highest, y)
+			dip = maxf(dip, y - highest)
+	_check(dip < 2.0, "a bola não volta para baixo na tela (desceu %.1f px)" % dip)
 	var rolls := BowlingRules.rolls_of(scene._state, 0)
 	_equals(rolls.size(), 1, "a jogada vira a primeira bola na cartela")
 	while scene._busy and frames < 1200:
@@ -192,6 +224,11 @@ func _open() -> Node:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	return scene
+
+
+func _frames(count: int) -> void:
+	for i in count:
+		await get_tree().process_frame
 
 
 func _tap(view: Control, at: Vector2) -> void:

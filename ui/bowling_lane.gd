@@ -50,15 +50,18 @@ const PIN_ROLL_DAMP := 1.0
 
 # --- o arremesso: o que cada parâmetro vale -----------------------------------
 
-## Velocidade de uma bola solta no ponto certo, em m/s (uns 29 km/h).
+## Velocidade com a força cheia solta no ponto certo, em m/s (uns 29 km/h), e com
+## a força mínima (uns 14 km/h).
 const FULL_SPEED := 8.0
+const MIN_SPEED := 4.0
 ## Direção cheia (parâmetro ±1), em graus para a direita ou a esquerda.
 const MAX_ANGLE := 3.5
 ## Erro de direção de um timing no limite (±1): cedo puxa para a esquerda, tarde
 ## empurra para a direita.
 const TIMING_ANGLE := 1.5
-## Quanto da velocidade um timing no limite tira.
-const TIMING_SLOW := 0.25
+## Quanto da velocidade um timing no limite tira. Menor que antes de existir a
+## força: agora é ela quem decide a velocidade.
+const TIMING_SLOW := 0.15
 ## Giro de lado com o efeito cheio, em rad/s. É ele que vira gancho no seco.
 const MAX_SPIN := 15.0
 ## Quanto da rolagem para frente a bola já leva ao sair da mão (o resto ela pega
@@ -89,6 +92,7 @@ var pins: Array[RigidBody3D] = []
 
 var _time := 0.0
 var _after := -1.0
+var _on_oil := false
 var _pin_shape: Shape3D = null
 
 
@@ -112,13 +116,14 @@ static func pin_spot(pin: int) -> Vector3:
 	return Vector3((float(slot) - float(row) * 0.5) * PIN_SPACING, 0.0, -(HEAD_PIN + depth))
 
 
-## O arremesso a partir dos quatro parâmetros (cada um de -1 a 1): posição na
-## linha, direção, efeito (positivo curva para a direita) e timing (0 é o ponto
-## certo, negativo é cedo).
+## O arremesso a partir dos parâmetros: posição na linha, direção, efeito
+## (positivo curva para a direita) e timing (0 é o ponto certo, negativo é cedo),
+## de -1 a 1; e a força, de 0 a 1 (sem ela, cheia).
 static func launch(params: PackedFloat32Array) -> Dictionary:
 	var spot := params[0] * (LANE_W * 0.5 - BALL_R)
 	var angle := deg_to_rad(params[1] * MAX_ANGLE + params[3] * TIMING_ANGLE)
-	var speed := FULL_SPEED * (1.0 - absf(params[3]) * TIMING_SLOW)
+	var power := params[4] if params.size() > 4 else 1.0
+	var speed := lerpf(MIN_SPEED, FULL_SPEED, power) * (1.0 - absf(params[3]) * TIMING_SLOW)
 	var forward := Vector3(sin(angle), 0.0, -cos(angle))
 	# Giro em volta da direção de viagem: o atrito no seco empurra a bola para o
 	# lado contrário ao deslize do ponto de contato, e é esse o gancho.
@@ -155,7 +160,10 @@ func throw(params: PackedFloat32Array) -> void:
 	ball.name = "Ball"
 	ball.mass = BALL_MASS
 	ball.continuous_cd = true
-	ball.physics_material_override = _material(1.0, 0.1)
+	# No óleo, o atrito da bola é o do óleo: a Godot usa o menor dos dois atritos
+	# no contato, então a pista (seco) desliza como óleo até a bola passar dele.
+	ball.physics_material_override = _material(OIL_FRICTION, 0.1)
+	_on_oil = true
 	_no_damping(ball)
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
@@ -176,6 +184,8 @@ func throw(params: PackedFloat32Array) -> void:
 
 ## Pinta o mármore cinza da bola (o material `ball`; os furos ficam como estão).
 static func tint_ball(node: Node, color: Color) -> void:
+	if color == Color.WHITE:
+		return  # o mármore como veio; e sem material novo, que o modo sem tela reclama
 	for found in node.find_children("*", "MeshInstance3D", true, false):
 		var mesh := (found as MeshInstance3D).mesh
 		for surface in mesh.get_surface_count():
@@ -201,6 +211,12 @@ func _physics_process(delta: float) -> void:
 		return
 	_time += delta
 	var at := ball.global_position
+	if _on_oil and (at.z < -OIL_LEN or absf(at.x) > LANE_W * 0.5):
+		# Acabou o óleo (ou a bola caiu na canaleta, que não tem óleo): ela volta ao
+		# atrito cheio, e o contato passa a valer o da pista seca, da canaleta e dos
+		# pinos.
+		_on_oil = false
+		ball.physics_material_override = _material(1.0, 0.1)
 	if _after < 0.0 and (at.z < -(HEAD_PIN - 0.5) or at.y < -0.1):
 		_after = 0.0
 	elif _after >= 0.0:
@@ -263,21 +279,27 @@ func _make_pin(pin: int) -> RigidBody3D:
 
 func _build_colliders() -> void:
 	var cap_out := LANE_W * 0.5 + GUTTER_W + CAP_W
-	var oil := _static_body(OIL_FRICTION)
-	_box(oil, Vector3(LANE_W, 0.06, OIL_LEN), Vector3(0.0, -0.03, -OIL_LEN * 0.5))
-	_box(oil, Vector3(cap_out * 2.0, 0.06, APPROACH), Vector3(0.0, -0.03, APPROACH * 0.5))
-	var dry := _static_body(DRY_FRICTION)
-	var dry_len := DECK_END - OIL_LEN
-	_box(dry, Vector3(LANE_W, 0.06, dry_len), Vector3(0.0, -0.03, -(OIL_LEN + dry_len * 0.5)))
+	# A pista é **uma** caixa, da aproximação ao fim do deck. Na 1.47 eram duas
+	# (óleo e seco, cada uma com o seu atrito), e a quina entre elas, a 12,19 m,
+	# jogava a bola para cima — até 45 cm, conforme a força. O óleo agora é o
+	# atrito da bola (ver `_physics_process`), e a pista tem o atrito do seco.
+	var lane_body := _static_body(DRY_FRICTION)
+	var length := APPROACH + DECK_END
+	_box(lane_body, Vector3(LANE_W, 0.06, length), Vector3(0.0, -0.03, APPROACH - length * 0.5))
+	# A aproximação é mais larga que a pista; as sobras dos lados nunca ficam no
+	# caminho da bola.
+	var side_w := cap_out - LANE_W * 0.5
+	for side: float in [-1.0, 1.0]:
+		_box(lane_body, Vector3(side_w, 0.06, APPROACH), Vector3(side * (LANE_W * 0.5 + side_w * 0.5), -0.03, APPROACH * 0.5))
 	# Canaletas, divisórias, paredes do fundo, poço e máquina: a malha do próprio
 	# modelo, para a bola cair na canaleta de verdade.
 	var walls := _static_body(0.3)
 	# Parede invisível na borda de fora de cada canaleta: uma bola com gancho forte
 	# subia a meia-cana e pulava a divisória de 3 cm para fora do mundo.
 	var outer := LANE_W * 0.5 + GUTTER_W
-	var length := APPROACH + DECK_END + 1.0
+	var reach := APPROACH + DECK_END + 1.0
 	for side: float in [-1.0, 1.0]:
-		_box(walls, Vector3(0.1, 1.0, length), Vector3(side * (outer + 0.05), 0.5, APPROACH - length * 0.5))
+		_box(walls, Vector3(0.1, 1.0, reach), Vector3(side * (outer + 0.05), 0.5, APPROACH - reach * 0.5))
 	for node in find_children("*", "MeshInstance3D", true, false):
 		if node.name in ["gutters", "walls", "pit", "masking"]:
 			var mi := node as MeshInstance3D

@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.48
+
+- Boliche: agora você escolhe a força. Segure o botão para a bola recuar mais e sair mais forte, solte o dedo e toque quando o marcador passar no verde.
+- Boliche: a bola não sai mais sozinha. Sem o toque no verde, ela volta para a mira.
+- Boliche: a bola não dá mais aquele pulinho no meio da pista.
+
 ## 1.47
 
 - Jogo novo: boliche em 3D, com os pinos caindo de verdade. Mire, escolha o efeito e toque de novo para soltar a bola no ponto verde do balanço.
