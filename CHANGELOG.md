@@ -12,6 +12,8 @@ novidade.
 - Boliche: a bola rola lisa depois do lançamento, sem engasgar.
 - Boliche: a força sobe e desce enquanto você segura o botão. Solte o dedo na força que quiser.
 - Boliche: depois de soltar o dedo, a bola fica balançando até o seu toque, sem lançar sozinha nem voltar para a mira.
+- Tocar na estrela para favoritar um jogo não abre mais a folha do jogo junto.
+- O X do cartão "Voltar para a partida" fecha o cartão sem retomar a partida.
 
 ## 1.48
 

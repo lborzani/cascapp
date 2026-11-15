@@ -139,6 +139,12 @@ func _let_scroll_through(node: Node) -> void:
 		return
 	var parent := button.get_parent()
 	while parent != null:
+		# Botão dentro de botão (a estrela no bloco do jogo) fica com o toque. O de
+		# fora já deixa o arrasto chegar à lista; deixando passar também o de dentro,
+		# o mesmo toque chegava ao botão de fora e valia pelos dois — favoritar abria
+		# a folha do jogo junto.
+		if parent is BaseButton:
+			return
 		if parent is ScrollContainer:
 			button.mouse_filter = Control.MOUSE_FILTER_PASS
 			return
