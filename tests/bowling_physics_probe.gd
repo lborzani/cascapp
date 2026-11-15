@@ -37,6 +37,7 @@ func _run() -> void:
 	await _test_gutter()
 	await _test_hook()
 	await _test_settles_and_rack()
+	await _test_smooth()
 
 	if _failures == 0:
 		print("OK — física do boliche consistente.")
@@ -142,6 +143,37 @@ func _test_settles_and_rack() -> void:
 	_check(exact, "os que ficaram voltam ao lugar exato, e só eles")
 	_check(lane.ball == null and lane.knocked() == 0, "sem bola e nenhum caído depois de armar")
 	lane.free()
+
+
+## O stuttering da 1.48: a física anda a 60 Hz e a tela do celular a 90 ou 120, e a
+## bola desenhada no corpo só andava nos quadros de física. Aqui a física cai para
+## 30 Hz com a tela a 60: sem a interpolação, a bola desenhada para em metade dos
+## quadros.
+func _test_smooth() -> void:
+	print("desenho liso")
+	Engine.physics_ticks_per_second = 30
+	var lane := BowlingLane.new()
+	root.add_child(lane)
+	lane.rack(BowlingRules.ALL_PINS)
+	lane.throw(PackedFloat32Array([0, 0, 0, 0, 1]))
+	var still := 0
+	var moved := 0
+	var last := Vector3.INF
+	for i in 150:
+		await process_frame
+		if lane.ball == null or lane.ball.global_position.z < -(BowlingLane.HEAD_PIN - 1.0):
+			break
+		var drawn: Vector3 = (lane._smooth[lane.ball][0] as Node3D).global_position
+		# Os primeiros quadros são a largada: o corpo ainda não andou.
+		if last != Vector3.INF and i > 4:
+			if drawn.is_equal_approx(last):
+				still += 1
+			else:
+				moved += 1
+		last = drawn
+	Engine.physics_ticks_per_second = 60
+	lane.free()
+	_check(still == 0 and moved > 30, "a bola desenhada anda em todo quadro da tela (%d andando, %d parados)" % [moved, still])
 
 
 # --- apoio --------------------------------------------------------------------

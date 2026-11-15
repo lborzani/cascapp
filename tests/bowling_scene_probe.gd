@@ -99,32 +99,24 @@ func _probe_swing_and_throw() -> void:
 	var scene := await _open()
 	var view: BowlingView = scene._view
 	var got := []
-	var missed := []
 	view.released.connect(func(p: PackedFloat32Array) -> void: got.append(p))
-	view.swing_missed.connect(func() -> void: missed.append(true))
 
-	# Sem o toque a bola não sai (na 1.47 ela saía sozinha no fim da volta).
+	# A força vai e volta enquanto o dedo está no botão (na 1.48 travava em 100%).
 	view._button.button_down.emit()
-	await _frames(12)
-	view._button.button_up.emit()
-	var frames := 0
-	while view._phase != BowlingView.Phase.AIM and frames < 200:
-		await get_tree().process_frame
-		frames += 1
-	_check(got.is_empty() and BowlingRules.rolls_of(scene._state, 0).is_empty(), "sem o toque no verde a bola não sai")
-	_equals(missed.size(), 1, "e o balanço avisa que voltou")
-	_check(view.enabled and not scene._busy and view._button.text == "Segure para jogar", "com a mira de volta")
-
-	# Segurar meio segundo dá meia força.
-	view._button.button_down.emit()
-	_check(view._phase == BowlingView.Phase.HOLD and view._button.text == "Solte o dedo", "segurar o botão junta força")
-	await _frames(30)
-	_check(absf(view._power - 0.5) < 0.06, "meio segundo segurando é meia força (%.2f)" % view._power)
+	_check(view._phase == BowlingView.Phase.HOLD and view._button.text == "Solte na força certa", "segurar o botão junta força")
+	await _frames(48)
+	_check(view._power > 0.95, "em 0,8 s a força chega ao máximo (%.2f)" % view._power)
 	_check(view._angle > BowlingView.MIN_BACKSWING, "e a bola recua (%.0f°)" % view._angle)
+	await _frames(24)
+	_check(absf(view._power - 0.5) < 0.06, "e volta em vez de travar: meia força em 1,2 s (%.2f)" % view._power)
 	view._button.button_up.emit()
-	_check(view._phase == BowlingView.Phase.FORWARD and view._button.text == "Toque no verde!", "soltar o dedo começa a volta")
-	frames = 0
-	while not (view._phase == BowlingView.Phase.FORWARD and view._angle < 3.0) and frames < 300:
+	_check(view._phase == BowlingView.Phase.SWING and view._button.text == "Toque no verde!", "soltar o dedo começa o balanço")
+
+	# O balanço vai e volta até o toque: nem solta sozinho, nem desiste.
+	await _frames(300)
+	_check(got.is_empty() and view._phase == BowlingView.Phase.SWING, "cinco segundos depois a bola ainda balança, sem sair")
+	var frames := 0
+	while not (view._phase == BowlingView.Phase.SWING and absf(view._angle) < 3.0) and frames < 300:
 		await get_tree().process_frame
 		frames += 1
 	# O toque na pista, longe do botão, também solta.

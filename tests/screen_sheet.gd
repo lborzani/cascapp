@@ -560,7 +560,8 @@ func _stage_bowling(scene: Node, swing: bool) -> void:
 	view.rack(BowlingRules.standing(state))
 	scene._refresh()
 	if swing:
-		view._phase = BowlingView.Phase.FORWARD
+		view._phase = BowlingView.Phase.SWING
+		view._top = 60.0
 		view._angle = 9.0
 		view._swing = 0.0
 		view._place_preview()

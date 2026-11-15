@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.49
+
+- Boliche: a bola rola lisa depois do lançamento, sem engasgar.
+- Boliche: a força sobe e desce enquanto você segura o botão. Solte o dedo na força que quiser.
+- Boliche: depois de soltar o dedo, a bola fica balançando até o seu toque, sem lançar sozinha nem voltar para a mira.
+
 ## 1.48
 
 - Boliche: agora você escolhe a força. Segure o botão para a bola recuar mais e sair mais forte, solte o dedo e toque quando o marcador passar no verde.
