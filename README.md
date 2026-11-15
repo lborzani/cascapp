@@ -1182,10 +1182,15 @@ máquina e no mesmo aparelho; a partida online vem depois.
   máquina de pinos repõe os que ficaram em pé no lugar exato, e o segundo
   arremesso começa igual nos dois lados.
 - **Controles** (`ui/bowling_view.gd`): arrastar a bola escolhe de onde ela sai,
-  arrastar na pista mira, e o trilho escolhe o efeito. Segurar o botão é a força
-  (a bola recua mais), soltar o dedo começa a volta, e um toque solta: no verde
-  sai como mirado, cedo puxa para a esquerda, tarde empurra para a direita. Sem o
-  toque a bola não sai, e a mira volta.
+  arrastar na pista mira, e o trilho escolhe o efeito. Segurando o botão, a força
+  vai e volta de 0 a 100%, e soltar o dedo a escolhe. Depois a bola balança, indo
+  e voltando até o toque: no verde sai como mirado, antes puxa para a esquerda,
+  depois empurra para a direita. Nenhuma das duas barras trava ou dispara sozinha.
+- **Desenho liso:** a física anda a 60 Hz e a tela do celular a 90 ou 120. O
+  desenho da bola e dos pinos é um filho `top_level`, posto entre os dois últimos
+  quadros de física (`Engine.get_physics_interpolation_fraction`), e a câmera segue
+  esse ponto. Só no boliche: ligar a interpolação do projeto inteiro mexeria nas
+  animações de todos os outros jogos.
 - **O óleo é atrito da bola, não da pista.** A pista é uma caixa só; com duas
   (óleo e seco), a quina entre elas jogava a bola para cima. A Godot usa o menor
   atrito do contato, então a bola começa com o atrito do óleo e passa ao cheio

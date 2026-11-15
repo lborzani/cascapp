@@ -94,6 +94,12 @@ var _time := 0.0
 var _after := -1.0
 var _on_oil := false
 var _pin_shape: Shape3D = null
+## Desenho suave. A física anda a 60 quadros por segundo e a tela do celular a 90
+## ou 120: desenhada no corpo, a bola só andava nos quadros de física e "travava"
+## nos outros (o stuttering da 1.48). O desenho de cada corpo é um filho
+## `top_level`, posto entre os dois últimos quadros de física na fração em que o
+## quadro da tela cai. Corpo -> [desenho, transformada anterior, atual].
+var _smooth := {}
 
 
 func _init() -> void:
@@ -142,10 +148,10 @@ func rack(mask: int) -> void:
 	rolling = false
 	for pin in BowlingRules.PINS:
 		if pins[pin] != null:
-			pins[pin].free()
+			_drop(pins[pin])
 			pins[pin] = null
 	if ball != null:
-		ball.free()
+		_drop(ball)
 		ball = null
 	for pin in BowlingRules.PINS:
 		if mask & (1 << pin):
@@ -154,7 +160,7 @@ func rack(mask: int) -> void:
 
 func throw(params: PackedFloat32Array) -> void:
 	if ball != null:
-		ball.free()
+		_drop(ball)
 	var start := launch(params)
 	ball = RigidBody3D.new()
 	ball.name = "Ball"
@@ -175,6 +181,7 @@ func throw(params: PackedFloat32Array) -> void:
 	ball.add_child(visual)
 	ball.position = start["position"]
 	add_child(ball)
+	_track(ball, visual)
 	ball.linear_velocity = start["velocity"]
 	ball.angular_velocity = start["spin"]
 	_time = 0.0
@@ -207,6 +214,12 @@ func knocked() -> int:
 
 
 func _physics_process(delta: float) -> void:
+	# O passo de física de agora ainda não andou: o que o corpo tem é o resultado
+	# do anterior. O desenho fica um quadro de física atrás, e liso.
+	for body: RigidBody3D in _smooth:
+		var entry: Array = _smooth[body]
+		entry[1] = entry[2]
+		entry[2] = body.global_transform
 	if not rolling:
 		return
 	_time += delta
@@ -274,7 +287,40 @@ func _make_pin(pin: int) -> RigidBody3D:
 	body.position = pin_spot(pin)
 	body.sleeping = true
 	add_child(body)
+	_track(body, visual)
 	return body
+
+
+func _track(body: RigidBody3D, visual: Node3D) -> void:
+	visual.top_level = true
+	visual.global_transform = body.global_transform
+	_smooth[body] = [visual, body.global_transform, body.global_transform]
+
+
+func _drop(body: RigidBody3D) -> void:
+	_smooth.erase(body)
+	body.free()
+
+
+## Onde a bola está desenhada agora (entre os dois últimos quadros de física). É
+## o que a câmera segue: seguir o corpo dava o mesmo tranco da bola.
+func ball_point() -> Vector3:
+	if ball == null:
+		return Vector3.ZERO
+	var entry: Array = _smooth.get(ball, [])
+	if entry.is_empty():
+		return ball.global_position
+	var before: Transform3D = entry[1]
+	var now: Transform3D = entry[2]
+	return before.origin.lerp(now.origin, Engine.get_physics_interpolation_fraction())
+
+
+func _process(_delta: float) -> void:
+	var fraction := Engine.get_physics_interpolation_fraction()
+	for body: RigidBody3D in _smooth:
+		var entry: Array = _smooth[body]
+		var before: Transform3D = entry[1]
+		(entry[0] as Node3D).global_transform = before.interpolate_with(entry[2], fraction)
 
 
 func _build_colliders() -> void:

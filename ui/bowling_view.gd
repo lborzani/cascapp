@@ -14,14 +14,15 @@ extends Control
 ## - **Direção:** arrastar na pista, acima da bola, gira a mira (a linha mostra
 ##   o caminho, já com a curva do efeito);
 ## - **Efeito:** o trilho embaixo, de gancho à esquerda a gancho à direita;
-## - **Força:** segurar o botão faz a bola recuar; quanto mais tempo, mais recuo e
-##   mais força;
-## - **Timing:** soltar o dedo começa a volta do pêndulo, e um toque (no botão ou
-##   em qualquer lugar da pista) solta a bola. O ponto verde da barra é o fundo do
-##   balanço: soltar ali sai como mirado, cedo puxa para a esquerda, tarde empurra
-##   para a direita. Sem o toque a bola **não** sai: no fim da volta o balanço
-##   desiste e a mira volta (na 1.47 ela saía sozinha, e parecia que o timing não
-##   existia).
+## - **Força:** enquanto o botão está seguro, a força vai e volta de 0 a 100% (e a
+##   bola recua e desce junto). Soltar o dedo escolhe a força daquele momento;
+## - **Timing:** depois de soltar o dedo, a bola balança como um pêndulo, indo e
+##   voltando até o toque (no botão ou em qualquer lugar da pista). O ponto verde
+##   da barra é o fundo do balanço: soltar ali sai como mirado, antes dele puxa
+##   para a esquerda, depois empurra para a direita.
+##
+## As duas barras vão e voltam sem parar, a pedido do Borzani: a força não trava
+## em 100% e o balanço não desiste nem solta a bola sozinho.
 ##
 ## ## A câmera faz o caminho de quem assiste ao boliche
 ##
@@ -30,8 +31,6 @@ extends Control
 
 ## Quem joga soltou a bola; a física já começou com estes parâmetros.
 signal released(params: PackedFloat32Array)
-## A volta do balanço acabou sem o toque: a bola voltou para a mira.
-signal swing_missed
 ## A jogada parou: `mask` são os pinos armados que caíram.
 signal settled(mask: int)
 
@@ -51,17 +50,17 @@ const FOLLOW_AHEAD := 6.0
 ## Quão rápido a câmera alcança o alvo (por segundo).
 const CAMERA_EASE := 6.0
 
-## O balanço: braço do pêndulo, quanto a bola recua (de força nenhuma a força
-## cheia) e até onde ela vai.
+## O balanço: braço do pêndulo e quanto a bola recua, de força nenhuma a força
+## cheia. O balanço vai até o mesmo tanto para a frente.
 const ARM := 0.75
 const MIN_BACKSWING := 20.0
 const BACKSWING := 75.0
-const FOLLOW_THROUGH := -40.0
-## Segurando o botão por esse tempo a força chega ao máximo (e fica lá).
-const HOLD_TIME := 1.0
-## Duração da volta, igual com qualquer força, como num pêndulo: com mais força a
-## bola passa mais rápido pelo verde, e o timing fica mais difícil.
-const FORWARD_TIME := 0.7
+## Uma ida e volta da força (0 → 100% → 0).
+const POWER_PERIOD := 1.6
+## Uma ida e volta do balanço (atrás → frente → atrás), igual com qualquer força,
+## como num pêndulo: com mais força a bola passa mais rápido pelo verde, e o
+## timing fica mais difícil.
+const SWING_PERIOD := 1.6
 ## Graus do fundo do balanço até o timing valer ±1.
 const WINDOW := 20.0
 ## Faixa do ponto certo, em fração da janela, pintada de verde na barra.
@@ -75,7 +74,7 @@ const BOTTOM_PAD := 16.0
 const TRACK_WIDTH := 220.0
 const KNOB := 12.0
 
-enum Phase { IDLE, AIM, HOLD, FORWARD, ROLLING }
+enum Phase { IDLE, AIM, HOLD, SWING, ROLLING }
 
 ## Aceita mira e o botão. Falso na vez do outro e com a bola rolando.
 var enabled := false:
@@ -233,7 +232,7 @@ func params(timing: float, power := _power) -> PackedFloat32Array:
 
 ## A bola está rolando ou o balanço está no meio.
 func busy() -> bool:
-	return _phase in [Phase.HOLD, Phase.FORWARD, Phase.ROLLING]
+	return _phase in [Phase.HOLD, Phase.SWING, Phase.ROLLING]
 
 
 # --- o balanço ----------------------------------------------------------------
@@ -247,7 +246,7 @@ func _on_press() -> void:
 			_swing = 0.0
 			_power = 0.0
 			_drag = Drag.NONE
-		Phase.FORWARD:
+		Phase.SWING:
 			_release(_timing())
 	_sync()
 
@@ -256,7 +255,7 @@ func _on_press() -> void:
 func _on_lift() -> void:
 	if _phase != Phase.HOLD:
 		return
-	_phase = Phase.FORWARD
+	_phase = Phase.SWING
 	_top = _angle
 	_swing = 0.0
 	_sync()
@@ -291,21 +290,17 @@ func _process(delta: float) -> void:
 	match _phase:
 		Phase.HOLD:
 			_swing += delta
-			_power = clampf(_swing / HOLD_TIME, 0.0, 1.0)
-			# A bola sobe atrás do recuo da força, sem saltar para ele.
+			# Vai e volta: 0 → 100% → 0, até o dedo sair.
+			_power = 1.0 - absf(fposmod(_swing / POWER_PERIOD, 1.0) * 2.0 - 1.0)
+			# A bola acompanha o recuo da força, sem saltar para ele.
 			var top := lerpf(MIN_BACKSWING, BACKSWING, _power)
 			_angle = lerpf(_angle, top, 1.0 - exp(-12.0 * delta))
-		Phase.FORWARD:
+		Phase.SWING:
 			_swing += delta
-			var u := clampf(_swing / FORWARD_TIME, 0.0, 1.0)
-			_angle = lerpf(_top, FOLLOW_THROUGH, u)
-			if u >= 1.0:
-				# Passou do ponto e ninguém tocou: a bola volta para a mira.
-				_phase = Phase.AIM
-				_angle = 0.0
-				_power = 0.0
-				_sync()
-				swing_missed.emit()
+			# Onda triangular: começa atrás (+1), passa pelo fundo, vai à frente (-1)
+			# e volta — sem parar, até o toque. Triangular e não seno: a bola passa
+			# pelo verde sempre na mesma velocidade, e o toque é questão de olho.
+			_angle = _top * (4.0 * absf(fposmod(_swing / SWING_PERIOD, 1.0) - 0.5) - 1.0)
 	_place_preview()
 	_follow(delta)
 	queue_redraw()
@@ -333,7 +328,7 @@ func _follow(delta: float) -> void:
 	var target := _aim_camera()
 	var look := AIM_LOOK
 	if lane.ball != null:
-		var at := lane.ball.global_position
+		var at := lane.ball_point()
 		var z := maxf(at.z + FOLLOW_BACK, PIN_CAMERA.z)
 		var k := inverse_lerp(AIM_CAMERA.z, PIN_CAMERA.z, z)
 		target = Vector3(lerpf(at.x * 0.4, 0.0, k), lerpf(AIM_CAMERA.y, PIN_CAMERA.y, k), z)
@@ -355,7 +350,7 @@ func _gui_input(event: InputEvent) -> void:
 	var press := event as InputEventMouseButton
 	# Na volta do balanço, tocar em qualquer lugar da pista solta: o alvo é o
 	# momento, não o botão.
-	if enabled and _phase == Phase.FORWARD and press != null and press.pressed:
+	if enabled and _phase == Phase.SWING and press != null and press.pressed:
 		_on_press()
 		accept_event()
 		return
@@ -436,11 +431,11 @@ func _track_rect() -> Rect2:
 func _sync() -> void:
 	if _button == null:
 		return
-	_button.visible = enabled and _phase in [Phase.AIM, Phase.HOLD, Phase.FORWARD]
+	_button.visible = enabled and _phase in [Phase.AIM, Phase.HOLD, Phase.SWING]
 	match _phase:
 		Phase.HOLD:
-			_button.text = "Solte o dedo"
-		Phase.FORWARD:
+			_button.text = "Solte na força certa"
+		Phase.SWING:
 			_button.text = "Toque no verde!"
 		_:
 			_button.text = "Segure para jogar"
@@ -461,7 +456,7 @@ func _render() -> void:
 
 func _live() -> bool:
 	return (
-		_phase in [Phase.HOLD, Phase.FORWARD, Phase.ROLLING] or _drag != Drag.NONE
+		_phase in [Phase.HOLD, Phase.SWING, Phase.ROLLING] or _drag != Drag.NONE
 		or lane.rolling or _camera_moving
 	)
 
@@ -476,7 +471,7 @@ func _draw() -> void:
 		_draw_spin()
 	elif _phase == Phase.HOLD:
 		_draw_power()
-	elif _phase == Phase.FORWARD:
+	elif _phase == Phase.SWING:
 		_draw_timing()
 
 
@@ -544,9 +539,11 @@ func _draw_power() -> void:
 	_caption("FORÇA %d%%" % roundi(_power * 100.0), Vector2(track.get_center().x, track.position.y - 12.0), font)
 
 
-## Onde um ângulo do balanço cai na barra: recuado à esquerda, passado à direita.
+## Onde um ângulo do balanço cai na barra: recuado à esquerda, à frente à direita.
+## A barra é o balanço inteiro desta força, então o verde estreita com mais força.
 func _bar_x(track: Rect2, angle: float) -> float:
-	return track.position.x + (BACKSWING - angle) / (BACKSWING - FOLLOW_THROUGH) * track.size.x
+	var reach := maxf(_top, 1.0)
+	return track.position.x + clampf((reach - angle) / (2.0 * reach), 0.0, 1.0) * track.size.x
 
 
 ## A faixa da barra de `-angle` a `+angle` em volta do fundo do balanço.

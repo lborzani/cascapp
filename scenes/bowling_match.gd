@@ -109,8 +109,6 @@ func _build() -> void:
 	_view.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_view.released.connect(_on_released)
 	_view.settled.connect(_on_settled)
-	_view.swing_missed.connect(func() -> void:
-		_banner.show_message("A bola voltou. Toque quando o marcador passar no verde.", Banner.Kind.ALERT))
 	stage.add_child(_view)
 
 	_banner = Banner.new()
