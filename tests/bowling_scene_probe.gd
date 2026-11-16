@@ -246,9 +246,28 @@ func _probe_online() -> void:
 	await _frames(3)
 	_equals(scene._state.ply, 1, "arremesso de quem não tem a vez é recusado")
 
-	Net.move_received.emit({"p": BowlingRules.roll(0).path, "n": 1, "seat": 0})
+	# A segunda bola da Ana chega em quadros, enquanto ela joga: a pista segue o
+	# que ela manda, sem física, e o lance só entra depois do último quadro.
+	for step in range(0, 61, 4):
+		var down := 0b1000000000 if step == 60 else 0
+		Net.frame_received.emit({"n": 1, "k": step, "x": _poses(-step / 8.0, down, 0b1000000000), "seat": 0})
+	_check(scene._shown == 1 and scene._view.lane.following, "os quadros da Ana vão direto para a pista")
+	_check(scene._view._phase == BowlingView.Phase.ROLLING and not scene._view.enabled, "com a bola rolando e sem mira")
+	_check(scene._view.lane.pins[9].freeze, "e sem física daqui")
+	var wrong: int = scene._view.lane._frames.size()
+	Net.frame_received.emit({"n": 1, "k": 64, "x": _poses(-8.0, 0, 0b1000000000), "seat": 1})
+	_equals(scene._view.lane._frames.size(), wrong, "quadro de quem não tem a vez é ignorado")
+	Net.move_received.emit({"p": BowlingRules.roll(0b1000000000).path, "n": 1, "seat": 0})
+	await _frames(2)
+	_equals(scene._state.ply, 1, "o lance espera a pista mostrar o último quadro")
 	frames = 0
-	while (scene._busy or scene._state.ply < 2) and frames < 1200:
+	while scene._state.ply < 2 and frames < 600:
+		await get_tree().process_frame
+		frames += 1
+	_check(BowlingLane.is_down(scene._view.lane.pins[9].global_transform), "no fim, o 10 está no chão como na pista da Ana")
+	_equals(BowlingRules.rolls_of(scene._state, 0), PackedInt32Array([9, 1]), "e o spare entra na cartela")
+	frames = 0
+	while scene._busy and frames < 1200:
 		await get_tree().process_frame
 		frames += 1
 	_equals(BowlingRules.turn_of(scene._state), 1, "o frame da Ana fechou e a vez é daqui")
@@ -279,6 +298,28 @@ func _probe_online() -> void:
 
 
 # --- apoio --------------------------------------------------------------------
+
+
+## Um quadro de jogada como o que vem pela rede (`BowlingLane.snapshot`): a bola
+## em `ball_z` no meio da pista, os pinos de `racked` no lugar e os de `fallen`
+## deitados.
+func _poses(ball_z: float, fallen: int, racked: int) -> PackedInt32Array:
+	var poses := PackedInt32Array()
+	poses.resize(BowlingLane.BODIES * BowlingLane.POSE_INTS)
+	_put(poses, 0, Transform3D(Basis.IDENTITY, Vector3(0.0, BowlingLane.BALL_R, ball_z)))
+	for pin in BowlingRules.PINS:
+		if racked & (1 << pin):
+			var lying := Basis(Vector3.RIGHT, PI / 2.0) if fallen & (1 << pin) else Basis.IDENTITY
+			_put(poses, pin + 1, Transform3D(lying, BowlingLane.pin_spot(pin)))
+	return poses
+
+
+func _put(poses: PackedInt32Array, index: int, pose: Transform3D) -> void:
+	var at := pose.origin * BowlingLane.POSE_MM
+	var turn := pose.basis.get_rotation_quaternion() * BowlingLane.POSE_QUAT
+	var values := [at.x, at.y, at.z, turn.x, turn.y, turn.z, turn.w]
+	for slot in BowlingLane.POSE_INTS:
+		poses[index * BowlingLane.POSE_INTS + slot] = roundi(values[slot])
 
 
 func _open() -> Node:

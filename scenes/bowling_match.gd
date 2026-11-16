@@ -12,12 +12,18 @@ extends Control
 ##
 ## ## Em rede
 ##
-## Quem arremessa roda a física e manda o lance (máscara e parâmetros) antes de
-## aplicá-lo, como os outros jogos. Os outros aparelhos repetem o arremesso na
-## própria pista para ver a jogada, e no fim **vale a máscara recebida**, não a
-## que a física daqui deu: a Jolt não dá o mesmo resultado bit a bit em dois
-## aparelhos. A máquina de pinos arma o que o estado manda, então a próxima bola
-## começa igual em todo lado, mesmo que a repetição tenha divergido.
+## Quem arremessa roda a física e, enquanto a bola rola, manda a pose da bola e
+## dos pinos 15 vezes por segundo (`Net.send_frame`). Os outros aparelhos não
+## rodam física: a pista deles segue esses quadros, com uns 0,2 s de folga, e
+## termina com os mesmos pinos no chão. Repetir o arremesso na física daqui, como
+## na 1.50, mostrava outra jogada (a Jolt não dá o mesmo resultado bit a bit em
+## dois aparelhos) e chegava uma jogada inteira atrasado.
+##
+## Quando a bola para, sai o lance (máscara e parâmetros), e é ele que vale na
+## cartela. Ele só entra depois de a pista daqui mostrar o último quadro. Sem
+## quadros (quem jogou numa versão antiga), a pista repete o arremesso na física
+## daqui, como antes. A máquina de pinos arma o que o estado manda, então a
+## próxima bola começa igual em todo lado.
 ##
 ## Os lances de fora entram numa fila, um por vez, porque cada um leva o tempo da
 ## jogada inteira. Reconexão e entrada no meio refazem a cartela pelo histórico,
@@ -29,6 +35,11 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 const AFTER_THROW := 1.4
 ## Quanto o bot "pensa" antes de arremessar.
 const BOT_THINK := 0.9
+## Passos de física entre dois quadros mandados aos outros aparelhos: a 60 Hz,
+## 15 quadros por segundo. O relay aceita 40 mensagens por segundo de cada um.
+const FRAME_EVERY := 4
+## Teto de quadros guardados por lance: a jogada mais longa (12 s) tem 181.
+const MAX_FRAMES := 400
 ## Erro do bot no timing: desvio padrão, na escala de -1 a 1.
 const BOT_TIMING_SPREAD := 0.35
 ## Uma cor de bola por cadeira.
@@ -48,6 +59,16 @@ var _abandoned := false
 ## Lances de outros aparelhos esperando a vez de serem repetidos na pista.
 var _incoming: Array[Dictionary] = []
 var _draining := false
+## Passos de física da jogada que este aparelho transmite (`_physics_process`);
+## -1 quando ele não transmite nada.
+var _step := -1
+## Quadros recebidos, por lance: `n -> [[passo, poses, assento], ...]`. Esperam
+## aqui até a pista estar livre para mostrá-los.
+var _frames := {}
+## O lance cuja jogada a pista mostra pelos quadros (-1 sem nenhum), e de qual
+## assento eles vêm.
+var _shown := -1
+var _shown_from := -1
 var _again: Button = null
 
 var _view: BowlingView = null
@@ -79,6 +100,7 @@ func _ready() -> void:
 		Game.local_seat = Net.local_seat
 		_bot_seats = Net.bot_seats
 		Net.move_received.connect(_on_remote_move)
+		Net.frame_received.connect(_on_remote_frame)
 		Net.opponent_left.connect(_on_opponent_left)
 		Net.seat_left.connect(_on_seat_left)
 		Net.seat_returned.connect(_on_seat_returned)
@@ -242,8 +264,24 @@ func _on_released(params: PackedFloat32Array) -> void:
 	_busy = true
 	_pending = params
 	_view.enabled = false
+	_start_streaming()
 	Sound.play(Sound.Cue.MOVE)
 	_refresh()
+
+
+## Em rede, quem roda a física manda a jogada em quadros enquanto ela acontece.
+func _start_streaming() -> void:
+	if Game.mode == Game.Mode.ONLINE:
+		_step = 0
+		Net.send_frame(_state.ply, _step, _view.lane.snapshot())
+
+
+func _physics_process(_delta: float) -> void:
+	if _step < 0 or not _view.lane.rolling:
+		return
+	_step += 1
+	if _step % FRAME_EVERY == 0:
+		Net.send_frame(_state.ply, _step, _view.lane.snapshot())
 
 
 ## A física parou. Quem arremessou transforma o que caiu em lance — e o lance
@@ -251,6 +289,11 @@ func _on_released(params: PackedFloat32Array) -> void:
 func _on_settled(mask: int) -> void:
 	if _pending.is_empty():
 		return
+	if _step >= 0:
+		# O último quadro é a pose exata de onde saiu a máscara: a pista dos outros
+		# termina igual à daqui.
+		Net.send_frame(_state.ply, _step + 1, _view.lane.snapshot())
+		_step = -1
 	var move := _rules.validate(_state, BowlingRules.roll(mask, _pending).path)
 	_pending = PackedFloat32Array()
 	if move == null:
@@ -273,6 +316,7 @@ func _play(move: Move, from_network := false) -> void:
 	if not is_inside_tree():
 		return
 	_busy = false
+	_shown = -1
 	_view.rack(BowlingRules.standing(_state))
 	if BowlingRules.game_over(_state):
 		_finish(BowlingRules.winner_of(_state))
@@ -309,6 +353,7 @@ func _run_bot() -> void:
 	_busy = true
 	_pending = bot_params()
 	_view.throw(_pending)
+	_start_streaming()
 
 
 ## O arremesso do bot: sai da direita com um gancho leve para a esquerda, mira
@@ -340,10 +385,66 @@ func _on_remote_move(data: Dictionary) -> void:
 	_drain_incoming()
 
 
-## Repete os lances de fora, um por vez: cada um é a jogada inteira na pista, e
-## só depois dela o lance entra na cartela.
+## Um quadro da jogada de outro aparelho. O do lance da vez, de quem tem a vez,
+## vai direto para a pista; os de um lance adiante (a pista daqui ainda mostra o
+## anterior) esperam guardados.
+func _on_remote_frame(data: Dictionary) -> void:
+	var index := int(data.get("n", -1))
+	var poses: PackedInt32Array = data.get("x", PackedInt32Array())
+	if (
+		_abandoned or index < _state.ply or index > _state.ply + 2
+		or poses.size() != BowlingLane.BODIES * BowlingLane.POSE_INTS
+	):
+		return
+	var seat := int(data.get("seat", -1))
+	if index == _state.ply and seat != _sender_for(BowlingRules.turn_of(_state)):
+		return
+	var list: Array = _frames.get_or_add(index, [])
+	if list.size() < MAX_FRAMES:
+		list.append([int(data.get("k", 0)), poses, seat])
+	_show_frames()
+
+
+## A pista livre começa a mostrar os quadros do lance da vez, e a que já mostra
+## recebe os novos.
+func _show_frames() -> void:
+	if _abandoned or (_busy and _shown != _state.ply):
+		return
+	var list: Array = _frames.get(_state.ply, [])
+	var sender := _sender_for(BowlingRules.turn_of(_state))
+	if _shown != _state.ply:
+		# Guardados antes de se saber de quem era a vez: os de outro assento saem.
+		list = list.filter(func(frame: Array) -> bool: return frame[2] == sender)
+		if list.is_empty():
+			return
+		_busy = true
+		_shown = _state.ply
+		_shown_from = sender
+		_view.enabled = false
+		_view.ball_color = _seat_color(BowlingRules.turn_of(_state))
+	for frame: Array in list:
+		_view.follow(frame[0], frame[1])
+	_frames[_state.ply] = []
+
+
+## A jogada que a pista mostrava pelos quadros não vai acabar (quem jogava saiu):
+## a pista volta ao que o estado manda, e a vez segue como se ela não existisse.
+func _drop_shown() -> void:
+	if _shown < 0:
+		return
+	_frames.erase(_shown)
+	_shown = -1
+	_busy = false
+	_view.rack(BowlingRules.standing(_state))
+
+
+## Os lances de fora, um por vez, e só depois da jogada na pista: a mostrada
+## pelos quadros, até o último; sem quadros, repetida na física daqui.
 func _drain_incoming() -> void:
-	if _draining or _busy or _abandoned or _incoming.is_empty():
+	if _draining or _abandoned or _incoming.is_empty():
+		return
+	_show_frames()
+	if _busy and _shown != _state.ply:
 		return
 	_draining = true
 	while not _incoming.is_empty() and not _abandoned and is_inside_tree():
@@ -363,14 +464,19 @@ func _drain_incoming() -> void:
 		if move == null:
 			push_warning("Arremesso de rede recusado pelas regras: %s" % [entry["p"]])
 			continue
-		_busy = true
-		_view.enabled = false
-		_view.ball_color = _seat_color(turn)
-		_view.throw(BowlingRules.params_of(move))
-		await _view.settled
+		if _shown == index:
+			while not _view.lane.caught_up() and is_inside_tree() and not _abandoned and _shown == index:
+				await get_tree().process_frame
+		else:
+			_busy = true
+			_view.enabled = false
+			_view.ball_color = _seat_color(turn)
+			_view.throw(BowlingRules.params_of(move))
+			await _view.settled
 		# Um histórico pode ter chegado no meio da jogada e refeito a partida.
 		if not is_inside_tree() or _abandoned or _state.ply != index:
 			break
+		_frames.erase(index)
 		await _play(move, true)
 	_draining = false
 
@@ -389,6 +495,9 @@ func _apply_sync(moves: Array, _clocks: Array) -> void:
 	_state = rebuilt
 	_busy = false
 	_pending = PackedFloat32Array()
+	_step = -1
+	_frames.clear()
+	_shown = -1
 	_incoming.clear()
 	_view.rack(BowlingRules.standing(_state))
 	if BowlingRules.game_over(_state):
@@ -420,6 +529,10 @@ func _on_seat_left(seat: int) -> void:
 	if _abandoned:
 		return
 	var who := _seat_name(seat)
+	# Saiu no meio do arremesso que a pista mostra: o lance dele não vem mais, e
+	# a vez é jogada de novo (pela máquina, ou por quem dirige as máquinas agora).
+	if _shown == _state.ply and _shown_from == seat:
+		_drop_shown()
 	_bot_seats = Net.bot_seats
 	_banner.show_message("%s saiu. Uma máquina joga até a volta." % who, Banner.Kind.ALERT)
 	_refresh()
@@ -467,7 +580,9 @@ func _refresh() -> void:
 	_hint.add_theme_stylebox_override("normal", pill)
 	_hint.add_theme_color_override("font_color", AppTheme.ACCENT_INK if lit else AppTheme.TEXT_DIM)
 
-	# Arremessos de fora que chegaram com a pista ocupada esperam a vez deles.
+	# Jogadas e arremessos de fora que chegaram com a pista ocupada esperam a vez
+	# deles.
+	_show_frames()
 	_drain_incoming()
 	if (
 		_is_bot(turn) and _drives_bots() and not _bot_pending and not _busy
@@ -522,6 +637,7 @@ func _restart() -> void:
 	_busy = false
 	_bot_pending = false
 	_pending = PackedFloat32Array()
+	_step = -1
 	_overlay.visible = false
 	_view.rack(BowlingRules.ALL_PINS)
 	_refresh()

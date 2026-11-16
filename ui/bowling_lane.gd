@@ -8,8 +8,11 @@ extends Node3D
 ## dar a mesma mesa bit a bit nos dois aparelhos; pinos batendo uns nos outros em
 ## três dimensões não cabem nisso, e por isso o lance do boliche carrega o
 ## resultado (ver o cabeçalho de `BowlingRules`). Esta cena só **produz** a
-## máscara: no aparelho de quem arremessa ela vira o lance, e no dos outros ela
-## só mostra a jogada.
+## máscara, no aparelho de quem arremessa, e ela vira o lance.
+##
+## Os outros aparelhos não rodam física: seguem os quadros que quem arremessa
+## manda (`snapshot` de lá, `follow` daqui), com os corpos parados e postos onde
+## o quadro diz. A Jolt daria outra jogada em cada aparelho.
 ##
 ## Eixos: a pista corre para -Z a partir da linha de falta (z = 0), x é o lado
 ## (positivo à direita de quem joga) e o tampo é y = 0. As medidas são as de
@@ -82,8 +85,22 @@ const AFTER_MAX := 4.0
 ## Teto da jogada inteira, para uma bola fraca que para no meio da pista.
 const MAX_TIME := 12.0
 
+# --- em rede: a jogada em quadros ---------------------------------------------
+
+## Corpos num quadro (`snapshot`): a bola e os dez pinos, nesta ordem.
+const BODIES := 1 + BowlingRules.PINS
+## Inteiros por corpo: a posição em milímetros e o quatérnio × 10000.
+const POSE_INTS := 7
+const POSE_MM := 1000.0
+const POSE_QUAT := 10000.0
+## Atraso de propósito ao seguir os quadros: folga para os que a rede entrega
+## fora do ritmo, sem a bola parar no meio.
+const FOLLOW_DELAY := 0.2
+
 ## A jogada em curso. Falso antes do primeiro arremesso e depois de `settled`.
 var rolling := false
+## Mostrando a jogada de outro aparelho pelos quadros (`follow`), sem física.
+var following := false
 ## Cor da bola do próximo arremesso (a de quem joga).
 var ball_color := Color.WHITE
 var ball: RigidBody3D = null
@@ -100,6 +117,10 @@ var _pin_shape: Shape3D = null
 ## `top_level`, posto entre os dois últimos quadros de física na fração em que o
 ## quadro da tela cai. Corpo -> [desenho, transformada anterior, atual].
 var _smooth := {}
+## Os quadros seguidos, `[segundos, poses]` em ordem, e o ponto da jogada que a
+## tela mostra agora.
+var _frames: Array = []
+var _clock := 0.0
 
 
 func _init() -> void:
@@ -146,6 +167,8 @@ static func launch(params: PackedFloat32Array) -> Dictionary:
 ## zero, e não só reposicionados: a mesma armação dá a mesma jogada.
 func rack(mask: int) -> void:
 	rolling = false
+	following = false
+	_frames.clear()
 	for pin in BowlingRules.PINS:
 		if pins[pin] != null:
 			_drop(pins[pin])
@@ -159,17 +182,60 @@ func rack(mask: int) -> void:
 
 
 func throw(params: PackedFloat32Array) -> void:
-	if ball != null:
-		_drop(ball)
 	var start := launch(params)
-	ball = RigidBody3D.new()
-	ball.name = "Ball"
-	ball.mass = BALL_MASS
-	ball.continuous_cd = true
+	_spawn_ball(start["position"])
 	# No óleo, o atrito da bola é o do óleo: a Godot usa o menor dos dois atritos
 	# no contato, então a pista (seco) desliza como óleo até a bola passar dele.
 	ball.physics_material_override = _material(OIL_FRICTION, 0.1)
 	_on_oil = true
+	ball.linear_velocity = start["velocity"]
+	ball.angular_velocity = start["spin"]
+	_time = 0.0
+	_after = -1.0
+	rolling = true
+
+
+## Um quadro da jogada de outro aparelho, no passo de física `step` dela. No
+## primeiro, os corpos param de simular; daí em diante a tela os põe entre os
+## dois quadros em volta do ponto que ela mostra (`_follow_frames`).
+func follow(step: int, poses: PackedInt32Array) -> void:
+	var at := float(step) / Engine.physics_ticks_per_second
+	if not following:
+		following = true
+		rolling = false
+		_frames.clear()
+		_clock = at - FOLLOW_DELAY
+		var start: Variant = pose_of(poses, 0)
+		_spawn_ball(start.origin if start != null else Vector3(0.0, BALL_R, START_Z))
+		for body in _bodies():
+			body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+			body.freeze = true
+	if _frames.is_empty() or at > _frames[-1][0]:
+		_frames.append([at, poses])
+	elif is_equal_approx(at, _frames[-1][0]):
+		_frames[-1][1] = poses
+
+
+## A tela já mostrou o último quadro recebido.
+func caught_up() -> bool:
+	return following and not _frames.is_empty() and _clock >= _frames[-1][0]
+
+
+func _bodies() -> Array[RigidBody3D]:
+	var bodies: Array[RigidBody3D] = [ball]
+	for body in pins:
+		if body != null:
+			bodies.append(body)
+	return bodies
+
+
+func _spawn_ball(at: Vector3) -> void:
+	if ball != null:
+		_drop(ball)
+	ball = RigidBody3D.new()
+	ball.name = "Ball"
+	ball.mass = BALL_MASS
+	ball.continuous_cd = true
 	_no_damping(ball)
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
@@ -179,14 +245,9 @@ func throw(params: PackedFloat32Array) -> void:
 	var visual := BALL_SCENE.instantiate()
 	tint_ball(visual, ball_color)
 	ball.add_child(visual)
-	ball.position = start["position"]
+	ball.position = at
 	add_child(ball)
 	_track(ball, visual)
-	ball.linear_velocity = start["velocity"]
-	ball.angular_velocity = start["spin"]
-	_time = 0.0
-	_after = -1.0
-	rolling = true
 
 
 ## Pinta o mármore cinza da bola (o material `ball`; os furos ficam como estão).
@@ -208,9 +269,40 @@ static func tint_ball(node: Node, color: Color) -> void:
 func knocked() -> int:
 	var mask := 0
 	for pin in BowlingRules.PINS:
-		if pins[pin] != null and _is_down(pins[pin]):
+		if pins[pin] != null and is_down(pins[pin].global_transform):
 			mask |= 1 << pin
 	return mask
+
+
+## Onde está cada corpo agora (ver `BODIES`), em inteiros. É o quadro que o
+## aparelho que roda a física manda aos outros enquanto a bola rola: eles mostram
+## a jogada daqui, e não a física deles, que daria outra. Corpo que não existe
+## (pino não armado, bola antes do arremesso) vai zerado.
+func snapshot() -> PackedInt32Array:
+	var poses := PackedInt32Array()
+	poses.resize(BODIES * POSE_INTS)
+	for index in BODIES:
+		var body := ball if index == 0 else pins[index - 1]
+		if body == null:
+			continue
+		var at := body.global_position * POSE_MM
+		var turn := body.global_basis.get_rotation_quaternion() * POSE_QUAT
+		var values := [at.x, at.y, at.z, turn.x, turn.y, turn.z, turn.w]
+		for slot in POSE_INTS:
+			poses[index * POSE_INTS + slot] = roundi(values[slot])
+	return poses
+
+
+## A pose do corpo `index` num quadro, ou `null` se ele não existia ali.
+static func pose_of(poses: PackedInt32Array, index: int) -> Variant:
+	var base := index * POSE_INTS
+	if poses.size() < base + POSE_INTS:
+		return null
+	var turn := Quaternion(poses[base + 3], poses[base + 4], poses[base + 5], poses[base + 6])
+	if turn.length_squared() < 1.0:
+		return null
+	var at := Vector3(poses[base], poses[base + 1], poses[base + 2]) / POSE_MM
+	return Transform3D(Basis(turn.normalized()), at)
 
 
 func _physics_process(delta: float) -> void:
@@ -249,20 +341,20 @@ func _physics_process(delta: float) -> void:
 
 func _pins_resting() -> bool:
 	for body in pins:
-		if body == null or body.sleeping or _off_deck(body):
+		if body == null or body.sleeping or off_deck(body.global_position):
 			continue
 		if body.linear_velocity.length() > REST_SPEED or body.angular_velocity.length() > REST_SPIN:
 			return false
 	return true
 
 
-func _is_down(body: RigidBody3D) -> bool:
-	return _off_deck(body) or body.global_basis.y.dot(Vector3.UP) < cos(deg_to_rad(FALL_TILT))
+## Um pino nesta pose caiu: deitado demais, ou fora do deck.
+static func is_down(pose: Transform3D) -> bool:
+	return off_deck(pose.origin) or pose.basis.y.normalized().dot(Vector3.UP) < cos(deg_to_rad(FALL_TILT))
 
 
 ## Caiu na canaleta ou no poço: já conta, e o que ele faz lá não importa mais.
-func _off_deck(body: RigidBody3D) -> bool:
-	var at := body.global_position
+static func off_deck(at: Vector3) -> bool:
 	return at.y < -0.02 or absf(at.x) > LANE_W * 0.5 + 0.02 or at.z < -DECK_END
 
 
@@ -315,12 +407,47 @@ func ball_point() -> Vector3:
 	return before.origin.lerp(now.origin, Engine.get_physics_interpolation_fraction())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if following:
+		_follow_frames(delta)
+		return
 	var fraction := Engine.get_physics_interpolation_fraction()
 	for body: RigidBody3D in _smooth:
 		var entry: Array = _smooth[body]
 		var before: Transform3D = entry[1]
 		(entry[0] as Node3D).global_transform = before.interpolate_with(entry[2], fraction)
+
+
+## Anda o ponto mostrado e põe cada corpo entre os dois quadros em volta dele.
+##
+## Sem quadro novo, a pista segura no último (a bola espera, não inventa
+## caminho). Atrás da folga, por um quadro que atrasou ou por ter começado
+## tarde, ela anda até duas vezes mais rápido até alcançar, sem pular.
+func _follow_frames(delta: float) -> void:
+	if _frames.is_empty():
+		return
+	var last: float = _frames[-1][0]
+	var lag := last - _clock
+	_clock = minf(_clock + delta * (1.0 + clampf(lag / FOLLOW_DELAY - 1.0, 0.0, 1.0)), last)
+	var next := 0
+	while next < _frames.size() - 1 and _frames[next][0] < _clock:
+		next += 1
+	var after: Array = _frames[next]
+	var before: Array = _frames[maxi(next - 1, 0)]
+	var span: float = after[0] - before[0]
+	var weight := clampf((_clock - before[0]) / span, 0.0, 1.0) if span > 0.0 else 1.0
+	for index in BODIES:
+		var body := ball if index == 0 else pins[index - 1]
+		var to: Variant = pose_of(after[1], index)
+		if body == null or to == null:
+			continue
+		var from: Variant = pose_of(before[1], index)
+		var pose: Transform3D = to if from == null else (from as Transform3D).interpolate_with(to, weight)
+		body.global_transform = pose
+		var entry: Array = _smooth[body]
+		entry[1] = pose
+		entry[2] = pose
+		(entry[0] as Node3D).global_transform = pose
 
 
 func _build_colliders() -> void:
