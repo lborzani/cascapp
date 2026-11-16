@@ -50,4 +50,6 @@ dependencies {
     // Fixado: abaixo de 2.6 o LifecycleOwner ainda é interface Java com
     // getLifecycle(), e o plugin precisa ser um LifecycleOwner para o CameraX.
     implementation "androidx.lifecycle:lifecycle-runtime:${versions.lifecycle}"
+    // Consulta de versão nova com o app fechado (`app/UpdateWorker.kt`).
+    implementation "androidx.work:work-runtime:${versions.work}"
 }

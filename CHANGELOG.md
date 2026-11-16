@@ -10,6 +10,7 @@ novidade.
 ## 1.51
 
 - Atualizar pelo app ficou mais simples: depois de baixar a versão nova, o app fecha e abre sozinho nela.
+- Saiu versão nova? O celular avisa com uma notificação, mesmo com o app fechado. Toque em "Atualizar" e o app abre já baixando a versão nova.
 - Esta versão chega pelo APK; as próximas atualizações já reabrem sozinhas.
 
 ## 1.50

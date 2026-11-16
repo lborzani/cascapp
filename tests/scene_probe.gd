@@ -2308,6 +2308,16 @@ func _test_update_notice() -> void:
 	_check((ota.find_child("Hint", true, false) as Label).text.begins_with("Não deu"), "e diz por quê")
 	ota.queue_free()
 
+	# Aberto pela notificação de versão nova: o download começa sem toque.
+	var noticed := UpdateGate.new()
+	noticed.offer = {"version": "99.0", "url": "", "changes": [], "pck": pck}
+	add_child(noticed)
+	noticed.start()
+	button = noticed.find_child("Download", true, false)
+	_equals(button.text, "Baixando…", "pela notificação, já baixa")
+	_check(button.disabled, "e o botão espera o download")
+	noticed.queue_free()
+
 	# Próxima abertura, sem rede: a guardada tranca de novo.
 	menu.queue_free()
 	await get_tree().process_frame

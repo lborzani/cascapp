@@ -21,8 +21,9 @@ extends Control
 ## mão — e é por isso que o reinício mora aqui, que se atualiza pelo pacote, e não
 ## no `Patcher`, que nunca se atualiza.
 
-## O singleton do plugin Android que reabre o app (`GodotAppPlugin.kt`).
-const RESTART_PLUGIN := "GodotApp"
+## O singleton do plugin Android que reabre o app e avisa de versão nova
+## (`GodotAppPlugin.kt`).
+const APP_PLUGIN := "GodotApp"
 ## Quanto o "Reabrindo…" fica na tela antes de o app fechar: o bastante para quem
 ## tocou entender que o app vai sumir de propósito.
 const RESTART_DELAY := 0.8
@@ -128,6 +129,17 @@ func _refresh() -> void:
 
 func _on_download() -> void:
 	Sound.play(Sound.Cue.TAP)
+	_update()
+
+
+## Aberto pelo toque em "Atualizar" na notificação de versão nova: faz o que o
+## botão faria, sem esperar outro toque.
+func start() -> void:
+	if not _download.disabled:
+		_update()
+
+
+func _update() -> void:
 	if _downloaded() and can_restart():
 		_restart()
 	elif _downloaded():
@@ -175,13 +187,13 @@ func _fetch_pck() -> void:
 ## O app sabe se reabrir sozinho: no Android pelo plugin, no desktop pelo próprio
 ## Godot.
 static func can_restart() -> bool:
-	return Engine.has_singleton(RESTART_PLUGIN) or not OS.has_feature("mobile")
+	return Engine.has_singleton(APP_PLUGIN) or not OS.has_feature("mobile")
 
 
 ## Fecha e abre o app de novo. Na abertura nova o `Patcher` carrega o pacote.
 func _restart() -> void:
-	if Engine.has_singleton(RESTART_PLUGIN):
-		Engine.get_singleton(RESTART_PLUGIN).restart()
+	if Engine.has_singleton(APP_PLUGIN):
+		Engine.get_singleton(APP_PLUGIN).restart()
 		return
 	OS.set_restart_on_exit(true, OS.get_cmdline_args())
 	get_tree().quit()

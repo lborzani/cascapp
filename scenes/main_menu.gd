@@ -372,6 +372,7 @@ func _greet() -> void:
 ## API ou de JSON é silêncio — e não conta como consultada, então a próxima volta
 ## ao menu tenta de novo.
 func _check_update() -> void:
+	var from_notice := _watch_updates()
 	var pending := Prefs.pending_update()
 	if not pending.is_empty():
 		if AppVersion.compare(str(pending.get("version", "")), AppVersion.text()) > 0:
@@ -380,20 +381,40 @@ func _check_update() -> void:
 			# Instalou: a versão guardada foi alcançada.
 			Prefs.set_pending_update({})
 	var now := int(Time.get_unix_time_from_system())
-	if not OS.has_feature("template") or not UpdateCheck.due(now):
+	if not OS.has_feature("template") or not (from_notice or UpdateCheck.due(now)):
 		return
 	UpdateCheck.fetch(self, func(releases: Variant) -> void:
 		if releases == null:
 			return
 		Prefs.set_update_checked(now)
-		_offer_update(releases)
+		_offer_update(releases, from_notice)
 	)
+
+
+## O aviso de versão nova com o app fechado: a consulta em segundo plano do
+## plugin `GodotApp` (`UpdateWorker.kt`), e a permissão de notificar pedida uma
+## vez, depois das boas-vindas. Diz se o app abriu pelo toque nessa notificação —
+## aí a consulta sai na hora e o download começa sozinho.
+func _watch_updates() -> bool:
+	if not OS.has_feature("template") or not Engine.has_singleton(UpdateGate.APP_PLUGIN):
+		return false
+	var app := Engine.get_singleton(UpdateGate.APP_PLUGIN)
+	app.watchUpdates(UpdateCheck.URL, AppVersion.text())
+	if Prefs.welcomed():
+		app.askToNotify()
+	return app.takeUpdateLaunch()
+
+
+func _notification(what: int) -> void:
+	# Voltou do segundo plano, talvez pelo toque na notificação de versão nova.
+	if what == NOTIFICATION_APPLICATION_RESUMED and is_node_ready():
+		_check_update()
 
 
 ## A resposta do GitHub, já lida. Recebe a lista pronta, e não a busca, para o
 ## teste de cena injetá-la sem rede. Sem versão nova (inclusive release apagada
 ## depois de vista), a guardada e a tela saem.
-func _offer_update(releases: Array) -> void:
+func _offer_update(releases: Array, start := false) -> void:
 	var offer := UpdateCheck.offer(releases, AppVersion.text(), Patcher.apk_version)
 	Prefs.set_pending_update(offer)
 	if offer.is_empty():
@@ -401,7 +422,7 @@ func _offer_update(releases: Array) -> void:
 			_gate.queue_free()
 			_gate = null
 		return
-	_show_gate(offer)
+	_show_gate(offer, start)
 
 
 ## "Novidades da X" na primeira abertura de uma versão, do `CHANGELOG.md` do APK.
@@ -432,15 +453,17 @@ func _news() -> ChangelogPanel:
 	return null
 
 
-func _show_gate(offer: Dictionary) -> void:
-	if _gate != null:
-		if _gate.offer.get("version") == offer.get("version"):
-			return
-		_gate.queue_free()
-	_gate = UpdateGate.new()
-	_gate.offer = offer
-	# Por último, por cima da folha, das boas-vindas e do cartão de voltar.
-	add_child(_gate)
+## `start`: veio da notificação, e o download começa sem esperar o toque.
+func _show_gate(offer: Dictionary, start := false) -> void:
+	if _gate == null or _gate.offer.get("version") != offer.get("version"):
+		if _gate != null:
+			_gate.queue_free()
+		_gate = UpdateGate.new()
+		_gate.offer = offer
+		# Por último, por cima da folha, das boas-vindas e do cartão de voltar.
+		add_child(_gate)
+	if start:
+		_gate.start()
 
 
 ## Um QR lido numa execução anterior do processo. Se o Android recolheu o app

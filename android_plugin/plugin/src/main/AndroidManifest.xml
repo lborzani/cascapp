@@ -15,7 +15,12 @@
       não é tocado. Até o Android 11 o scan BLE exige localização, por isso ela
       vem limitada a `maxSdkVersion="30"`; do 12 em diante bastam as três de
       "Dispositivos próximos", com `neverForLocation`.
+
+      As notificações (Android 13+) avisam de versão nova com o app fechado
+      (`app/UpdateWorker.kt`). São pedidas uma vez, no menu, depois das
+      boas-vindas.
     -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.NFC" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
