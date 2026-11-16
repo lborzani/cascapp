@@ -11,10 +11,22 @@ extends Control
 ##
 ## Dois caminhos. Com pacote OTA (`offer.pck`), ele baixa aqui dentro, é
 ## conferido pelo sha256 que a release anunciou, e espera em `user://ota/` a
-## próxima abertura (`Patcher`) — o Android não deixa o app se reiniciar, então a
-## tela pede para fechar e abrir. Sem pacote, ou se ele falhar, o APK baixa pelo
-## navegador e instala por cima. Nos dois, a próxima abertura já é a versão nova,
-## e o menu não mostra mais esta tela.
+## próxima abertura (`Patcher`). Baixado, o app fecha e abre sozinho na versão
+## nova (`_restart`). Sem pacote, ou se ele falhar, o APK baixa pelo navegador e
+## instala por cima. Nos dois, a próxima abertura já é a versão nova, e o menu não
+## mostra mais esta tela.
+##
+## Reabrir sozinho precisa do plugin `GodotApp` no Android, que só chega pelo APK
+## (desde a 1.48). Num APK sem ele a tela continua pedindo para fechar e abrir na
+## mão — e é por isso que o reinício mora aqui, que se atualiza pelo pacote, e não
+## no `Patcher`, que nunca se atualiza.
+
+## O singleton do plugin Android que reabre o app e avisa de versão nova
+## (`GodotAppPlugin.kt`).
+const APP_PLUGIN := "GodotApp"
+## Quanto o "Reabrindo…" fica na tela antes de o app fechar: o bastante para quem
+## tocou entender que o app vai sumir de propósito.
+const RESTART_DELAY := 0.8
 
 ## `{version, url, changes}` e às vezes `pck`, de `UpdateCheck.offer`.
 var offer := {}
@@ -94,13 +106,20 @@ func _refresh() -> void:
 	var version := str(offer.get("version", ""))
 	var pck := _pck()
 	if _downloaded():
-		_download.text = "Fechar o app"
-		_hint.text = "A versão %s já está baixada. Feche e abra o app de novo para usar." % version
+		if can_restart():
+			_download.text = "Reabrir o app"
+			_hint.text = "A versão %s já está baixada. O app fecha e abre de novo nela." % version
+		else:
+			_download.text = "Fechar o app"
+			_hint.text = "A versão %s já está baixada. Feche e abra o app de novo para usar." % version
 	elif not pck.is_empty():
 		_download.text = "Atualizar para a %s (%s MB)" % [
 			version, ("%.1f" % (int(pck.get("size", 0)) / 1048576.0)).replace(".", ",")
 		]
-		_hint.text = "Baixa aqui mesmo. Depois é só fechar e abrir o app."
+		_hint.text = (
+			"Baixa aqui mesmo, e o app reabre sozinho na versão nova." if can_restart()
+			else "Baixa aqui mesmo. Depois é só fechar e abrir o app."
+		)
 	else:
 		_download.text = "Baixar a versão %s" % version
 		_hint.text = "O APK baixa pelo navegador; abra o arquivo para instalar por cima."
@@ -110,7 +129,20 @@ func _refresh() -> void:
 
 func _on_download() -> void:
 	Sound.play(Sound.Cue.TAP)
-	if _downloaded():
+	_update()
+
+
+## Aberto pelo toque em "Atualizar" na notificação de versão nova: faz o que o
+## botão faria, sem esperar outro toque.
+func start() -> void:
+	if not _download.disabled:
+		_update()
+
+
+func _update() -> void:
+	if _downloaded() and can_restart():
+		_restart()
+	elif _downloaded():
 		get_tree().quit()
 	elif not _pck().is_empty():
 		_fetch_pck()
@@ -142,12 +174,39 @@ func _fetch_pck() -> void:
 				DirAccess.remove_absolute(part)
 				_pck_failed = true
 			_refresh()
+			if _downloaded() and can_restart():
+				_restart_soon()
 	)
 	if http.request(str(pck.get("url", ""))) != OK:
 		http.queue_free()
 		_download.disabled = false
 		_pck_failed = true
 		_refresh()
+
+
+## O app sabe se reabrir sozinho: no Android pelo plugin, no desktop pelo próprio
+## Godot.
+static func can_restart() -> bool:
+	return Engine.has_singleton(APP_PLUGIN) or not OS.has_feature("mobile")
+
+
+## Fecha e abre o app de novo. Na abertura nova o `Patcher` carrega o pacote.
+func _restart() -> void:
+	if Engine.has_singleton(APP_PLUGIN):
+		Engine.get_singleton(APP_PLUGIN).restart()
+		return
+	OS.set_restart_on_exit(true, OS.get_cmdline_args())
+	get_tree().quit()
+
+
+## Logo depois de o pacote baixar: avisa e reabre, sem pedir mais um toque.
+func _restart_soon() -> void:
+	_download.disabled = true
+	_download.text = "Reabrindo…"
+	_hint.text = "A versão %s foi baixada. O app vai fechar e abrir de novo nela." % offer.get("version", "")
+	await get_tree().create_timer(RESTART_DELAY).timeout
+	if is_inside_tree():
+		_restart()
 
 
 func _label(text: String, variation: StringName, node_name: String) -> Label:

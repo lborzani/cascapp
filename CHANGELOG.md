@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.51
+
+- Atualizar pelo app ficou mais simples: depois de baixar a versão nova, o app fecha e abre sozinho nela.
+- Saiu versão nova? O celular avisa com uma notificação, mesmo com o app fechado. Toque em "Atualizar" e o app abre já baixando a versão nova.
+- Esta versão chega pelo APK; as próximas atualizações já reabrem sozinhas.
+
 ## 1.50
 
 - Boliche online: jogue de 2 a 4 pela internet ou por Bluetooth. Todo mundo vê o arremesso de cada um na própria pista, e quem cair volta para a mesma partida.
