@@ -47,6 +47,11 @@ const SHOTS := [
 	["res://scenes/match.tscn", "24_assistindo"],
 	["res://scenes/bowling_match.tscn", "25_boliche"],
 	["res://scenes/bowling_match.tscn", "25b_boliche_balanco"],
+	["res://scenes/match.tscn", "26_conversa"],
+	["res://scenes/match.tscn", "26b_conversa_assistindo"],
+	["res://scenes/ludo_match.tscn", "26c_conversa_aviso"],
+	["res://scenes/ludo_match.tscn", "26d_conversa_deitada"],
+	["res://scenes/match.tscn", "27_aviso_xadrez"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -87,6 +92,7 @@ func _ready() -> void:
 const LANDSCAPE_SHOTS := [
 	"17_ludo", "17b_ludo_bots", "17c_ludo_andando", "17d_ludo_pilha",
 	"22_sinuca", "22b_sinuca_brasileira",
+	"26c_conversa_aviso", "26d_conversa_deitada",
 ]
 const PORTRAIT_WINDOW := Vector2i(432, 768)
 ## Deitado num formato de celular de verdade, e **não** em 16:9.
@@ -135,8 +141,8 @@ func _next() -> void:
 	if shot == "01e_favoritos":
 		for id in [Game.CHESS, Game.LUDO, Game.UNO, Game.POOL]:
 			Prefs.toggle_favorite(id)
-	# Só o print de quem assiste é espectador; os outros voltam a jogar.
-	Net.is_spectator = shot == "24_assistindo"
+	# Só os prints de quem assiste são espectador; os outros voltam a jogar.
+	Net.is_spectator = shot in ["24_assistindo", "26b_conversa_assistindo"]
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
@@ -241,6 +247,24 @@ func _next() -> void:
 			Net.connected = true
 			Net.white_seat = 0
 			Net.player_names = {0: "Ana", 1: "Bia"}
+		"26_conversa", "26b_conversa_assistindo":
+			# A conversa aberta no meio de uma partida de xadrez, com histórico. O
+			# histórico e a gaveta entram no `_stage_chat`.
+			Game.start_hotseat(Game.CHESS)
+			Game.mode = Game.Mode.ONLINE
+			Net.connected = true
+			Net.local_seat = 0
+			Net.player_names = {0: "Ana", 1: "Bia"}
+		"27_aviso_xadrez":
+			Game.start_hotseat(Game.CHESS)
+		"26c_conversa_aviso", "26d_conversa_deitada":
+			# Deitado, com quatro na mesa: o aviso embaixo da barra baixa e a gaveta
+			# na altura curta da tela deitada.
+			Game.start_hotseat(Game.LUDO)
+			Game.mode = Game.Mode.ONLINE
+			Net.connected = true
+			Net.local_seat = 0
+			Net.player_names = {0: "Ana", 1: "Bia", 2: "Caio", 3: "Duda"}
 	# O palco gira **antes** de a cena existir: a cena deitada se mede no
 	# `_ready`, e medida num palco em pé ela sai espremida.
 	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW)
@@ -521,6 +545,13 @@ func _process(_delta: float) -> void:
 	_frames += 1
 	if _frames == 30 and SHOTS[_index][1] == "11_arrasto":
 		_stage_drag(_scene)
+	if _frames == 20 and SHOTS[_index][1].begins_with("26"):
+		_stage_chat(_scene, SHOTS[_index][1])
+	# O aviso da partida mora na barra: uma frase de duas linhas, em pé, é o caso
+	# apertado. Mostrado tarde, e não no `_ready`: o primeiro quadro de uma cena
+	# leva segundos de verdade, e um aviso que nasce ali já sumiu na hora do print.
+	if _frames == 20 and SHOTS[_index][1] == "27_aviso_xadrez":
+		_scene._banner.show_message("Conexão instável. Tentando reconectar…", Banner.Kind.ALERT, true)
 	# As cenas entram com um fade de 0,16s, e `modulate` no nó raiz é aplicado a
 	# cada filho separadamente — no meio do fade um painel opaco deixa o que está
 	# atrás aparecer. Um print tirado cedo demais documenta um bug que não existe.
@@ -666,3 +697,24 @@ func _stage_battleship(scene: Node) -> void:
 	scene._state.side_to_move = Board.Side.WHITE
 	scene._aim = _sq("d6")
 	scene._refresh()
+
+
+## Uma conversa já andando: frase pronta, reação e um texto comprido o bastante
+## para quebrar linha, que é o caso que decide a largura da gaveta. O print do
+## aviso recebe duas mensagens com a conversa fechada (aviso e contador); os
+## outros abrem a gaveta.
+func _stage_chat(scene: Node, shot: String) -> void:
+	Net.chat = ChatLog.new()
+	var said := [
+		[1, {"q": 0}], [0, {"e": 6}],
+		[1, {"s": "essa jogada foi de mestre, depois quero revanche valendo"}],
+		[0, {"q": 1}], [1, {"e": 1}],
+	]
+	for index in said.size():
+		Net.chat.receive(said[index][0], said[index][1], index * 2000)
+	var bar: MatchBar = scene.get_node("%Bar")
+	if shot == "26c_conversa_aviso":
+		Net._handle_message({"t": "chat", "e": 5}, 1)
+		Net._handle_message({"t": "chat", "s": "Boa! Agora é a sua vez"}, 2)
+	else:
+		bar.chat.open()

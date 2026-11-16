@@ -52,6 +52,12 @@ var status: MatchStatus = null
 var leave: LeaveButton = null
 ## O `?`: as regras desta mesa, sem sair da partida.
 var help: Button = null
+## O balão da conversa. Só em partida pela rede; nulo nas outras.
+var chat: ChatButton = null
+## O aviso da partida, por cima do título e da faixa de contexto (ver
+## `Banner.docked`). Toda tela de partida avisa por aqui, e assim nenhum aviso
+## cobre a mesa.
+var notice: Banner = null
 
 var _title: Label = null
 ## O título e, embaixo dele, a faixa de contexto. Deitada, os dois ficam lado a
@@ -99,18 +105,7 @@ func _init() -> void:
 	help.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	help.add_theme_font_override("font", AppTheme.display(700))
 	help.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M + 2)
-	# Neutro como o de sair: os dois são moldura, e a cor da tela é do jogo.
-	for state_name: String in ["font_color", "font_hover_color", "font_pressed_color"]:
-		help.add_theme_color_override(state_name, AppTheme.TEXT_DIM)
-	for state_name: String in ["normal", "hover", "pressed", "focus"]:
-		var square := AppTheme.box(
-			AppTheme.SURFACE_TOP if state_name == "pressed" else AppTheme.SURFACE_HIGH, AppTheme.RADIUS
-		)
-		square.content_margin_left = 0
-		square.content_margin_right = 0
-		square.content_margin_top = 0
-		square.content_margin_bottom = 0
-		help.add_theme_stylebox_override(state_name, square)
+	frame_button(help)
 	help.pressed.connect(func() -> void: open_rules())
 	row.add_child(help)
 
@@ -118,6 +113,20 @@ func _init() -> void:
 	actions.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	actions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(actions)
+
+	# Dentro de uma camada solta, e não direto na barra: a barra é um contêiner e
+	# esticaria o aviso por cima dela inteira, botões inclusive. A camada é que é
+	# esticada; o aviso, filho dela, ocupa só o retângulo de [method _notice_rect].
+	# Não `top_level`: um item solto assim é desenhado fora da ordem da árvore, e no
+	# xadrez ele sumia atrás do fundo da tela.
+	var layer := Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(layer)
+	notice = Banner.new()
+	notice.docked = true
+	notice.dock_rect = _notice_rect
+	layer.add_child(notice)
+	row.sort_children.connect(notice.dock)
 
 	_apply_size()
 	_apply_skin()
@@ -155,6 +164,52 @@ func bind(bar_title := "") -> void:
 	title = bar_title if not bar_title.is_empty() else Game.game_title()
 	status.started_at = Game.match_started_at
 	status.code = Net.room_code() if Game.mode == Game.Mode.ONLINE else ""
+	# A conversa, ao lado do `?`: só em rede, que é onde há com quem falar. Uma vez
+	# só, porque a revanche liga a barra de novo.
+	if Game.mode == Game.Mode.ONLINE and chat == null:
+		chat = ChatButton.new()
+		chat.notice = notice
+		help.add_sibling(chat)
+		help.get_parent().move_child(chat, help.get_index())
+
+
+## Onde o aviso se põe: do fim do botão de sair ao começo do primeiro botão à
+## direita do título. É o espaço do título e da faixa de contexto, ou do placar
+## que os substitui na sinuca ([method replace_words]); os botões continuam
+## tocáveis com o aviso na tela.
+func _notice_rect() -> Rect2:
+	var row := leave.get_parent() as Control
+	var gap := float(row.get_theme_constant("separation"))
+	var left := leave.get_global_rect().end.x + gap * 0.5
+	var right := get_global_rect().end.x
+	var middle_seen := false
+	for index in range(leave.get_index() + 1, row.get_child_count()):
+		var child := row.get_child(index) as Control
+		if child == null or not child.visible:
+			continue
+		if not middle_seen:
+			middle_seen = true
+			continue
+		right = child.get_global_rect().position.x - gap * 0.5
+		break
+	var frame := get_global_rect()
+	return Rect2(left, frame.position.y, right - left, frame.size.y)
+
+
+## O quadrado neutro dos botões de moldura (o `?` e o balão da conversa): os dois
+## são moldura, como o de sair, e a cor da tela é do jogo.
+static func frame_button(button: Button) -> void:
+	for state_name: String in ["font_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state_name, AppTheme.TEXT_DIM)
+	for state_name: String in ["normal", "hover", "pressed", "focus"]:
+		var square := AppTheme.box(
+			AppTheme.SURFACE_TOP if state_name == "pressed" else AppTheme.SURFACE_HIGH, AppTheme.RADIUS
+		)
+		square.content_margin_left = 0
+		square.content_margin_right = 0
+		square.content_margin_top = 0
+		square.content_margin_bottom = 0
+		button.add_theme_stylebox_override(state_name, square)
 
 
 ## Abre a gaveta com as regras **desta** mesa: as opções da partida em curso, lidas

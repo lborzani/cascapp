@@ -5,7 +5,6 @@
 [ext_resource type="Script" path="res://ui/paper_card.gd" id="10_paper"]
 [ext_resource type="Script" uid="uid://c5ufyl0o0t7os" path="res://scenes/board_view.gd" id="2_board"]
 [ext_resource type="Script" path="res://ui/player_tag.gd" id="3_card"]
-[ext_resource type="Script" uid="uid://6ooh7oflwmd2" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" uid="uid://bul13hsycc7ib" path="res://ui/last_move.gd" id="6_last"]
 [ext_resource type="Script" uid="uid://cgkwjc0se5pce" path="res://ui/safe_area_margin.gd" id="9_safe"]
 
@@ -101,15 +100,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("2_board")
-
-[node name="Banner" type="Control" parent="Safe/Shell/Pad/VBox/BoardArea" unique_id=465729966]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 46.0
-grow_horizontal = 2
-script = ExtResource("4_banner")
 
 [node name="BottomLastMoveSlot" type="Control" parent="Safe/Shell/Pad/VBox" unique_id=602407345]
 unique_name_in_owner = true

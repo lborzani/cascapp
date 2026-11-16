@@ -97,7 +97,7 @@ var _turn_pill: Label = null
 
 @onready var _board: LudoView = %Board
 @onready var _dice: DieView = %Die
-@onready var _banner: Banner = %Toast
+@onready var _banner: Banner = %Bar.notice
 
 
 func _ready() -> void:

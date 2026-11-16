@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.53
+
+- Conversa nas partidas online: toque no balão da barra para mandar uma reação, uma frase pronta ou uma mensagem escrita. Quem assiste lê a conversa.
+- O balão mostra quantas mensagens chegaram enquanto a conversa estava fechada, e cada uma aparece por uns segundos na barra, com o nome de quem mandou.
+- Os avisos da partida (xeque, conexão, quem saiu) agora aparecem na barra de cima e não cobrem mais o tabuleiro.
+
 ## 1.52
 
 - Boliche online em tempo real: a bola rola no celular de todo mundo enquanto a jogada acontece, e não depois.

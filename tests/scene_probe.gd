@@ -54,6 +54,7 @@ func _ready() -> void:
 	_test_stockfish_license()
 	await _test_manual_update()
 	await _test_match_bar()
+	_check(await _test_chat() == true, "conversa da partida rodou até o fim")
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
@@ -2139,6 +2140,145 @@ func _test_match_bar() -> void:
 
 	scene.queue_free()
 	await get_tree().process_frame
+
+
+## O balão da conversa: só em rede, em toda tela de partida, e a gaveta manda,
+## lista e respeita a espera. A rede é simulada pela entrada do protocolo
+## (`Net._handle_message`), que é por onde a mensagem de verdade chega.
+func _test_chat() -> bool:
+	print("conversa da partida")
+	Game.mode = Game.Mode.HOTSEAT
+	var loose := MatchBar.create("Xadrez")
+	add_child(loose)
+	_check(loose.chat == null, "no mesmo aparelho a barra não tem conversa")
+	loose.queue_free()
+
+	# Cada tela monta a barra do seu jeito (no `.tscn` ou por código). O risco é uma
+	# delas não chamar o `bind()`, e aí o balão simplesmente não aparece.
+	for case in [
+		["res://scenes/match.tscn", Game.CHESS],
+		["res://scenes/match.tscn", Game.CHECKERS],
+		["res://scenes/battleship_match.tscn", Game.BATTLESHIP],
+		["res://scenes/ludo_match.tscn", Game.LUDO],
+		["res://scenes/uno_match.tscn", Game.UNO],
+		["res://scenes/monopoly_match.tscn", Game.MONOPOLY],
+		["res://scenes/pool_match.tscn", Game.POOL],
+		["res://scenes/bowling_match.tscn", Game.BOWLING],
+	]:
+		Game.start_hotseat(case[1])
+		Game.mode = Game.Mode.ONLINE
+		Net.is_spectator = false
+		Net.connected = true
+		Net.local_seat = 0
+		var scene: Node = load(case[0]).instantiate()
+		add_child(scene)
+		await get_tree().process_frame
+		var found := _chat_buttons(scene)
+		_check(
+			found.size() == 1 and found[0].is_visible_in_tree(),
+			"%s em rede tem o balão da conversa (%d)" % [case[1], found.size()]
+		)
+		# O aviso da partida é o da barra: um `Banner` solto na tela voltaria a
+		# cobrir a mesa.
+		_check(
+			found.size() == 1 and scene.get("_banner") == found[0].notice,
+			"%s avisa pela barra" % case[1]
+		)
+		scene.queue_free()
+		await get_tree().process_frame
+
+	Game.start_hotseat(Game.CHESS)
+	Game.mode = Game.Mode.ONLINE
+	Net.connected = true
+	Net.local_seat = 0
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	Net.chat = ChatLog.new()
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var bar: MatchBar = scene.get_node("%Bar")
+	var button := bar.chat
+
+	Net._handle_message({"t": "chat", "q": 1}, 1)
+	_equals(button.unread, 1, "mensagem com a conversa fechada conta como não lida")
+	_equals(bar.notice._message, "Bia: " + ChatLog.PHRASES[1], "e aparece no aviso com o nome")
+	var notice := bar.notice.get_global_rect()
+	var frame := bar.get_global_rect()
+	_check(
+		notice.position.y >= frame.position.y - 1.0 and notice.end.y <= frame.end.y + 1.0,
+		"o aviso fica dentro da barra, e não sobre a mesa (%s em %s)" % [notice, frame]
+	)
+	_check(
+		notice.position.x >= bar.leave.get_global_rect().end.x
+		and notice.end.x <= button.get_global_rect().position.x,
+		"entre o botão de sair e o balão, sem cobrir nenhum dos dois"
+	)
+	_check(notice.size.x > 100.0, "e com largura para ler (%d)" % notice.size.x)
+
+	# Aviso permanente da partida, chat por cima: quando o chat some, o aviso da
+	# partida volta. E um aviso comum da partida encerra o permanente.
+	bar.notice.show_message("Conexão instável.", Banner.Kind.ALERT, true)
+	Net._handle_message({"t": "chat", "e": 2}, 1)
+	bar.notice._fade_out()
+	_equals(bar.notice._message, "Conexão instável.", "o chat passa e o aviso permanente volta")
+	bar.notice.show_message("Reconectado.")
+	bar.notice._fade_out()
+	_equals(bar.notice._sticky, "", "um aviso comum da partida encerra o permanente")
+
+	var panel := button.open()
+	await get_tree().process_frame
+	_equals(button.unread, 0, "abrir a conversa zera as não lidas")
+	_equals(panel._rows.get_child_count(), 2, "a gaveta mostra o que já foi dito")
+	_equals(panel._senders.size(), ChatLog.EMOTES.size() + ChatLog.PHRASES.size() + 1, "reações, frases e enviar")
+	panel._senders[0].pressed.emit()
+	_check(panel.is_queued_for_deletion(), "mandar fecha a gaveta")
+	_equals(Net.chat.entries.size(), 3, "e a reação entra no histórico")
+	_equals(bar.notice._message, "Você: " + ChatLog.EMOTES[0], "a própria reação aparece no aviso")
+	_equals(button.unread, 0, "e não conta como não lida")
+	await get_tree().process_frame
+
+	panel = button.open()
+	await get_tree().process_frame
+	_check(
+		panel._senders.all(func(sender: BaseButton) -> bool: return sender.disabled),
+		"na espera os botões de mandar ficam desligados"
+	)
+	panel._input.text = "oi"
+	panel._send_text()
+	_check(not panel.is_queued_for_deletion(), "na espera a gaveta fica aberta")
+	_equals(panel._input.text, "oi", "e o texto digitado não se perde")
+	Net._handle_message({"t": "chat", "s": "[url=x]clique[/url]"}, 1)
+	_equals(panel._rows.get_child_count(), 4, "o que chega com a gaveta aberta entra na lista")
+	var newest: Label = panel._rows.get_child(0).get_child(1)
+	_equals(newest.text, "[url=x]clique[/url]", "a mais nova em cima, e o texto sai como texto")
+	_equals(button.unread, 0, "com a gaveta aberta nada fica por ler")
+	panel.dismiss()
+	await get_tree().process_frame
+
+	Net.is_spectator = true
+	panel = button.open()
+	await get_tree().process_frame
+	_check(panel._input == null and panel._senders.is_empty(), "quem assiste só lê a conversa")
+	_equals(panel._rows.get_child_count(), 4, "mas lê tudo")
+	panel.dismiss()
+
+	Net.is_spectator = false
+	Net.connected = false
+	Net.player_names = {}
+	Net.chat = ChatLog.new()
+	Game.mode = Game.Mode.HOTSEAT
+	scene.queue_free()
+	await get_tree().process_frame
+	return true
+
+
+func _chat_buttons(node: Node) -> Array[ChatButton]:
+	var found: Array[ChatButton] = []
+	if node is ChatButton:
+		found.append(node)
+	for child in node.get_children():
+		found.append_array(_chat_buttons(child))
+	return found
 
 
 ## A faixa de contexto dentro de uma partida de verdade.

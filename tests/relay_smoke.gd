@@ -47,6 +47,10 @@ var _abandon_seconds := 0.0
 var _guest_draw := []
 var _host_draw := []
 var _host_resign := []
+## Chat: o que cada lado recebeu, e se o segundo envio dentro da espera saiu.
+var _host_chat := []
+var _guest_chat := []
+var _second_sent := true
 
 
 func _initialize() -> void:
@@ -72,6 +76,8 @@ func _setup() -> void:
 	_guest.draw_message.connect(func(kind: String, ply: int, seat: int): _guest_draw = [kind, ply, seat])
 	_host.draw_message.connect(func(kind: String, ply: int, seat: int): _host_draw = [kind, ply, seat])
 	_host.resigned.connect(func(seat: int, ply: int): _host_resign = [seat, ply])
+	_host.chat_received.connect(func(entry: Dictionary): _host_chat.append(entry))
+	_guest.chat_received.connect(func(entry: Dictionary): _guest_chat.append(entry))
 
 
 func _spawn_side(side_name: String) -> Node:
@@ -148,6 +154,18 @@ func _process(delta: float) -> bool:
 				_phase = 51
 		51:
 			if not _host_draw.is_empty() and not _host_resign.is_empty():
+				# Chat: o anfitrião reage e tenta falar de novo dentro da espera. O
+				# convidado faz o papel de um cliente modificado: pula a limpeza e
+				# a espera, e ainda diz que é o assento 0.
+				_host.send_emote(3)
+				_second_sent = _host.send_text("de novo")
+				_guest._send_direct({
+					"t": "chat", "seat": 0,
+					"s": "  olá\n\tmundo\u202E " + "x".repeat(300),
+				})
+				_phase = 52
+		52:
+			if not _guest_chat.is_empty() and _host_chat.size() >= 2:
 				# Fotografado antes da saída: depois dela os dois lados estão
 				# desconectados de propósito, e o relatório roda no fim.
 				_linked = {"host": _host.connected, "guest": _guest.connected}
@@ -194,6 +212,17 @@ func _report() -> void:
 	_equals(_guest_draw, ["draw", 1, 0], "a proposta de empate chega com o lance e o assento de quem propôs")
 	_equals(_host_draw, ["draw_ok", 1, 1], "e o aceite volta")
 	_equals(_host_resign, [1, 1], "a desistência chega com o assento de quem desistiu")
+
+	_equals(_guest_chat.size(), 1, "o convidado recebe uma mensagem de chat")
+	_equals(_guest_chat[0].get("text"), ChatLog.EMOTES[3], "o emote do anfitrião")
+	_equals(_guest_chat[0].get("seat"), 0, "com o assento de quem mandou")
+	_check(not _second_sent, "o segundo envio dentro da espera não sai")
+	_equals(_host_chat[0].get("seat"), 0, "quem mandou também ouve a própria mensagem")
+	var forged: Dictionary = _host_chat[1]
+	_equals(forged.get("seat"), 1, "o assento é o do servidor, não o que a mensagem diz")
+	_check(str(forged.get("text")).begins_with("olá mundo xxx"), "o texto chega limpo (%s…)" % str(forged.get("text")).left(16))
+	_equals(str(forged.get("text")).length(), ChatLog.TEXT_LIMIT, "e cortado no limite")
+	_equals(_host.chat.entries.size(), 2, "o histórico do anfitrião tem as duas")
 
 	_check(_abandoned, "a saída do oponente é anunciada")
 	# O `bye` chega no mesmo fôlego da saída. Sem ele, só a carência de 95s

@@ -128,7 +128,7 @@ var _seated := true
 
 @onready var _board: BoardView = %Board
 var _match_status: MatchStatus = null
-@onready var _banner: Banner = %Banner
+@onready var _banner: Banner = %Bar.notice
 ## A moeda do sorteio de cor, enquanto está na tela.
 var _coin_toss: CoinToss = null
 @onready var _top_last_move: LastMoveLine = %TopLastMove

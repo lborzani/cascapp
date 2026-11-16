@@ -326,18 +326,12 @@ func _build_layout() -> void:
 
 	_build_bar(stage)
 
-	_banner = Banner.new()
+	_banner = _match_bar.notice
 	# O aviso daqui é notícia, e não confirmação de um toque: ele conta o que
 	# aconteceu com o dinheiro de outra pessoa, com nomes e uma casa no meio, e
 	# quase sempre enquanto o olho está no tabuleiro. Uma frase dessas some antes
 	# de ser lida no tempo que basta para "Lance inválido".
 	_banner.linger = 1.7
-	# Largura inteira do palco: o aviso se desenha centrado dentro do que recebe,
-	# e ancorado só pelo centro ele nasce com largura zero e o texto some.
-	_banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_banner.offset_top = PANEL_MARGIN
-	_banner.offset_right = -(PANEL_MARGIN * 2 + PANEL_WIDTH)
-	stage.add_child(_banner)
 
 	# Cinco cadeiras ou mais e os cartões apertam. Quem sabe de quantos é a mesa é
 	# esta cena; o cartão desenha um jogador e não conhece os outros.
@@ -1557,8 +1551,8 @@ func _restart() -> void:
 ## `actor_of` não é `turn_of` —, e fechar a tela por gesto tiraria da frente os
 ## dois únicos botões que destravam os outros jogadores. O gesto não faz nada, e
 ## é a resposta certa: a saída daqui é "Aceitar" ou "Recusar".
-## A coluna, o painel e o aviso descem a altura da barra. O tabuleiro não: é por
-## ele passar por baixo dela que a barra é translúcida.
+## A coluna e o painel descem a altura da barra. O tabuleiro não: é por ele passar
+## por baixo dela que a barra é translúcida.
 func _fit_under_bar() -> void:
 	if _match_bar == null:
 		return
@@ -1566,8 +1560,6 @@ func _fit_under_bar() -> void:
 	_rail_top.custom_minimum_size.y = maxf(0.0, room - 8.0)
 	if _panel != null:
 		_panel.offset_top = room + PANEL_MARGIN - 8.0
-	if _banner != null:
-		_banner.offset_top = room + PANEL_MARGIN - 8.0
 
 
 ## O gesto de voltar fecha a mesa de troca quando ela está aberta; fora dela,

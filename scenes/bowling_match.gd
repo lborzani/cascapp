@@ -173,10 +173,8 @@ func _build() -> void:
 	_view.settled.connect(_on_settled)
 	stage.add_child(_view)
 
-	_banner = Banner.new()
-	_banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_banner.offset_bottom = 110.0
-	stage.add_child(_banner)
+	# Na barra, e não sobre a pista: no alto da pista ficam os pinos.
+	_banner = _bar.notice
 
 	_build_overlay()
 

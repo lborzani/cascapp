@@ -51,7 +51,7 @@ var _rematch_refused := false
 @onready var _enemy: WatersView = %EnemyWaters
 @onready var _own: WatersView = %OwnWaters
 @onready var _place: WatersView = %PlaceWaters
-@onready var _banner: Banner = %Banner
+@onready var _banner: Banner = %Bar.notice
 ## A linha que diz o que fazer e o botão que atira na casa mirada.
 var _hint: Label = null
 var _fire: Button = null

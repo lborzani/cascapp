@@ -1,10 +1,9 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/ludo_match.gd" id="1_ludo"]
 [ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="9_safe"]
 [ext_resource type="Script" path="res://ui/ludo_view.gd" id="2_board"]
 [ext_resource type="Script" path="res://ui/die_view.gd" id="3_die"]
-[ext_resource type="Script" path="res://ui/banner.gd" id="4_banner"]
 [ext_resource type="Script" path="res://ui/match_bar.gd" id="5_bar"]
 [ext_resource type="Script" path="res://ui/paper_card.gd" id="10_paper"]
 
@@ -109,19 +108,6 @@ focus_mode = 0
 theme_type_variation = &"PrimaryButton"
 text = "Rolar"
 
-
-[node name="ToastLayer" type="Control" parent="Margin"]
-mouse_filter = 2
-layout_mode = 2
-
-[node name="Toast" type="Control" parent="Margin/ToastLayer"]
-unique_name_in_owner = true
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 120.0
-grow_horizontal = 2
-script = ExtResource("4_banner")
 
 [node name="Overlay" type="Control" parent="."]
 unique_name_in_owner = true

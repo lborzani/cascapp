@@ -103,7 +103,7 @@ var _actions := {}
 
 @onready var _table: UnoView = %Table
 @onready var _hand: UnoHand = %Hand
-@onready var _banner: Banner = %Toast
+@onready var _banner: Banner = %Bar.notice
 @onready var _fx: UnoFx = %Fx
 
 

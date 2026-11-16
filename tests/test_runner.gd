@@ -46,12 +46,67 @@ func _initialize() -> void:
 	_test_training()
 	_test_rounds_played()
 	_test_match_clock()
+	_test_chat_log()
 
 	if _failures == 0:
 		print("OK — todos os testes passaram.")
 	else:
 		printerr("%d teste(s) falharam." % _failures)
 	quit(1 if _failures > 0 else 0)
+
+
+## O chat da partida. Tudo aqui é o que um cliente modificado pode mandar: o relay
+## repassa o envelope sem abrir, e quem recebe é a última barreira.
+func _test_chat_log() -> void:
+	print("chat da partida")
+
+	_equals(ChatLog.clean("  oi\n\ttudo   bem \u0007 "), "oi tudo bem", "quebras, tabs e controles viram um espaço só")
+	_equals(ChatLog.clean("\u202Eabc\u2066d"), "abcd", "controles de direção do texto saem")
+	_equals(ChatLog.clean("👍🏽 ok"), "👍🏽 ok", "emoji com tom de pele passa inteiro")
+	_equals(ChatLog.clean("x".repeat(500)).length(), ChatLog.TEXT_LIMIT, "texto comprido é cortado no limite")
+	_equals(ChatLog.clean(42), "", "número não é texto")
+	_equals(ChatLog.clean(" \n\t "), "", "só espaço é nada")
+
+	var emote := ChatLog.read(1, {"e": 2.0})
+	_equals(emote.get("kind"), ChatLog.Kind.EMOTE, "emote pelo índice, como o JSON entrega (float)")
+	_equals(emote.get("text"), ChatLog.EMOTES[2], "e vira o emoji")
+	_equals(emote.get("seat"), 1, "com o assento de quem mandou")
+	for bad in [99, -1, 1.5, "1", null, NAN]:
+		_check(ChatLog.read(0, {"e": bad}).is_empty(), "emote %s fora da lista é descartado" % [bad])
+		_check(ChatLog.read(0, {"q": bad}).is_empty(), "frase %s fora da lista é descartada" % [bad])
+	_equals(ChatLog.read(0, {"q": 0}).get("text"), ChatLog.PHRASES[0], "frase pronta pelo índice")
+	_check(ChatLog.read(0, {"s": "   "}).is_empty(), "texto vazio depois da limpeza é descartado")
+	_check(ChatLog.read(0, {}).is_empty(), "mensagem sem nada é descartada")
+	for body in [{"e": 3}, {"q": 1}, {"s": "olá"}]:
+		var entry := ChatLog.read(0, body)
+		_equals(ChatLog.read(0, ChatLog.wire(entry)), entry, "%s vai e volta igual" % [body])
+
+	var chat := ChatLog.new()
+	_check(not chat.say(0, {"e": 0}, 1000).is_empty(), "a primeira mensagem sai")
+	_check(chat.say(0, {"e": 0}, 2000).is_empty(), "a segunda antes da espera não sai")
+	_check(not chat.can_send(2499), "e a espera ainda vale 1 ms antes do fim")
+	_check(not chat.say(0, {"e": 0}, 2500).is_empty(), "depois da espera sai")
+	_check(chat.say(0, {"e": 99}, 9000).is_empty(), "emote inválido não sai")
+	_check(not chat.say(0, {"e": 1}, 9000).is_empty(), "e não gasta a espera")
+
+	chat = ChatLog.new()
+	for i in ChatLog.BURST:
+		_check(not chat.receive(1, {"e": 0}, i * 100).is_empty(), "rajada: mensagem %d aceita" % (i + 1))
+	_check(chat.receive(1, {"e": 0}, 600).is_empty(), "passou do teto do assento: descartada")
+	_check(not chat.receive(2, {"e": 0}, 600).is_empty(), "o teto é por assento")
+	_check(not chat.receive(1, {"e": 0}, ChatLog.BURST_WINDOW_MS).is_empty(), "a janela passa e o assento volta")
+
+	chat.mute(1)
+	_check(chat.entries.all(func(entry: Dictionary) -> bool: return entry["seat"] != 1), "silenciar apaga o que o assento disse")
+	_check(chat.receive(1, {"s": "oi"}, 99000).is_empty(), "e o que ele disser depois não entra")
+	_check(chat.is_muted(1) and not chat.is_muted(2), "só ele fica calado")
+	_check(not chat.receive(2, {"s": "oi"}, 99000).is_empty(), "os outros continuam")
+
+	chat = ChatLog.new()
+	for i in ChatLog.HISTORY_LIMIT + 10:
+		chat.receive(i % 4, {"s": "m%d" % i}, i * 2000)
+	_equals(chat.entries.size(), ChatLog.HISTORY_LIMIT, "o histórico guarda as últimas %d" % ChatLog.HISTORY_LIMIT)
+	_equals(chat.entries[0]["text"], "m10", "e descarta as mais antigas")
 
 
 ## Rodadas completas, que a faixa de contexto mostra nas cinco telas.

@@ -134,6 +134,10 @@ signal queue_changed
 ## da partida que acabou. A cena começa a próxima como uma revanche — e é a
 ## revanche que troca as cores.
 signal seat_swapped(seat: int)
+## Alguém disse algo no chat da partida, este aparelho inclusive. `entry` é
+## `{"seat", "kind", "id", "text"}` (ver `ChatLog`), e o histórico inteiro está
+## em [member chat].
+signal chat_received(entry: Dictionary)
 
 const HOST_SIDE := Board.Side.WHITE
 
@@ -226,6 +230,9 @@ var _absence_token := 0
 ## quando a mesa inteira está pronta. Num jogo de dois isto tem um elemento e a
 ## conta é a mesma de sempre.
 var _ready_seats := {}
+## O chat desta sala. Um novo a cada saída ([method leave]); a revanche, que é a
+## mesma sala, continua a conversa.
+var chat := ChatLog.new()
 
 
 ## Resolvido por caminho, e não pelo identificador do autoload `Pairing`: este
@@ -270,6 +277,36 @@ func leave() -> void:
 	watcher_count = 0
 	queue_names = PackedStringArray()
 	queue_position = -1
+	chat = ChatLog.new()
+
+
+## Uma reação, uma frase pronta ou um texto digitado, pelos índices de
+## `ChatLog.EMOTES` e `ChatLog.PHRASES`. Falso quando nada saiu: espectador, sem
+## conexão, ainda na espera do `ChatLog.COOLDOWN_MS` ou nada a dizer.
+##
+## Quem mandou também recebe o [signal chat_received]: a tela escuta um sinal só
+## para a própria mensagem e para a dos outros.
+func send_emote(id: int) -> bool:
+	return _say({"e": id})
+
+
+func send_phrase(id: int) -> bool:
+	return _say({"q": id})
+
+
+func send_text(text: String) -> bool:
+	return _say({"s": text})
+
+
+func _say(body: Dictionary) -> bool:
+	if is_spectator or not connected:
+		return false
+	var entry := chat.say(local_seat, body, Time.get_ticks_msec())
+	if entry.is_empty():
+		return false
+	_send(ChatLog.wire(entry))
+	chat_received.emit(entry)
+	return true
 
 
 ## `clocks` é `[brancas, pretas]` em segundos, ou vazio sem relógio.
@@ -498,6 +535,11 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			draw_message.emit(str(message.get("t")), int(message.get("n", -1)), from_seat)
 		"bye":
 			_drop_seat(from_seat)
+		"chat":
+			# Também para quem assiste: o espectador lê, só não fala.
+			var entry := chat.receive(from_seat, message, Time.get_ticks_msec())
+			if not entry.is_empty():
+				chat_received.emit(entry)
 
 
 ## O que o espectador trata diferente dos jogadores. Devolve falso para o resto —
