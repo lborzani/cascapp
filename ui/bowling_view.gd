@@ -224,6 +224,17 @@ func throw(chosen: PackedFloat32Array) -> void:
 	_start_rolling(chosen)
 
 
+## Um quadro da jogada de outro aparelho: a pista segue o que ele manda em vez
+## de rodar a própria física (ver `BowlingLane.follow`).
+func follow(step: int, poses: PackedInt32Array) -> void:
+	if not lane.following:
+		_phase = Phase.ROLLING
+		_angle = 0.0
+		lane.ball_color = ball_color
+	lane.follow(step, poses)
+	_sync()
+
+
 func params(timing: float, power := _power) -> PackedFloat32Array:
 	return PackedFloat32Array([
 		aim_position, aim_direction, aim_spin, clampf(timing, -1.0, 1.0), clampf(power, 0.0, 1.0),
@@ -457,7 +468,7 @@ func _render() -> void:
 func _live() -> bool:
 	return (
 		_phase in [Phase.HOLD, Phase.SWING, Phase.ROLLING] or _drag != Drag.NONE
-		or lane.rolling or _camera_moving
+		or lane.rolling or lane.following or _camera_moving
 	)
 
 

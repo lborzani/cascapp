@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.52
+
+- Boliche online em tempo real: a bola rola no celular de todo mundo enquanto a jogada acontece, e não depois.
+- Boliche online: os pinos caem igual em todos os celulares. Um strike de quem jogou é strike na tela de todos.
+
 ## 1.51
 
 - Atualizar pelo app ficou mais simples: depois de baixar a versão nova, o app fecha e abre sozinho nela.

@@ -88,6 +88,8 @@ signal bots_changed
 ## "(bot)" e ninguém na mesa ficava sabendo que a pessoa estava de volta.
 signal seat_returned(seat: int)
 signal move_received(data: Dictionary)
+## Um quadro da jogada do boliche em curso: `{n, k, x, seat}` (ver `send_frame`).
+signal frame_received(data: Dictionary)
 signal join_failed(reason: String)
 ## Revanche é convite, não ordem: quem pede espera, e quem recebe decide. Antes
 ## um toque em "Revanche" reiniciava a partida dos dois lados na hora, e o outro
@@ -288,6 +290,16 @@ func send_move(data: Dictionary, index: int, clocks: Array = []) -> void:
 	})
 
 
+## Um quadro da jogada do boliche: a pose da bola e dos pinos (`BowlingLane.snapshot`)
+## no passo de física `step` do lance `index`.
+##
+## Sai 15 vezes por segundo do aparelho que roda a física, para os outros verem a
+## jogada enquanto ela acontece, e igual à de quem jogou. Não é lance: não entra no
+## histórico, e perdido não faz falta, porque o lance que vem no fim traz a máscara.
+func send_frame(index: int, step: int, poses: PackedInt32Array) -> void:
+	_send({"t": "frame", "n": index, "k": step, "x": Array(poses)})
+
+
 ## O mar posicionado, casa a casa.
 ##
 ## Mandar a frota inteira dá ao adversário a informação que o jogo esconde, e
@@ -443,6 +455,13 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 				"pr": int(message.get("pr", 0)),
 				"n": int(message.get("n", -1)),
 				"c": _list(message.get("c")),
+				"seat": from_seat,
+			})
+		"frame":
+			frame_received.emit({
+				"n": int(message.get("n", -1)),
+				"k": int(message.get("k", -1)),
+				"x": _packed(message.get("x")),
 				"seat": from_seat,
 			})
 		"sync":

@@ -38,6 +38,8 @@ func _run() -> void:
 	await _test_hook()
 	await _test_settles_and_rack()
 	await _test_smooth()
+	await _test_frames()
+	await _test_follow()
 
 	if _failures == 0:
 		print("OK — física do boliche consistente.")
@@ -174,6 +176,115 @@ func _test_smooth() -> void:
 	Engine.physics_ticks_per_second = 60
 	lane.free()
 	_check(still == 0 and moved > 30, "a bola desenhada anda em todo quadro da tela (%d andando, %d parados)" % [moved, still])
+
+
+## Em rede, quem roda a física manda a jogada em quadros (`snapshot`): a pose de
+## cada corpo em inteiros. Ela precisa voltar inteira do outro lado, e o último
+## quadro precisa dar os mesmos pinos caídos que a máscara do lance.
+func _test_frames() -> void:
+	print("jogada em quadros, para a rede")
+	var lane := BowlingLane.new()
+	root.add_child(lane)
+	lane.rack(BowlingRules.ALL_PINS)
+	_equals(BowlingLane.pose_of(lane.snapshot(), 0), null, "antes do arremesso a bola não está no quadro")
+	# Bola fora do bolso: sobra pino em pé, e o teste confere pino a pino.
+	lane.throw(PackedFloat32Array([0.3, 0, 0, 0]))
+	for i in 20:
+		await physics_frame
+	var worst_mm := 0.0
+	var worst_deg := 0.0
+	var poses := lane.snapshot()
+	for index in BowlingLane.BODIES:
+		var body := lane.ball if index == 0 else lane.pins[index - 1]
+		var pose: Transform3D = BowlingLane.pose_of(poses, index)
+		worst_mm = maxf(worst_mm, pose.origin.distance_to(body.global_position) * 1000.0)
+		var turn := pose.basis.get_rotation_quaternion()
+		worst_deg = maxf(worst_deg, rad_to_deg(turn.angle_to(body.global_basis.get_rotation_quaternion())))
+	_check(worst_mm < 1.0 and worst_deg < 0.1, "a pose volta inteira do quadro (%.2f mm, %.3f°)" % [worst_mm, worst_deg])
+
+	var final := {}
+	# O lambda guarda uma cópia das variáveis locais: o resultado entra no dicionário,
+	# que é o mesmo objeto dos dois lados.
+	lane.settled.connect(func(mask: int) -> void: final.merge({"mask": mask, "poses": lane.snapshot()}), CONNECT_ONE_SHOT)
+	await _wait(lane)
+	var from_frame := 0
+	for pin in BowlingRules.PINS:
+		var pose: Variant = BowlingLane.pose_of(final["poses"], pin + 1)
+		if pose != null and BowlingLane.is_down(pose):
+			from_frame |= 1 << pin
+	print("  caíram: %s" % String.num_int64(final["mask"], 2))
+	_check(final["mask"] != 0, "a jogada derrubou pinos")
+	_equals(from_frame, final["mask"], "o último quadro derruba os mesmos pinos da máscara")
+	lane.rack(BowlingRules.ALL_PINS & ~final["mask"])
+	var after := lane.snapshot()
+	var racked := 0
+	for pin in BowlingRules.PINS:
+		if BowlingLane.pose_of(after, pin + 1) != null:
+			racked |= 1 << pin
+	_equals(racked, BowlingRules.ALL_PINS & ~final["mask"], "pino não armado vai zerado no quadro")
+	lane.free()
+
+
+## O outro lado da rede: uma jogada gravada em quadros (15 por segundo, como a
+## partida manda) e tocada numa pista nova, chegando no ritmo em que foi gravada.
+## A pista não roda física, anda em todo quadro da tela e termina com os mesmos
+## pinos no chão.
+func _test_follow() -> void:
+	print("seguir a jogada de outro aparelho")
+	var source := BowlingLane.new()
+	root.add_child(source)
+	source.rack(BowlingRules.ALL_PINS)
+	source.throw(PackedFloat32Array([0.3, 0, 0, 0]))
+	var sent: Array = [[0, source.snapshot()]]
+	var result := {}
+	source.settled.connect(func(mask: int) -> void: result["mask"] = mask, CONNECT_ONE_SHOT)
+	var step := 0
+	while source.rolling and _alive():
+		await physics_frame
+		step += 1
+		if step % 4 == 0:
+			sent.append([step, source.snapshot()])
+	sent.append([step + 1, source.snapshot()])
+	source.free()
+
+	var mirror := BowlingLane.new()
+	root.add_child(mirror)
+	mirror.rack(BowlingRules.ALL_PINS)
+	var started := -1
+	var still := 0
+	var moved := 0
+	var last := Vector3.INF
+	var shown := 0
+	var screen := 0
+	while not mirror.caught_up() and _alive():
+		# Chega o que já foi "mandado" até este quadro da tela.
+		while shown < sent.size() and sent[shown][0] <= screen:
+			mirror.follow(sent[shown][0], sent[shown][1])
+			shown += 1
+		if started < 0 and mirror.following:
+			started = screen
+		await process_frame
+		screen += 1
+		var drawn: Vector3 = mirror.ball_point()
+		var rolling_part: bool = drawn.z > -(BowlingLane.HEAD_PIN - 1.0)
+		if last != Vector3.INF and screen > started + BowlingLane.FOLLOW_DELAY * FPS + 2 and rolling_part:
+			if drawn.is_equal_approx(last):
+				still += 1
+			else:
+				moved += 1
+		last = drawn
+	_check(mirror.pins[0].freeze and mirror.ball.freeze, "quem segue não roda física")
+	_check(still == 0 and moved > 30, "a bola anda em todo quadro da tela (%d andando, %d parados)" % [moved, still])
+	var lag := float(screen) / FPS - float(sent[-1][0]) / FPS
+	_check(lag < BowlingLane.FOLLOW_DELAY + 0.05, "e mostra o fim só %.2f s depois de quem jogou" % lag)
+	var worst := 0.0
+	var final: PackedInt32Array = sent[-1][1]
+	for pin in BowlingRules.PINS:
+		var pose: Transform3D = BowlingLane.pose_of(final, pin + 1)
+		worst = maxf(worst, pose.origin.distance_to(mirror.pins[pin].global_position))
+	_check(worst < 0.01, "os pinos terminam onde terminaram em quem jogou (%.1f mm)" % (worst * 1000.0))
+	_equals(mirror.knocked(), result["mask"], "e os mesmos pinos no chão")
+	mirror.free()
 
 
 # --- apoio --------------------------------------------------------------------
