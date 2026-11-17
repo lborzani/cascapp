@@ -51,6 +51,8 @@ const SHOTS := [
 	["res://scenes/match.tscn", "26b_conversa_assistindo"],
 	["res://scenes/ludo_match.tscn", "26c_conversa_aviso"],
 	["res://scenes/ludo_match.tscn", "26d_conversa_deitada"],
+	["res://scenes/match.tscn", "26e_reacao_xadrez"],
+	["res://scenes/ludo_match.tscn", "26f_reacao_ludo"],
 	["res://scenes/match.tscn", "27_aviso_xadrez"],
 ]
 
@@ -92,7 +94,7 @@ func _ready() -> void:
 const LANDSCAPE_SHOTS := [
 	"17_ludo", "17b_ludo_bots", "17c_ludo_andando", "17d_ludo_pilha",
 	"22_sinuca", "22b_sinuca_brasileira",
-	"26c_conversa_aviso", "26d_conversa_deitada",
+	"26c_conversa_aviso", "26d_conversa_deitada", "26f_reacao_ludo",
 ]
 const PORTRAIT_WINDOW := Vector2i(432, 768)
 ## Deitado num formato de celular de verdade, e **não** em 16:9.
@@ -247,7 +249,7 @@ func _next() -> void:
 			Net.connected = true
 			Net.white_seat = 0
 			Net.player_names = {0: "Ana", 1: "Bia"}
-		"26_conversa", "26b_conversa_assistindo":
+		"26_conversa", "26b_conversa_assistindo", "26e_reacao_xadrez":
 			# A conversa aberta no meio de uma partida de xadrez, com histórico. O
 			# histórico e a gaveta entram no `_stage_chat`.
 			Game.start_hotseat(Game.CHESS)
@@ -257,7 +259,7 @@ func _next() -> void:
 			Net.player_names = {0: "Ana", 1: "Bia"}
 		"27_aviso_xadrez":
 			Game.start_hotseat(Game.CHESS)
-		"26c_conversa_aviso", "26d_conversa_deitada":
+		"26c_conversa_aviso", "26d_conversa_deitada", "26f_reacao_ludo":
 			# Deitado, com quatro na mesa: o aviso embaixo da barra baixa e a gaveta
 			# na altura curta da tela deitada.
 			Game.start_hotseat(Game.LUDO)
@@ -713,6 +715,14 @@ func _stage_chat(scene: Node, shot: String) -> void:
 	for index in said.size():
 		Net.chat.receive(said[index][0], said[index][1], index * 2000)
 	var bar: MatchBar = scene.get_node("%Bar")
+	# Reações: a de quem está do outro lado e a própria, cada uma subindo da
+	# etiqueta de quem mandou. Deitado, três cadeiras reagindo juntas.
+	if shot.begins_with("26e") or shot.begins_with("26f"):
+		Net._handle_message({"t": "chat", "e": 1}, 1)
+		if shot.begins_with("26f"):
+			Net._handle_message({"t": "chat", "e": 6}, 2)
+		Net.send_emote(5)
+		return
 	if shot == "26c_conversa_aviso":
 		Net._handle_message({"t": "chat", "e": 5}, 1)
 		Net._handle_message({"t": "chat", "s": "Boa! Agora é a sua vez"}, 2)

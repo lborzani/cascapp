@@ -10,6 +10,15 @@ extends Button
 ##
 ## O aviso é o mesmo da partida (`MatchBar.notice`), mas de passagem: um "Boa!"
 ## no meio de "Sem conexão…" some e deixa o aviso da partida de volta.
+##
+## A reação (emote) não vai para o aviso: ela sobe da etiqueta de quem a mandou,
+## que é onde o olho já procura "quem". A tela diz onde fica cada um pelo
+## `chat_spot(seat) -> Rect2` (global; vazio quando não sabe), e sem ele a reação
+## cai no aviso como o resto.
+
+const POP_FONT := 40
+const POP_RISE := 56.0
+const POP_TIME := 1.4
 
 ## O aviso da barra. A barra o entrega ao criar o botão.
 var notice: Banner = null
@@ -44,20 +53,61 @@ func open() -> ChatPanel:
 	return _panel
 
 
-## A própria mensagem também vira aviso: quem mandou fechou a gaveta ao mandar, e
-## o aviso é a confirmação de que saiu. A dos outros só avisa com a conversa
-## fechada; aberta, ela já está na lista.
+## A própria mensagem também aparece: quem mandou fechou a gaveta ao mandar, e ver
+## a mensagem é a confirmação de que saiu. A dos outros só vai ao aviso com a
+## conversa fechada; aberta, ela já está na lista. A reação sobe da etiqueta
+## sempre, porque é a mesa que reage, e não a lista.
 func _on_chat(entry: Dictionary) -> void:
-	var mine := int(entry["seat"]) == Net.local_seat and not Net.is_spectator
+	var seat := int(entry["seat"])
+	var mine := seat == Net.local_seat and not Net.is_spectator
+	if not mine and not _is_open():
+		unread += 1
+	if int(entry["kind"]) == ChatLog.Kind.EMOTE and _pop(seat, str(entry["text"])):
+		return
 	if _is_open() and not mine:
 		return
-	if not mine:
-		unread += 1
 	if notice != null:
 		notice.show_message(
-			"%s: %s" % [ChatPanel.speaker(int(entry["seat"])), entry["text"]],
-			Banner.Kind.INFO, false, true
+			"%s: %s" % [ChatPanel.speaker(seat), entry["text"]], Banner.Kind.INFO, false, true
 		)
+
+
+## O retângulo global de uma etiqueta, ou vazio se ela não está na tela. As telas
+## respondem o `chat_spot` com isto.
+static func spot_of(control: Control) -> Rect2:
+	if control == null or not control.is_visible_in_tree():
+		return Rect2()
+	return control.get_global_rect()
+
+
+## A reação cresce sobre a bolacha da etiqueta (o quadrado da esquerda, onde mora
+## a foto ou a peça), sobe e some. Falso quando a tela não sabe onde fica o assento.
+func _pop(seat: int, emote: String) -> bool:
+	var host := RulesPage.host_of(self) as Control
+	if host == null or not host.has_method(&"chat_spot"):
+		return false
+	var spot: Rect2 = host.call(&"chat_spot", seat)
+	if not spot.has_area():
+		return false
+	var label := Label.new()
+	label.text = emote
+	label.mouse_filter = MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", POP_FONT)
+	# Acima da mesa e dos cartões, abaixo das gavetas (90).
+	label.z_index = 85
+	host.add_child(label)
+	label.reset_size()
+	var center := Vector2(spot.position.x + minf(spot.size.x, spot.size.y) * 0.5, spot.get_center().y)
+	label.global_position = center - label.size * 0.5
+	label.pivot_offset = label.size * 0.5
+	label.scale = Vector2.ONE * 0.4
+	var tween := label.create_tween()
+	tween.tween_property(label, "scale", Vector2.ONE * 1.15, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "scale", Vector2.ONE, 0.1)
+	tween.tween_property(label, "position:y", label.position.y - POP_RISE, POP_TIME).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, POP_TIME * 0.5).set_delay(POP_TIME * 0.5)
+	tween.tween_callback(label.queue_free)
+	return true
 
 
 func _draw() -> void:

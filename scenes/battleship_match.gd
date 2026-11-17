@@ -585,3 +585,10 @@ func go_back() -> void:
 func _exit() -> void:
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+## Onde a reação do chat de `seat` aparece (ver `ChatButton`): a etiqueta de
+## baixo é a deste aparelho.
+func chat_spot(seat: int) -> Rect2:
+	var tag: PlayerTag = %BottomTag if seat == Net.local_seat else %TopTag
+	return ChatButton.spot_of(tag)

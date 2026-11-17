@@ -2184,6 +2184,14 @@ func _test_chat() -> bool:
 			found.size() == 1 and scene.get("_banner") == found[0].notice,
 			"%s avisa pela barra" % case[1]
 		)
+		# A reação sobe da etiqueta de quem a mandou: a tela tem de saber onde fica
+		# cada assento, e os dois lugares não podem ser o mesmo.
+		var mine: Rect2 = scene.call("chat_spot", 0)
+		var theirs: Rect2 = scene.call("chat_spot", 1)
+		_check(
+			mine.has_area() and theirs.has_area() and mine != theirs,
+			"%s sabe onde fica cada assento (%s, %s)" % [case[1], mine, theirs]
+		)
 		scene.queue_free()
 		await get_tree().process_frame
 
@@ -2218,22 +2226,41 @@ func _test_chat() -> bool:
 	# Aviso permanente da partida, chat por cima: quando o chat some, o aviso da
 	# partida volta. E um aviso comum da partida encerra o permanente.
 	bar.notice.show_message("Conexão instável.", Banner.Kind.ALERT, true)
-	Net._handle_message({"t": "chat", "e": 2}, 1)
+	Net._handle_message({"t": "chat", "s": "caiu aí?"}, 1)
+	_equals(bar.notice._message, "Bia: caiu aí?", "o chat passa por cima do aviso permanente")
 	bar.notice._fade_out()
 	_equals(bar.notice._message, "Conexão instável.", "o chat passa e o aviso permanente volta")
 	bar.notice.show_message("Reconectado.")
 	bar.notice._fade_out()
 	_equals(bar.notice._sticky, "", "um aviso comum da partida encerra o permanente")
 
+	# A reação de Bia sobe da etiqueta de cima (Bia joga de pretas, e embaixo é
+	# quem joga aqui), e não passa pelo aviso.
+	var before := bar.notice._message
+	Net._handle_message({"t": "chat", "e": 4}, 1)
+	var pop := _emote_pop(scene, ChatLog.EMOTES[4])
+	_check(pop != null, "a reação de quem joga do outro lado aparece na mesa")
+	if pop != null:
+		_check(
+			_node(scene, "%TopTag").get_global_rect().grow(8.0).has_point(pop.get_global_rect().get_center()),
+			"em cima da etiqueta dele (%s)" % pop.get_global_rect()
+		)
+	_equals(bar.notice._message, before, "e não vai para o aviso")
+	_equals(button.unread, 3, "mas conta como não lida, e fica no histórico")
+
 	var panel := button.open()
 	await get_tree().process_frame
 	_equals(button.unread, 0, "abrir a conversa zera as não lidas")
-	_equals(panel._rows.get_child_count(), 2, "a gaveta mostra o que já foi dito")
+	_equals(panel._rows.get_child_count(), 3, "a gaveta mostra o que já foi dito")
 	_equals(panel._senders.size(), ChatLog.EMOTES.size() + ChatLog.PHRASES.size() + 1, "reações, frases e enviar")
 	panel._senders[0].pressed.emit()
 	_check(panel.is_queued_for_deletion(), "mandar fecha a gaveta")
-	_equals(Net.chat.entries.size(), 3, "e a reação entra no histórico")
-	_equals(bar.notice._message, "Você: " + ChatLog.EMOTES[0], "a própria reação aparece no aviso")
+	_equals(Net.chat.entries.size(), 4, "e a reação entra no histórico")
+	var own := _emote_pop(scene, ChatLog.EMOTES[0])
+	_check(
+		own != null and _node(scene, "%BottomTag").get_global_rect().grow(8.0).has_point(own.get_global_rect().get_center()),
+		"a própria reação sobe da etiqueta de baixo"
+	)
 	_equals(button.unread, 0, "e não conta como não lida")
 	await get_tree().process_frame
 
@@ -2248,7 +2275,7 @@ func _test_chat() -> bool:
 	_check(not panel.is_queued_for_deletion(), "na espera a gaveta fica aberta")
 	_equals(panel._input.text, "oi", "e o texto digitado não se perde")
 	Net._handle_message({"t": "chat", "s": "[url=x]clique[/url]"}, 1)
-	_equals(panel._rows.get_child_count(), 4, "o que chega com a gaveta aberta entra na lista")
+	_equals(panel._rows.get_child_count(), 5, "o que chega com a gaveta aberta entra na lista")
 	var newest: Label = panel._rows.get_child(0).get_child(1)
 	_equals(newest.text, "[url=x]clique[/url]", "a mais nova em cima, e o texto sai como texto")
 	_equals(button.unread, 0, "com a gaveta aberta nada fica por ler")
@@ -2259,7 +2286,7 @@ func _test_chat() -> bool:
 	panel = button.open()
 	await get_tree().process_frame
 	_check(panel._input == null and panel._senders.is_empty(), "quem assiste só lê a conversa")
-	_equals(panel._rows.get_child_count(), 4, "mas lê tudo")
+	_equals(panel._rows.get_child_count(), 5, "mas lê tudo")
 	panel.dismiss()
 
 	Net.is_spectator = false
@@ -2270,6 +2297,14 @@ func _test_chat() -> bool:
 	scene.queue_free()
 	await get_tree().process_frame
 	return true
+
+
+## A reação que subiu na mesa, se houver: um `Label` solto na raiz da cena.
+func _emote_pop(scene: Node, emote: String) -> Label:
+	for child in scene.get_children():
+		if child is Label and (child as Label).text == emote:
+			return child
+	return null
 
 
 func _chat_buttons(node: Node) -> Array[ChatButton]:

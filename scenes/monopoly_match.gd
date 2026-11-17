@@ -1578,3 +1578,9 @@ func go_back() -> void:
 func _leave() -> void:
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+## Onde a reação do chat de `seat` aparece (ver `ChatButton`): o cartão dele no
+## trilho.
+func chat_spot(seat: int) -> Rect2:
+	return ChatButton.spot_of(_cards[seat]) if seat >= 0 and seat < _cards.size() else Rect2()

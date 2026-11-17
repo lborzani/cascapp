@@ -591,3 +591,8 @@ func go_back() -> void:
 func _leave() -> void:
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+## Onde a reação do chat de `seat` aparece (ver `ChatButton`): a etiqueta dele.
+func chat_spot(seat: int) -> Rect2:
+	return ChatButton.spot_of(_tags[seat]) if seat >= 0 and seat < _tags.size() else Rect2()

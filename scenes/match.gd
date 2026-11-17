@@ -2016,3 +2016,11 @@ func _check_square() -> int:
 	if not chess.is_in_check(_state, _state.side_to_move):
 		return Board.NO_SQUARE
 	return _state.find_piece(_state.side_to_move, Board.Kind.KING)
+
+
+## Onde a reação do chat de `seat` aparece: a etiqueta da cor dele (ver
+## `ChatButton`). Embaixo fica o lado de quem joga neste aparelho.
+func chat_spot(seat: int) -> Rect2:
+	var side := Board.Side.WHITE if _seat_of(Board.Side.WHITE) == seat else Board.Side.BLACK
+	var tag: PlayerTag = %BottomTag if side == _bottom_side() else %TopTag
+	return ChatButton.spot_of(tag)

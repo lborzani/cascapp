@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.54
+
+- Reações nas partidas online: o emoji que alguém manda sobe da foto ou da peça dessa pessoa na mesa, e não aparece mais como aviso.
+
 ## 1.53
 
 - Conversa nas partidas online: toque no balão da barra para mandar uma reação, uma frase pronta ou uma mensagem escrita. Quem assiste lê a conversa.

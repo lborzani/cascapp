@@ -651,3 +651,13 @@ func go_back() -> void:
 func _leave() -> void:
 	Game.reset_to_menu()
 	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+## Onde a reação do chat de `seat` aparece (ver `ChatButton`): o nome dele na
+## cartela. A cartela é desenhada, e não feita de nós, então a linha sai da conta
+## do próprio `BowlingCard`.
+func chat_spot(seat: int) -> Rect2:
+	if _card == null or not _card.is_visible_in_tree() or seat < 0:
+		return Rect2()
+	var top := _card.get_global_rect().position + Vector2(0.0, seat * (BowlingCard.ROW + BowlingCard.GAP))
+	return Rect2(top, Vector2(BowlingCard.NAME_WIDTH, BowlingCard.ROW))
