@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.55
+
+- Corrige celulares que travavam ao entrar num jogo: o app agora desenha a tela de um jeito que funciona em mais aparelhos.
+
 ## 1.54
 
 - Reações nas partidas online: o emoji que alguém manda sobe da foto ou da peça dessa pessoa na mesa, e não aparece mais como aviso.
