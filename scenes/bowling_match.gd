@@ -419,7 +419,7 @@ func _show_frames() -> void:
 		_shown = _state.ply
 		_shown_from = sender
 		_view.enabled = false
-		_view.ball_color = _seat_color(BowlingRules.turn_of(_state))
+		_dress_ball(BowlingRules.turn_of(_state))
 	for frame: Array in list:
 		_view.follow(frame[0], frame[1])
 	_frames[_state.ply] = []
@@ -468,7 +468,7 @@ func _drain_incoming() -> void:
 		else:
 			_busy = true
 			_view.enabled = false
-			_view.ball_color = _seat_color(turn)
+			_dress_ball(turn)
 			_view.throw(BowlingRules.params_of(move))
 			await _view.settled
 		# Um histórico pode ter chegado no meio da jogada e refeito a partida.
@@ -554,7 +554,7 @@ func _adopt_bot_seats() -> void:
 
 func _refresh() -> void:
 	var turn := BowlingRules.turn_of(_state)
-	_view.ball_color = _seat_color(turn)
+	_dress_ball(turn)
 	_view.enabled = _can_act()
 	var names := PackedStringArray()
 	var colors: Array[Color] = []
@@ -591,6 +591,21 @@ func _refresh() -> void:
 
 func _seat_color(seat: int) -> Color:
 	return SEAT_COLORS[seat % SEAT_COLORS.size()]
+
+
+## A bola de quem joga: a textura da loja do assento, ou o mármore na cor dele.
+func _dress_ball(seat: int) -> void:
+	_view.ball_skin = Cosmetics.ball_texture(seat_look(seat))
+	_view.ball_color = _seat_color(seat)
+
+
+## O visual (`Cosmetics`) de um assento. Online, o que cada aparelho disse no
+## aperto de mão; aqui, o do dono do aparelho no assento 0 (no mesmo aparelho ele
+## é o dono, contra o bot é quem joga). Máquinas e convidados ficam no padrão.
+func seat_look(seat: int) -> Dictionary:
+	if Game.mode == Game.Mode.ONLINE:
+		return Net.look_of(seat)
+	return Account.look if seat == 0 else {}
 
 
 func _seat_name(seat: int) -> String:

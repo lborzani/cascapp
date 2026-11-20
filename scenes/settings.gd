@@ -21,6 +21,8 @@ var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
+var _shop: ShopPanel = null
+var _shop_button: Button = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
@@ -78,7 +80,14 @@ func _ready() -> void:
 	for state: String in ["font_color", "font_hover_color"]:
 		%NewsButton.add_theme_color_override(state, AppTheme.ACCENT)
 	%NewsButton.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
-	for shortcut: Button in [%HistoryButton, %TrainingButton]:
+	# A loja é o terceiro atalho, numa linha inteira embaixo dos dois.
+	_shop_button = Button.new()
+	_shop_button.custom_minimum_size = Vector2(0, 76)
+	_shop_button.focus_mode = Control.FOCUS_NONE
+	_shop_button.theme_type_variation = &"IconButton"
+	_shop_button.pressed.connect(_open_shop)
+	%HistoryButton.get_parent().add_sibling(_shop_button)
+	for shortcut: Button in [%HistoryButton, %TrainingButton, _shop_button]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
 	_refresh_games()
@@ -97,6 +106,7 @@ func _ready() -> void:
 	%PhotoButton.disabled = not DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)
+	Account.wallet_changed.connect(_refresh_games)
 	_update_preview()
 
 
@@ -185,6 +195,7 @@ func _fill_stats(games: int, due: int) -> void:
 	_stat(str(Account.elo) if Account.elo > 0 else "—", "Elo no xadrez", chess, AppTheme.ACCENT_INK)
 	_stat(str(games), "partidas" if games != 1 else "partida", AppTheme.SURFACE, AppTheme.TEXT)
 	_stat(str(due), "para treinar hoje", AppTheme.SURFACE, AppTheme.TEXT)
+	_stat(str(Account.coins) if Account.coins >= 0 else "—", "moedas", AppTheme.SURFACE, AppTheme.TEXT)
 
 
 func _stat(value: String, caption: String, fill: Color, ink: Color) -> void:
@@ -272,6 +283,9 @@ func go_back() -> void:
 	if is_instance_valid(_training):
 		_training.close()
 		return
+	if is_instance_valid(_shop):
+		_shop.close()
+		return
 	_leave()
 
 
@@ -329,6 +343,12 @@ func _open_training() -> void:
 	add_child(_training)
 
 
+func _open_shop() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_shop = ShopPanel.new()
+	add_child(_shop)
+
+
 ## Os números da tela: os três blocos do topo e a linha de cada atalho. "Treino"
 ## conta o que vence hoje, e não o baralho inteiro: o número é o convite, e um
 ## convite para 40 desafios que só voltam no mês que vem é mentira.
@@ -343,6 +363,10 @@ func _refresh_games() -> void:
 	%TrainingButton.set_meta(&"lit", due > 0)
 	%HistoryButton.queue_redraw()
 	%TrainingButton.queue_redraw()
+	_shop_button.set_meta(&"title", "Loja")
+	_shop_button.set_meta(&"detail", "Bolas de boliche · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
+	_shop_button.set_meta(&"lit", true)
+	_shop_button.queue_redraw()
 
 
 static func history_detail(games: int) -> String:

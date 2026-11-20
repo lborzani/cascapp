@@ -23,6 +23,8 @@ const FakeBle := preload("res://tests/fake_ble.gd")
 const CODE := "BOWLNT"
 const SEATS := 3
 const TIMEOUT_SECONDS := 30.0
+## A bola da loja de cada aparelho (`Net.player_look`).
+const LOOKS := [{"ball": "ball_galaxy"}, {"ball": "ball_wood"}, {"ball": "ball_melon"}]
 ## Quadros por arremesso. Poucos, porque aqui saem de uma vez: o relay aceita 40
 ## mensagens por segundo de cada aparelho, e a partida manda 15.
 const FRAMES_PER_THROW := 8
@@ -76,6 +78,7 @@ func _spawn(index: int) -> Node:
 	root.add_child(branch)
 	set_multiplayer(SceneMultiplayer.new(), NodePath("/root/Seat%d" % index))
 	var link := NetLink.new()
+	link.player_look = LOOKS[index]
 	link.name = "Net"
 	var bridge := RelayBridge.new()
 	bridge.name = "RelayBridge"
@@ -190,6 +193,10 @@ func _report() -> void:
 	for index in SEATS:
 		seats.append(_links[index].local_seat)
 	_equals(seats, [0, 1, 2], "cada aparelho é um assento diferente")
+	# O visual de cada um (a bola da loja) chegou aos outros no aperto de mão.
+	for index in SEATS:
+		for seat in SEATS:
+			_equals(_links[index].look_of(seat), LOOKS[seat], "o aparelho %d sabe a bola do assento %d" % [index, seat])
 
 	var first: MatchState = _states[0]
 	for index in range(1, SEATS):

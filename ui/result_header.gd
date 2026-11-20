@@ -14,6 +14,8 @@ extends VBoxContainer
 
 enum Mood { WIN, DRAW, LOSS }
 
+## O desfecho como a rota do prêmio (`Account.reward`) o chama.
+const RESULTS := {Mood.WIN: "win", Mood.DRAW: "draw", Mood.LOSS: "loss"}
 const BADGE := 92.0
 const EDGE := 6.0
 
@@ -30,6 +32,13 @@ var confetti: Confetti = null
 var _badge: Control = null
 var _stats: HBoxContainer = null
 var _wobble: Tween = null
+## Os números que a cena passou por último, para o bloco das moedas entrar
+## depois sem apagá-los.
+var _given: Array = []
+## O bloco das moedas pagas por esta partida; vazio até o servidor responder.
+var _reward: Array = []
+## A partida (`_match_key`) cujo prêmio já foi pedido por este cartão.
+var _reward_key := ""
 
 
 func _init() -> void:
@@ -81,17 +90,41 @@ static func duration_since(started_at: int) -> String:
 ## destaque pinta a legenda de limão (o Elo que subiu). Vazia, a fileira some.
 func show_result(new_mood: Mood, stats: Array) -> void:
 	mood = new_mood
+	if _reward_key != _match_key():
+		_reward = []  # revanche no mesmo cartão: o bloco era da partida de antes
 	set_stats(stats)
 	_sync_wobble()
+	_claim_reward()
 
 
 func set_stats(stats: Array) -> void:
+	_given = stats
 	for child in _stats.get_children():
 		_stats.remove_child(child)
 		child.queue_free()
-	for entry: Array in stats:
+	var shown := stats + ([_reward] if not _reward.is_empty() else [])
+	for entry: Array in shown:
 		_stats.add_child(_tile(str(entry[0]), str(entry[1]), entry.size() > 2 and bool(entry[2])))
-	_stats.visible = not stats.is_empty()
+	_stats.visible = not shown.is_empty()
+
+
+## A partida contra bot ou online paga moedas, e o que entrou vira o último bloco
+## da fileira. Uma vez por partida: a conta guarda a última que pagou, então o
+## cartão que reabre não cobra de novo. Mesmo aparelho não paga, senão o jogador
+## venceria a si mesmo por moedas; quem assiste também não.
+func _claim_reward() -> void:
+	var key := _match_key()
+	if key == _reward_key or not visible or Game.mode == Game.Mode.HOTSEAT or Net.is_spectator:
+		return
+	_reward_key = key
+	var granted: int = await Account.reward(Game.game_id, RESULTS[mood], key)
+	if granted > 0 and is_inside_tree() and _reward_key == key:
+		_reward = ["+%d" % granted, "moedas", true]
+		set_stats(_given)
+
+
+static func _match_key() -> String:
+	return "%s:%d" % [Game.game_id, Game.match_started_at]
 
 
 ## A fileira de números, para o cartão pôr onde couber (embaixo do texto).

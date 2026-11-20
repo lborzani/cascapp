@@ -424,6 +424,59 @@ static func forget_history() -> void:
 		_file().save(PATH)
 
 
+# --- moedas -------------------------------------------------------------------
+#
+# O saldo é da conta (`Account.coins`). Aqui fica só o prêmio de partida que
+# ainda não subiu: terminou sem rede, ou a conta ainda não tinha entrado.
+
+const WALLET_SECTION := "wallet"
+const REWARDS_KEY := "pending"
+const LAST_REWARD_KEY := "last_key"
+
+
+## `[{"game", "result", "key"}]`, da mais antiga para a mais nova.
+static func pending_rewards() -> Array:
+	return (_file().get_value(WALLET_SECTION, REWARDS_KEY, []) as Array).duplicate()
+
+
+## Põe o prêmio de uma partida na fila. Falso quando a partida (`key`) já entrou:
+## o cartão de fim reabre (revanche recusada, oponente que sai) e não paga de novo.
+static func queue_reward(reward: Dictionary) -> bool:
+	if _file().get_value(WALLET_SECTION, LAST_REWARD_KEY, "") == reward["key"]:
+		return false
+	var queue := pending_rewards()
+	queue.append(reward)
+	_file().set_value(WALLET_SECTION, REWARDS_KEY, queue)
+	_file().set_value(WALLET_SECTION, LAST_REWARD_KEY, reward["key"])
+	_file().save(PATH)
+	return true
+
+
+## O prêmio `key` subiu (ou o servidor o recusou de vez).
+static func drop_reward(key: String) -> void:
+	var queue := pending_rewards().filter(func(entry: Dictionary) -> bool: return entry["key"] != key)
+	_file().set_value(WALLET_SECTION, REWARDS_KEY, queue)
+	_file().save(PATH)
+
+
+## O visual equipado (`Cosmetics`), cópia do que a conta disse por último. Vale
+## antes de a conta entrar e sem rede: a bola da partida não espera o servidor.
+static func look() -> Dictionary:
+	return (_file().get_value(WALLET_SECTION, "look", {}) as Dictionary).duplicate()
+
+
+static func set_look(value: Dictionary) -> void:
+	_file().set_value(WALLET_SECTION, "look", value)
+	_file().save(PATH)
+
+
+## Só para os testes.
+static func forget_rewards() -> void:
+	if _file().has_section(WALLET_SECTION):
+		_file().erase_section(WALLET_SECTION)
+		_file().save(PATH)
+
+
 # --- treino -------------------------------------------------------------------
 #
 # O baralho de `Training`, inteiro numa chave: ele é lido e regravado de uma vez

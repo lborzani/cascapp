@@ -22,6 +22,8 @@ signal signed_in_changed(now: bool)
 signal avatar_changed
 ## Chegou a foto de outra conta pedida em [method avatar_of].
 signal remote_avatar_loaded
+## O saldo ou os itens mudaram: entrada, bônus, prêmio ou compra.
+signal wallet_changed
 
 ## O PocketBase (`/api`) e a busca (`/search`) da Pi, pelo túnel do Cloudflare
 ## (borda em São Paulo). Até a 1.56 era `homeserver.tailb8b7e1.ts.net:8443/cascapp`,
@@ -46,8 +48,22 @@ var avatar_file := ""
 var elo := 0
 ## O código de amigo desta conta, como a última entrada disse; vazio sem conta.
 var friend_code := ""
+## O saldo de moedas, como a última resposta disse; -1 antes da primeira.
+var coins := -1
+## Os itens pagos que esta conta comprou (`pocketbase/pb_hooks/loja.js`).
+var owned: Array = []
+## O bônus do dia que entrou e ainda não foi mostrado. Quem mostra zera.
+var daily_notice := 0
+## O visual equipado (`Cosmetics`). Começa pela cópia do aparelho; a conta
+## confirma na entrada.
+var look: Dictionary = Prefs.look()
+## id → preço, da loja do servidor; vazio até [method fetch_prices] responder.
+var prices := {}
 ## O nome que a conta tem no servidor, como a última resposta disse.
 var _name := ""
+## O dia de Brasília do último pedido de bônus, para não pedir a cada volta ao app.
+var _daily_day := ""
+var _rewarding := false
 var _busy := false
 var _local_texture: Texture2D = null
 ## Nome do arquivo → foto de outra conta (`null` enquanto baixa).
@@ -75,11 +91,16 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_IN and not signed_in() and not base_url().is_empty():
-		# Adiado: durante a notificação o Godot não deixa este nó ganhar filhos, e
-		# o `HTTPRequest` do pedido nascia fora da árvore ("Parent node is busy
-		# setting up children"). A entrada falhava e só voltava 60 s depois.
+	if what != NOTIFICATION_APPLICATION_FOCUS_IN or base_url().is_empty():
+		return
+	# Adiado: durante a notificação o Godot não deixa este nó ganhar filhos, e
+	# o `HTTPRequest` do pedido nascia fora da árvore ("Parent node is busy
+	# setting up children"). A entrada falhava e só voltava 60 s depois.
+	if not signed_in():
 		sign_in.call_deferred()
+	elif _daily_day != br_day(int(Time.get_unix_time_from_system())):
+		# O app ficou aberto (ou em segundo plano) até virar o dia.
+		claim_daily.call_deferred()
 
 
 func signed_in() -> bool:
@@ -115,6 +136,8 @@ func sign_in() -> bool:
 		# Partidas que terminaram com o servidor fora sobem agora.
 		push_reviews()
 		push_matches()
+		push_rewards()
+		claim_daily()
 	if not ok:
 		_retry.start()
 	return ok
@@ -381,6 +404,129 @@ static func review_body(game: Dictionary, owner: String) -> Dictionary:
 	}
 
 
+# --- moedas ---------------------------------------------------------------------
+#
+# Rotas de `pocketbase/pb_hooks/loja.pb.js`. O saldo é do servidor: o app só
+# mostra o que a última resposta disse. Cada rota devolve a carteira inteira.
+
+
+## O dia de Brasília (UTC-3) de um instante Unix, "AAAA-MM-DD", como o servidor
+## conta o bônus diário.
+static func br_day(unix: int) -> String:
+	return Time.get_date_string_from_unix_time(unix - 3 * 3600)
+
+
+## Pede o bônus do dia. Quando ele entra, [member daily_notice] guarda quanto,
+## para o menu avisar.
+func claim_daily() -> void:
+	if not signed_in():
+		return
+	_daily_day = br_day(int(Time.get_unix_time_from_system()))
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/daily", {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		_daily_day = ""
+		return
+	daily_notice += int(reply["data"].get("granted", 0))
+	_take_wallet(reply["data"])
+
+
+## Uma partida terminou contra bot ou online, com `result` "win", "draw" ou
+## "loss". Entra na fila do aparelho e sobe agora se der. Devolve as moedas pagas
+## nesta subida: 0 sem conta (fica na fila), no teto do dia, ou com a partida
+## (`key`) já contada. Fora do APK sem `CASCAPP_PB_URL` não faz nada.
+func reward(game: StringName, result: String, key: String) -> int:
+	if base_url().is_empty() or not Prefs.queue_reward({"game": String(game), "result": result, "key": key}):
+		return 0
+	return await push_rewards()
+
+
+## Sobe a fila de prêmios, da mais antiga para a mais nova. 200 pagou; 400 é
+## pedido que o servidor nunca vai aceitar e sai da fila. Qualquer outra resposta
+## para tudo, e a próxima entrada ou partida tenta de novo.
+func push_rewards() -> int:
+	if not signed_in() or _rewarding:
+		return 0
+	_rewarding = true
+	var granted := 0
+	while true:
+		# Relida a cada volta: a partida que terminou durante a subida entra junto.
+		var queue := Prefs.pending_rewards()
+		if queue.is_empty():
+			break
+		var entry: Dictionary = queue[0]
+		var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/reward", {"game": entry["game"], "result": entry["result"]})
+		if reply["code"] == 200 and reply["data"] is Dictionary:
+			granted += int(reply["data"].get("granted", 0))
+			_take_wallet(reply["data"])
+		elif reply["code"] != 400:
+			break
+		Prefs.drop_reward(str(entry["key"]))
+	_rewarding = false
+	return granted
+
+
+## Os preços da loja. Falso sem resposta.
+func fetch_prices() -> bool:
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/shop", {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return false
+	var items: Variant = reply["data"].get("items")
+	prices = items if items is Dictionary else {}
+	wallet_changed.emit()
+	return true
+
+
+## Se o item pode ser equipado: comprado, ou grátis (fora da tabela de preços).
+## Sem a tabela ainda, só o comprado.
+func owns(item: String) -> bool:
+	return item in owned or (not prices.is_empty() and not prices.has(item))
+
+
+## Compra um item. O código HTTP: 200 comprou, 402 sem moedas, 409 já tinha,
+## 404 o servidor não vende; 0 sem conta ou sem resposta.
+func buy(item: String) -> int:
+	if not signed_in():
+		return 0
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/buy", {"item": item})
+	if reply["code"] == 200 and reply["data"] is Dictionary:
+		_take_wallet(reply["data"])
+	return reply["code"]
+
+
+## Equipa `item` no encaixe `slot`; vazio volta ao padrão. Verdadeiro se a conta
+## guardou. Sem conta não equipa: o visual é da conta, e o servidor confere que
+## o item foi comprado.
+func equip(slot: String, item: String) -> bool:
+	if not signed_in():
+		return false
+	var next := look.duplicate()
+	if item.is_empty():
+		next.erase(slot)
+	else:
+		next[slot] = item
+	var reply := await _call(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + user_id, {"look": next})
+	if reply["code"] != 200:
+		return false
+	look = next
+	Prefs.set_look(look)
+	# O próximo aperto de mão já leva o visual novo (ver `Net.player_look`).
+	Net.player_look = look
+	wallet_changed.emit()
+	return true
+
+
+func _take_wallet(record: Dictionary) -> void:
+	coins = int(record.get("coins", 0))
+	var items: Variant = record.get("owned")
+	owned = items if items is Array else []
+	if record.has("look"):
+		look = Cosmetics.clean(record["look"])
+		Prefs.set_look(look)
+		# O próximo aperto de mão já leva o visual novo (ver `Net.player_look`).
+		Net.player_look = look
+	wallet_changed.emit()
+
+
 # --- avatar ---------------------------------------------------------------------
 #
 # A foto já sai comprimida de `Avatar.compress`. Ela vale primeiro no aparelho
@@ -473,6 +619,9 @@ func _fetch_own_avatar() -> void:
 ## Esquece a sessão (não a conta). Para os testes.
 func sign_out() -> void:
 	_set_token("", "")
+	coins = -1
+	owned = []
+	_daily_day = ""
 
 
 ## `{"email", "password"}` deste aparelho, sempre os mesmos.
@@ -521,6 +670,7 @@ func _authenticate(credentials: Dictionary) -> int:
 	elo = int(data["record"].get("elo_chess", 0))
 	friend_code = str(data["record"].get("friend_code", ""))
 	_set_token(str(data["token"]), str(data["record"]["id"]))
+	_take_wallet(data["record"])
 	return 200
 
 

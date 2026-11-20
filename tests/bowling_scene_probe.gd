@@ -25,6 +25,7 @@ var _done := false
 func _ready() -> void:
 	_watchdog()
 	await _probe_opening()
+	await _probe_skins()
 	await _probe_aim()
 	await _probe_swing_and_throw()
 	await _probe_full_game()
@@ -210,6 +211,63 @@ func _probe_bot() -> void:
 
 ## Em rede, pelos sinais do `Net` (sem relay: o caminho do relay é do
 ## `bowling_net_smoke`). Este aparelho é o assento 1 de uma mesa de dois.
+## A bola de cada assento: a textura da loja do visual dele, ou o mármore na cor.
+func _probe_skins() -> void:
+	print("bola da loja")
+	var galaxy := Cosmetics.ball_texture({"ball": "ball_galaxy"})
+	var flames := Cosmetics.ball_texture({"ball": "ball_flames"})
+	var look_before := Account.look
+	Account.look = {"ball": "ball_galaxy"}
+	Game.start_hotseat(Game.BOWLING)
+	var scene := await _open()
+	_equals(_ball_paint(scene._view._preview), galaxy, "no aparelho, a bola do dono usa a textura dele")
+	_equals(scene._view.lane.ball_skin, galaxy, "e a pista arma a bola com ela")
+	scene._dress_ball(1)
+	_check(_ball_paint(scene._view._preview) != galaxy, "o segundo jogador do mesmo aparelho fica com a bola padrão")
+	_equals(_ball_tint(scene._view._preview), scene._seat_color(1), "na cor do assento dele")
+	scene.free()
+
+	Game.start_hotseat(Game.BOWLING)
+	Game.mode = Game.Mode.ONLINE
+	Net.local_seat = 1
+	Net.seats = 2
+	Net.looks = {0: {"ball": "ball_flames"}, 1: {"ball": "ball_galaxy"}}
+	scene = await _open()
+	scene._dress_ball(0)
+	_equals(_ball_paint(scene._view._preview), flames, "em rede, a bola de cada um é a que ele mandou")
+	scene._dress_ball(1)
+	_equals(_ball_paint(scene._view._preview), galaxy, "inclusive a deste aparelho")
+	Net.looks = {0: {"ball": "ball_que_nao_existe"}}
+	scene._dress_ball(0)
+	_equals(_ball_tint(scene._view._preview), scene._seat_color(0), "item que este app não conhece cai na bola padrão")
+	scene.free()
+	Net.looks = {}
+	Account.look = look_before
+	Game.mode = Game.Mode.HOTSEAT
+
+
+## A textura que a bola desenha agora (a do material pintado, ou a do mármore).
+func _ball_paint(node: Node) -> Texture2D:
+	var material := _ball_material(node)
+	return material.albedo_texture if material != null else null
+
+
+func _ball_tint(node: Node) -> Color:
+	var material := _ball_material(node)
+	return material.albedo_color if material != null else Color.WHITE
+
+
+func _ball_material(node: Node) -> StandardMaterial3D:
+	for found in node.find_children("*", "MeshInstance3D", true, false):
+		var mesh := (found as MeshInstance3D).mesh
+		for surface in mesh.get_surface_count():
+			var source := mesh.surface_get_material(surface) as StandardMaterial3D
+			if source != null and source.resource_name == "ball":
+				var painted := (found as MeshInstance3D).get_surface_override_material(surface) as StandardMaterial3D
+				return painted if painted != null else source
+	return null
+
+
 func _probe_online() -> void:
 	print("em rede")
 	Game.start_hotseat(Game.BOWLING)

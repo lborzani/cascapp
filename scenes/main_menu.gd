@@ -40,6 +40,7 @@ var _leaving := false
 var _sheet: GameSheet = null
 ## A tela de versão nova obrigatória, enquanto está na tela.
 var _gate: UpdateGate = null
+var _toast: Banner = null
 
 
 func _ready() -> void:
@@ -79,6 +80,9 @@ func _ready() -> void:
 	_fill_games()
 	_offer_rejoin()
 	_greet()
+	# O bônus do dia chega pela entrada na conta, antes ou depois do menu abrir.
+	Account.wallet_changed.connect(_show_daily)
+	_show_daily()
 	_check_update()
 	_open_chat_launch()
 	_show_news()
@@ -392,6 +396,16 @@ func _greet() -> void:
 		if is_inside_tree():
 			%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	)
+
+
+func _show_daily() -> void:
+	if Account.daily_notice <= 0:
+		return
+	if _toast == null:
+		_toast = Banner.new()
+		$Safe.add_child(_toast)
+	_toast.show_message("Bônus do dia: +%d moedas." % Account.daily_notice, Banner.Kind.INFO)
+	Account.daily_notice = 0
 
 
 # --- versão nova ---------------------------------------------------------------

@@ -18,6 +18,7 @@ const SHOTS := [
 	["res://scenes/main_menu.tscn", "01c_voltar"],
 	["res://scenes/main_menu.tscn", "01d_como_jogar"],
 	["res://scenes/main_menu.tscn", "01e_favoritos"],
+	["res://scenes/main_menu.tscn", "01f_bonus_diario"],
 	["res://scenes/match.tscn", "02b_regras_mesa"],
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
@@ -40,6 +41,7 @@ const SHOTS := [
 	["res://scenes/ludo_match.tscn", "17d_ludo_pilha"],
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/settings.tscn", "18b_historico"],
+	["res://scenes/settings.tscn", "18c_loja"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
@@ -47,6 +49,7 @@ const SHOTS := [
 	["res://scenes/match.tscn", "24_assistindo"],
 	["res://scenes/bowling_match.tscn", "25_boliche"],
 	["res://scenes/bowling_match.tscn", "25b_boliche_balanco"],
+	["res://scenes/bowling_match.tscn", "25c_boliche_bola"],
 	["res://scenes/match.tscn", "26_conversa"],
 	["res://scenes/match.tscn", "26b_conversa_assistindo"],
 	["res://scenes/ludo_match.tscn", "26c_conversa_aviso"],
@@ -145,12 +148,36 @@ func _next() -> void:
 			Prefs.toggle_favorite(id)
 	# Só os prints de quem assiste são espectador; os outros voltam a jogar.
 	Net.is_spectator = shot in ["24_assistindo", "26b_conversa_assistindo"]
+	# A conta de mentira da loja vale só no print dela; a bola, só no do boliche.
+	Account.token = ""
+	Account.look = {}
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
 			Prefs.forget_welcome()
 		"01_jogos":
 			Prefs.set_welcomed()
+		"01f_bonus_diario":
+			# O aviso que a entrada na conta deixa para o menu.
+			Prefs.set_welcomed()
+			Account.daily_notice = 50
+		"18_ajustes":
+			Account.coins = 350
+		"18c_loja":
+			# Uma conta "entrada" sem servidor: só o que a tela lê.
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {
+				"ball_galaxy": 400, "ball_flames": 300, "ball_ocean": 250,
+				"ball_melon": 200, "ball_wood": 150, "ball_checker": 200,
+			}
+			Account.owned = ["ball_wood", "ball_galaxy"]
+			Account.look = {"ball": "ball_galaxy"}
+		"25c_boliche_bola":
+			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
+			Game.start_hotseat(Game.BOWLING)
+			Game.table_size = 2
+			Account.look = {"ball": "ball_galaxy"}
 		"01c_voltar":
 			# O app reaberto depois de cair de uma partida de Uno.
 			Prefs.set_welcomed()
@@ -311,6 +338,8 @@ func _next() -> void:
 		_play_opening(_scene)
 		if shot == "07_material":
 			_stuff_captures(_scene)
+	elif shot == "18c_loja":
+		_scene._open_shop()
 	elif shot == "18b_historico":
 		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina
 		# nova, cheio na de quem joga. Os dois estados valem ser vistos.
@@ -351,6 +380,9 @@ func _next() -> void:
 		# Com vencedor decidido, para o print mostrar o selo e os números.
 		_scene._winner = Board.Side.WHITE
 		_scene._show_overlay("Brancas venceram", "Você venceu em 10 lances.", true)
+		# O bloco das moedas, como chegaria do servidor (aqui não há conta).
+		_scene._result_header._reward = ["+25", "moedas", true]
+		_scene._result_header.set_stats(_scene._result_header._given)
 		_scene._on_rematch_requested()
 	elif shot == "10_planejado":
 		# Vez do oponente, com os **três** lances seguintes já escolhidos. Duas
@@ -378,6 +410,9 @@ func _next() -> void:
 		_scene._refresh()
 	elif shot == "16_naval":
 		_stage_battleship(_scene)
+	elif shot == "25c_boliche_bola":
+		# Três bolas: strike do 1 e spare do 2, e a vez volta ao dono da bola da loja.
+		_stage_bowling(_scene, true, [1023, 0b0011111111, 0b1100000000])
 	elif shot == "25_boliche" or shot == "25b_boliche_balanco":
 		_stage_bowling(_scene, shot == "25b_boliche_balanco")
 	elif shot == "22_sinuca" or shot == "22b_sinuca_brasileira":
@@ -581,10 +616,10 @@ func _process(_delta: float) -> void:
 ## Boliche com três frames jogados à mão (strike, aberto e spare), o 4 e o 7 em
 ## pé para o primeiro jogador, e a mira com efeito. `swing` congela o balanço
 ## perto do fundo, com a barra de timing à vista.
-func _stage_bowling(scene: Node, swing: bool) -> void:
+func _stage_bowling(scene: Node, swing: bool, masks := [1023, 0b0011111111, 0b1100000000, 0b0111111111, 0, 951]) -> void:
 	var rules: BowlingRules = scene._rules
 	var state: MatchState = scene._state
-	for mask in [1023, 0b0011111111, 0b1100000000, 0b0111111111, 0, 951]:
+	for mask in masks:
 		rules.apply_move(state, BowlingRules.roll(mask))
 	var view: BowlingView = scene._view
 	view.aim_position = 0.45

@@ -269,6 +269,7 @@ func leave() -> void:
 	_expected_code = ""
 	_ready_seats = {}
 	player_names = {}
+	looks = {}
 	verified_seats = {}
 	_pending_sync = {}
 	is_spectator = false
@@ -446,11 +447,13 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			# convidado manda serve à contagem do aperto de mão, mas guardar o nome
 			# por ele deixaria qualquer um renomear o vizinho.
 			_remember_name(from_seat, message.get("name"))
+			_remember_look(from_seat, message.get("look"))
 			_on_ready(int(message.get("seat", 1)))
 		"resume":
 			# A lista inteira vem de volta: quem reabriu o app perdeu os nomes que
 			# aprendeu, e o `resume` é o único aperto de mão que ele vê.
 			_remember_names(message.get("names"))
+			_remember_looks(message.get("looks"))
 			# O relay entrega a mesma mensagem à mesa inteira, e quem responde é só
 			# quem voltou: um `resumed` de quem nunca saiu faria quem recebeu mandar
 			# o histórico inteiro uma vez por aparelho da mesa.
@@ -459,7 +462,7 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 				# o `resume` **é** o convite, e a tela de entrar só sai do lugar com o
 				# `table_ready`.
 				_mark_connected()
-				_send_direct({"t": "resumed", "name": player_name})
+				_send_direct({"t": "resumed", "name": player_name, "look": player_look})
 				_adopt_table(message)
 				if seats == 2:
 					opponent_joined.emit(Board.opponent(local_side))
@@ -470,7 +473,7 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 				# o link voltou, mais a lista de máquinas, que mudou enquanto ele
 				# estava fora.
 				_mark_connected()
-				_send_direct({"t": "resumed", "name": player_name})
+				_send_direct({"t": "resumed", "name": player_name, "look": player_look})
 				_adopt_bots(message)
 				link_restored.emit()
 			else:
@@ -482,6 +485,7 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 			# O nome é de todos: quem voltou se apresenta à mesa inteira, e não só a
 			# quem o recebeu.
 			_remember_name(from_seat, message.get("name"))
+			_remember_look(from_seat, message.get("look"))
 			# O histórico sai de quem recebeu, e de mais ninguém.
 			if _session_started and _greeter(from_seat) == local_seat:
 				_mark_connected()
@@ -560,8 +564,10 @@ func _handle_as_spectator(message: Dictionary, from_seat: int) -> bool:
 			# Um jogador voltou. Para quem assiste só os nomes interessam; o resto do
 			# `resume` é convite a jogar, e espectador não joga.
 			_remember_names(message.get("names"))
+			_remember_looks(message.get("looks"))
 		"resumed":
 			_remember_name(from_seat, message.get("name"))
+			_remember_look(from_seat, message.get("look"))
 			# Quem tinha caído voltou: o tabuleiro de quem assiste descongela.
 			if _watch_started and not connected:
 				connected = true
@@ -711,6 +717,7 @@ func _welcome() -> Dictionary:
 		"tc": time_control,
 		"opt": option,
 		"names": _name_list(),
+		"looks": _look_list(),
 		# O assento das brancas. A revanche troca as cores, e quem volta com o
 		# processo morto não tem como saber disso: sem este campo ele tirava a cor
 		# do assento e voltava com as peças da primeira partida.
@@ -766,9 +773,42 @@ var verified_seats := {}
 var player_name := ""
 
 
+## O visual (`Cosmetics`) de cada assento, como cada aparelho disse no aperto de
+## mão, pelo mesmo caminho do nome: `ready`, `resumed` e a lista no `welcome`.
+## Enfeite como o nome: confiado (o servidor não confere o de ninguém aqui) e,
+## se se perder, a bola volta à cor do assento.
+var looks := {}
+## O visual **deste** aparelho. Como [member player_name]: preenchido do `Prefs`
+## quando ninguém o escreveu, e os testes de rede escrevem o deles antes.
+var player_look := {}
+
+
 ## Como este assento se chama, ou vazio se ninguém disse.
 func name_of(seat: int) -> String:
 	return str(player_names.get(seat, ""))
+
+
+## O visual deste assento, ou vazio (o padrão) se ninguém disse.
+func look_of(seat: int) -> Dictionary:
+	return looks.get(seat, {})
+
+
+func _look_list() -> Array:
+	var pairs := []
+	for seat in looks:
+		pairs.append([seat, looks[seat]])
+	return pairs
+
+
+func _remember_look(seat: int, raw: Variant) -> void:
+	if seat >= 0:
+		looks[seat] = Cosmetics.clean(raw)
+
+
+func _remember_looks(raw: Variant) -> void:
+	for entry in _list(raw):
+		if entry is Array and (entry as Array).size() == 2:
+			_remember_look(int(entry[0]), entry[1])
 
 
 ## `{"user", "avatar", "elo"}` da conta confirmada no assento, ou vazio. `avatar`
@@ -865,6 +905,7 @@ func _adopt_table(message: Dictionary) -> void:
 	time_control = int(message.get("tc", 0))
 	option = int(message.get("opt", 0))
 	_remember_names(message.get("names"))
+	_remember_looks(message.get("looks"))
 	# A cor sai do **nosso assento**, e não do campo `side` da mensagem.
 	#
 	# `side` descreve o convidado, porque quem mandava a mesa era sempre o
@@ -897,7 +938,7 @@ func _on_welcome(message: Dictionary) -> void:
 	#
 	# O nome vai junto, e o relay entrega a **todos** — então este `ready` é o que
 	# apresenta este jogador aos outros convidados também, não só a quem abriu.
-	_send_direct({"t": "ready", "seat": local_seat, "name": player_name})
+	_send_direct({"t": "ready", "seat": local_seat, "name": player_name, "look": player_look})
 	if seats == 2:
 		opponent_joined.emit(Board.opponent(local_side))
 	else:
@@ -1003,6 +1044,7 @@ func watch_relay(code: String) -> void:
 	seats = 2
 	bot_seats = PackedInt32Array()
 	player_names = {}
+	looks = {}
 	verified_seats = {}
 	_expected_code = code
 	# Quem assiste também tem nome: é o que a fila mostra se ele pedir a vez.
@@ -1037,6 +1079,8 @@ func join_relay(code: String, id: StringName, key := "") -> void:
 func _default_name() -> void:
 	if player_name.is_empty():
 		player_name = Prefs.player_name()
+	if player_look.is_empty():
+		player_look = Prefs.look()
 
 
 func _wire_relay() -> bool:
@@ -1120,7 +1164,10 @@ func _on_relay_swapped(seat: int, raw_name: String, key: String, watchers: int) 
 	# `identity` de quem sentou.
 	verified_seats.erase(seat)
 	player_names.erase(seat)
+	looks.erase(seat)
 	_remember_name(seat, player_name if seat == local_seat else raw_name)
+	if seat == local_seat:
+		_remember_look(seat, player_look)
 	names_changed.emit()
 	seat_swapped.emit(seat)
 
@@ -1144,6 +1191,7 @@ func _on_relay_seated(seat: int, capacity: int) -> void:
 	# aparelho descobre **qual assento ele é**, e sem isso quem abre mandaria um
 	# `welcome` sem se apresentar.
 	_remember_name(seat, player_name)
+	_remember_look(seat, player_look)
 	# Só antes de a partida começar. Depois a cor é a da partida (moeda, revanche),
 	# que este aparelho já tem; refazer pelo assento a apagava a cada reconexão.
 	# Para quem entra é um palpite: o `welcome` ou o `resume` trazem a certa.

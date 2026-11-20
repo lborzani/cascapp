@@ -103,6 +103,8 @@ var rolling := false
 var following := false
 ## Cor da bola do próximo arremesso (a de quem joga).
 var ball_color := Color.WHITE
+## A textura da loja da bola de quem joga, ou `null` para o mármore na cor.
+var ball_skin: Texture2D = null
 var ball: RigidBody3D = null
 ## Um por pino (índice 0 = pino 1); `null` nos que não estão armados.
 var pins: Array[RigidBody3D] = []
@@ -243,25 +245,31 @@ func _spawn_ball(at: Vector3) -> void:
 	shape.shape = sphere
 	ball.add_child(shape)
 	var visual := BALL_SCENE.instantiate()
-	tint_ball(visual, ball_color)
+	tint_ball(visual, ball_color, ball_skin)
 	ball.add_child(visual)
 	ball.position = at
 	add_child(ball)
 	_track(ball, visual)
 
 
-## Pinta o mármore cinza da bola (o material `ball`; os furos ficam como estão).
-static func tint_ball(node: Node, color: Color) -> void:
-	if color == Color.WHITE:
-		return  # o mármore como veio; e sem material novo, que o modo sem tela reclama
+## Pinta a bola (o material `ball`; os furos ficam como estão): a textura da
+## loja (`Cosmetics`) quando há, senão o mármore cinza na cor do assento.
+static func tint_ball(node: Node, color: Color, skin: Texture2D = null) -> void:
 	for found in node.find_children("*", "MeshInstance3D", true, false):
 		var mesh := (found as MeshInstance3D).mesh
 		for surface in mesh.get_surface_count():
 			var source := mesh.surface_get_material(surface) as StandardMaterial3D
 			if source == null or source.resource_name != "ball":
 				continue
+			if color == Color.WHITE and skin == null:
+				# O mármore como veio; e sem material novo, que o modo sem tela reclama.
+				(found as MeshInstance3D).set_surface_override_material(surface, null)
+				continue
 			var painted := source.duplicate() as StandardMaterial3D
-			painted.albedo_color = color
+			if skin != null:
+				painted.albedo_texture = skin
+			else:
+				painted.albedo_color = color
 			(found as MeshInstance3D).set_surface_override_material(surface, painted)
 
 

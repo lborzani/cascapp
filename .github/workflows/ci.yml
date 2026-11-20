@@ -96,8 +96,8 @@ jobs:
           make -C /tmp/Stockfish-sf_15.1/src -j"$(nproc)" build ARCH=x86-64-modern EXTRACXXFLAGS=-DNNUE_EMBEDDING_OFF > /tmp/sf-build.log 2>&1 || { tail -30 /tmp/sf-build.log; exit 1; }
           STOCKFISH=/tmp/Stockfish-sf_15.1/src/stockfish godot --headless --path . --script res://tests/stockfish_probe.gd
 
-      # A conta anônima contra um PocketBase de verdade, na mesma versão do
-      # servidor (lida do Dockerfile) e com as mesmas migrations. Fora daqui o
+      # A conta anônima e a loja contra um PocketBase de verdade, na mesma versão
+      # do servidor (lida do Dockerfile) e com as mesmas migrations. Fora daqui o
       # `Account` não liga: sem `CASCAPP_PB_URL`, nenhuma suíte cria conta.
       - name: Contas (PocketBase)
         run: |
@@ -108,6 +108,8 @@ jobs:
           /tmp/pb/pocketbase serve --http 127.0.0.1:18091 --dir /tmp/pb/data --migrationsDir pocketbase/pb_migrations --hooksDir pocketbase/pb_hooks > pb.log 2>&1 &
           timeout 30 bash -c 'until curl -sf 127.0.0.1:18091/api/health >/dev/null; do sleep 0.5; done'
           CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/account_probe.tscn
+          node --test pocketbase/loja.test.js
+          CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/shop_probe.tscn
 
       # Tema e componentes base: fontes embarcadas com os acentos do português,
       # contraste dos pares de texto, as variações que as telas pedem, e a

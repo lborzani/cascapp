@@ -91,6 +91,29 @@ servidor o muda. Dono e `played_at` são únicos juntos, então o reenvio de uma
 resposta perdida não duplica. Não passa pelo relay: a revisão é pessoal, e o
 relay só conhece um hash da partida.
 
+## Loja e moedas
+
+Cada conta tem saldo (`coins`), itens pagos comprados (`owned`) e o visual
+equipado (`look`, `{"ball": "ball_wood", "hair": "hair_mohawk", ...}`). O saldo
+e os itens são do servidor: só as rotas de `pb_hooks/loja.pb.js` mexem neles,
+e a regra de atualização recusa o app escrevendo `coins`, `owned` ou os campos
+do dia. A conta nova nasce zerada por cima do que vier no corpo.
+
+- `GET /api/cascapp/shop`, aberta: os preços (`items`), o bônus diário e o
+  prêmio por partida. O preço mora só aqui (`pb_hooks/loja.js`); item fora da
+  tabela é grátis.
+- `POST /api/cascapp/daily`: 50 moedas, uma vez por dia de Brasília.
+- `POST /api/cascapp/reward` com `{game, result}`: 25 por vitória, 15 por
+  empate e 10 por derrota, até 300 por dia. O app conta o próprio desfecho e o
+  servidor confia, limitado pelo teto.
+- `POST /api/cascapp/buy` com `{item}`: desconta numa transação; 402 sem saldo,
+  409 já comprado, 404 item que não existe.
+- O app equipa pelo update normal do `look`; um hook recusa (403) item pago que
+  não está em `owned`.
+
+As regras puras têm teste no Node (`node --test pocketbase/loja.test.js`), e as
+rotas, no `tests/shop_probe.tscn` contra um PocketBase local.
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `homeserver` pela tailnet (`USUARIO` é o seu

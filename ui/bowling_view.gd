@@ -94,7 +94,18 @@ var ball_color := Color.WHITE:
 		if lane != null:
 			lane.ball_color = value
 		if _preview != null:
-			Lane.tint_ball(_preview, value)
+			Lane.tint_ball(_preview, value, ball_skin)
+		_render()
+
+## A textura da loja (`Cosmetics`) da bola de quem joga; `null` é o mármore na
+## cor do assento.
+var ball_skin: Texture2D = null:
+	set(value):
+		ball_skin = value
+		if lane != null:
+			lane.ball_skin = value
+		if _preview != null:
+			Lane.tint_ball(_preview, ball_color, value)
 		_render()
 
 var lane: BowlingLane = null
@@ -175,12 +186,13 @@ func _build_world() -> void:
 
 	lane = BowlingLane.new()
 	lane.ball_color = ball_color
+	lane.ball_skin = ball_skin
 	lane.settled.connect(_on_settled)
 	_viewport.add_child(lane)
 
 	_preview = Lane.BALL_SCENE.instantiate()
 	_viewport.add_child(_preview)
-	Lane.tint_ball(_preview, ball_color)
+	Lane.tint_ball(_preview, ball_color, ball_skin)
 
 	_camera = Camera3D.new()
 	_camera.fov = FOV
@@ -231,6 +243,7 @@ func follow(step: int, poses: PackedInt32Array) -> void:
 		_phase = Phase.ROLLING
 		_angle = 0.0
 		lane.ball_color = ball_color
+		lane.ball_skin = ball_skin
 	lane.follow(step, poses)
 	_sync()
 
@@ -287,6 +300,7 @@ func _start_rolling(chosen: PackedFloat32Array) -> void:
 	_phase = Phase.ROLLING
 	_angle = 0.0
 	lane.ball_color = ball_color
+	lane.ball_skin = ball_skin
 	lane.throw(chosen)
 	_sync()
 

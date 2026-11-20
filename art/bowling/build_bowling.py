@@ -416,4 +416,6 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "bowling.blend"))
 
 
-main()
+# As bolas da loja (`build_skins.py`) importam as funções daqui sem refazer tudo.
+if __name__ == "__main__":
+    main()
