@@ -207,6 +207,9 @@ jobs:
       # O sétimo é o de quem **volta**: queda sem aviso virando bot, a chave
       # devolvendo o mesmo assento, e o anfitrião que cai sendo recebido pelos
       # outros em vez de abrir uma partida nova com outra semente.
+      #
+      # O oitavo abre e entra em salas seguidas com o anfitrião trocando de rede
+      # no meio: era o convidado preso em "Esperando quem abriu a sala".
       - name: Partida ponta a ponta
         env:
           CHESS_RELAY_URL: ws://127.0.0.1:8080/ws
@@ -221,6 +224,7 @@ jobs:
           godot --headless --path . --script res://tests/bowling_net_smoke.gd
           godot --headless --path . --script res://tests/monopoly_net_smoke.gd
           godot --headless --path . --script res://tests/rejoin_smoke.gd
+          godot --headless --path . --script res://tests/lobby_stress.gd -- --rounds=20
 
   apk:
     name: APK de depuração

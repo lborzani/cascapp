@@ -98,6 +98,49 @@ describe('RoomRegistry', () => {
     assert.equal(clash.ok === false && clash.reason, 'room_taken');
   });
 
+  // A troca de Wi-Fi para 4G deixa o socket antigo de quem abriu "aberto" no
+  // servidor até o ping matá-lo. Com a chave, a volta derruba o zumbi, como no
+  // `join`; sem ela, era `room_taken` e a sala morria com o convidado dentro.
+  it('devolve o assento 0 a quem abriu e volta com a chave, mesmo com o zumbi aberto', () => {
+    const rooms = registry();
+    const zombie = new FakeSocket();
+    const opened = rooms.openRoom('ABC123', 'chess', zombie);
+    const key = opened.ok ? opened.key : '';
+
+    const back = new FakeSocket();
+    const again = rooms.openRoom('ABC123', 'chess', back, false, 0, 2, '', key);
+    assert.equal(again.ok && again.seat, 0);
+    assert.equal(again.ok && again.evicted, zombie, 'o zumbi sai para o servidor derrubar');
+    assert.equal(rooms.get('ABC123')?.seats[0], back);
+
+    const stranger = rooms.openRoom('ABC123', 'chess', new FakeSocket(), false, 0, 2, '', 'errada');
+    assert.equal(stranger.ok === false && stranger.reason, 'room_taken', 'chave errada não toma a sala');
+  });
+
+  // Quem abriu caiu e está voltando: o assento 0 é dele. Sentado ali, o convidado
+  // ficava sozinho na sala e a volta de quem abriu dava `room_taken`.
+  it('quem entra sem chave não pega o assento 0 de quem abriu', () => {
+    const rooms = registry();
+    const host = new FakeSocket();
+    rooms.openRoom('ABC123', 'chess', host);
+    host.kill();
+
+    const guest = rooms.joinRoom('ABC123', new FakeSocket());
+    assert.equal(guest.ok && guest.seat, 1);
+    assert.equal(rooms.openRoom('ABC123', 'chess', new FakeSocket()).ok, true, 'e quem abriu volta');
+  });
+
+  it('o assento 0 ainda serve quando é o único livre', () => {
+    const rooms = registry();
+    const host = new FakeSocket();
+    rooms.openRoom('LUDO01', 'ludo', host, false, 0, 4);
+    for (let i = 0; i < 3; i++) rooms.joinRoom('LUDO01', new FakeSocket());
+    host.kill();
+
+    const late = rooms.joinRoom('LUDO01', new FakeSocket());
+    assert.equal(late.ok && late.seat, 0);
+  });
+
   it('recusa um terceiro jogador numa sala de dois', () => {
     const rooms = registry();
     rooms.openRoom('ABC123', 'chess', new FakeSocket());
@@ -476,6 +519,7 @@ describe('protocolo', () => {
       seats: 2,
       name: '',
       token: '',
+      key: '',
     });
     assert.deepEqual(parseClientMessage('{"t":"join","room":"ABC123"}'), {
       t: 'join',

@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.56
+
+- Corrige quem entrava numa sala e ficava preso em "Esperando quem abriu a sala": se a internet de quem abriu oscilava (por exemplo, do Wi-Fi para o 4G), a sala se perdia. Agora ela volta sozinha.
+- Xadrez online: o relógio não gasta mais tempo enquanto a moeda do sorteio de cor está girando.
+
 ## 1.55
 
 - Corrige celulares que travavam ao entrar num jogo: o app agora desenha a tela de um jeito que funciona em mais aparelhos.

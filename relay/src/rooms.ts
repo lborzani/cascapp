@@ -179,14 +179,18 @@ export class RoomRegistry<S extends OpenState> {
     listed = false,
     tc = 0,
     capacity = MIN_SEATS,
-    host = ''
+    host = '',
+    key = ''
   ): SeatOutcome<S> {
     if (!isValidSeatCount(capacity)) {
       return { ok: false, reason: 'bad_seats' };
     }
     const existing = this.rooms.get(code);
     if (existing !== undefined) {
-      if (isOpen(existing.seats[0])) {
+      // Aberto **e** sem a chave dele: é outro aparelho tentando a mesma sala.
+      // Com a chave é quem abriu voltando, e o socket aberto é o zumbi que a
+      // troca de rede deixou — o mesmo caso que o `join` resolve derrubando-o.
+      if (isOpen(existing.seats[0]) && (key === '' || existing.keys[0] !== key)) {
         return { ok: false, reason: 'room_taken' };
       }
       return this.take(existing, 0, socket);
@@ -353,7 +357,11 @@ export class RoomRegistry<S extends OpenState> {
         return this.take(room, seat, socket);
       }
     }
-    const free = room.seats.findIndex((seated) => !isOpen(seated));
+    // O assento 0 por último. Livre, ele quase sempre é de quem abriu e está
+    // voltando de uma queda; sentado nele, quem chega ficava sozinho na sala, e a
+    // volta de quem abriu dava `room_taken`.
+    let free = room.seats.findIndex((seated, seat) => seat > 0 && !isOpen(seated));
+    if (free < 0 && !isOpen(room.seats[0])) free = 0;
     if (free < 0) {
       return { ok: false, reason: 'room_full' };
     }

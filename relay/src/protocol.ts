@@ -82,6 +82,11 @@ export type ClientMessage =
       name: string;
       /** Token da conta (PocketBase). Vazio é jogador sem conta. Ver `accounts.ts`. */
       token: string;
+      /**
+       * Chave do assento 0, na volta de quem abriu. Vazia na abertura. Com ela a
+       * volta derruba o socket zumbi que a troca de rede deixou aberto.
+       */
+      key: string;
     }
   /** `key` vazia é a primeira entrada; preenchida, é uma volta ao mesmo assento. */
   | { t: 'join'; room: string; key: string; token: string }
@@ -383,6 +388,7 @@ export function parseClientMessage(raw: string): ClientMessage | null {
             // que é como todas as salas eram até aqui.
             name: cleanName(record.name),
             token: cleanToken(record.token),
+            key: typeof record.key === 'string' ? record.key : '',
           }
         : null;
     case 'join':

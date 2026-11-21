@@ -462,7 +462,7 @@ func _process(delta: float) -> void:
 ## mesma resposta.
 func _on_socket_closed() -> void:
 	var reason: String = _socket.get_close_reason()
-	if _socket.get_close_code() == CLOSE_POLICY:
+	if _socket.get_close_code() == CLOSE_POLICY and not _is_own_room_taken(reason):
 		_refusal = reason
 		_want_link = false
 		_close_socket()
@@ -471,6 +471,19 @@ func _on_socket_closed() -> void:
 		failed.emit(_refusal_text(reason, "O servidor recusou a conexão (%s)." % reason))
 		return
 	_drop("A conexão com o servidor caiu.")
+
+
+## "Sala ocupada" na **volta** de quem a abriu não é recusa: o ocupante é o nosso
+## próprio socket antigo, que o servidor ainda acha vivo depois de uma troca de
+## rede. O relay novo o derruba pela chave; o antigo só pelo ping, em até 50 s.
+## Até lá, tentar de novo. Desistir aqui matava a sala com o convidado dentro,
+## esperando um `welcome` que não vinha.
+##
+## "Volta" é qualquer conexão depois de uma queda (`_retry_index` só zera no
+## `joined`), com ou sem chave: a rede pode cair entre o `host` e o `joined`, e aí
+## a sala já existe no servidor sem que a chave tenha chegado aqui.
+func _is_own_room_taken(reason: String) -> bool:
+	return reason == "room_taken" and _role == "host" and _retry_index > 0
 
 
 ## Pelo Bluetooth a recusa também pode vir do rádio (`disabled`, `no_permission`),
@@ -552,6 +565,9 @@ func _send_hello() -> void:
 			"seats": _capacity,
 			"name": _host_name,
 			"token": _account_token(),
+			# Vazia na abertura. Na volta de uma queda é ela que derruba o socket
+			# antigo, que a troca de Wi-Fi para 4G deixa "aberto" no servidor.
+			"key": _key,
 		}))
 	elif _role == "watch":
 		_socket.send_text(JSON.stringify({"t": "watch", "room": _room}))
@@ -647,6 +663,9 @@ func _handle(message: Dictionary) -> void:
 			pass
 		"error":
 			var reason := str(message.get("reason", ""))
+			if _is_own_room_taken(reason):
+				_drop("A sala ainda está presa à conexão anterior.")
+				return
 			_refusal = reason
 			# Recusa do servidor não se resolve tentando de novo.
 			_want_link = false

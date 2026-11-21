@@ -284,7 +284,8 @@ export function createRelay(options: RelayOptions = {}): Relay {
               message.listed,
               message.tc,
               message.seats,
-              message.name
+              message.name,
+              message.key
             )
           );
           break;
