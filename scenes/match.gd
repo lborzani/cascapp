@@ -323,6 +323,10 @@ func _clock_running() -> bool:
 		return false
 	if _outcome != Ruleset.Outcome.ONGOING or %PromotionLayer.visible:
 		return false
+	# A moeda do sorteio cobre a mesa por quase três segundos, e quem sai de
+	# brancas ainda está lendo a própria cor. O relógio só anda depois que ela some.
+	if is_instance_valid(_coin_toss):
+		return false
 	return Game.mode != Game.Mode.ONLINE or Net.connected
 
 
@@ -779,14 +783,19 @@ func _run_premove() -> void:
 	var wait := _board.remaining_animation()
 	if wait > 0.0:
 		var expected := _state.ply
+		var clock_before := float(_clock[Game.local_side])
 		await get_tree().create_timer(wait).timeout
 		if _state.ply != expected or _premove.size() < 2:
 			return
 		# A espera é para o jogador **ver** o lance do oponente, e não pode custar
 		# relógio: o premove existe para sair em tempo zero. Devolvido aqui, antes
 		# de `_play`, ele viaja certo no lance para o outro aparelho.
+		#
+		# O valor de antes, e não a duração da espera: o relógio pode ter ficado
+		# parado nela (moeda na tela, link caído), e somar `wait` daria tempo que
+		# ninguém gastou.
 		if Game.has_clock():
-			_clock[Game.local_side] = float(_clock[Game.local_side]) + wait
+			_clock[Game.local_side] = maxf(float(_clock[Game.local_side]), clock_before)
 	# Link caído na espera: a corrente fica. A vez continua nossa e o oponente não
 	# tem como jogar; quando o link volta, [method _on_link_restored] a solta.
 	if Game.mode == Game.Mode.ONLINE and not Net.connected and not _abandoned:

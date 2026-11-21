@@ -634,6 +634,10 @@ func _test_coin_toss() -> void:
 	Net.local_side = Board.Side.BLACK
 	Net.local_seat = 0
 	Net.is_spectator = false
+	# Com relógio e ligado: é o caso em que o tempo de brancas corria por baixo da moeda.
+	var time_control := Game.time_control
+	Game.time_control = 1
+	Net.connected = true
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
 	await get_tree().process_frame
@@ -642,9 +646,15 @@ func _test_coin_toss() -> void:
 	_equals(coin._caption.text, "Você joga de pretas", "com a cor de quem vê")
 	_equals(coin.kind, Board.Kind.PAWN, "e um peão nas faces do xadrez")
 	_equals(coin.mouse_filter, Control.MOUSE_FILTER_IGNORE, "sem segurar o toque")
-	await get_tree().create_timer(CoinToss.SPIN + CoinToss.HOLD + CoinToss.FADE + 0.4).timeout
+	await get_tree().create_timer(CoinToss.SPIN).timeout
+	_equals(float(scene._clock[Board.Side.WHITE]), Game.clock_initial(), "o relógio não anda com a moeda na tela")
+	await get_tree().create_timer(CoinToss.HOLD + CoinToss.FADE + 0.4).timeout
 	_check(not is_instance_valid(coin), "e some sozinha")
+	await get_tree().create_timer(0.3).timeout
+	_check(float(scene._clock[Board.Side.WHITE]) < Game.clock_initial(), "e depois dela o relógio de brancas corre")
 	scene.queue_free()
+	Game.time_control = time_control
+	Net.connected = false
 	await get_tree().process_frame
 
 	var cases := [
