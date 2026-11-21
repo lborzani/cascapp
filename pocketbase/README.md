@@ -1,24 +1,36 @@
 # Contas (PocketBase)
 
 PocketBase das contas do Cascapp, rodando no servidor de casa (`homeserver`, uma
-Raspberry Pi 64 bits, Docker) atrás do Tailscale — a casa está em CGNAT e não há
-domínio próprio. A imagem sai na arquitetura de quem constrói (`TARGETARCH` no
+Raspberry Pi 64 bits, Docker) atrás do Tailscale — a casa está em CGNAT. O relay
+das partidas roda no mesmo compose e sai pelo túnel do Cloudflare
+(`relay.cascapp.com.br`, ver `relay/README.md`). A imagem sai na arquitetura de quem constrói (`TARGETARCH` no
 `Dockerfile`): arm64 no Pi, amd64 num PC.
 
 | O quê | Onde | Quem alcança |
 |---|---|---|
-| API | `https://homeserver.tailb8b7e1.ts.net:8443/cascapp/api/` | internet (Tailscale Funnel, só `/cascapp/api`) |
-| Busca (`/search`) | `https://homeserver.tailb8b7e1.ts.net:8443/cascapp/search` | internet, só com token de conta (`worker/search.mjs`) |
+| O quê | Onde | Quem alcança |
+|---|---|---|
+| API | `https://api.cascapp.com.br/api/` | internet (túnel do Cloudflare, só `^/api/`) |
+| Busca (`/search`) | `https://api.cascapp.com.br/search` | internet, só com token de conta (`worker/search.mjs`) |
 | Painel admin | `https://homeserver.tailb8b7e1.ts.net:8092/_/` | só a tailnet (`tailscale serve`) |
 | Container | `127.0.0.1:8092` no `homeserver` | só o próprio servidor |
 
-As três portas do Funnel da Pi já têm dono (443 galaticos, 8443 ate-o-japao,
-10000 SPMove), e a 8090 local é do galaticos. Por isso o Cascapp divide a 8443
-pelo caminho `/cascapp/api`, e o app usa `…:8443/cascapp` como endereço base.
-Só o `/api` vai para a internet; o painel `/_/` fica na tailnet. Nunca rodar
-`tailscale funnel` sem `--https=`: isso troca a 443 do galaticos.
+O app usa `https://api.cascapp.com.br` como endereço base. O túnel do Cloudflare
+(serviço `tunnel` do compose) tem duas rotas nesse hostname, configuradas no
+painel (Zero Trust › Networks › Tunnels › `cascapp`): path `^/api/` para
+`http://pocketbase:8090` e path `^/search$` para `http://search:8093`. Qualquer
+outro caminho, como o painel `/_/`, cai no 404 do túnel. O túnel e não o Funnel
+porque o ingresso do Funnel fica em Nova York: medido em 2026-11-21, ~280 ms por
+pedido daqui, contra a borda do Cloudflare em São Paulo.
 
-**Transição:** antes ele morava no `mammus`, e as versões do app até a 1.41 têm
+**Transição do Funnel:** as versões do app até a 1.56 usam
+`https://homeserver.tailb8b7e1.ts.net:8443/cascapp` fixo. As três portas do
+Funnel já têm dono (443 galaticos, 8443 ate-o-japao, 10000 SPMove), por isso o
+Cascapp divide a 8443 pelos caminhos `/cascapp/api` e `/cascapp/search`. Eles
+ficam no ar até essas versões sumirem. Nunca rodar `tailscale funnel` sem
+`--https=`: isso troca a 443 do galaticos.
+
+**Transição anterior:** antes ele morava no `mammus`, e as versões do app até a 1.41 têm
 `https://mammus.tailb8b7e1.ts.net:8443` fixo. Enquanto elas existirem, a 8443
 `/api` do `mammus` só repassa para o `homeserver`; depois a ponte é desligada.
 A porta 443 do Funnel do `mammus` é do bot de música e não é tocada.

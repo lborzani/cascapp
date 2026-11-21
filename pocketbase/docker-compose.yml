@@ -1,7 +1,9 @@
 # Stack das contas no servidor de casa (`homeserver`, Raspberry Pi).
 #
-# Escuta só no 127.0.0.1: quem publica é o Tailscale — a API pela internet
-# (Funnel, porta 8443, só /cascapp/api) e o painel admin só pela tailnet (porta 8092).
+# Escuta só no 127.0.0.1. Para a internet sai pelo túnel do Cloudflare (serviço
+# `tunnel`): `api.cascapp.com.br` (só `/api/` e `/search`) e `relay.cascapp.com.br`.
+# O painel admin fica só na tailnet (porta 8092). O Funnel da 8443 segue no ar
+# para as versões do app até a 1.56.
 # Ver o README desta pasta.
 name: cascapp-contas
 
@@ -49,7 +51,7 @@ services:
 
   # Busca de uma posição na hora (`worker/search.mjs`), para o desafio e a
   # avaliação ao vivo. Mesma imagem do worker, outro processo, um núcleo. O
-  # Funnel publica `:8443/cascapp/search` (ver o README). Confere o token de
+  # túnel publica `api.cascapp.com.br/search` (ver o README). Confere o token de
   # quem pede no PocketBase pela rede do compose.
   search:
     image: cascapp-worker:sf19
@@ -64,6 +66,44 @@ services:
     environment:
       PB_URL: http://pocketbase:8090
       SEARCH_NODES: ${SEARCH_NODES:-100000}
+
+  # O relay das partidas online (`relay/` na raiz do repositório). As salas moram
+  # na memória do processo: um container só, nunca réplicas. Sai para a internet
+  # pelo túnel do Cloudflare (`relay.cascapp.com.br`, serviço `tunnel` abaixo).
+  # Fala com o PocketBase pela rede do compose, sem passar pelo Funnel. A imagem
+  # é construída à parte, a partir da pasta `relay/` (ver o README).
+  relay:
+    image: cascapp-relay:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8094:8080"
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      POCKETBASE_URL: http://pocketbase:8090
+      CASCAPP_RELAY_SECRET: ${CASCAPP_RELAY_SECRET:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Túnel do Cloudflare, e não o Funnel: o ingresso do Funnel fica
+  # em Nova York e um lance levava ~280 ms; a borda do Cloudflare fica em São
+  # Paulo. As rotas (`relay.cascapp.com.br` -> `http://relay:8080`;
+  # `api.cascapp.com.br` `^/api/` -> `http://pocketbase:8090` e `^/search$` ->
+  # `http://search:8093`) ficam
+  # no painel do Cloudflare (Zero Trust > Tunnels). O token mora no
+  # `.env` (`CLOUDFLARE_TUNNEL_TOKEN`).
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.1
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    depends_on:
+      - relay
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
 
 volumes:
   pb_data:

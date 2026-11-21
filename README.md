@@ -2009,19 +2009,9 @@ exportação ficam em cache por versão, em `.github/actions/godot`.
 
 ### Deploy do relay
 
-`.github/workflows/deploy.yml` publica o relay (Node, `relay/`) no Fly. Ela
-dispara em `main`, e só quando muda algo em `relay/`: uma mudança no app não
-reinicia as salas em curso.
-
-Um segredo, `FLY_API_TOKEN`, com acesso ao app. Sem ele a tarefa falha
-**dizendo isso**, em vez de morrer dentro do `flyctl` com uma mensagem de
-autenticação que não explica o que fazer.
-
-O deploy termina com `fly scale count 1`, e ele não é economia de custo: as salas
-moram na memória do processo. É a
-armadilha das limitações conhecidas, transformada num passo que roda sozinho.
-Depois disso o relay é conferido pelo `/healthz`: o que decide se a publicação
-deu certo é o processo **respondendo**, e não o código de saída do `deploy`.
+O relay (Node, `relay/`) roda no servidor de casa e é publicado à mão, com
+`tools/deploy_relay.sh`. A CI só testa (`npm test` no `ci.yml`). Detalhes em
+`relay/README.md`, "Deploy".
 
 ### Release por tag
 
@@ -3416,10 +3406,8 @@ depende do rádio do outro lado), mas os três erros acima teriam sido pegos.
 - **O relay não escala horizontalmente.** As salas moram na memória de um
   processo; duas instâncias atrás do mesmo endereço põem anfitrião e convidado em
   processos diferentes e eles nunca se acham, e o sintoma do lado do jogador é
-  "nenhuma partida com esse código" — que parece erro de digitação. O `fly
-  launch` cria duas máquinas por padrão, então o problema aparecia sozinho; hoje
-  **a esteira de deploy desfaz isso a cada publicação** (`fly scale count 1`) em
-  vez de depender de alguém lembrar. Uma instância aguenta na casa dos milhares
+  "nenhuma partida com esse código" — que parece erro de digitação. Por isso o
+  relay é um container só no compose do servidor de casa, sem réplicas. Uma instância aguenta na casa dos milhares
   de partidas; o limite é número de conexões, não CPU. Detalhes em
   [`relay/README.md`](relay/README.md).
 - **Numa mesa de dois a janela de reconexão é de 90 segundos.** Um túnel longo ou

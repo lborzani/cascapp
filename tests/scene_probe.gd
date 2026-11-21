@@ -1987,6 +1987,8 @@ func _test_manual_update() -> void:
 ## limpeza de tela não quebraria nada que outro teste veja.
 func _test_server_search() -> void:
 	print("busca no servidor (ServerSearch)")
+	_equals(ServerSearch.parse_url("https://api.cascapp.com.br/search"),
+		{"tls": true, "host": "api.cascapp.com.br", "port": 443, "path": "/search"}, "https sem porta")
 	_equals(ServerSearch.parse_url("https://homeserver.tailb8b7e1.ts.net:8443/cascapp/search"),
 		{"tls": true, "host": "homeserver.tailb8b7e1.ts.net", "port": 8443, "path": "/cascapp/search"}, "endereço com porta e caminho")
 	_equals(ServerSearch.parse_url("http://127.0.0.1/search"), {"tls": false, "host": "127.0.0.1", "port": 80, "path": "/search"}, "http sem porta")

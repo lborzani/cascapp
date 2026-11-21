@@ -122,55 +122,45 @@ Use o IP da máquina na rede, não `localhost` — o celular precisa alcançá-l
 
 ## Deploy
 
-### Fly.io
+O relay roda no servidor de casa (a Raspberry Pi das contas), como o serviço
+`relay` de `pocketbase/docker-compose.yml`, e sai para a internet pelo túnel do
+Cloudflare (serviço `tunnel` do mesmo compose):
+
+    wss://relay.cascapp.com.br/ws
+
+Para publicar uma versão nova:
 
 ```bash
-cd relay && fly launch --no-deploy --copy-config --name chess-checkers-relay && fly deploy
+tools/deploy_relay.sh
 ```
 
-**Depois do deploy, obrigatoriamente:**
+O script copia `relay/` para `~/cascapp-relay` na Pi, constrói a imagem lá e
+recria o container. Reiniciar derruba as salas em curso; os apps reconectam.
+
+**Por que o túnel do Cloudflare, e não o Tailscale Funnel das contas:** o
+ingresso do Funnel fica em Nova York. Medido em 2026-11-21 com
+`latency-probe.mjs`, um lance levava 284 ms pelo Funnel, contra 14 ms no Fly em
+`gru`. A borda do Cloudflare fica em São Paulo. A casa está em CGNAT, então
+abrir porta no roteador não é opção.
+
+O hostname público (`relay.cascapp.com.br` → `http://relay:8080`) fica no painel
+do Cloudflare, em Zero Trust › Networks › Tunnels. O token do túnel mora no
+`.env` das contas na Pi (`CLOUDFLARE_TUNNEL_TOKEN`), fora do repositório.
+
+**Um container só, nunca réplicas.** As salas moram na memória do processo: com
+dois processos atrás do mesmo endereço, anfitrião e convidado caem em processos
+diferentes e nunca se acham. O jogador vê "nenhuma partida com esse código", que
+parece erro de digitação. Para conferir, com uma partida aberta:
 
 ```bash
-fly scale count 1
+curl https://relay.cascapp.com.br/healthz
 ```
 
-O `fly launch` cria **duas** máquinas por padrão, e este servidor não sobrevive
-a isso: as salas moram na memória de um processo, então o anfitrião entra numa
-máquina, o convidado na outra, e os dois nunca se acham. O jogador vê "nenhuma
-partida com esse código" — indistinguível de um código digitado errado. Metade
-dos pareamentos falha, e a outra metade funciona, que é o pior tipo de bug.
+O campo `machine` tem de ser sempre o mesmo e `rooms` tem de ficar estável.
 
-Para confirmar, com uma partida aberta na tela de criar:
-
-```bash
-curl https://chess-checkers-relay.fly.dev/healthz
-```
-
-Repita algumas vezes. O campo `machine` tem de ser sempre o mesmo e `rooms` tem
-de ficar estável. Se `rooms` oscilar entre 0 e 1, há mais de uma máquina.
-
-URL final: `wss://chess-checkers-relay.fly.dev/ws`.
-
-`auto_stop_machines = false` é proposital, pela mesma razão: parar a máquina
-apaga as partidas em andamento, e subir do zero custaria vários segundos de
-espera na tela de pareamento.
-
-### Railway / Render
-
-Apontar para este diretório; o `Dockerfile` e a variável `PORT` já são o que
-essas plataformas esperam. Health check em `/healthz`.
-
-Atenção ao free tier que hiberna: o primeiro pareamento depois da hibernação
-espera o cold start. Se for esse o caso, aumente o timeout do cliente em
-`net/relay_bridge.gd` (`CONNECT_TIMEOUT`).
-
-## Depois do deploy
-
-Coloque a URL em `net/relay_bridge.gd`:
-
-```gdscript
-const DEFAULT_URL := "wss://SEU-APP.fly.dev/ws"
-```
+Até a 1.56 o relay rodava no Fly (`chess-checkers-relay.fly.dev`). As versões
+antigas do app têm esse endereço fixo; a atualização obrigatória leva todo mundo
+para o endereço novo.
 
 ## Escala
 

@@ -91,8 +91,8 @@ enum State {
 const MIN_SEATS := 2
 const MAX_SEATS := 6
 
-## Trocar aqui depois do deploy (veja `relay/README.md`).
-const DEFAULT_URL := "wss://chess-checkers-relay.fly.dev/ws"
+## O relay no servidor de casa, pelo túnel do Cloudflare (veja `relay/README.md`).
+const DEFAULT_URL := "wss://relay.cascapp.com.br/ws"
 ## Para desenvolvimento: `CHESS_RELAY_URL=ws://192.168.0.10:8080/ws godot --path .`
 ## Use o IP da máquina na rede, não `localhost` — o celular precisa alcançá-lo.
 const URL_ENV := "CHESS_RELAY_URL"

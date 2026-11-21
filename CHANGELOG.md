@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.57
+
+- As partidas online e a conta agora rodam no nosso próprio servidor. Entrar na conta, carregar fotos e a análise do xadrez ficaram mais rápidos.
+
 ## 1.56
 
 - Corrige quem entrava numa sala e ficava preso em "Esperando quem abriu a sala": se a internet de quem abriu oscilava (por exemplo, do Wi-Fi para o 4G), a sala se perdia. Agora ela volta sozinha.

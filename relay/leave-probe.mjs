@@ -4,13 +4,14 @@ import { WebSocket } from 'ws';
  * O assento é devolvido quando o convidado sai?
  *
  *   node relay/leave-probe.mjs
+ *   RELAY_URL=ws://127.0.0.1:8080/ws node relay/leave-probe.mjs
  *
  * Reproduz o relato: alguém entra na sala, desiste, e a tela de quem abriu
  * continua contando duas pessoas. O que se pergunta aqui é de quem é a culpa —
  * o servidor não avisa, ou o app não escuta.
  */
 
-const WS = 'wss://chess-checkers-relay.fly.dev/ws';
+const WS = process.env.RELAY_URL ?? 'wss://relay.cascapp.com.br/ws';
 const CODE = `LEAVE${Math.floor(Math.random() * 900 + 100)}`;
 
 function open() {

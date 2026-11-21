@@ -4,6 +4,7 @@ import { WebSocket } from 'ws';
  * Mede o atraso do relay do jeito que a partida sente.
  *
  *   node relay/latency-probe.mjs
+ *   RELAY_URL=ws://127.0.0.1:8080/ws node relay/latency-probe.mjs
  *
  * Três medidas, e só a terceira é a que o jogador percebe:
  *
@@ -16,8 +17,8 @@ import { WebSocket } from 'ws';
  * servidor responde `not_in_room`. Medir antes de entrar mede a mensagem de erro.
  */
 
-const HTTP = 'https://chess-checkers-relay.fly.dev';
-const WS = 'wss://chess-checkers-relay.fly.dev/ws';
+const WS = process.env.RELAY_URL ?? 'wss://relay.cascapp.com.br/ws';
+const HTTP = WS.replace(/^ws/, 'http').replace(/\/ws$/, '');
 const ROUNDS = 15;
 const CODE = `PROBE${Math.floor(Math.random() * 900 + 100)}`;
 

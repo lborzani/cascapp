@@ -2,7 +2,7 @@
 // ao vivo do app. A revisão da partida inteira é do `worker.mjs` (fila); aqui
 // é um pedido por vez, com resposta direta.
 //
-// Fica exposto à internet (Funnel `:8443/cascapp/search`), então nada de fora
+// Fica exposto à internet (`api.cascapp.com.br/search`), então nada de fora
 // chega ao motor sem passar por aqui:
 //   - só conta logada: o token do PocketBase é conferido nele (com cache curto);
 //   - limite por conta, e não por IP (atrás do Funnel todo mundo tem o mesmo);

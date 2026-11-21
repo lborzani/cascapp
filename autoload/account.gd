@@ -23,7 +23,11 @@ signal avatar_changed
 ## Chegou a foto de outra conta pedida em [method avatar_of].
 signal remote_avatar_loaded
 
-const DEFAULT_URL := "https://homeserver.tailb8b7e1.ts.net:8443/cascapp"
+## O PocketBase (`/api`) e a busca (`/search`) da Pi, pelo túnel do Cloudflare
+## (borda em São Paulo). Até a 1.56 era `homeserver.tailb8b7e1.ts.net:8443/cascapp`,
+## pelo Funnel, com ingresso em Nova York; esse endereço segue no ar para as
+## versões antigas (ver `pocketbase/README.md`).
+const DEFAULT_URL := "https://api.cascapp.com.br"
 const EMAIL_DOMAIN := "anon.cascapp.invalid"
 const RETRY_SECONDS := 60.0
 ## Um pedido a mais que isto é servidor fora do ar, e não lentidão.
