@@ -1,9 +1,9 @@
 class_name HistoryPanel
 extends Control
 
-## As partidas de xadrez que terminaram neste aparelho, mais recente primeiro.
-## Cada uma abre a mesma revisão do fim de partida — análise, gráfico e
-## desafios —, que é a razão de o histórico existir.
+## As partidas que terminaram neste aparelho, de todos os jogos, mais recente
+## primeiro. As de xadrez abrem a mesma revisão do fim de partida — análise,
+## gráfico e desafios.
 ##
 ## Por cima da tela "Você", como a revisão fica por cima da partida: fechar
 ## devolve a tela como estava.
@@ -55,7 +55,7 @@ func _ready() -> void:
 	var games := Prefs.history()
 	if games.is_empty():
 		var empty := Label.new()
-		empty.text = "Nenhuma partida de xadrez ainda. As que terminarem aparecem aqui, prontas para revisar."
+		empty.text = "Nenhuma partida ainda. As que terminarem aparecem aqui; as de xadrez, prontas para revisar."
 		empty.theme_type_variation = &"Subtitle"
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		rows.add_child(empty)
@@ -81,12 +81,10 @@ func _row(game: Dictionary) -> Control:
 
 	var texts := VBoxContainer.new()
 	texts.size_flags_horizontal = SIZE_EXPAND_FILL
-	var moves: Array = game.get("moves", [])
-	var side := "brancas" if int(game.get("side", Board.Side.WHITE)) == Board.Side.WHITE else "pretas"
 	for pair in [
-		[str(game.get("title", "")), &"", AppTheme.TEXT],
+		[headline(game), &"", AppTheme.TEXT],
 		[str(game.get("against", "")), &"Hint", AppTheme.TEXT],
-		["%s · de %s · %d lances" % [when(int(game.get("at", 0))), side, (moves.size() + 1) / 2], &"Caption", AppTheme.TEXT_DIM],
+		[footnote(game), &"Caption", AppTheme.TEXT_DIM],
 	]:
 		var label := Label.new()
 		label.text = pair[0]
@@ -100,6 +98,9 @@ func _row(game: Dictionary) -> Control:
 		texts.add_child(label)
 	line.add_child(texts)
 
+	# Só o xadrez guarda os lances que a revisão abre.
+	if not game.has("moves"):
+		return card
 	var open := Button.new()
 	open.text = "Revisar"
 	open.theme_type_variation = &"PrimaryButton"
@@ -114,6 +115,29 @@ func _open(game: Dictionary) -> void:
 	_review = ReviewPanel.new()
 	add_child(_review)
 	_review.open(game.get("moves", []), Training.played(game), game)
+
+
+## "Uno · Vitória". Sem resultado (mesmo aparelho, abandono, xadrez de antes da
+## 1.59), o título do fim de partida no lugar.
+static func headline(game: Dictionary) -> String:
+	var title := Game.game_title(MatchLog.game_of(game))
+	var result := MatchLog.result_text(game)
+	if result.is_empty():
+		result = str(game.get("title", ""))
+	return "%s · %s" % [title, result] if not result.is_empty() else title
+
+
+## "14/10 às 17:32 · de brancas · 32 lances" no xadrez; nos outros, os números do
+## cartão de fim.
+static func footnote(game: Dictionary) -> String:
+	var parts := PackedStringArray([when(int(game.get("at", 0)))])
+	if game.has("moves"):
+		var side := "brancas" if int(game.get("side", Board.Side.WHITE)) == Board.Side.WHITE else "pretas"
+		parts.append("de %s" % side)
+		parts.append("%d lances" % (((game["moves"] as Array).size() + 1) / 2))
+	elif not str(game.get("detail", "")).is_empty():
+		parts.append(str(game["detail"]))
+	return " · ".join(parts)
 
 
 ## "14/10 às 17:32", na hora local do aparelho.

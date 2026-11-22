@@ -1521,6 +1521,11 @@ func _finish(champion: int) -> void:
 		_state, champion, _player_label, Game.mode != Game.Mode.ONLINE,
 		_rules.rounds_played(_state)
 	)
+	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
+	Game.record_result(
+		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS,
+		[[ResultHeader.duration_since(Game.match_started_at), "duração"], [str(_rules.rounds_played(_state)), "rodadas"]]
+	)
 
 
 func _restart() -> void:

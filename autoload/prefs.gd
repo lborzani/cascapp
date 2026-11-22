@@ -356,14 +356,15 @@ static func set_avatar_pending(pending: bool) -> void:
 
 # --- histórico de partidas ----------------------------------------------------
 #
-# As partidas de xadrez que terminaram, mais recente primeiro, para a tela de
-# histórico abrir a revisão de qualquer uma. Cada uma é um dicionário com os
-# lances no formato do fio (`moves`) e o que a lista mostra: quando, contra quem,
-# de que lado e como acabou. Uma partida de 40 lances ocupa ~1 KB.
+# As partidas que terminaram, de todos os jogos, mais recente primeiro (ver
+# `MatchLog`). Cada uma é um dicionário com o que a lista mostra: o jogo, quando,
+# contra quem e como acabou. As de xadrez levam também os lances no formato do
+# fio (`moves`), para a revisão; uma de 40 lances ocupa ~1 KB, as outras poucos
+# bytes.
 
 const HISTORY_SECTION := "history"
 const HISTORY_KEY := "games"
-const HISTORY_LIMIT := 50
+const HISTORY_LIMIT := 100
 
 
 static func history() -> Array:

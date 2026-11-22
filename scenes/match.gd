@@ -1274,19 +1274,17 @@ func _confirm_then(button: Button, action: Callable) -> void:
 	)
 
 
-## Só xadrez, que é o que a revisão sabe abrir, e só de quem jogou.
+## Xadrez e damas entram no histórico (`Game.record_result`); só o xadrez leva
+## os lances, que é o que a revisão sabe abrir.
 func _record_game(title: String, detail: String) -> void:
-	if not _recorded_game.is_empty() or not _ruleset is ChessRules or _state.history.is_empty() or Net.is_spectator:
+	if not _recorded_game.is_empty() or _state.history.is_empty():
 		return
-	var against := "No mesmo aparelho"
-	if Game.mode == Game.Mode.SOLO:
-		against = "Contra o bot (%s)" % Bot.level_label(Game.game_id, Game.current_bot_level())
-	elif Game.mode == Game.Mode.ONLINE:
-		against = "Online contra %s" % _opponent_name()
-	_recorded_game = {
-		"at": int(Time.get_unix_time_from_system()),
+	var mood := _result_mood() if _winner != NO_RESULT else -1
+	if not _ruleset is ChessRules:
+		_recorded_game = Game.record_result(mood, _result_stats(), {"title": title})
+		return
+	_recorded_game = Game.record_result(mood, _result_stats(), {
 		"moves": _state.history.duplicate(),
-		"against": against,
 		"side": Game.local_side if Game.mode != Game.Mode.HOTSEAT else Board.Side.WHITE,
 		# Para a revisão saber que os dois lados eram de quem revisa.
 		"hotseat": Game.mode == Game.Mode.HOTSEAT,
@@ -1294,9 +1292,9 @@ func _record_game(title: String, detail: String) -> void:
 		"detail": detail,
 		# Ainda não subiu para a revisão no servidor (`Account.push_reviews`).
 		"uploaded": false,
-	}
-	Prefs.record_game(_recorded_game)
-	Account.push_reviews()
+	})
+	if not _recorded_game.is_empty():
+		Account.push_reviews()
 
 
 func _result_detail() -> String:

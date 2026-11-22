@@ -1329,6 +1329,28 @@ func _test_history() -> void:
 	_equals(Prefs.pending_uploads().size(), 1, "a fila sobrevive a fechar o app")
 	Prefs.forget_history()
 
+	print("histórico de todos os jogos")
+	var stats := [["4:12", "duração"], ["32", "jogadas"]]
+	var uno := MatchLog.entry(&"uno", false, "solo", 0, "Contra o bot (Fácil)", stats, 100, 400)
+	_equals(uno["result"], MatchLog.WIN, "vitória vira win")
+	_equals(uno["detail"], "4:12 duração · 32 jogadas", "os números do cartão numa linha")
+	_equals(MatchLog.result_text(uno), "Vitória", "e o texto da lista")
+	_equals(MatchLog.entry(&"ludo", true, "hotseat", 0, "", [], 1, 2)["result"], "", "mesmo aparelho: sem resultado")
+	_equals(MatchLog.entry(&"pool", false, "online", 1, "", [], 1, 2)["result"], MatchLog.DRAW, "empate")
+	_equals(MatchLog.entry(&"chess", false, "online", -1, "", [], 1, 2)["result"], "", "abandono: sem resultado")
+	_check(MatchLog.same_match(uno, &"uno", 100), "mesmo jogo e mesmo começo: a mesma partida")
+	_check(not MatchLog.same_match(uno, &"uno", 101), "a revanche começa de novo: outra partida")
+	_check(not MatchLog.same_match(uno, &"ludo", 100), "outro jogo: outra partida")
+	_equals(MatchLog.game_of({"at": 1, "moves": []}), &"chess", "a linha antiga, sem jogo, é de xadrez")
+
+	Prefs.record_game({"at": 1, "moves": [], "analysed": false})
+	Prefs.record_game(uno)
+	Prefs.record_game({"at": 3, "moves": [], "uploaded": false})
+	_equals(Prefs.history().size(), 3, "o histórico guarda todos os jogos")
+	_equals(Training.pending(Prefs.history()).map(func(g: Dictionary) -> int: return g["at"]), [3, 1], "o treino só vê o xadrez")
+	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [3], "a revisão no servidor também")
+	Prefs.forget_history()
+
 
 ## Entradas de mentira no formato de `GameReview.analyse`, só com o que o
 ## baralho lê.

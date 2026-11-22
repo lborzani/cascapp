@@ -563,10 +563,12 @@ func _show_result(title: String, detail: String, allow_rematch: bool, mood := -1
 		_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %OverlayLayer)
 	_result_header.visible = mood >= 0
 	if mood >= 0 and not %OverlayLayer.visible:
-		_result_header.celebrate(mood, [
+		var stats := [
 			[ResultHeader.duration_since(Game.match_started_at), "duração"],
 			[str(_match_status.rounds), "rodadas"],
-		])
+		]
+		_result_header.celebrate(mood, stats)
+		Game.record_result(mood, stats)
 	%RematchButton.visible = allow_rematch and not _abandoned
 	_refresh_rematch()
 	%OverlayLayer.visible = true

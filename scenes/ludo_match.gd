@@ -744,12 +744,13 @@ func _finish(champion: int) -> void:
 	%Overlay.visible = true
 	# Quem joga no mesmo aparelho comemora sempre: alguém da mesa venceu.
 	var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
-	_result_header.celebrate(
-		ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS, [
-			[ResultHeader.duration_since(Game.match_started_at), "duração"],
-			[str(_match_status.rounds), "rodadas"],
-		]
-	)
+	var mood := ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS
+	var stats := [
+		[ResultHeader.duration_since(Game.match_started_at), "duração"],
+		[str(_match_status.rounds), "rodadas"],
+	]
+	_result_header.celebrate(mood, stats)
+	Game.record_result(mood, stats)
 
 
 func _restart() -> void:

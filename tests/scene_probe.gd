@@ -977,19 +977,37 @@ func _test_match_history() -> void:
 	if not games.is_empty():
 		_equals(games[0]["against"], "No mesmo aparelho", "com o modo")
 		_equals((games[0]["moves"] as Array).size(), 4, "e os lances")
+		_equals(games[0]["game"], "chess", "e o jogo")
 	scene.queue_free()
 	await get_tree().process_frame
+
+	# Os outros jogos entram pelo mesmo `Game.record_result`, sem lances.
+	for mood in [ResultHeader.Mood.WIN, ResultHeader.Mood.DRAW, ResultHeader.Mood.LOSS]:
+		_equals(MatchLog.result_of(mood), MatchLog.MOODS[mood], "MatchLog.MOODS segue a ordem do ResultHeader.Mood")
+	Game.mode = Game.Mode.SOLO
+	Game.game_id = &"uno"
+	Game.match_started_at = 12345
+	var uno := Game.record_result(ResultHeader.Mood.WIN, [["2:00", "duração"]])
+	Game.record_result(ResultHeader.Mood.WIN, [["2:00", "duração"]])
+	_equals(Prefs.history().size(), 2, "o Uno entra uma vez só")
+	_equals(uno.get("result"), MatchLog.WIN, "com o resultado")
+	_check(str(uno.get("against", "")).begins_with("Contra o bot"), "e contra quem")
+	_equals(HistoryPanel.headline(uno), "Uno · Vitória", "a linha diz o jogo e o resultado")
+	Game.match_started_at = 0
+	Game.start_hotseat(Game.CHESS)
 
 	var settings := preload("res://scenes/settings.tscn").instantiate()
 	add_child(settings)
 	await get_tree().process_frame
 	var button: Button = settings.get_node("%HistoryButton")
-	_equals(button.get_meta(&"detail"), "1 partida", "a tela Você conta as partidas")
+	_equals(button.get_meta(&"detail"), "2 partidas", "a tela Você conta as partidas de todos os jogos")
 	button.pressed.emit()
 	var panel: HistoryPanel = settings._history
 	_check(panel != null, "o botão abre o histórico")
 	var review_buttons := panel.find_children("*", "Button", true, false).filter(func(b): return b.text == "Revisar")
-	_equals(review_buttons.size(), 1, "uma linha por partida")
+	_equals(review_buttons.size(), 1, "só a partida de xadrez tem Revisar")
+	var lines := panel.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	_check(lines.has("Uno · Vitória"), "a partida de Uno aparece na lista")
 	review_buttons[0].pressed.emit()
 	_check(is_instance_valid(panel._review), "Revisar abre a revisão da partida")
 	_equals(panel._review._moves.get_child_count(), 4, "com os lances dela")

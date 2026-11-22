@@ -563,10 +563,12 @@ func _finish(champion: int) -> void:
 	if champion != -2:
 		var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
 		mood = ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS
-	_result_header.celebrate(mood, [
+	var stats := [
 		[ResultHeader.duration_since(Game.match_started_at), "duração"],
 		[str(_state.ply), "tacadas"],
-	])
+	]
+	_result_header.celebrate(mood, stats)
+	Game.record_result(mood, stats)
 
 
 func _restart() -> void:

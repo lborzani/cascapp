@@ -753,6 +753,41 @@ func restart_match() -> void:
 	match_started_at = Prefs.restart_match(code, now) if not code.is_empty() else now
 
 
+## Grava no histórico a partida que acabou de terminar (ver `MatchLog`). As sete
+## cenas chamam no fim, com o humor do cartão (`ResultHeader.Mood`, ou -1 sem
+## vencedor) e os números dele; `extra` é o que só o jogo sabe (os lances do
+## xadrez). Quem assiste não grava: a partida não é dele. Devolve a linha, ou a
+## que já estava lá quando o fim chega de novo.
+func record_result(mood: int, stats: Array = [], extra := {}) -> Dictionary:
+	if Net.is_spectator or match_started_at <= 0:
+		return {}
+	var games := Prefs.history()
+	if not games.is_empty() and MatchLog.same_match(games[0], game_id, match_started_at):
+		return games[0]
+	var mode_name: String = {Mode.HOTSEAT: "hotseat", Mode.ONLINE: "online", Mode.SOLO: "solo"}[mode]
+	var entry := MatchLog.entry(
+		game_id, mode == Mode.HOTSEAT, mode_name, mood, against_label(), stats,
+		match_started_at, int(Time.get_unix_time_from_system())
+	)
+	entry.merge(extra, true)
+	Prefs.record_game(entry)
+	return entry
+
+
+## "Contra o bot (Médio)", "No mesmo aparelho", "Online contra Ana, Beto".
+func against_label() -> String:
+	match mode:
+		Mode.SOLO:
+			return "Contra o bot (%s)" % Bot.level_label(game_id, current_bot_level())
+		Mode.ONLINE:
+			var names := PackedStringArray()
+			for seat: int in Net.player_names:
+				if seat != Net.local_seat and not Net.name_of(seat).is_empty():
+					names.append(Net.name_of(seat))
+			return "Online contra %s" % (", ".join(names) if not names.is_empty() else "Oponente")
+	return "No mesmo aparelho"
+
+
 func reset_to_menu() -> void:
 	# Sair **avisando** é desistir da cadeira: a volta deixa de ser oferecida. Cair
 	# não passa por aqui — o processo morre, ou a ponte perde a rede — e é

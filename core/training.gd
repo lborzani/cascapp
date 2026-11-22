@@ -142,6 +142,7 @@ static func position(card: Dictionary) -> MatchState:
 	return state
 
 
-## As partidas do histórico que ainda não passaram pela análise inteira.
+## As partidas de xadrez do histórico que ainda não passaram pela análise
+## inteira. As dos outros jogos não têm lances para analisar.
 static func pending(games: Array) -> Array:
-	return games.filter(func(game): return not game.get("analysed", false))
+	return MatchLog.reviewable(games).filter(func(game): return not game.get("analysed", false))

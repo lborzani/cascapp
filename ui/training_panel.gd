@@ -169,7 +169,7 @@ func _forget(card: Dictionary) -> void:
 
 
 ## "Da partida de 14/10 às 17:32 · Contra o bot (Avançado)". A partida pode já
-## ter saído do histórico (ele guarda as 50 últimas); o cartão continua valendo.
+## ter saído do histórico (ele guarda as 100 últimas); o cartão continua valendo.
 func _origin(card: Dictionary) -> String:
 	for game in Prefs.history():
 		if int(game.get("at", -1)) == int(card["at"]):

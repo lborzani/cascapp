@@ -623,10 +623,12 @@ func _finish(champion: int) -> void:
 		var mine := Game.mode == Game.Mode.HOTSEAT or champion == Game.local_seat
 		mood = ResultHeader.Mood.WIN if mine else ResultHeader.Mood.LOSS
 	var best := BowlingRules.score_of(_state, maxi(champion, 0))
-	_result_header.celebrate(mood, [
+	var stats := [
 		[ResultHeader.duration_since(Game.match_started_at), "duração"],
 		[str(best), "pontos"],
-	])
+	]
+	_result_header.celebrate(mood, stats)
+	Game.record_result(mood, stats)
 
 
 func _restart() -> void:
