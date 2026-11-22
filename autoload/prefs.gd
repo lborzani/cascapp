@@ -398,6 +398,16 @@ static func mark_uploaded(at: int) -> void:
 	_flag_game(at, "uploaded")
 
 
+## As partidas que ainda não subiram para o perfil dos amigos (`matches`). Só as
+## gravadas com `"synced": false` (ver `MatchLog.entry`).
+static func pending_matches() -> Array:
+	return history().filter(func(game: Dictionary) -> bool: return game.get("synced", true) == false)
+
+
+static func mark_synced(at: int) -> void:
+	_flag_game(at, "synced")
+
+
 static func _flag_game(at: int, flag: String) -> void:
 	var games := history()
 	for game in games:

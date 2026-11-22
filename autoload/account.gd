@@ -111,6 +111,7 @@ func sign_in() -> bool:
 	if ok:
 		# Partidas que terminaram com o servidor fora sobem agora.
 		push_reviews()
+		push_matches()
 	if not ok:
 		_retry.start()
 	return ok
@@ -189,6 +190,46 @@ func drop_request(id: String) -> bool:
 		return false
 	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/requests/" + id.uri_encode(), {})
 	return reply["code"] == 204
+
+
+## O perfil de um amigo: `{"profile", "stats", "recent"}` (ver a rota em
+## `pocketbase/pb_hooks/amigos.pb.js`). `stats` é jogo → `{played, won, lost,
+## draw}`; `recent`, as 20 últimas partidas no formato do histórico. `null`
+## quando não deu para perguntar ou a conta não é mais amiga.
+func friend_profile(id: String) -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/friends/%s/profile" % id.uri_encode(), {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("stats") is Dictionary or not data.get("recent") is Array:
+		return null
+	return data
+
+
+# --- partidas para o perfil dos amigos -------------------------------------------
+#
+# Toda partida com resultado sobe para `matches`, como a revisão do xadrez: vale
+# primeiro no aparelho (`Prefs`, marca `synced`) e sobe quando der.
+
+var _pushing_matches := false
+
+
+## Mesma regra da `push_reviews`: 200 subiu, 400 já estava lá (ou nunca vai
+## entrar); as duas saem da fila. Qualquer outra resposta para tudo. Uma subida
+## por vez: o `sign_in` e o fim de partida podem chamar juntos, e quem chega
+## com outra em curso espera ela acabar e confere a fila de novo.
+func push_matches() -> void:
+	while _pushing_matches:
+		await get_tree().process_frame
+	if not signed_in():
+		return
+	_pushing_matches = true
+	for game: Dictionary in Prefs.pending_matches():
+		var reply := await _call(HTTPClient.METHOD_POST, "/api/collections/matches/records", MatchLog.server_body(game, user_id))
+		if reply["code"] != 200 and reply["code"] != 400:
+			break
+		Prefs.mark_synced(int(game["at"]))
+	_pushing_matches = false
 
 
 # --- revisão no servidor --------------------------------------------------------

@@ -2895,6 +2895,50 @@ func _test_friend_requests() -> void:
 	_equals(buttons, ["Aceitar", "Recusar", "Cancelar"], "recebido aceita ou recusa, enviado cancela")
 	panel.free()
 	Friends.requests = {"incoming": [], "outgoing": []}
+
+	print("perfil do amigo")
+	_equals(FriendProfile.stat_line({"played": 12, "won": 7, "lost": 4, "draw": 1}), "12 partidas · 7 vitórias · 4 derrotas · 1 empate", "a linha de cada jogo")
+	_equals(FriendProfile.stat_line({"played": 1, "won": 0, "lost": 1, "draw": 0}), "1 partida · 1 derrota", "sem zeros sobrando")
+	Friends.list = [{"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350}]
+	Friends.online = {"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}}
+	var menu2: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu2)
+	await get_tree().process_frame
+	menu2._open_friends()
+	await get_tree().process_frame
+	var drawer2: FriendsDrawer = menu2._drawer()
+	var card: Control = drawer2._rows.get_child(0)
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	card.gui_input.emit(touch)
+	var release := touch.duplicate()
+	release.pressed = false
+	card.gui_input.emit(release)
+	await get_tree().process_frame
+	var profile: FriendProfile = drawer2.find_children("", "FriendProfile", false, false).front() if not drawer2.find_children("", "FriendProfile", false, false).is_empty() else null
+	_check(profile != null, "tocar no card do amigo abre o perfil")
+	if profile != null:
+		var words := profile.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
+		_check(words.has("Eva") and words.has("Elo 1350 no xadrez"), "com o nome e o Elo")
+		_check(profile.find_child("Invite", true, false) != null, "e Convidar para quem está livre")
+		profile.show_data({
+			"stats": {"uno": {"played": 3, "won": 2, "lost": 1, "draw": 0}, "chess": {"played": 1, "won": 0, "lost": 0, "draw": 1}},
+			"recent": [{"game": "uno", "result": "win", "against": "Contra o bot (Fácil)", "detail": "", "at": 100}],
+		})
+		var games := profile._rows.get_children().filter(func(n: Node) -> bool: return n.has_meta(&"game")).map(func(n: Node) -> StringName: return n.get_meta(&"game"))
+		_equals(games, [Game.CHESS, &"uno"], "uma linha por jogo jogado, na ordem do catálogo")
+		words = profile._rows.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
+		_check(words.has("Uno · Vitória"), "e as partidas recentes")
+		(profile.find_child("Invite", true, false) as Button).pressed.emit()
+		await get_tree().process_frame
+		_check(not is_instance_valid(profile) or profile.is_queued_for_deletion(), "Convidar fecha o perfil")
+		_equals(drawer2._inviting, "evaevaevaeva123", "e a gaveta pergunta o jogo")
+		drawer2._inviting = ""
+		var again := drawer2.open_profile("evaevaevaeva123")
+		drawer2.close()
+		_check(again.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha o perfil antes da gaveta")
+	menu2.queue_free()
+	await get_tree().process_frame
 	Friends.list = saved_list
 	Friends.online = saved_online
 

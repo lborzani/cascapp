@@ -21,7 +21,7 @@ const DRAW := "draw"
 ## -1 quando a partida parou sem vencedor (alguém saiu). No mesmo aparelho não há
 ## "eu" contra alguém, e o resultado fica vazio.
 static func entry(game_id: StringName, hotseat: bool, mode_name: String, mood: int, against: String, stats: Array, started: int, now: int) -> Dictionary:
-	return {
+	var line := {
 		"at": now,
 		"started": started,
 		"game": String(game_id),
@@ -29,6 +29,24 @@ static func entry(game_id: StringName, hotseat: bool, mode_name: String, mood: i
 		"result": "" if hotseat else result_of(mood),
 		"against": against,
 		"detail": summary(stats),
+	}
+	# Com resultado (bot ou online), ela sobe para o perfil que os amigos veem
+	# (`Account.push_matches`). A marca some quando subiu.
+	if not str(line["result"]).is_empty():
+		line["synced"] = false
+	return line
+
+
+## O registro de `matches` no servidor (`pocketbase/pb_migrations/1760950000_partidas.js`).
+static func server_body(game: Dictionary, owner: String) -> Dictionary:
+	return {
+		"owner": owner,
+		"game": String(game_of(game)),
+		"mode": str(game.get("mode", "")),
+		"result": str(game.get("result", "")),
+		"against": str(game.get("against", "")).left(80),
+		"detail": str(game.get("detail", "")).left(120),
+		"played_at": int(game.get("at", 0)),
 	}
 
 

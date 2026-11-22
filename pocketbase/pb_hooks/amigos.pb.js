@@ -73,6 +73,46 @@ routerAdd("DELETE", "/api/cascapp/friends/{id}", (e) => {
   return e.noContent(204)
 }, $apis.requireAuth("users"))
 
+// O perfil de um amigo: o público, os números por jogo e as 20 partidas mais
+// recentes (`pb_migrations/1760950000_partidas.js`). Só para amigo; para os
+// outros, 404, como se a conta não existisse.
+routerAdd("GET", "/api/cascapp/friends/{id}/profile", (e) => {
+  const perfil = require(`${__hooks}/perfil.js`)
+  const amizade = require(`${__hooks}/amizade.js`)
+  const id = String(e.request.pathValue("id") || "")
+  if (!amizade.areFriends(e.app, e.auth.id, id)) {
+    return e.json(404, { message: "Amigo não encontrado." })
+  }
+  let user
+  try {
+    user = e.app.findRecordById("users", id)
+  } catch (_) {
+    return e.json(404, { message: "Amigo não encontrado." })
+  }
+  const counts = arrayOf(new DynamicModel({ game: "", result: "", n: 0 }))
+  e.app.db()
+    .newQuery("SELECT game, result, COUNT(*) AS n FROM matches WHERE owner = {:id} GROUP BY game, result")
+    .bind({ id })
+    .all(counts)
+  const stats = {}
+  for (const row of counts) {
+    const game = stats[row.game] || (stats[row.game] = { played: 0, won: 0, lost: 0, draw: 0 })
+    game.played += row.n
+    if (row.result === "win") game.won += row.n
+    if (row.result === "loss") game.lost += row.n
+    if (row.result === "draw") game.draw += row.n
+  }
+  const recent = e.app.findRecordsByFilter("matches", "owner = {:id}", "-played_at", 20, 0, { id }).map((row) => ({
+    game: row.getString("game"),
+    mode: row.getString("mode"),
+    result: row.getString("result"),
+    against: row.getString("against"),
+    detail: row.getString("detail"),
+    at: row.getInt("played_at"),
+  }))
+  return e.json(200, { profile: perfil.publicProfile(user), stats, recent })
+}, $apis.requireAuth("users"))
+
 // Os pedidos que esperam resposta: `incoming` (para mim) e `outgoing` (meus),
 // mais novos primeiro. Cada um é `{id, created, profile}`, com o perfil público
 // da outra conta.

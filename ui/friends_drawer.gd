@@ -12,6 +12,10 @@ extends Control
 ## "Convidar", que pergunta o jogo aqui mesmo. A gaveta só pede: quem troca de
 ## tela é a tela que a abriu (`watch_requested`, `invite_requested`).
 ##
+## Tocar no card abre o perfil do amigo (`FriendProfile`), com os números e as
+## partidas dele. Pedido de amizade recebido aparece no topo, com Aceitar e
+## Recusar.
+##
 ## Gerenciar amigos (código, QR, remover) continua no painel da aba Você: o
 ## "Adicionar amigo" daqui abre aquele painel por cima, e a lista volta
 ## atualizada quando ele fecha.
@@ -130,7 +134,7 @@ func _exit_tree() -> void:
 ## gesto de voltar faz, uma camada por vez.
 func close() -> void:
 	for child in get_children():
-		if child is FriendsPanel:
+		if (child is FriendsPanel or child is FriendProfile) and not child.is_queued_for_deletion():
 			child.close()
 			return
 	if is_queued_for_deletion():
@@ -253,10 +257,12 @@ func _row(friend: Dictionary) -> Control:
 	# A bolinha verde por cima do canto da foto, como nos mensageiros.
 	var photo_box := Control.new()
 	photo_box.custom_minimum_size = Vector2(PHOTO, PHOTO)
+	photo_box.mouse_filter = MOUSE_FILTER_PASS
 	photo_box.size_flags_vertical = SIZE_SHRINK_CENTER
 	line.add_child(photo_box)
 	var coaster := Coaster.new()
 	coaster.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	coaster.mouse_filter = MOUSE_FILTER_IGNORE
 	coaster.player_name = str(friend.get("name", ""))
 	coaster.photo = Account.avatar_of(id, str(friend.get("avatar", "")))
 	photo_box.add_child(coaster)
@@ -289,7 +295,27 @@ func _row(friend: Dictionary) -> Control:
 	var action := _action(id, status)
 	if action != null:
 		line.add_child(action)
+	# Tocar no card (fora do botão) abre o perfil. Ao soltar: arrastar a lista
+	# não abre nada.
+	var press := Tap.Press.new()
+	card.gui_input.connect(func(event: InputEvent) -> void:
+		if press.feed(event):
+			open_profile(id)
+	)
 	return card
+
+
+func open_profile(id: String) -> FriendProfile:
+	Sound.play(Sound.Cue.TAP)
+	var profile := FriendProfile.new()
+	profile.friend_id = id
+	profile.invite_requested.connect(func(friend: String) -> void:
+		profile.close()
+		_inviting = friend
+		_fill()
+	)
+	add_child(profile)
+	return profile
 
 
 ## "Assistir" para quem está jogando algo que tem tela de espectador; "Convidar"

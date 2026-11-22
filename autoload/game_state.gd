@@ -771,6 +771,7 @@ func record_result(mood: int, stats: Array = [], extra := {}) -> Dictionary:
 	)
 	entry.merge(extra, true)
 	Prefs.record_game(entry)
+	Account.push_matches()
 	return entry
 
 

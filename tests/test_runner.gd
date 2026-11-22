@@ -1351,6 +1351,21 @@ func _test_history() -> void:
 	_equals(Prefs.pending_uploads().map(func(g: Dictionary) -> int: return g["at"]), [3], "a revisão no servidor também")
 	Prefs.forget_history()
 
+	print("partidas para o perfil dos amigos")
+	_equals(uno.get("synced"), false, "partida com resultado entra na fila do perfil")
+	_check(not MatchLog.entry(&"ludo", true, "hotseat", 0, "", [], 1, 2).has("synced"), "mesmo aparelho não sobe")
+	_check(not MatchLog.entry(&"chess", false, "online", -1, "", [], 1, 2).has("synced"), "nem partida sem resultado")
+	_equals(MatchLog.server_body(uno, "dono"), {
+		"owner": "dono", "game": "uno", "mode": "solo", "result": "win",
+		"against": "Contra o bot (Fácil)", "detail": "4:12 duração · 32 jogadas", "played_at": 400,
+	}, "o registro do servidor")
+	Prefs.record_game(uno)
+	Prefs.record_game({"at": 500, "game": "pool", "result": ""})
+	_equals(Prefs.pending_matches().map(func(g: Dictionary) -> int: return g["at"]), [400], "só a com resultado espera subir")
+	Prefs.mark_synced(400)
+	_equals(Prefs.pending_matches(), [], "subiu, sai da fila")
+	Prefs.forget_history()
+
 
 ## Entradas de mentira no formato de `GameReview.analyse`, só com o que o
 ## baralho lê.
