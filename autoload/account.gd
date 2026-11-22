@@ -64,6 +64,8 @@ var _name := ""
 ## O dia de Brasília do último pedido de bônus, para não pedir a cada volta ao app.
 var _daily_day := ""
 var _rewarding := false
+## O `updated` da carteira aplicada por último (ver `_take_wallet`).
+var _wallet_at := ""
 var _busy := false
 var _local_texture: Texture2D = null
 ## Nome do arquivo → foto de outra conta (`null` enquanto baixa).
@@ -515,7 +517,16 @@ func equip(slot: String, item: String) -> bool:
 	return true
 
 
+## As respostas podem chegar fora de ordem: o bônus pedido na entrada, lido
+## antes de o prêmio gravar, volta depois dele com o saldo antigo. O `updated`
+## do registro diz qual é a carteira mais nova, e a mais velha é ignorada.
+## ponytail: precisão de milissegundo; duas gravações no mesmo milissegundo
+## empatam e vale a que chegar por último.
 func _take_wallet(record: Dictionary) -> void:
+	var stamp := str(record.get("updated", ""))
+	if stamp < _wallet_at:
+		return
+	_wallet_at = stamp
 	coins = int(record.get("coins", 0))
 	var items: Variant = record.get("owned")
 	owned = items if items is Array else []
@@ -622,6 +633,7 @@ func sign_out() -> void:
 	coins = -1
 	owned = []
 	_daily_day = ""
+	_wallet_at = ""
 
 
 ## `{"email", "password"}` deste aparelho, sempre os mesmos.

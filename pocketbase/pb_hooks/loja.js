@@ -78,6 +78,8 @@ function wallet(record) {
     coins: record.getInt("coins"),
     owned: jsonOf(record, "owned", []),
     look: jsonOf(record, "look", {}),
+    // Para o app ignorar a resposta que chega depois de uma mais nova.
+    updated: record.getString("updated"),
   }
 }
 
