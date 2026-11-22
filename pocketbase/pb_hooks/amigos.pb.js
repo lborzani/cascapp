@@ -1,7 +1,8 @@
 /// <reference path="../pb_data/types.d.ts" />
 
-// Amigos (ver `pb_migrations/1760750000_amizades.js`). As três rotas falam só
-// da conta que chama: ninguém lê nem mexe na lista de outro.
+// Amigos (ver `pb_migrations/1760750000_amizades.js`) e pedidos de amizade
+// (`1760900000_pedidos_amizade.js`). As rotas falam só da conta que chama:
+// ninguém lê nem mexe na lista ou nos pedidos de outro.
 
 // A lista de amigos, com o perfil público de cada um, mais antigos primeiro.
 routerAdd("GET", "/api/cascapp/friends", (e) => {
@@ -18,10 +19,15 @@ routerAdd("GET", "/api/cascapp/friends", (e) => {
   return e.json(200, { items: friends })
 }, $apis.requireAuth("users"))
 
-// Adiciona pelo código de amigo, nos dois sentidos. Já amigos: responde igual,
-// sem erro — ler o mesmo QR duas vezes não é falha de ninguém.
+// Pede amizade pelo código. Responde o perfil do outro com `status`:
+// - "requested": o pedido foi feito (ou já estava feito) e espera o outro;
+// - "friends": já eram amigos, ou o outro já tinha pedido — os dois querem, e
+//   a amizade nasce aqui.
+// A versão até a 1.58 lê só o perfil e diz "adicionado"; para ela, o amigo
+// aparece quando o outro aceitar.
 routerAdd("POST", "/api/cascapp/friends/{code}", (e) => {
   const perfil = require(`${__hooks}/perfil.js`)
+  const amizade = require(`${__hooks}/amizade.js`)
   const code = String(e.request.pathValue("code") || "").toUpperCase()
   let other
   try {
@@ -29,23 +35,28 @@ routerAdd("POST", "/api/cascapp/friends/{code}", (e) => {
   } catch (_) {
     return e.json(404, { message: "Nenhuma conta com esse código." })
   }
-  if (other.id === e.auth.id) {
+  const me = e.auth.id
+  if (other.id === me) {
     return e.json(400, { message: "Esse é o seu próprio código." })
   }
-  e.app.runInTransaction((tx) => {
-    const collection = tx.findCollectionByNameOrId("friendships")
-    for (const [owner, friend] of [[e.auth.id, other.id], [other.id, e.auth.id]]) {
-      try {
-        tx.findFirstRecordByFilter("friendships", "owner = {:owner} && friend = {:friend}", { owner, friend })
-      } catch (_) {
-        const row = new Record(collection)
-        row.set("owner", owner)
-        row.set("friend", friend)
-        tx.save(row)
-      }
+  const reply = (status) => Object.assign(perfil.publicProfile(other), { status })
+  if (amizade.areFriends(e.app, me, other.id)) {
+    return e.json(200, reply("friends"))
+  }
+  if (amizade.findRequest(e.app, other.id, me)) {
+    e.app.runInTransaction((tx) => amizade.befriend(tx, me, other.id))
+    return e.json(200, reply("friends"))
+  }
+  if (!amizade.findRequest(e.app, me, other.id)) {
+    if (e.app.countRecords("friend_requests", $dbx.hashExp({ from: me })) >= amizade.MAX_PENDING) {
+      return e.json(429, { message: "Pedidos demais esperando resposta." })
     }
-  })
-  return e.json(200, perfil.publicProfile(other))
+    const row = new Record(e.app.findCollectionByNameOrId("friend_requests"))
+    row.set("from", me)
+    row.set("to", other.id)
+    e.app.save(row)
+  }
+  return e.json(200, reply("requested"))
 }, $apis.requireAuth("users"))
 
 // Desfaz a amizade, nos dois sentidos. Quem não era amigo: 204 do mesmo jeito.
@@ -59,5 +70,65 @@ routerAdd("DELETE", "/api/cascapp/friends/{id}", (e) => {
     )
     for (const row of rows) tx.delete(row)
   })
+  return e.noContent(204)
+}, $apis.requireAuth("users"))
+
+// Os pedidos que esperam resposta: `incoming` (para mim) e `outgoing` (meus),
+// mais novos primeiro. Cada um é `{id, created, profile}`, com o perfil público
+// da outra conta.
+routerAdd("GET", "/api/cascapp/friends/requests", (e) => {
+  const perfil = require(`${__hooks}/perfil.js`)
+  const me = e.auth.id
+  const list = (filter, otherField) => {
+    const out = []
+    for (const row of e.app.findRecordsByFilter("friend_requests", filter, "-created", 100, 0, { me })) {
+      try {
+        out.push({
+          id: row.id,
+          created: row.getString("created"),
+          profile: perfil.publicProfile(e.app.findRecordById("users", row.getString(otherField))),
+        })
+      } catch (_) {}
+    }
+    return out
+  }
+  return e.json(200, { incoming: list("to = {:me}", "from"), outgoing: list("from = {:me}", "to") })
+}, $apis.requireAuth("users"))
+
+// Aceita um pedido recebido. Pedido de outro, ou que não existe mais: 404.
+routerAdd("POST", "/api/cascapp/friends/requests/{id}/accept", (e) => {
+  const perfil = require(`${__hooks}/perfil.js`)
+  const amizade = require(`${__hooks}/amizade.js`)
+  let row
+  try {
+    row = e.app.findRecordById("friend_requests", String(e.request.pathValue("id") || ""))
+  } catch (_) {
+    return e.json(404, { message: "Pedido não encontrado." })
+  }
+  if (row.getString("to") !== e.auth.id) {
+    return e.json(404, { message: "Pedido não encontrado." })
+  }
+  const from = row.getString("from")
+  e.app.runInTransaction((tx) => amizade.befriend(tx, e.auth.id, from))
+  try {
+    return e.json(200, perfil.publicProfile(e.app.findRecordById("users", from)))
+  } catch (_) {
+    return e.json(404, { message: "Pedido não encontrado." })
+  }
+}, $apis.requireAuth("users"))
+
+// Recusa (quem recebeu) ou cancela (quem mandou) um pedido. Pedido de outros
+// dois: 404, como se não existisse.
+routerAdd("DELETE", "/api/cascapp/friends/requests/{id}", (e) => {
+  let row
+  try {
+    row = e.app.findRecordById("friend_requests", String(e.request.pathValue("id") || ""))
+  } catch (_) {
+    return e.json(404, { message: "Pedido não encontrado." })
+  }
+  if (row.getString("to") !== e.auth.id && row.getString("from") !== e.auth.id) {
+    return e.json(404, { message: "Pedido não encontrado." })
+  }
+  e.app.delete(row)
   return e.noContent(204)
 }, $apis.requireAuth("users"))

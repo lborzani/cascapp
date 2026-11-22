@@ -129,8 +129,8 @@ func push_name(name: String) -> bool:
 
 # --- amigos ---------------------------------------------------------------------
 #
-# Rotas de `pocketbase/pb_hooks/amigos.pb.js`. Adicionar pelo código vale para os
-# dois lados: quem tem o código de alguém recebeu dele.
+# Rotas de `pocketbase/pb_hooks/amigos.pb.js`. Adicionar pelo código manda um
+# pedido; a amizade nasce quando o outro aceita, ou na hora se ele já tinha pedido.
 
 
 ## Os amigos desta conta, cada um com o perfil público
@@ -146,9 +146,10 @@ func friends() -> Variant:
 	return data["items"]
 
 
-## Adiciona pelo código de amigo. `{"code": HTTP, "data": perfil ou erro}`:
-## 200 virou amigo (ou já era), 404 código que não existe, 400 o próprio código,
-## 0 sem conta ou sem servidor.
+## Pede amizade pelo código. `{"code": HTTP, "data": perfil ou erro}`: 200 com
+## `data.status` "requested" (espera o outro) ou "friends" (já eram, ou o outro
+## tinha pedido); 404 código que não existe, 400 o próprio código, 429 pedidos
+## demais esperando, 0 sem conta ou sem servidor.
 func add_friend(code: String) -> Dictionary:
 	if not signed_in():
 		return {"code": 0, "data": null}
@@ -159,6 +160,34 @@ func remove_friend(id: String) -> bool:
 	if not signed_in():
 		return false
 	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/" + id.uri_encode(), {})
+	return reply["code"] == 204
+
+
+## Os pedidos esperando resposta: `{"incoming": [...], "outgoing": [...]}`, cada
+## um `{"id", "created", "profile"}`. `null` quando não deu para perguntar.
+func friend_requests() -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/friends/requests", {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("incoming") is Array or not data.get("outgoing") is Array:
+		return null
+	return data
+
+
+## Aceita o pedido recebido `id`. Verdadeiro se viraram amigos.
+func accept_request(id: String) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/friends/requests/%s/accept" % id.uri_encode(), {})
+	return reply["code"] == 200
+
+
+## Recusa um pedido recebido ou cancela um enviado.
+func drop_request(id: String) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/friends/requests/" + id.uri_encode(), {})
 	return reply["code"] == 204
 
 

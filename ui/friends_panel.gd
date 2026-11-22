@@ -5,8 +5,9 @@ extends Control
 ## amigo para adicionar — digitado ou lido pela câmera —, e a lista com foto,
 ## nome e Elo de cada um.
 ##
-## Adicionar vale para os dois lados na hora (`pocketbase/pb_hooks/amigos.pb.js`):
-## quem tem o código de alguém recebeu dele, então não há pedido para aceitar.
+## Adicionar manda um pedido (`pocketbase/pb_hooks/amigos.pb.js`): a amizade
+## nasce quando o outro aceita, ou na hora se ele já tinha pedido. Os pedidos
+## recebidos (Aceitar, Recusar) e os enviados (Cancelar) ficam acima da lista.
 ##
 ## Por cima da tela "Você", como o histórico: fechar devolve a tela como estava.
 
@@ -19,6 +20,7 @@ const QR_PREFIX := "XDMF|"
 var _code_input: CodeInput = null
 var _status: Label = null
 var _rows: VBoxContainer = null
+var _requests: VBoxContainer = null
 ## Id do amigo cujo "Remover" já foi tocado uma vez e espera a confirmação.
 var _confirming := ""
 
@@ -66,6 +68,10 @@ func _ready() -> void:
 	_status = _text("", &"Caption")
 	_status.visible = false
 	column.add_child(_status)
+
+	_requests = VBoxContainer.new()
+	_requests.add_theme_constant_override("separation", 10)
+	column.add_child(_requests)
 
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
@@ -166,21 +172,33 @@ func _add(code: String) -> void:
 		200:
 			var friend: Dictionary = reply["data"] if reply["data"] is Dictionary else {}
 			Sound.play(Sound.Cue.CASH)
-			_say("%s agora é seu amigo." % str(friend.get("name", "Conta")))
+			_say(added_text(friend))
 			_code_input.clear()
 			_load()
 		404:
 			_say("Nenhuma conta com esse código. Confira as letras.")
 		400:
 			_say("Esse é o seu próprio código.")
+		429:
+			_say("Você tem pedidos demais esperando resposta. Cancele alguns antes.")
 		_:
 			_say("Não deu para adicionar agora. Confira a internet e tente de novo.")
 
 
+## O que dizer depois de ler o código, pelo `status` da resposta.
+static func added_text(friend: Dictionary) -> String:
+	var name := str(friend.get("name", "")) if not str(friend.get("name", "")).is_empty() else "Essa conta"
+	if str(friend.get("status", "")) == "friends":
+		return "%s agora é seu amigo." % name
+	return "Pedido enviado. %s aparece aqui quando aceitar." % name
+
+
 func _load() -> void:
 	var friends: Variant = await Account.friends()
+	var pending: Variant = await Account.friend_requests()
 	if not is_inside_tree():
 		return
+	_fill_requests(pending if pending is Dictionary else {"incoming": [], "outgoing": []})
 	for child in _rows.get_children():
 		child.queue_free()
 	if friends == null:
@@ -192,8 +210,56 @@ func _load() -> void:
 		_rows.add_child(_row(friend))
 
 
+func _fill_requests(pending: Dictionary) -> void:
+	for child in _requests.get_children():
+		child.queue_free()
+	for pair in [["incoming", "Pedidos recebidos"], ["outgoing", "Pedidos enviados"]]:
+		var items: Array = pending.get(pair[0], [])
+		if items.is_empty():
+			continue
+		_requests.add_child(_text(pair[1], &"Hint"))
+		for request: Dictionary in items:
+			_requests.add_child(_request_row(request, pair[0] == "incoming"))
+
+
 func _row(friend: Dictionary) -> Control:
-	var id := str(friend.get("id", ""))
+	var games := int(friend.get("games_chess", 0))
+	var detail := "Xadrez: Elo %d · %d %s" % [int(friend.get("elo_chess", 0)), games, "partida" if games == 1 else "partidas"]
+	var card := _card(friend, detail)
+	var remove := _button("Remover", &"GhostButton")
+	remove.pressed.connect(_remove.bind(str(friend.get("id", "")), remove))
+	card.get_child(0).add_child(remove)
+	return card
+
+
+## Pedido recebido: Aceitar e Recusar. Enviado: Cancelar.
+func _request_row(request: Dictionary, incoming: bool) -> Control:
+	var profile: Dictionary = request.get("profile", {})
+	var card := _card(profile, "Quer ser seu amigo" if incoming else "Pedido enviado")
+	card.set_meta(&"request_id", str(request.get("id", "")))
+	var line: Control = card.get_child(0)
+	var id := str(request.get("id", ""))
+	if incoming:
+		var accept := _button("Aceitar", &"PrimaryButton")
+		accept.pressed.connect(_answer.bind(id, true, accept))
+		line.add_child(accept)
+	var drop := _button("Recusar" if incoming else "Cancelar", &"GhostButton")
+	drop.pressed.connect(_answer.bind(id, false, drop))
+	line.add_child(drop)
+	return card
+
+
+func _answer(id: String, accept: bool, button: Button) -> void:
+	Sound.play(Sound.Cue.TAP)
+	button.disabled = true
+	if not await Friends.answer_request(id, accept) and is_inside_tree():
+		_say("Não deu para responder agora. Tente de novo.")
+	if is_inside_tree():
+		_load()
+
+
+## Foto, nome e uma linha embaixo. A fileira (`get_child(0)`) recebe os botões.
+func _card(profile: Dictionary, detail: String) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS, AppTheme.LINE_SOFT, 1))
 	var line := HBoxContainer.new()
@@ -203,30 +269,29 @@ func _row(friend: Dictionary) -> Control:
 	var coaster := Coaster.new()
 	coaster.custom_minimum_size = Vector2(48, 48)
 	coaster.size_flags_vertical = SIZE_SHRINK_CENTER
-	coaster.player_name = str(friend.get("name", ""))
-	coaster.photo = Account.avatar_of(id, str(friend.get("avatar", "")))
-	coaster.set_meta(&"friend", friend)
+	coaster.player_name = str(profile.get("name", ""))
+	coaster.photo = Account.avatar_of(str(profile.get("id", "")), str(profile.get("avatar", "")))
+	coaster.set_meta(&"friend", profile)
 	line.add_child(coaster)
 
 	var words := VBoxContainer.new()
 	words.size_flags_horizontal = SIZE_EXPAND_FILL
-	var name := _text(str(friend.get("name", "")), &"")
+	var name := _text(str(profile.get("name", "")), &"")
 	name.add_theme_font_override("font", AppTheme.font(800))
 	name.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
 	words.add_child(name)
-	var games := int(friend.get("games_chess", 0))
-	var detail := "Xadrez: Elo %d · %d %s" % [int(friend.get("elo_chess", 0)), games, "partida" if games == 1 else "partidas"]
 	words.add_child(_text(detail, &"Caption"))
 	line.add_child(words)
-
-	var remove := Button.new()
-	remove.text = "Remover"
-	remove.theme_type_variation = &"GhostButton"
-	remove.custom_minimum_size = Vector2(0, 44)
-	remove.size_flags_vertical = SIZE_SHRINK_CENTER
-	remove.pressed.connect(_remove.bind(id, remove))
-	line.add_child(remove)
 	return card
+
+
+func _button(text: String, variation: StringName) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.theme_type_variation = variation
+	button.custom_minimum_size = Vector2(0, 44)
+	button.size_flags_vertical = SIZE_SHRINK_CENTER
+	return button
 
 
 ## Dois toques: o primeiro pergunta, o segundo remove. Remover tira dos dois lados.
@@ -246,7 +311,7 @@ func _remove(id: String, button: Button) -> void:
 
 
 func _refresh_photos() -> void:
-	for card in _rows.get_children():
+	for card in _rows.get_children() + _requests.get_children():
 		for coaster in card.find_children("", "Coaster", true, false):
 			var friend: Dictionary = coaster.get_meta(&"friend", {})
 			if coaster.photo == null and not friend.is_empty():

@@ -56,7 +56,9 @@ func _ready() -> void:
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
 	# A pílula dos amigos acompanha quem está online, sem abrir a gaveta.
-	var count_online := func() -> void: %AppBar.set_online(Friends.online.size())
+	var count_online := func() -> void:
+		%AppBar.set_online(Friends.online.size())
+		%AppBar.set_alerts(Friends.alerts())
 	Friends.changed.connect(count_online)
 	count_online.call()
 

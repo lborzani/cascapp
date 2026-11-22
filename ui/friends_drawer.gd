@@ -149,7 +149,7 @@ func _fill() -> void:
 		note = "Sem conexão com a sua conta agora. Os amigos aparecem quando ela voltar."
 	elif not Net.relay_available():
 		note = "Sem servidor de partidas: não dá para ver quem está online."
-	elif Friends.list.is_empty():
+	elif Friends.list.is_empty() and Friends.alerts() == 0:
 		note = "Nenhum amigo ainda. Troque códigos com quem joga com você."
 	_note.text = note
 	_note.visible = not note.is_empty()
@@ -157,8 +157,50 @@ func _fill() -> void:
 	if not _inviting.is_empty():
 		_fill_games()
 		return
+	for request: Dictionary in Friends.requests.get("incoming", []):
+		_rows.add_child(_request_row(request))
 	for friend: Dictionary in Friends.sorted():
 		_rows.add_child(_row(friend))
+
+
+## Pedido recebido no topo da gaveta, com Aceitar e Recusar ali mesmo.
+func _request_row(request: Dictionary) -> Control:
+	var profile: Dictionary = request.get("profile", {})
+	var card := PanelContainer.new()
+	card.set_meta(&"request_id", str(request.get("id", "")))
+	card.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS, AppTheme.ACCENT, 1))
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	card.add_child(column)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	column.add_child(line)
+	var coaster := Coaster.new()
+	coaster.custom_minimum_size = Vector2(PHOTO, PHOTO)
+	coaster.player_name = str(profile.get("name", ""))
+	coaster.photo = Account.avatar_of(str(profile.get("id", "")), str(profile.get("avatar", "")))
+	line.add_child(coaster)
+	var words := _text("%s quer ser seu amigo" % str(profile.get("name", "Alguém")), &"Hint")
+	words.size_flags_horizontal = SIZE_EXPAND_FILL
+	words.size_flags_vertical = SIZE_SHRINK_CENTER
+	line.add_child(words)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	column.add_child(buttons)
+	for pair in [["Aceitar", &"PrimaryButton", true], ["Recusar", &"GhostButton", false]]:
+		var button := Button.new()
+		button.text = pair[0]
+		button.theme_type_variation = pair[1]
+		button.custom_minimum_size = Vector2(0, 40)
+		button.size_flags_horizontal = SIZE_EXPAND_FILL
+		button.pressed.connect(func() -> void:
+			Sound.play(Sound.Cue.TAP)
+			for other in buttons.get_children():
+				other.disabled = true
+			Friends.answer_request(str(request.get("id", "")), pair[2])
+		)
+		buttons.add_child(button)
+	return card
 
 
 ## A escolha do jogo do convite, no lugar da lista. Só jogos que abrem sala.

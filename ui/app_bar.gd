@@ -55,6 +55,7 @@ var _label: Label = null
 var _leading_button: IconButton = null
 var _friends: Button = null
 var _online := 0
+var _alerts := 0
 var _action_button: IconButton = null
 var _greeting: HBoxContainer = null
 var _greeting_name: Label = null
@@ -185,9 +186,23 @@ func set_online(count: int) -> void:
 	_friends.queue_redraw()
 
 
+## Quantas coisas esperam o jogador na gaveta (pedidos de amizade recebidos):
+## uma bolinha vermelha no canto da pílula. Zero apaga.
+func set_alerts(count: int) -> void:
+	_alerts = count
+	if _friends != null:
+		_friends.queue_redraw()
+
+
+func alerts() -> int:
+	return _alerts
+
+
 func _draw_online_dot() -> void:
 	if _online > 0:
 		_friends.draw_circle(Vector2(17.0, _friends.size.y * 0.5), 5.0, AppTheme.ACCENT)
+	if _alerts > 0:
+		_friends.draw_circle(Vector2(_friends.size.x - 4.0, 4.0), 6.0, AppTheme.DANGER)
 
 
 ## Título de aba, grande como no protótipo ("Online"): sem voltar à esquerda, ele

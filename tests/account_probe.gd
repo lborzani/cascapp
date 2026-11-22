@@ -122,29 +122,63 @@ func _ready() -> void:
 	_equals(await Account.friends(), [], "conta nova sem amigos")
 	_equals((await Account.add_friend(code))["code"], 400, "o próprio código: recusado")
 	_equals((await Account.add_friend("ZZZZZ1"))["code"], 404, "código que não existe: 404")
-	Account.device_seed = device + "-outro"
-	Account.sign_out()
-	await Account.sign_in()
+	var other_device := device + "-outro"
+	await _as(other_device)
+	var other_code := Account.friend_code
 	var added := await Account.add_friend(code.to_lower())
-	_equals(added["code"], 200, "a outra conta adiciona pelo código, em minúsculas")
-	_equals((added["data"] as Dictionary).get("id") if added["data"] is Dictionary else null, first, "e recebe o perfil da primeira")
-	_equals((await Account.add_friend(code))["code"], 200, "adicionar de novo não é erro")
-	var mine: Variant = await Account.friends()
-	_check(mine is Array and mine.size() == 1 and mine[0]["id"] == first, "a primeira aparece uma vez na lista")
-	_check(mine is Array and not (mine[0] as Dictionary).has("email"), "sem e-mail na lista")
-	Account.device_seed = device
-	Account.sign_out()
-	await Account.sign_in()
+	_equals(added["code"], 200, "a outra conta pede pelo código, em minúsculas")
+	var added_data: Dictionary = added["data"] if added["data"] is Dictionary else {}
+	_equals(added_data.get("id"), first, "e recebe o perfil da primeira")
+	_equals(added_data.get("status"), "requested", "como pedido, e não amizade")
+	_equals((await Account.add_friend(code))["data"].get("status"), "requested", "pedir de novo não é erro nem duplica")
+	_equals(await Account.friends(), [], "o pedido ainda não é amizade")
+	var sent: Variant = await Account.friend_requests()
+	_equals(sent["outgoing"].size() if sent is Dictionary else -1, 1, "quem pediu vê o pedido enviado")
+	var request_id: String = sent["outgoing"][0]["id"] if sent is Dictionary and not sent["outgoing"].is_empty() else ""
+
+	await _as(device + "-terceiro")
+	_check(not await Account.accept_request(request_id), "uma terceira conta não aceita o pedido alheio")
+	_check(not await Account.drop_request(request_id), "nem o apaga")
+
+	await _as(device)
+	var received: Variant = await Account.friend_requests()
+	var incoming: Array = received["incoming"] if received is Dictionary else []
+	_check(incoming.size() == 1 and incoming[0]["profile"]["id"] == second, "quem recebeu vê o pedido, com o perfil de quem pediu")
+	_check(incoming.size() == 1 and not (incoming[0]["profile"] as Dictionary).has("email"), "sem e-mail no pedido")
+	_check(await Account.accept_request(request_id), "aceitar o pedido")
 	var theirs: Variant = await Account.friends()
-	_check(theirs is Array and theirs.size() == 1 and theirs[0]["id"] == second, "e vale para os dois lados")
-	_check(await Account.remove_friend(second), "desfazer a amizade")
+	_check(theirs is Array and theirs.size() == 1 and theirs[0]["id"] == second, "o amigo aparece para quem aceitou")
+	_equals((await Account.friend_requests())["incoming"], [], "e o pedido sai da lista")
+	await _as(other_device)
+	var mine: Variant = await Account.friends()
+	_check(mine is Array and mine.size() == 1 and mine[0]["id"] == first, "e para quem pediu, uma vez só")
+	_check(mine is Array and not (mine[0] as Dictionary).has("email"), "sem e-mail na lista")
+	_equals((await Account.add_friend(code))["data"].get("status"), "friends", "pedir a quem já é amigo responde friends")
+	_check(await Account.remove_friend(first), "desfazer a amizade")
 	_equals(await Account.friends(), [], "some da lista de quem desfez")
-	Account.device_seed = device + "-outro"
-	Account.sign_out()
-	await Account.sign_in()
+	await _as(device)
 	_equals(await Account.friends(), [], "e da lista do outro")
-	Account.device_seed = device
+
+	print("pedidos cruzados, recusar e cancelar")
+	_equals((await Account.add_friend(other_code))["data"].get("status"), "requested", "a primeira pede à outra")
+	await _as(other_device)
+	_equals((await Account.add_friend(code))["data"].get("status"), "friends", "a outra pede de volta: viram amigos na hora")
+	_equals((await Account.friend_requests())["outgoing"], [], "sem pedido sobrando de nenhum lado")
+	await Account.remove_friend(first)
+	await Account.add_friend(code)
+	await _as(device)
+	var declined: Variant = await Account.friend_requests()
+	_check(await Account.drop_request(declined["incoming"][0]["id"]), "recusar o pedido")
+	_equals(await Account.friends(), [], "recusado, não vira amizade")
+	await _as(other_device)
+	_equals((await Account.friend_requests())["outgoing"], [], "e some de quem pediu")
+	await Account.add_friend(code)
+	var cancelled: Variant = await Account.friend_requests()
+	_check(await Account.drop_request(cancelled["outgoing"][0]["id"]), "quem pediu cancela")
+	await _as(device)
+	_equals((await Account.friend_requests())["incoming"], [], "e o pedido some de quem ia receber")
 	Account.sign_out()
+	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/friends/requests", {}))["code"], 401, "sem conta não vê pedidos")
 	_equals((await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/friends", {}))["code"], 401, "sem conta não lista")
 	_check(await Account.sign_in(), "volta ao primeiro aparelho")
 
@@ -293,6 +327,13 @@ func _ready() -> void:
 	Prefs.set_player_name(name_before)
 	print("OK — conta." if _failures == 0 else "%d falha(s)." % _failures)
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## Troca de aparelho: entra na conta derivada de `seed` (criada na primeira vez).
+func _as(seed: String) -> void:
+	Account.device_seed = seed
+	Account.sign_out()
+	await Account.sign_in()
 
 
 ## A rota que só o relay chama, com o segredo dele no cabeçalho.

@@ -33,6 +33,9 @@ const INVITE_SECONDS := 60.0
 
 ## Os amigos da conta, cada um com o perfil público (ver `Account.friends()`).
 var list: Array = []
+## Pedidos de amizade esperando resposta (ver `Account.friend_requests()`):
+## `incoming` para esta conta aceitar, `outgoing` os que ela mandou.
+var requests := {"incoming": [], "outgoing": []}
 ## Id → `{"game", "room", "playing"}` de cada amigo online agora.
 var online := {}
 ## O amigo a chamar quando a próxima sala abrir (ver `scenes/pairing.gd`).
@@ -131,15 +134,28 @@ func send_pending_invite(game: StringName, code: String) -> String:
 	return name if not name.is_empty() else "seu amigo"
 
 
-## Busca a lista de novo no PocketBase e pergunta ao relay. A gaveta chama ao
-## abrir, e o painel de amigos ao adicionar ou remover alguém.
+## O que espera o jogador na gaveta: a bolinha da pílula de amigos.
+func alerts() -> int:
+	return (requests["incoming"] as Array).size()
+
+
+## Aceita ou recusa um pedido recebido e atualiza tudo.
+func answer_request(id: String, accept: bool) -> bool:
+	var ok := false
+	if accept:
+		ok = await Account.accept_request(id)
+	else:
+		ok = await Account.drop_request(id)
+	await refresh()
+	return ok
+
+
+## Busca a lista e os pedidos de novo no PocketBase e pergunta ao relay. A gaveta
+## chama ao abrir, e o painel de amigos ao adicionar ou remover alguém.
 func refresh() -> void:
 	if not has_node(^"/root/Account") or not Account.signed_in():
 		return
-	var fresh: Variant = await Account.friends()
-	if fresh is Array:
-		list = fresh
-		changed.emit()
+	await _load_lists()
 	_poll = 0.0
 	if _socket == null:
 		_retry = 0.0
@@ -200,12 +216,21 @@ func _tick_retry(delta: float) -> void:
 		return
 	_retry = RETRY_SECONDS
 	if list.is_empty():
-		var fresh: Variant = await Account.friends()
-		if fresh is Array:
-			list = fresh
-			changed.emit()
+		await _load_lists()
 	if _socket == null and not _paused:
 		connect_presence(relay_url(), Account.token)
+
+
+## A lista e os pedidos, do PocketBase. Resposta que falhou deixa o que havia.
+func _load_lists() -> void:
+	var fresh: Variant = await Account.friends()
+	var pending: Variant = await Account.friend_requests()
+	if fresh is Array:
+		list = fresh
+	if pending is Dictionary:
+		requests = pending
+	if fresh is Array or pending is Dictionary:
+		changed.emit()
 
 
 func _handle(text: String) -> void:

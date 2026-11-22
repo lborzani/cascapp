@@ -61,6 +61,7 @@ func _ready() -> void:
 	_check(await _test_news() == true, "novidades rodou até o fim")
 	await _test_friends()
 	_check(await _test_friends_drawer() == true, "gaveta de amigos rodou até o fim")
+	await _test_friend_requests()
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -2854,6 +2855,48 @@ static func _square(name: String) -> int:
 
 static func _put(state: MatchState, name: String, side: int, kind: int) -> void:
 	state.set_piece(_square(name), Board.piece(side, kind))
+
+
+## Pedido de amizade: a bolinha na pílula, o pedido no topo da gaveta com
+## Aceitar e Recusar, e as seções do painel.
+func _test_friend_requests() -> void:
+	print("pedidos de amizade")
+	_equals(FriendsPanel.added_text({"name": "Eva", "status": "requested"}), "Pedido enviado. Eva aparece aqui quando aceitar.", "ler o código manda pedido")
+	_equals(FriendsPanel.added_text({"name": "Eva", "status": "friends"}), "Eva agora é seu amigo.", "pedido cruzado vira amizade")
+	var eva := {"id": "evaevaevaeva123", "name": "Eva", "avatar": ""}
+	var saved_list := Friends.list
+	var saved_online := Friends.online
+	Friends.list = []
+	Friends.online = {}
+	Friends.requests = {"incoming": [{"id": "req1", "profile": eva}], "outgoing": [{"id": "req2", "profile": eva}]}
+	_equals(Friends.alerts(), 1, "um pedido recebido é um aviso")
+	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_equals(menu.get_node("%AppBar").alerts(), 1, "a pílula de amigos acende a bolinha")
+	menu._open_friends()
+	await get_tree().process_frame
+	var drawer: FriendsDrawer = menu._drawer()
+	var first: Node = drawer._rows.get_child(0) if drawer != null and drawer._rows.get_child_count() > 0 else null
+	_check(first != null and first.get_meta(&"request_id", "") == "req1", "o pedido recebido vem no topo da gaveta")
+	var labels := drawer._rows.find_children("", "Button", true, false).map(func(b: Button) -> String: return b.text) if drawer != null else []
+	_check(labels.has("Aceitar") and labels.has("Recusar"), "com Aceitar e Recusar")
+	_check(not drawer._note.text.begins_with("Nenhum amigo"), "e sem o aviso de lista vazia")
+	menu.queue_free()
+	await get_tree().process_frame
+
+	var panel := FriendsPanel.new()
+	panel._requests = VBoxContainer.new()
+	panel.add_child(panel._requests)
+	panel._fill_requests(Friends.requests)
+	var texts := panel._requests.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	_check(texts.has("Pedidos recebidos") and texts.has("Pedidos enviados"), "o painel separa recebidos e enviados")
+	var buttons := panel._requests.find_children("", "Button", true, false).map(func(b: Button) -> String: return b.text)
+	_equals(buttons, ["Aceitar", "Recusar", "Cancelar"], "recebido aceita ou recusa, enviado cancela")
+	panel.free()
+	Friends.requests = {"incoming": [], "outgoing": []}
+	Friends.list = saved_list
+	Friends.online = saved_online
 
 
 ## A gaveta de amigos: online primeiro, o status certo de cada um, a bolinha só
