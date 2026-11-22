@@ -123,16 +123,33 @@ func _probe_palette() -> void:
 	var kinds := [Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK,
 		Board.Kind.QUEEN, Board.Kind.KING, Board.Kind.MAN, Board.Kind.DAME]
 	var knight := Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT)
-	_check(PieceRenderer.finished_texture(knight, "finish_nada") == null, "acabamento desconhecido não gera nada")
+	_check(PieceRenderer.styled_texture(knight, {"finish": "finish_nada"}) == null, "acabamento desconhecido não gera nada")
+	# Conjuntos de peças: as doze do xadrez em cada um, sozinhas e com cada
+	# acabamento; as pedras de damas não mudam de formato.
+	var chess_kinds := kinds.slice(0, 6)
+	var finishes: Array[String] = [""]
+	finishes.append_array(Cosmetics.of_slot(Cosmetics.FINISH))
+	_check(PieceRenderer.styled_texture(knight, {"pieces": "pieces_nada"}) == null, "conjunto desconhecido fica nas peças de sempre")
+	_check(PieceRenderer.styled_texture(Board.piece(Board.Side.WHITE, Board.Kind.MAN), {"pieces": "pieces_minimal"}) == null, "as damas não mudam de formato")
+	for set in Cosmetics.of_slot(Cosmetics.PIECES):
+		var made := 0
+		for finish in finishes:
+			for kind in chess_kinds:
+				for side in [Board.Side.WHITE, Board.Side.BLACK]:
+					var texture := PieceRenderer.styled_texture(Board.piece(side, kind), {"pieces": set, "finish": finish})
+					if texture != null and texture.get_size() == Vector2(288, 288):
+						made += 1
+		_equals(made, chess_kinds.size() * 2 * finishes.size(), "%s: as doze peças, sozinhas e com cada acabamento" % set)
+		_check(PieceRenderer.styled_texture(knight, {"pieces": set}) != PieceRenderer._texture(knight), "%s: o cavalo é outro desenho" % set)
 	for id in Cosmetics.of_slot(Cosmetics.FINISH):
 		var made := 0
 		for kind in kinds:
 			for side in [Board.Side.WHITE, Board.Side.BLACK]:
-				var texture := PieceRenderer.finished_texture(Board.piece(side, kind), id)
+				var texture := PieceRenderer.styled_texture(Board.piece(side, kind), {"finish": id})
 				if texture != null and texture.get_size() == Vector2(288, 288):
 					made += 1
 		_equals(made, kinds.size() * 2, "%s: as peças dos dois jogos, nos dois lados" % id)
-		_check(PieceRenderer.finished_texture(knight, id) == PieceRenderer.finished_texture(knight, id), "%s: a segunda vez vem do cache" % id)
+		_check(PieceRenderer.styled_texture(knight, {"finish": id}) == PieceRenderer.styled_texture(knight, {"finish": id}), "%s: a segunda vez vem do cache" % id)
 		# O corpo é o que diz a cor da peça; o contorno de uma é claro e o da outra
 		# escuro, e por isso fica fora da comparação.
 		var white_paint := Cosmetics.finish_paint(id, Board.Side.WHITE)

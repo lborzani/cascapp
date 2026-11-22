@@ -64,6 +64,7 @@ const SHOTS := [
 	["res://scenes/match.tscn", "29b_damas_dividido"],
 	["res://scenes/match.tscn", "29c_xadrez_dividido_pretas"],
 	["res://scenes/match.tscn", "31_pecas_divididas"],
+	["res://scenes/match.tscn", "33_conjuntos_divididos"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -94,6 +95,8 @@ func _ready() -> void:
 	for id in Cosmetics.of_slot(Cosmetics.BOARD):
 		_shots.append(["res://scenes/match.tscn", "28_xadrez_" + id.trim_prefix("board_")])
 		_shots.append(["res://scenes/match.tscn", "28b_damas_" + id.trim_prefix("board_")])
+	for id in Cosmetics.of_slot(Cosmetics.PIECES):
+		_shots.append(["res://scenes/match.tscn", "32_conjunto_" + id.trim_prefix("pieces_")])
 	for id in Cosmetics.of_slot(Cosmetics.FINISH):
 		_shots.append(["res://scenes/match.tscn", "30_pecas_" + id.trim_prefix("finish_")])
 		_shots.append(["res://scenes/match.tscn", "30b_damas_" + id.trim_prefix("finish_")])
@@ -171,11 +174,15 @@ func _next() -> void:
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
 		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
+	if shot.begins_with("32"):
+		# Um conjunto de peças da loja no tabuleiro de sempre.
+		Game.start_hotseat(Game.CHESS)
+		Account.look = {"pieces": "pieces_" + shot.split("_", true, 2)[2]}
 	if shot.begins_with("30"):
 		# Um acabamento da loja no tabuleiro de sempre.
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("30b") else Game.CHESS)
 		Account.look = {"finish": "finish_" + shot.split("_", true, 2)[2]}
-	if shot.begins_with("29") or shot == "31_pecas_divididas":
+	if shot.begins_with("29") or shot == "31_pecas_divididas" or shot == "33_conjuntos_divididos":
 		# Eu de um lado e o adversário do outro, cada um com o seu tabuleiro.
 		var black_view := shot.ends_with("pretas")
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("29b") else Game.CHESS)
@@ -190,11 +197,15 @@ func _next() -> void:
 			"29b_damas_dividido": ["board_marble", "board_candy"],
 			"29c_xadrez_dividido_pretas": ["board_tournament", "board_ocean"],
 			"31_pecas_divididas": ["board_wood", "board_neon"],
+			"33_conjuntos_divididos": ["board_marble", "board_ocean"],
 		}
 		Net.looks = {0: {"board": pairs[shot][0]}, 1: {"board": pairs[shot][1]}}
 		if shot == "31_pecas_divididas":
 			Net.looks[0]["finish"] = "finish_metal"
 			Net.looks[1]["finish"] = "finish_neon"
+		if shot == "33_conjuntos_divididos":
+			Net.looks[0].merge({"pieces": "pieces_staunton", "finish": "finish_wood"})
+			Net.looks[1].merge({"pieces": "pieces_medieval", "finish": "finish_gems"})
 		Account.look = Net.looks[0]
 	match shot:
 		"00_boas_vindas":
@@ -231,11 +242,12 @@ func _next() -> void:
 			Account.token = "print"
 			Account.coins = 350
 			Account.prices = {
+				"pieces_staunton": 400, "pieces_minimal": 400, "pieces_medieval": 400,
 				"finish_wood": 200, "finish_marble": 250, "finish_metal": 350,
 				"finish_neon": 300, "finish_gems": 350,
 			}
-			Account.owned = ["finish_metal"]
-			Account.look = {"finish": "finish_metal"}
+			Account.owned = ["pieces_staunton", "finish_metal"]
+			Account.look = {"pieces": "pieces_staunton", "finish": "finish_metal"}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)
@@ -408,10 +420,10 @@ func _next() -> void:
 		_scene._open_shop()
 		_scene._shop._tabs.set_current(tab)
 		_scene._shop._tabs.selected.emit(tab)
-	if (shot.begins_with("29") or shot == "31_pecas_divididas") and is_instance_valid(_scene._coin_toss):
+	if (shot.begins_with("29") or shot.begins_with("31") or shot.begins_with("33")) and is_instance_valid(_scene._coin_toss):
 		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
 		_scene._coin_toss.free()
-	if shot.begins_with("28_") or shot.begins_with("30_") or shot in ["29_xadrez_dividido", "29c_xadrez_dividido_pretas", "31_pecas_divididas"]:
+	if shot.begins_with("28_") or shot.begins_with("30_") or shot.begins_with("32_") or shot in ["29_xadrez_dividido", "29c_xadrez_dividido_pretas", "31_pecas_divididas", "33_conjuntos_divididos"]:
 		_play_opening(_scene)
 		_scene._refresh()
 	elif shot.begins_with("28b_") or shot.begins_with("30b_") or shot == "29b_damas_dividido":

@@ -11,15 +11,21 @@ extends Control
 signal closed
 
 const SWATCH := 92.0
-## As abas, uma por encaixe: `[encaixe, rótulo]`, na ordem da tela.
-const TABS := [[Cosmetics.BALL, "Bola"], [Cosmetics.BOARD, "Tabuleiro"], [Cosmetics.FINISH, "Peças"]]
+## As abas: `[encaixes, rótulo]`, na ordem da tela. Aba de mais de um encaixe
+## mostra uma seção por encaixe, com o título de `SECTIONS`.
+const TABS := [
+	[[Cosmetics.BALL], "Bola"],
+	[[Cosmetics.BOARD], "Tabuleiro"],
+	[[Cosmetics.PIECES, Cosmetics.FINISH], "Peças"],
+]
+const SECTIONS := {Cosmetics.PIECES: "Formato", Cosmetics.FINISH: "Acabamento"}
 
 var _balance: Label = null
 var _note: Label = null
-var _grid: GridContainer = null
+var _rows: VBoxContainer = null
 var _tabs: SegmentedControl = null
-## O encaixe da aba aberta.
-var _slot: String = TABS[0][0]
+## Os encaixes da aba aberta.
+var _slots: Array = TABS[0][0]
 var _toast: Banner = null
 ## O item à espera do segundo toque para comprar; vazio sem nenhum.
 var _confirming := ""
@@ -73,7 +79,7 @@ func _ready() -> void:
 	_tabs.setup(labels)
 	_tabs.selected.connect(func(index: int) -> void:
 		Sound.play(Sound.Cue.TAP)
-		_slot = TABS[index][0]
+		_slots = TABS[index][0]
 		_confirming = ""
 		_fill()
 	)
@@ -83,15 +89,10 @@ func _ready() -> void:
 	scroll.size_flags_vertical = SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroll)
-	var rows := VBoxContainer.new()
-	rows.size_flags_horizontal = SIZE_EXPAND_FILL
-	rows.add_theme_constant_override("separation", 10)
-	scroll.add_child(rows)
-	_grid = GridContainer.new()
-	_grid.columns = 2
-	_grid.add_theme_constant_override("h_separation", 10)
-	_grid.add_theme_constant_override("v_separation", 10)
-	rows.add_child(_grid)
+	_rows = VBoxContainer.new()
+	_rows.size_flags_horizontal = SIZE_EXPAND_FILL
+	_rows.add_theme_constant_override("separation", 10)
+	scroll.add_child(_rows)
 
 	_toast = Banner.new()
 	safe.add_child(_toast)
@@ -116,17 +117,28 @@ func _fill() -> void:
 		_note.text = "Carregando os preços…"
 	else:
 		_note.text = "Ganhe moedas terminando partidas contra o bot ou online, e com o bônus do dia."
-	for child in _grid.get_children():
-		_grid.remove_child(child)
+	for child in _rows.get_children():
+		_rows.remove_child(child)
 		child.queue_free()
-	_grid.add_child(_card(""))
-	for id in Cosmetics.of_slot(_slot):
-		if Account.prices.has(id) or id in Account.owned:
-			_grid.add_child(_card(id))
+	for slot: String in _slots:
+		if _slots.size() > 1:
+			var heading := Label.new()
+			heading.text = SECTIONS[slot]
+			heading.theme_type_variation = &"SectionHeader"
+			_rows.add_child(heading)
+		var grid := GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 10)
+		grid.add_theme_constant_override("v_separation", 10)
+		_rows.add_child(grid)
+		grid.add_child(_card(slot, ""))
+		for id in Cosmetics.of_slot(slot):
+			if Account.prices.has(id) or id in Account.owned:
+				grid.add_child(_card(slot, id))
 
 
 ## Um item: a amostra, o nome e o botão. `id` vazio é o padrão do encaixe.
-func _card(id: String) -> Control:
+func _card(slot: String, id: String) -> Control:
 	var card := PanelContainer.new()
 	card.size_flags_horizontal = SIZE_EXPAND_FILL
 	var box := AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE)
@@ -137,7 +149,7 @@ func _card(id: String) -> Control:
 	column.add_theme_constant_override("separation", 8)
 	card.add_child(column)
 
-	column.add_child(_swatch(id))
+	column.add_child(_swatch(slot, id))
 
 	var name := Label.new()
 	name.text = Cosmetics.name_of(id) if not id.is_empty() else "Padrão"
@@ -149,7 +161,7 @@ func _card(id: String) -> Control:
 	var action := Button.new()
 	action.custom_minimum_size = Vector2(0, 44)
 	action.focus_mode = FOCUS_NONE
-	var using := str(Account.look.get(_slot, "")) == id
+	var using := str(Account.look.get(slot, "")) == id
 	var owned := id.is_empty() or Account.owns(id)
 	if using:
 		action.text = "Em uso"
@@ -162,21 +174,19 @@ func _card(id: String) -> Control:
 		action.text = "%d moedas" % int(Account.prices.get(id, 0))
 		action.theme_type_variation = &"GhostButton"
 	action.disabled = action.disabled or _busy or not Account.signed_in()
-	action.pressed.connect(_on_action.bind(id, owned))
+	action.pressed.connect(_on_action.bind(slot, id, owned))
 	column.add_child(action)
 	return card
 
 
-## A amostra do item na aba aberta. `id` vazio é o padrão do encaixe.
-func _swatch(id: String) -> Control:
-	var look := {_slot: id}
-	if _slot == Cosmetics.BOARD or _slot == Cosmetics.FINISH:
+## A amostra do item. `id` vazio é o padrão do encaixe.
+func _swatch(slot: String, id: String) -> Control:
+	var look := {slot: id}
+	if slot != Cosmetics.BALL:
 		var sample := BoardSample.new()
 		# As peças aparecem no tabuleiro de quem compra, e o tabuleiro com as peças
-		# de sempre: a amostra mostra o item como ele vai aparecer na partida.
-		var mine := Account.look.merged(look, true)
-		sample.skin = Cosmetics.board_skin(mine)
-		sample.finish = Cosmetics.finish_of(mine)
+		# de quem compra: a amostra mostra o item como ele vai aparecer na partida.
+		sample.look = Account.look.merged(look, true)
 		sample.custom_minimum_size = Vector2(SWATCH, SWATCH)
 		sample.size_flags_horizontal = SIZE_SHRINK_CENTER
 		return sample
@@ -195,10 +205,10 @@ func _swatch(id: String) -> Control:
 	return swatch
 
 
-func _on_action(id: String, owned: bool) -> void:
+func _on_action(slot: String, id: String, owned: bool) -> void:
 	Sound.play(Sound.Cue.TAP)
 	if owned:
-		await _equip(id)
+		await _equip(slot, id)
 		return
 	if _confirming != id:
 		_confirming = id
@@ -214,7 +224,7 @@ func _on_action(id: String, owned: bool) -> void:
 	match code:
 		200:
 			_toast.show_message("%s é sua." % Cosmetics.name_of(id), Banner.Kind.INFO)
-			await _equip(id)
+			await _equip(slot, id)
 		402:
 			var missing := int(Account.prices.get(id, 0)) - maxi(Account.coins, 0)
 			_toast.show_message("Faltam %d moedas." % missing, Banner.Kind.ALERT)
@@ -223,10 +233,10 @@ func _on_action(id: String, owned: bool) -> void:
 	_fill()
 
 
-func _equip(id: String) -> void:
+func _equip(slot: String, id: String) -> void:
 	_busy = true
 	_fill()
-	var ok := await Account.equip(_slot, id)
+	var ok := await Account.equip(slot, id)
 	_busy = false
 	if not is_inside_tree():
 		return
@@ -240,10 +250,11 @@ func _equip(id: String) -> void:
 class BoardSample:
 	extends Control
 
-	var skin: Dictionary = Cosmetics.DEFAULT_BOARD
-	var finish := ""
+	## O visual que a amostra mostra: o tabuleiro e as peças dele.
+	var look := {}
 
 	func _draw() -> void:
+		var skin := Cosmetics.board_skin(look)
 		var side := minf(size.x, size.y)
 		var outer := Rect2((size - Vector2.ONE * side) * 0.5, Vector2.ONE * side)
 		draw_style_box(AppTheme.box(skin["frame"], int(side * 0.12)), outer)
@@ -259,9 +270,9 @@ class BoardSample:
 				BoardView.paint_square(self, skin, Rect2(inner.position + Vector2(col, row) * cell, Vector2.ONE * cell), square, color)
 		PieceRenderer.draw_piece(
 			self, Board.piece(Board.Side.BLACK, Board.Kind.KNIGHT), inner.position + Vector2(0.5, 0.5) * cell, cell,
-			1.0, 1.0, false, Color.WHITE, 0.0, finish
+			1.0, 1.0, false, Color.WHITE, 0.0, look
 		)
 		PieceRenderer.draw_piece(
 			self, Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT), inner.position + Vector2(1.5, 1.5) * cell, cell,
-			1.0, 1.0, false, Color.WHITE, 0.0, finish
+			1.0, 1.0, false, Color.WHITE, 0.0, look
 		)

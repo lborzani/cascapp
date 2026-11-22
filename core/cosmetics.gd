@@ -11,6 +11,7 @@ extends RefCounted
 const BALL := "ball"
 const BOARD := "board"
 const FINISH := "finish"
+const PIECES := "pieces"
 ## A textura da bola padrão (o mármore que a cor do assento pinta), para a amostra.
 const MARBLE := "res://assets/bowling/ball_ball_marble.png"
 
@@ -58,6 +59,11 @@ const ITEMS := {
 	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
 	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
 	# contorno e os detalhes.
+	# Conjuntos de peças do xadrez (`tools/build_piece_sets.gd`): o mesmo nome de
+	# arquivo das peças de sempre, noutra pasta. As damas não mudam de formato.
+	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
+	"pieces_minimal": {"slot": PIECES, "name": "Minimalista", "dir": "res://assets/pieces/sets/minimal"},
+	"pieces_medieval": {"slot": PIECES, "name": "Medieval", "dir": "res://assets/pieces/sets/medieval"},
 	"finish_wood": {
 		"slot": FINISH, "name": "Madeira",
 		"white": {"body": ["#f5dcae", "#e3c28c", "#f2d6a2", "#d9b47a", "#efd09a", "#e0bd84"], "line": "#5a3a1e"},
@@ -131,6 +137,12 @@ static func board_skin(look: Dictionary) -> Dictionary:
 static func finish_of(look: Dictionary) -> String:
 	var id := str(look.get(FINISH, ""))
 	return id if ITEMS.has(id) and ITEMS[id]["slot"] == FINISH else ""
+
+
+## A pasta do conjunto de peças de um visual, ou vazio para as de sempre.
+static func pieces_dir(look: Dictionary) -> String:
+	var id := str(look.get(PIECES, ""))
+	return str(ITEMS[id]["dir"]) if ITEMS.has(id) and ITEMS[id]["slot"] == PIECES else ""
 
 
 ## As tintas de um acabamento para um lado (`Board.Side`): `{"body", "line"}`,

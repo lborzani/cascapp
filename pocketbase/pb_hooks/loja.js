@@ -23,6 +23,9 @@ const PRICES = {
   finish_metal: 350,
   finish_neon: 300,
   finish_gems: 350,
+  pieces_staunton: 400,
+  pieces_minimal: 400,
+  pieces_medieval: 400,
 }
 
 const DAILY = 50

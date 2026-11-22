@@ -93,9 +93,9 @@ const RAW_KINDS := [
 	Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK,
 	Board.Kind.QUEEN, Board.Kind.KING, Board.Kind.MAN, Board.Kind.DAME,
 ]
-## Peça e acabamento → textura gerada, ou `null` quando não deu (cai no desenho
-## de sempre). Gerada uma vez por peça e acabamento, nunca por quadro.
-static var _finished := {}
+## Peça, conjunto e acabamento → textura gerada, ou `null` quando não deu (cai no
+## desenho de sempre). Gerada uma vez por combinação, nunca por quadro.
+static var _styled := {}
 
 static var _cache := {}
 ## Peça (inteiro de `Board.piece`) → textura, ou `null` quando não há arquivo.
@@ -122,20 +122,21 @@ static var _textures := {}
 ## mesa. Existe pelo peão derrubado do Ludo: uma peça que atravessa o tabuleiro
 ## em pé lê como "mudou de lugar", e girando lê como "foi comida".
 ##
-## `finish` é o acabamento da loja (`Cosmetics`, encaixe `finish`); vazio, ou um
-## que não deu para gerar, é o desenho de sempre.
+## `look` é o visual da loja (`Cosmetics`) do dono da peça: o conjunto
+## (`pieces`) e o acabamento (`finish`). Sem eles, ou se não deu para gerar, é o
+## desenho de sempre.
 static func draw_piece(
 	canvas: CanvasItem, piece: int, center: Vector2, cell: float,
 	opacity := 1.0, size := 1.0, upside_down := false, tint := Color.WHITE, spin := 0.0,
-	finish := ""
+	look := {}
 ) -> void:
 	if piece == 0 or opacity <= 0.0:
 		return
 	var texture := _texture(piece)
-	if not finish.is_empty():
-		var finished := finished_texture(piece, finish)
-		if finished != null:
-			texture = finished
+	if not look.is_empty():
+		var styled := styled_texture(piece, look)
+		if styled != null:
+			texture = styled
 	if texture != null:
 		_draw_texture(canvas, texture, center, cell, opacity, size, upside_down, tint, spin)
 		return
@@ -148,33 +149,39 @@ static func _texture(piece: int) -> Texture2D:
 	var kind := Board.kind_of(piece)
 	var texture: Texture2D = null
 	if TEXTURE_NAMES.has(kind):
-		var path := _svg_path(piece)
+		var path := _svg_path(piece, TEXTURE_DIR)
 		texture = _raster(FileAccess.get_file_as_string(path)) if kind in RAW_KINDS else load(path) as Texture2D
 	_textures[piece] = texture
 	return texture
 
 
-## A peça com o acabamento: o SVG cru dela (ver `RAW_KINDS`) com as tintas
-## trocadas, rasterizado na hora.
-static func finished_texture(piece: int, finish: String) -> Texture2D:
-	var key := "%d:%s" % [piece, finish]
-	if _finished.has(key):
-		return _finished[key]
-	var texture: Texture2D = null
+## A peça no visual da loja: o SVG cru dela (ver `RAW_KINDS`) no conjunto do
+## visual, com as tintas do acabamento, rasterizado na hora. `null` quando o
+## visual não muda esta peça (as damas não têm conjunto) ou não deu para gerar.
+static func styled_texture(piece: int, look: Dictionary) -> Texture2D:
 	var kind := Board.kind_of(piece)
-	var white := Board.side_of(piece) == Board.Side.WHITE
-	var paint := Cosmetics.finish_paint(finish, Board.side_of(piece))
-	if not paint.is_empty() and kind in RAW_KINDS:
-		var svg := FileAccess.get_file_as_string(_svg_path(piece))
-		if not svg.is_empty():
-			texture = _raster(recolor(svg, white, paint))
-	_finished[key] = texture
+	# O conjunto é só do xadrez: as pedras de damas continuam as de sempre.
+	var dir := Cosmetics.pieces_dir(look) if kind not in [Board.Kind.MAN, Board.Kind.DAME] else ""
+	var finish := Cosmetics.finish_of(look)
+	if (dir.is_empty() and finish.is_empty()) or kind not in RAW_KINDS:
+		return null
+	var key := "%d:%s:%s" % [piece, dir, finish]
+	if _styled.has(key):
+		return _styled[key]
+	var texture: Texture2D = null
+	var svg := FileAccess.get_file_as_string(_svg_path(piece, dir if not dir.is_empty() else TEXTURE_DIR))
+	if not svg.is_empty():
+		var white := Board.side_of(piece) == Board.Side.WHITE
+		if not finish.is_empty():
+			svg = recolor(svg, white, Cosmetics.finish_paint(finish, Board.side_of(piece)))
+		texture = _raster(svg)
+	_styled[key] = texture
 	return texture
 
 
-static func _svg_path(piece: int) -> String:
+static func _svg_path(piece: int, dir: String) -> String:
 	var side := "white" if Board.side_of(piece) == Board.Side.WHITE else "black"
-	return "%s/%s_%s.svg" % [TEXTURE_DIR, TEXTURE_NAMES[Board.kind_of(piece)], side]
+	return "%s/%s_%s.svg" % [dir, TEXTURE_NAMES[Board.kind_of(piece)], side]
 
 
 ## O texto de um SVG vira textura; `null` quando não é SVG que dê para ler.
