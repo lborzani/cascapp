@@ -206,6 +206,45 @@ func friend_profile(id: String) -> Variant:
 	return data
 
 
+# --- conversa com amigos ---------------------------------------------------------
+#
+# Rotas de `pocketbase/pb_hooks/conversa.pb.js`. Cada mensagem é
+# `{"id", "from", "kind", "text", "emote", "game", "room", "at"}`, com `kind`
+# "text", "emote" ou "invite" e `at` em tempo Unix.
+
+
+## As últimas mensagens com `friend`, da mais antiga à mais nova. Ler marca as
+## recebidas como lidas. `null` quando não deu para perguntar.
+func chat(friend: String) -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/chat/" + friend.uri_encode(), {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("items") is Array:
+		return null
+	return data["items"]
+
+
+## Manda `body` (`{"kind": "text", "text"}`, `{"kind": "emote", "emote"}` ou
+## `{"kind": "invite", "game", "room"}`). `{"code": HTTP, "data": mensagem}`: 200
+## foi, 400 inválida, 404 não é mais amigo, 429 rápido demais, 0 sem servidor.
+func send_chat(friend: String, body: Dictionary) -> Dictionary:
+	if not signed_in():
+		return {"code": 0, "data": null}
+	return await _call(HTTPClient.METHOD_POST, "/api/cascapp/chat/" + friend.uri_encode(), body)
+
+
+## Id do amigo → mensagens não lidas. `null` quando não deu para perguntar.
+func unread() -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/chat/unread", {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("counts") is Dictionary:
+		return null
+	return data["counts"]
+
+
 # --- partidas para o perfil dos amigos -------------------------------------------
 #
 # Toda partida com resultado sobe para `matches`, como a revisão do xadrez: vale

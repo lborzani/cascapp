@@ -15,6 +15,8 @@ extends Control
 signal closed
 ## Convidar este amigo: a gaveta pergunta o jogo.
 signal invite_requested(friend_id: String)
+## Abrir a conversa com este amigo.
+signal chat_requested(friend_id: String)
 
 const PHOTO := 72.0
 
@@ -80,18 +82,34 @@ func _ready() -> void:
 	top.add_child(words)
 	column.add_child(top)
 
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8)
+	column.add_child(actions)
+	var unread := Friends.unread_of(friend_id)
+	var chat := Button.new()
+	chat.name = "Chat"
+	chat.text = "Conversar (%d nova%s)" % [unread, "" if unread == 1 else "s"] if unread > 0 else "Conversar"
+	chat.theme_type_variation = &"GhostButton"
+	chat.custom_minimum_size = Vector2(0, 48)
+	chat.size_flags_horizontal = SIZE_EXPAND_FILL
+	chat.pressed.connect(func() -> void:
+		Sound.play(Sound.Cue.TAP)
+		chat_requested.emit(friend_id)
+	)
+	actions.add_child(chat)
 	# Convidar só quem está online e fora de sala, como na gaveta.
 	if status is Dictionary and str(status.get("room", "")).is_empty() and Net.relay_available():
 		var invite := Button.new()
 		invite.name = "Invite"
-		invite.text = "Convidar para jogar"
+		invite.text = "Convidar"
 		invite.theme_type_variation = &"PrimaryButton"
 		invite.custom_minimum_size = Vector2(0, 48)
+		invite.size_flags_horizontal = SIZE_EXPAND_FILL
 		invite.pressed.connect(func() -> void:
 			Sound.play(Sound.Cue.TAP)
 			invite_requested.emit(friend_id)
 		)
-		column.add_child(invite)
+		actions.add_child(invite)
 
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)

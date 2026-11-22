@@ -2937,6 +2937,46 @@ func _test_friend_requests() -> void:
 		var again := drawer2.open_profile("evaevaevaeva123")
 		drawer2.close()
 		_check(again.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha o perfil antes da gaveta")
+
+		print("conversa com o amigo")
+		Friends.unread = {"evaevaevaeva123": 3.0}
+		Friends.changed.emit()
+		_equals(menu2.get_node("%AppBar").alerts(), 3, "mensagens não lidas acendem a pílula")
+		var badge := drawer2._rows.get_child(0).find_child("Unread", true, false) as Label
+		_equals(badge.text if badge != null else "", "3", "e o card do amigo mostra quantas")
+		var with_chat := drawer2.open_profile("evaevaevaeva123")
+		var chat_button := with_chat.find_child("Chat", true, false) as Button
+		_equals(chat_button.text if chat_button != null else "", "Conversar (3 novas)", "o perfil diz que há mensagens")
+		chat_button.pressed.emit()
+		await get_tree().process_frame
+		var chats := drawer2.find_children("", "FriendChat", false, false)
+		_check(chats.size() == 1 and not is_instance_valid(with_chat), "Conversar troca o perfil pela conversa")
+		if chats.size() == 1:
+			var chat: FriendChat = chats[0]
+			var now := 10000
+			Account.user_id = "euueuueuueu123"
+			chat.show_items([
+				{"id": "m1", "from": "euueuueuueu123", "kind": "text", "text": "oi", "at": now - 60},
+				{"id": "m2", "from": "evaevaevaeva123", "kind": "emote", "emote": 1, "at": now - 50},
+				{"id": "m3", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "AB12CD", "at": now - 30},
+				{"id": "m4", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "OLD123", "at": now - 3600},
+				{"id": "m5", "from": "euueuueuueu123", "kind": "invite", "game": "uno", "room": "MINE12", "at": now - 10},
+			], now)
+			var rows := chat._bubbles.get_children()
+			_equals(rows.size(), 5, "um balão por mensagem")
+			_equals(rows.map(func(r: HBoxContainer) -> int: return r.alignment), [
+				BoxContainer.ALIGNMENT_END, BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_BEGIN,
+				BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_END,
+			], "os meus à direita")
+			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Join", true, false) != null), [false, false, true, false, false], "Entrar só no convite recebido e recente")
+			var bubble_texts := chat._bubbles.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
+			_check(bubble_texts.has(ChatLog.EMOTES[1]) and bubble_texts.has("Te chamou para %s" % Game.game_title(&"uno")), "o emoji e o convite aparecem no fio")
+			_equals(FriendChat.preview({"kind": "text", "text": "oi"}, "Eva"), "Eva: oi", "a prévia do texto")
+			_equals(FriendChat.preview({"kind": "invite", "game": "uno"}, "Eva"), "Eva te chamou para %s" % Game.game_title(&"uno"), "e do convite")
+			Account.user_id = ""
+			drawer2.close()
+			_check(chat.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha a conversa antes da gaveta")
+		Friends.unread = {}
 	menu2.queue_free()
 	await get_tree().process_frame
 	Friends.list = saved_list

@@ -30,6 +30,10 @@ const INVITE_SCENES: Array[String] = [
 ]
 ## Quanto tempo o aviso fica na tela. A sala do outro não espera para sempre.
 const INVITE_SECONDS := 60.0
+## De quanto em quanto tempo o app pergunta as mensagens não lidas, em primeiro
+## plano. `ponytail:` consulta, e não empurrão; o socket de presença pode avisar
+## quando a carga do PocketBase incomodar.
+const UNREAD_SECONDS := 20.0
 
 ## Os amigos da conta, cada um com o perfil público (ver `Account.friends()`).
 var list: Array = []
@@ -38,6 +42,8 @@ var list: Array = []
 var requests := {"incoming": [], "outgoing": []}
 ## Id → `{"game", "room", "playing"}` de cada amigo online agora.
 var online := {}
+## Id do amigo → mensagens que ele mandou e esta conta não leu.
+var unread := {}
 ## O amigo a chamar quando a próxima sala abrir (ver `scenes/pairing.gd`).
 var pending_invite := ""
 ## A gaveta está aberta: perguntar ao relay de tempos em tempos.
@@ -51,6 +57,8 @@ var _token := ""
 var _hello_sent := false
 var _poll := 0.0
 var _retry := 0.0
+var _unread_poll := 0.0
+var _unread_busy := false
 ## O app foi para o fundo: presença fechada até ele voltar.
 var _paused := false
 
@@ -117,8 +125,11 @@ func profile_of(id: String) -> Dictionary:
 	return {}
 
 
+## O convite vai pelo relay (o aviso na hora) e fica na conversa dos dois.
 func invite(to: String, game: StringName, code: String) -> void:
 	_send({"t": "invite", "to": to, "game": String(game), "room": code})
+	if has_node(^"/root/Account"):
+		Account.send_chat(to, {"kind": "invite", "game": String(game), "room": code})
 
 
 ## A sala de `code` abriu: chama o amigo guardado em [member pending_invite], uma
@@ -134,9 +145,36 @@ func send_pending_invite(game: StringName, code: String) -> String:
 	return name if not name.is_empty() else "seu amigo"
 
 
-## O que espera o jogador na gaveta: a bolinha da pílula de amigos.
+## O que espera o jogador na gaveta: a bolinha da pílula de amigos. Pedidos
+## recebidos e mensagens não lidas.
 func alerts() -> int:
-	return (requests["incoming"] as Array).size()
+	var total := (requests["incoming"] as Array).size()
+	for count: Variant in unread.values():
+		total += int(count)
+	return total
+
+
+func unread_of(id: String) -> int:
+	return int(unread.get(id, 0))
+
+
+## A conversa com `id` foi aberta: as dele viraram lidas no servidor.
+func mark_read(id: String) -> void:
+	if unread.erase(id):
+		changed.emit()
+
+
+## Pergunta as não lidas agora. O tique de [constant UNREAD_SECONDS] chama, e a
+## gaveta ao abrir.
+func refresh_unread() -> void:
+	if _unread_busy or not has_node(^"/root/Account") or not Account.signed_in():
+		return
+	_unread_busy = true
+	var counts: Variant = await Account.unread()
+	_unread_busy = false
+	if counts is Dictionary and counts != unread:
+		unread = counts
+		changed.emit()
 
 
 ## Aceita ou recusa um pedido recebido e atualiza tudo.
@@ -181,6 +219,7 @@ func _ids() -> Array:
 
 
 func _process(delta: float) -> void:
+	_tick_unread(delta)
 	if _socket == null:
 		_tick_retry(delta)
 		return
@@ -203,6 +242,17 @@ func _process(delta: float) -> void:
 			if not online.is_empty():
 				online.clear()
 				changed.emit()
+
+
+## Só a autoload pergunta sozinha, e só com conta e o app na frente.
+func _tick_unread(delta: float) -> void:
+	if _paused or get_parent() != get_tree().root:
+		return
+	_unread_poll -= delta
+	if _unread_poll > 0.0:
+		return
+	_unread_poll = UNREAD_SECONDS
+	refresh_unread()
 
 
 ## Só a autoload reconecta sozinha, e só com conta, relay e o app na frente.

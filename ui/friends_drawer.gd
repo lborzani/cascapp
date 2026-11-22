@@ -118,6 +118,7 @@ func _ready() -> void:
 	Friends.watching = true
 	_fill()
 	Friends.refresh()
+	Friends.refresh_unread()
 
 	_slider.position.x = _width
 	modulate.a = 0.0
@@ -134,7 +135,7 @@ func _exit_tree() -> void:
 ## gesto de voltar faz, uma camada por vez.
 func close() -> void:
 	for child in get_children():
-		if (child is FriendsPanel or child is FriendProfile) and not child.is_queued_for_deletion():
+		if (child is FriendsPanel or child is FriendProfile or child is FriendChat) and not child.is_queued_for_deletion():
 			child.close()
 			return
 	if is_queued_for_deletion():
@@ -292,6 +293,24 @@ func _row(friend: Dictionary) -> Control:
 	words.add_child(status_label)
 	line.add_child(words)
 
+	# Mensagens não lidas: a contagem numa pílula vermelha, antes do botão.
+	var unread := Friends.unread_of(id)
+	if unread > 0:
+		var badge := Label.new()
+		badge.name = "Unread"
+		badge.text = str(unread) if unread < 100 else "99+"
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.size_flags_vertical = SIZE_SHRINK_CENTER
+		badge.custom_minimum_size = Vector2(24, 24)
+		badge.add_theme_font_override("font", AppTheme.font(800))
+		badge.add_theme_font_size_override("font_size", AppTheme.SIZE_CAPTION)
+		badge.add_theme_color_override("font_color", AppTheme.TEXT)
+		var pill := AppTheme.box(AppTheme.DANGER, 12)
+		pill.content_margin_left = 6
+		pill.content_margin_right = 6
+		badge.add_theme_stylebox_override("normal", pill)
+		line.add_child(badge)
+
 	var action := _action(id, status)
 	if action != null:
 		line.add_child(action)
@@ -314,8 +333,19 @@ func open_profile(id: String) -> FriendProfile:
 		_inviting = friend
 		_fill()
 	)
+	profile.chat_requested.connect(func(friend: String) -> void:
+		profile.close()
+		open_chat(friend)
+	)
 	add_child(profile)
 	return profile
+
+
+func open_chat(id: String) -> FriendChat:
+	var chat := FriendChat.new()
+	chat.friend_id = id
+	add_child(chat)
+	return chat
 
 
 ## "Assistir" para quem está jogando algo que tem tela de espectador; "Convidar"
