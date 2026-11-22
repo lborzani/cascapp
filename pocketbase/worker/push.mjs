@@ -160,13 +160,15 @@ export function serve(push, { port, secret, maxTokens }) {
   }).listen(port, '0.0.0.0');
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href && process.argv[2] === 'topic') {
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain && process.argv[2] === 'topic') {
   // Da esteira de release: `FIREBASE_SA=sa.json node push.mjs topic updates type=update version=1.60`.
   const sa = JSON.parse(readFileSync(config.saFile, 'utf8'));
   const data = Object.fromEntries(process.argv.slice(4).map((pair) => pair.split(/=(.*)/s).slice(0, 2)));
   await sendTopic({ sa, auth: createAuth(sa), fcmBase: config.fcmBase }, process.argv[3], data);
   console.log(`tópico ${process.argv[3]}: ${JSON.stringify(data)}`);
-} else if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+} else if (isMain) {
   const sa = JSON.parse(readFileSync(config.saFile, 'utf8'));
   const push = createPush({ sa, auth: createAuth(sa), fcmBase: config.fcmBase });
   serve(push, config);
