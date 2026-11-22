@@ -198,7 +198,8 @@ func _app_wallet() -> void:
 	_check(await Account.equip(Cosmetics.BALL, ""), "voltar ao padrão")
 	_equals(Account.look, {}, "deixa o visual vazio")
 
-	print("tabuleiro")
+	print("tabuleiro e peças")
+	_equals(await Account.equip(Cosmetics.FINISH, "finish_gems"), false, "o acabamento não comprado não entra")
 	_equals(await Account.equip(Cosmetics.BOARD, "board_tournament"), false, "o tabuleiro não comprado não entra")
 	# Saldo 0 + seis vitórias (150) dá o torneio (150).
 	for i in 6:

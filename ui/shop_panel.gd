@@ -12,7 +12,7 @@ signal closed
 
 const SWATCH := 92.0
 ## As abas, uma por encaixe: `[encaixe, rótulo]`, na ordem da tela.
-const TABS := [[Cosmetics.BALL, "Bola"], [Cosmetics.BOARD, "Tabuleiro"]]
+const TABS := [[Cosmetics.BALL, "Bola"], [Cosmetics.BOARD, "Tabuleiro"], [Cosmetics.FINISH, "Peças"]]
 
 var _balance: Label = null
 var _note: Label = null
@@ -170,9 +170,13 @@ func _card(id: String) -> Control:
 ## A amostra do item na aba aberta. `id` vazio é o padrão do encaixe.
 func _swatch(id: String) -> Control:
 	var look := {_slot: id}
-	if _slot == Cosmetics.BOARD:
+	if _slot == Cosmetics.BOARD or _slot == Cosmetics.FINISH:
 		var sample := BoardSample.new()
-		sample.skin = Cosmetics.board_skin(look)
+		# As peças aparecem no tabuleiro de quem compra, e o tabuleiro com as peças
+		# de sempre: a amostra mostra o item como ele vai aparecer na partida.
+		var mine := Account.look.merged(look, true)
+		sample.skin = Cosmetics.board_skin(mine)
+		sample.finish = Cosmetics.finish_of(mine)
 		sample.custom_minimum_size = Vector2(SWATCH, SWATCH)
 		sample.size_flags_horizontal = SIZE_SHRINK_CENTER
 		return sample
@@ -237,6 +241,7 @@ class BoardSample:
 	extends Control
 
 	var skin: Dictionary = Cosmetics.DEFAULT_BOARD
+	var finish := ""
 
 	func _draw() -> void:
 		var side := minf(size.x, size.y)
@@ -252,5 +257,11 @@ class BoardSample:
 				if row == 1 and col == 1:
 					color = skin["last_dark"] if dark else skin["last"]
 				BoardView.paint_square(self, skin, Rect2(inner.position + Vector2(col, row) * cell, Vector2.ONE * cell), square, color)
-		PieceRenderer.draw_piece(self, Board.piece(Board.Side.BLACK, Board.Kind.KNIGHT), inner.position + Vector2(0.5, 0.5) * cell, cell)
-		PieceRenderer.draw_piece(self, Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT), inner.position + Vector2(1.5, 1.5) * cell, cell)
+		PieceRenderer.draw_piece(
+			self, Board.piece(Board.Side.BLACK, Board.Kind.KNIGHT), inner.position + Vector2(0.5, 0.5) * cell, cell,
+			1.0, 1.0, false, Color.WHITE, 0.0, finish
+		)
+		PieceRenderer.draw_piece(
+			self, Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT), inner.position + Vector2(1.5, 1.5) * cell, cell,
+			1.0, 1.0, false, Color.WHITE, 0.0, finish
+		)

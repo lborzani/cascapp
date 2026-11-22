@@ -17,16 +17,24 @@ const MOVE_STEP := 0.17
 const HOP := 0.22
 const TARGET_GROW := 0.16
 
-## As skins do tabuleiro (`Cosmetics.board_skin`), uma por metade, pela cor
-## (`Board.Side`): as fileiras 1 a 4 são das brancas, 5 a 8 das pretas. Online
-## a partida põe a de quem joga com cada cor, e cada um vê a própria metade do
-## seu lado. Fora de rede as duas são a do dono do aparelho.
-var skins: Array = [Cosmetics.board_skin(Account.look), Cosmetics.board_skin(Account.look)]:
+## O visual (`Cosmetics`) de cada cor, `[brancas, pretas]`. Online a partida põe
+## o de quem joga com cada cor; fora de rede os dois são o do dono do aparelho.
+## Dele saem a metade do tabuleiro de cada um (`skins`) e o acabamento das peças
+## de cada lado (`finishes`).
+var looks: Array = [Account.look, Account.look]:
 	set(value):
-		if value == skins:
+		if value == looks:
 			return
-		skins = value
+		looks = value
+		skins = [Cosmetics.board_skin(looks[0]), Cosmetics.board_skin(looks[1])]
+		finishes = [Cosmetics.finish_of(looks[0]), Cosmetics.finish_of(looks[1])]
 		queue_redraw()
+## As skins do tabuleiro (`Cosmetics.board_skin`), uma por metade, pela cor
+## (`Board.Side`): as fileiras 1 a 4 são das brancas, 5 a 8 das pretas. Cada um
+## vê a própria metade do seu lado.
+var skins: Array = [Cosmetics.board_skin(Account.look), Cosmetics.board_skin(Account.look)]
+## O acabamento das peças de cada lado, pela cor.
+var finishes: Array = [Cosmetics.finish_of(Account.look), Cosmetics.finish_of(Account.look)]
 ## O cache da metade de cima da moldura, quando as duas metades diferem.
 var _half_frame: StyleBoxFlat = null
 
@@ -168,6 +176,11 @@ func _can_drag(square: int) -> bool:
 	return picked or square == premove_pick
 
 
+## O acabamento das peças do lado desta peça.
+func _finish(piece: int) -> String:
+	return finishes[Board.side_of(piece)]
+
+
 ## A skin da metade do tabuleiro onde fica a casa.
 func skin_of(square: int) -> Dictionary:
 	return skins[Board.Side.WHITE if Board.rank_of(square) < Board.SIZE / 2.0 else Board.Side.BLACK]
@@ -249,13 +262,14 @@ func _draw() -> void:
 				rect.get_center(), _cell * (0.4 + 0.5 * t), 0.0, TAU, 32,
 				Color(AppTheme.ACCENT, 1.0 - t), maxf(2.0, _cell * 0.08 * (1.0 - t)), true
 			)
-		PieceRenderer.draw_piece(self, piece, rect.get_center(), _cell, 1.0, grow, _turned(piece))
+		PieceRenderer.draw_piece(self, piece, rect.get_center(), _cell, 1.0, grow, _turned(piece), Color.WHITE, 0.0, _finish(piece))
 		if doomed.has(square):
 			_draw_cross(rect)
 	if preview_from != Board.NO_SQUARE and preview_to != Board.NO_SQUARE and preview_to != dragged:
 		var previewed := state.squares[preview_from]
 		PieceRenderer.draw_piece(
-			self, previewed, rect_of(preview_to).get_center(), _cell, 1.0, 1.0, _turned(previewed)
+			self, previewed, rect_of(preview_to).get_center(), _cell, 1.0, 1.0, _turned(previewed),
+			Color.WHITE, 0.0, _finish(previewed)
 		)
 
 	_draw_bursts()
@@ -299,7 +313,7 @@ func _draw_travelling(arriving: int) -> void:
 	for entry in _move_taken:
 		PieceRenderer.draw_piece(
 			self, entry[1], rect_of(entry[0]).get_center(), _cell, fade, 0.7 + 0.3 * fade,
-			_turned(entry[1])
+			_turned(entry[1]), Color.WHITE, 0.0, _finish(entry[1])
 		)
 
 	var segments := _move_path.size() - 1
@@ -314,7 +328,8 @@ func _draw_travelling(arriving: int) -> void:
 	# Um leve aumento enquanto viaja sugere a peça erguida do tabuleiro.
 	var moving := state.squares[arriving]
 	PieceRenderer.draw_piece(
-		self, moving, position, _cell, 1.0, 1.0 + 0.08 * sin(PI * progress), _turned(moving)
+		self, moving, position, _cell, 1.0, 1.0 + 0.08 * sin(PI * progress), _turned(moving),
+		Color.WHITE, 0.0, _finish(moving)
 	)
 
 
@@ -477,7 +492,7 @@ func _draw_drag() -> void:
 	var over := square_at(_drag_at)
 	if over != Board.NO_SQUARE and over != _drag_square:
 		draw_rect(rect_of(over).grow(-2.0), Color(AppTheme.TEXT, 0.75), false, maxf(2.0, _cell * 0.05))
-	PieceRenderer.draw_piece(self, piece, _drag_at, _cell, 1.0, 1.16, _turned(piece))
+	PieceRenderer.draw_piece(self, piece, _drag_at, _cell, 1.0, 1.16, _turned(piece), Color.WHITE, 0.0, _finish(piece))
 
 
 func _dragged_piece() -> int:

@@ -18,6 +18,11 @@ const PRICES = {
   board_ocean: 200,
   board_neon: 300,
   board_candy: 250,
+  finish_wood: 200,
+  finish_marble: 250,
+  finish_metal: 350,
+  finish_neon: 300,
+  finish_gems: 350,
 }
 
 const DAILY = 50

@@ -118,6 +118,30 @@ func _probe_palette() -> void:
 		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
 		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
 		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
+	# Acabamentos das peças: geram todas as peças dos dois jogos a partir dos SVGs
+	# crus, uma vez só, e as brancas continuam diferentes das pretas.
+	var kinds := [Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK,
+		Board.Kind.QUEEN, Board.Kind.KING, Board.Kind.MAN, Board.Kind.DAME]
+	var knight := Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT)
+	_check(PieceRenderer.finished_texture(knight, "finish_nada") == null, "acabamento desconhecido não gera nada")
+	for id in Cosmetics.of_slot(Cosmetics.FINISH):
+		var made := 0
+		for kind in kinds:
+			for side in [Board.Side.WHITE, Board.Side.BLACK]:
+				var texture := PieceRenderer.finished_texture(Board.piece(side, kind), id)
+				if texture != null and texture.get_size() == Vector2(288, 288):
+					made += 1
+		_equals(made, kinds.size() * 2, "%s: as peças dos dois jogos, nos dois lados" % id)
+		_check(PieceRenderer.finished_texture(knight, id) == PieceRenderer.finished_texture(knight, id), "%s: a segunda vez vem do cache" % id)
+		# O corpo é o que diz a cor da peça; o contorno de uma é claro e o da outra
+		# escuro, e por isso fica fora da comparação.
+		var white_paint := Cosmetics.finish_paint(id, Board.Side.WHITE)
+		var black_paint := Cosmetics.finish_paint(id, Board.Side.BLACK)
+		var gap := _rgb_gap(_mean_paint(white_paint["body"]), _mean_paint(black_paint["body"]))
+		_check(gap >= 0.3, "%s: brancas e pretas se distinguem (%.2f)" % [id, gap])
+		for paint: Dictionary in [white_paint, black_paint]:
+			var edge := _rgb_gap(_mean_paint(paint["body"]), Color(paint["line"]))
+			_check(edge >= 0.3, "%s: o contorno se destaca do corpo (%.2f)" % [id, edge])
 	var line := AppTheme.contrast(AppTheme.BACKGROUND.blend(AppTheme.LINE), AppTheme.BACKGROUND)
 	_check(line >= 3.0, "LINE contorna coisa tocável (%.1f:1)" % line)
 
@@ -528,3 +552,14 @@ func _check(condition: bool, label: String) -> void:
 ## vê a troca de matiz, e o limão sobre o creme é matiz, não claro e escuro.
 static func _rgb_gap(a: Color, b: Color) -> float:
 	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+
+
+## A cor média de uma tinta de acabamento: uma cor, ou as paradas de um degradê.
+static func _mean_paint(body: Variant) -> Color:
+	var stops: Array = body if body is Array else [body]
+	var sum := Vector3.ZERO
+	for hex: String in stops:
+		var color := Color(hex)
+		sum += Vector3(color.r, color.g, color.b)
+	sum /= stops.size()
+	return Color(sum.x, sum.y, sum.z)

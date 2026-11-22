@@ -77,6 +77,25 @@ const TEXTURE_NAMES := {
 	Board.Kind.PIN: "pin",
 }
 const TEXTURE_DIR := "res://assets/pieces"
+## As duas tintas dos SVGs das peças. A branca tem o corpo claro e o contorno
+## escuro, e a preta o contrário; o acabamento (`Cosmetics`) troca as duas.
+const SVG_LIGHT := "#F4F7FA"
+const SVG_DARK := "#34364C"
+## A escala dos SVGs crus, a mesma da importação dos outros (`svg/scale` nos
+## `.import`): 72 px viram 288.
+const SVG_SCALE := 4.0
+## As peças do xadrez e das damas não são importadas como textura: os SVGs delas
+## vão crus no APK (`importer="keep"` nos `.import`), porque o acabamento troca as
+## tintas no texto do SVG, e a textura importada já não tem as cores separadas.
+## Com ou sem acabamento, elas são rasterizadas aqui (`_raster`), uma vez cada.
+## O `include_filter` da exportação não serve: arquivo importado nunca vai cru.
+const RAW_KINDS := [
+	Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK,
+	Board.Kind.QUEEN, Board.Kind.KING, Board.Kind.MAN, Board.Kind.DAME,
+]
+## Peça e acabamento → textura gerada, ou `null` quando não deu (cai no desenho
+## de sempre). Gerada uma vez por peça e acabamento, nunca por quadro.
+static var _finished := {}
 
 static var _cache := {}
 ## Peça (inteiro de `Board.piece`) → textura, ou `null` quando não há arquivo.
@@ -102,13 +121,21 @@ static var _textures := {}
 ## `spin` gira a peça em torno do próprio centro, e se soma à meia volta do modo
 ## mesa. Existe pelo peão derrubado do Ludo: uma peça que atravessa o tabuleiro
 ## em pé lê como "mudou de lugar", e girando lê como "foi comida".
+##
+## `finish` é o acabamento da loja (`Cosmetics`, encaixe `finish`); vazio, ou um
+## que não deu para gerar, é o desenho de sempre.
 static func draw_piece(
 	canvas: CanvasItem, piece: int, center: Vector2, cell: float,
-	opacity := 1.0, size := 1.0, upside_down := false, tint := Color.WHITE, spin := 0.0
+	opacity := 1.0, size := 1.0, upside_down := false, tint := Color.WHITE, spin := 0.0,
+	finish := ""
 ) -> void:
 	if piece == 0 or opacity <= 0.0:
 		return
 	var texture := _texture(piece)
+	if not finish.is_empty():
+		var finished := finished_texture(piece, finish)
+		if finished != null:
+			texture = finished
 	if texture != null:
 		_draw_texture(canvas, texture, center, cell, opacity, size, upside_down, tint, spin)
 		return
@@ -121,10 +148,63 @@ static func _texture(piece: int) -> Texture2D:
 	var kind := Board.kind_of(piece)
 	var texture: Texture2D = null
 	if TEXTURE_NAMES.has(kind):
-		var side := "white" if Board.side_of(piece) == Board.Side.WHITE else "black"
-		texture = load("%s/%s_%s.svg" % [TEXTURE_DIR, TEXTURE_NAMES[kind], side]) as Texture2D
+		var path := _svg_path(piece)
+		texture = _raster(FileAccess.get_file_as_string(path)) if kind in RAW_KINDS else load(path) as Texture2D
 	_textures[piece] = texture
 	return texture
+
+
+## A peça com o acabamento: o SVG cru dela (ver `RAW_KINDS`) com as tintas
+## trocadas, rasterizado na hora.
+static func finished_texture(piece: int, finish: String) -> Texture2D:
+	var key := "%d:%s" % [piece, finish]
+	if _finished.has(key):
+		return _finished[key]
+	var texture: Texture2D = null
+	var kind := Board.kind_of(piece)
+	var white := Board.side_of(piece) == Board.Side.WHITE
+	var paint := Cosmetics.finish_paint(finish, Board.side_of(piece))
+	if not paint.is_empty() and kind in RAW_KINDS:
+		var svg := FileAccess.get_file_as_string(_svg_path(piece))
+		if not svg.is_empty():
+			texture = _raster(recolor(svg, white, paint))
+	_finished[key] = texture
+	return texture
+
+
+static func _svg_path(piece: int) -> String:
+	var side := "white" if Board.side_of(piece) == Board.Side.WHITE else "black"
+	return "%s/%s_%s.svg" % [TEXTURE_DIR, TEXTURE_NAMES[Board.kind_of(piece)], side]
+
+
+## O texto de um SVG vira textura; `null` quando não é SVG que dê para ler.
+static func _raster(svg: String) -> Texture2D:
+	var image := Image.new()
+	if svg.is_empty() or image.load_svg_from_string(svg, SVG_SCALE) != OK:
+		return null
+	# O que a importação fazia (`process/fix_alpha_border`): a borda translúcida
+	# ganha a cor vizinha em vez do preto, e a peça não fica com franja escura.
+	image.fix_alpha_edges()
+	return ImageTexture.create_from_image(image)
+
+
+## O SVG de uma peça com as tintas de `paint` (`{"body", "line"}`). Corpo em
+## degradê vira um `linearGradient` quase vertical, em `defs` logo depois da tag
+## `<svg>`.
+static func recolor(svg: String, white: bool, paint: Dictionary) -> String:
+	var body_from := SVG_LIGHT if white else SVG_DARK
+	var line_from := SVG_DARK if white else SVG_LIGHT
+	svg = svg.replace(body_from, "@body@").replace(line_from, str(paint["line"]))
+	var body: Variant = paint["body"]
+	if body is String:
+		return svg.replace("@body@", body)
+	var stops := ""
+	for i in body.size():
+		stops += '<stop offset="%.3f" stop-color="%s"/>' % [float(i) / (body.size() - 1), body[i]]
+	var defs := '<defs><linearGradient id="finish" x1="0" y1="0" x2="0.35" y2="1">%s</linearGradient></defs>' % stops
+	svg = svg.replace("@body@", "url(#finish)")
+	var tag_end := svg.find(">", svg.find("<svg")) + 1
+	return svg.insert(tag_end, defs)
 
 
 ## A sombra é a própria peça desenhada de novo, deslocada e multiplicada por

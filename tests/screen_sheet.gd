@@ -43,6 +43,7 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18b_historico"],
 	["res://scenes/settings.tscn", "18c_loja"],
 	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
+	["res://scenes/settings.tscn", "18e_loja_pecas"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
@@ -62,6 +63,7 @@ const SHOTS := [
 	["res://scenes/match.tscn", "29_xadrez_dividido"],
 	["res://scenes/match.tscn", "29b_damas_dividido"],
 	["res://scenes/match.tscn", "29c_xadrez_dividido_pretas"],
+	["res://scenes/match.tscn", "31_pecas_divididas"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -92,6 +94,9 @@ func _ready() -> void:
 	for id in Cosmetics.of_slot(Cosmetics.BOARD):
 		_shots.append(["res://scenes/match.tscn", "28_xadrez_" + id.trim_prefix("board_")])
 		_shots.append(["res://scenes/match.tscn", "28b_damas_" + id.trim_prefix("board_")])
+	for id in Cosmetics.of_slot(Cosmetics.FINISH):
+		_shots.append(["res://scenes/match.tscn", "30_pecas_" + id.trim_prefix("finish_")])
+		_shots.append(["res://scenes/match.tscn", "30b_damas_" + id.trim_prefix("finish_")])
 	_stage = Stage.make(self, PORTRAIT_WINDOW)
 	_next()
 
@@ -166,7 +171,11 @@ func _next() -> void:
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
 		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
-	if shot.begins_with("29"):
+	if shot.begins_with("30"):
+		# Um acabamento da loja no tabuleiro de sempre.
+		Game.start_hotseat(Game.CHECKERS if shot.begins_with("30b") else Game.CHESS)
+		Account.look = {"finish": "finish_" + shot.split("_", true, 2)[2]}
+	if shot.begins_with("29") or shot == "31_pecas_divididas":
 		# Eu de um lado e o adversário do outro, cada um com o seu tabuleiro.
 		var black_view := shot.ends_with("pretas")
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("29b") else Game.CHESS)
@@ -180,8 +189,12 @@ func _next() -> void:
 			"29_xadrez_dividido": ["board_wood", "board_neon"],
 			"29b_damas_dividido": ["board_marble", "board_candy"],
 			"29c_xadrez_dividido_pretas": ["board_tournament", "board_ocean"],
+			"31_pecas_divididas": ["board_wood", "board_neon"],
 		}
 		Net.looks = {0: {"board": pairs[shot][0]}, 1: {"board": pairs[shot][1]}}
+		if shot == "31_pecas_divididas":
+			Net.looks[0]["finish"] = "finish_metal"
+			Net.looks[1]["finish"] = "finish_neon"
 		Account.look = Net.looks[0]
 	match shot:
 		"00_boas_vindas":
@@ -214,6 +227,15 @@ func _next() -> void:
 			}
 			Account.owned = ["board_wood"]
 			Account.look = {"board": "board_wood"}
+		"18e_loja_pecas":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {
+				"finish_wood": 200, "finish_marble": 250, "finish_metal": 350,
+				"finish_neon": 300, "finish_gems": 350,
+			}
+			Account.owned = ["finish_metal"]
+			Account.look = {"finish": "finish_metal"}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)
@@ -381,17 +403,18 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
-	elif shot == "18d_loja_tabuleiro":
+	elif shot == "18d_loja_tabuleiro" or shot == "18e_loja_pecas":
+		var tab := 1 if shot == "18d_loja_tabuleiro" else 2
 		_scene._open_shop()
-		_scene._shop._tabs.set_current(1)
-		_scene._shop._tabs.selected.emit(1)
-	if shot.begins_with("29") and is_instance_valid(_scene._coin_toss):
+		_scene._shop._tabs.set_current(tab)
+		_scene._shop._tabs.selected.emit(tab)
+	if (shot.begins_with("29") or shot == "31_pecas_divididas") and is_instance_valid(_scene._coin_toss):
 		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
 		_scene._coin_toss.free()
-	if shot.begins_with("28_") or shot == "29_xadrez_dividido" or shot == "29c_xadrez_dividido_pretas":
+	if shot.begins_with("28_") or shot.begins_with("30_") or shot in ["29_xadrez_dividido", "29c_xadrez_dividido_pretas", "31_pecas_divididas"]:
 		_play_opening(_scene)
 		_scene._refresh()
-	elif shot.begins_with("28b_") or shot == "29b_damas_dividido":
+	elif shot.begins_with("28b_") or shot.begins_with("30b_") or shot == "29b_damas_dividido":
 		_stage_double_jump(_scene)
 	elif shot == "18b_historico":
 		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina

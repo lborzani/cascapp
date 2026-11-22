@@ -10,6 +10,7 @@ extends RefCounted
 
 const BALL := "ball"
 const BOARD := "board"
+const FINISH := "finish"
 ## A textura da bola padrão (o mármore que a cor do assento pinta), para a amostra.
 const MARBLE := "res://assets/bowling/ball_ball_marble.png"
 
@@ -53,6 +54,35 @@ const ITEMS := {
 		"frame": Color("8a3a5c"), "last": Color("fff08a"), "last_dark": Color("ffc95a"),
 		"texture": "res://assets/boards/candy.png",
 	},
+	# Acabamentos das peças do xadrez e das damas (`PieceRenderer`): o desenho de
+	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
+	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
+	# contorno e os detalhes.
+	"finish_wood": {
+		"slot": FINISH, "name": "Madeira",
+		"white": {"body": ["#f5dcae", "#e3c28c", "#f2d6a2", "#d9b47a", "#efd09a", "#e0bd84"], "line": "#5a3a1e"},
+		"black": {"body": ["#7a4a2a", "#5e3519", "#82512f", "#55301a", "#744526", "#5c3419"], "line": "#f0d3a2"},
+	},
+	"finish_marble": {
+		"slot": FINISH, "name": "Mármore",
+		"white": {"body": ["#ffffff", "#ebe7df", "#fbfaf6", "#d9d4ca", "#f4f1ea"], "line": "#57534d"},
+		"black": {"body": ["#3a4140", "#1f2423", "#465050", "#191d1c", "#333a39"], "line": "#d5dbd8"},
+	},
+	"finish_metal": {
+		"slot": FINISH, "name": "Ouro e prata",
+		"white": {"body": ["#ffffff", "#c3cad3", "#eef2f6", "#9ea8b4", "#e6ebf0"], "line": "#3e4652"},
+		"black": {"body": ["#ffe89a", "#c8952a", "#fbe7a4", "#9c6c14", "#e9c25a"], "line": "#3d2604"},
+	},
+	"finish_neon": {
+		"slot": FINISH, "name": "Neon",
+		"white": {"body": "#e9fdff", "line": "#00c8ff"},
+		"black": {"body": "#1b0f35", "line": "#ff4fd8"},
+	},
+	"finish_gems": {
+		"slot": FINISH, "name": "Rubi e safira",
+		"white": {"body": ["#ff9db0", "#e2324f", "#ffc2cd", "#c21a38", "#ff7a92"], "line": "#4d0613"},
+		"black": {"body": ["#5f82ff", "#1d36a8", "#8aa4ff", "#14237a", "#4466e6"], "line": "#e3e9ff"},
+	},
 }
 
 ## O tabuleiro sem skin: o violeta do tema.
@@ -95,6 +125,20 @@ static func board_skin(look: Dictionary) -> Dictionary:
 	if skin.has("texture"):
 		skin["texture"] = load(skin["texture"])
 	return skin
+
+
+## O acabamento de peças de um visual, ou vazio para o desenho de sempre.
+static func finish_of(look: Dictionary) -> String:
+	var id := str(look.get(FINISH, ""))
+	return id if ITEMS.has(id) and ITEMS[id]["slot"] == FINISH else ""
+
+
+## As tintas de um acabamento para um lado (`Board.Side`): `{"body", "line"}`,
+## ou vazio quando o acabamento não existe.
+static func finish_paint(finish: String, side: int) -> Dictionary:
+	if not ITEMS.has(finish) or ITEMS[finish]["slot"] != FINISH:
+		return {}
+	return ITEMS[finish]["white" if side == Board.Side.WHITE else "black"]
 
 
 ## Um visual vindo da rede, só com encaixes e ids em texto curto. O que não
