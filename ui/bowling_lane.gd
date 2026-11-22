@@ -268,9 +268,29 @@ static func tint_ball(node: Node, color: Color, skin: Texture2D = null) -> void:
 			var painted := source.duplicate() as StandardMaterial3D
 			if skin != null:
 				painted.albedo_texture = skin
+				_finish_ball(painted, Cosmetics.ball_params(skin))
 			else:
 				painted.albedo_color = color
 			(found as MeshInstance3D).set_surface_override_material(surface, painted)
+
+
+## O material das bolas especiais da loja (`Cosmetics.ball_params`). A física
+## não vê nada disto.
+static func _finish_ball(material: StandardMaterial3D, params: Dictionary) -> void:
+	if params.has("metallic"):
+		material.metallic = params["metallic"]
+	if params.has("roughness"):
+		material.roughness = params["roughness"]
+	if params.has("glow"):
+		# A própria textura acende: o escuro dela quase não brilha.
+		material.emission_enabled = true
+		material.emission = Color.WHITE
+		material.emission_texture = material.albedo_texture
+		material.emission_energy_multiplier = params["glow"]
+	if params.has("alpha"):
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color = Color(1, 1, 1, params["alpha"])
+		material.clearcoat_enabled = true
 
 
 ## Os pinos armados que caíram até agora.

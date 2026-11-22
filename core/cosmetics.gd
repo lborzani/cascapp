@@ -25,6 +25,19 @@ const ITEMS := {
 	"ball_melon": {"slot": BALL, "name": "Melancia", "art": "res://assets/bowling/skins/ball_melon.png"},
 	"ball_wood": {"slot": BALL, "name": "Madeira", "art": "res://assets/bowling/skins/ball_wood.png"},
 	"ball_checker": {"slot": BALL, "name": "Xadrez", "art": "res://assets/bowling/skins/ball_checker.png"},
+	# As especiais (`art/bowling/build_special_balls.py`): o material também muda.
+	# `metallic` e `roughness` como no `StandardMaterial3D`; `glow` acende a própria
+	# textura (o escuro quase não brilha); `alpha` é vidro.
+	"ball_chrome": {
+		"slot": BALL, "name": "Cromada", "art": "res://assets/bowling/skins/ball_chrome.png",
+		"metallic": 0.55, "roughness": 0.08,
+	},
+	"ball_neon": {"slot": BALL, "name": "Neon", "art": "res://assets/bowling/skins/ball_neon.png", "glow": 2.2},
+	"ball_crystal": {
+		"slot": BALL, "name": "Cristal", "art": "res://assets/bowling/skins/ball_crystal.png",
+		"alpha": 0.5, "roughness": 0.02,
+	},
+	"ball_lava": {"slot": BALL, "name": "Lava", "art": "res://assets/bowling/skins/ball_lava.png", "glow": 1.6},
 	# Tabuleiros do xadrez e das damas (`BoardView`). `light`/`dark` são as casas,
 	# `last`/`last_dark` o último lance em cada uma, `frame` a moldura. Com
 	# `texture`, a casa é a textura (tons de cinza, de `tools/build_board_textures.gd`)
@@ -170,6 +183,23 @@ static func finish_paint(finish: String, side: int) -> Dictionary:
 	if not ITEMS.has(finish) or ITEMS[finish]["slot"] != FINISH:
 		return {}
 	return ITEMS[finish]["white" if side == Board.Side.WHITE else "black"]
+
+
+## O material especial da bola de uma textura da loja (`metallic`, `roughness`,
+## `glow`, `alpha`), ou vazio. Pela textura porque é ela que a pista e a mira já
+## recebem (`BowlingLane.tint_ball`).
+static func ball_params(skin: Texture2D) -> Dictionary:
+	if skin == null:
+		return {}
+	for id: String in ITEMS:
+		var item: Dictionary = ITEMS[id]
+		if item["slot"] == BALL and item["art"] == skin.resource_path:
+			var params := {}
+			for key in ["metallic", "roughness", "glow", "alpha"]:
+				if item.has(key):
+					params[key] = item[key]
+			return params
+	return {}
 
 
 ## Um visual vindo da rede, só com encaixes e ids em texto curto. O que não
