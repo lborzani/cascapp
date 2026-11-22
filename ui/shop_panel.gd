@@ -15,6 +15,7 @@ const SWATCH := 92.0
 ## mostra uma seção por encaixe, com o título de `SECTIONS`.
 const TABS := [
 	[[Cosmetics.BALL], "Bola"],
+	[[Cosmetics.CUE], "Taco"],
 	[[Cosmetics.BOARD], "Tabuleiro"],
 	[[Cosmetics.PIECES, Cosmetics.FINISH], "Peças"],
 ]
@@ -182,6 +183,18 @@ func _card(slot: String, id: String) -> Control:
 ## A amostra do item. `id` vazio é o padrão do encaixe.
 func _swatch(slot: String, id: String) -> Control:
 	var look := {slot: id}
+	if slot == Cosmetics.CUE:
+		var cue := CueSample.new()
+		cue.clip_contents = true
+		var skin := Cosmetics.cue_skin(look)
+		# O alfa da textura é a máscara do metal (`cue_skin.gdshader`), e aqui
+		# deixaria o ouro transparente: a amostra usa só a cor.
+		var image := (skin["art"] if not skin.is_empty() else load(Cosmetics.DEFAULT_CUE) as Texture2D).get_image()
+		image.convert(Image.FORMAT_RGB8)
+		cue.texture = ImageTexture.create_from_image(image)
+		cue.custom_minimum_size = Vector2(SWATCH, SWATCH)
+		cue.size_flags_horizontal = SIZE_SHRINK_CENTER
+		return cue
 	if slot != Cosmetics.BALL:
 		var sample := BoardSample.new()
 		# As peças aparecem no tabuleiro de quem compra, e o tabuleiro com as peças
@@ -276,3 +289,25 @@ class BoardSample:
 			self, Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT), inner.position + Vector2(1.5, 1.5) * cell, cell,
 			1.0, 1.0, false, Color.WHITE, 0.0, look
 		)
+
+
+## A amostra de um taco: a metade de trás dele (antebraço e cabo, onde fica o
+## desenho), na diagonal, num quadrado da cor do pano.
+class CueSample:
+	extends Control
+
+	var texture: Texture2D = null
+
+	func _draw() -> void:
+		var side := minf(size.x, size.y)
+		var outer := Rect2((size - Vector2.ONE * side) * 0.5, Vector2.ONE * side)
+		draw_style_box(AppTheme.box(Color("1f6b4a"), int(side * 0.12)), outer)
+		if texture == null:
+			return
+		var length := side * 1.25
+		var thickness := side * 0.16
+		var source_width := texture.get_width() * 0.48
+		var source := Rect2(texture.get_width() - source_width, texture.get_height() * 0.25, source_width, texture.get_height() * 0.5)
+		draw_set_transform(outer.get_center(), -PI / 4.0, Vector2.ONE)
+		draw_texture_rect_region(texture, Rect2(-length * 0.5, -thickness * 0.5, length, thickness), source)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -26,6 +26,11 @@ const PRICES = {
   pieces_staunton: 400,
   pieces_minimal: 400,
   pieces_medieval: 400,
+  cue_ebony: 250,
+  cue_carbon: 300,
+  cue_flames: 200,
+  cue_neon: 350,
+  cue_gold: 400,
 }
 
 const DAILY = 50

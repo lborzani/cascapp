@@ -45,6 +45,7 @@ func _ready() -> void:
 	await _probe_aim()
 	await _probe_spin()
 	await _probe_hand()
+	await _probe_cue_skin()
 
 	_done = true
 	if _failures == 0:
@@ -306,6 +307,37 @@ func _probe_hand() -> void:
 
 
 # --- utilidades ---------------------------------------------------------------
+
+
+## O taco da loja: o de quem tem a vez, pelo visual dele; o assento 0 do aparelho
+## é o dono, e o segundo jogador fica com o de sempre.
+func _probe_cue_skin() -> void:
+	print("taco da loja")
+	Account.look = {"cue": "cue_gold"}
+	var scene := await _open(PoolRules.Format.KNOCKOUT)
+	var view: PoolView = scene._view
+	var gold: Texture2D = Cosmetics.cue_skin(Account.look)["art"]
+	_equals(view.cue_look, {"cue": "cue_gold"}, "na vez do dono, o taco é o dele")
+	var dressed := _cue_surfaces(view)
+	_equals(dressed.size(), 4, "haste, junta, antebraço e cabo vestidos")
+	_check(dressed.all(func(m: Material) -> bool: return m is ShaderMaterial and m.get_shader_parameter("skin") == gold), "com a textura do ouro")
+	scene._state.meta[PoolRules.TURN] = 1
+	scene._refresh()
+	_equals(view.cue_look, {}, "na vez do segundo jogador, o de sempre")
+	_equals(_cue_surfaces(view).size(), 0, "e os materiais do modelo voltam")
+	Account.look = {}
+	scene.free()
+
+
+## Os materiais que o taco da loja pôs por cima do modelo.
+static func _cue_surfaces(view: PoolView) -> Array:
+	var found := []
+	for mesh_instance: MeshInstance3D in view._cue.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh_instance.mesh.get_surface_count():
+			var material := mesh_instance.get_surface_override_material(i)
+			if material != null:
+				found.append(material)
+	return found
 
 
 func _open(wanted: int) -> Node:

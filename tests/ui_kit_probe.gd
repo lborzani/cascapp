@@ -118,6 +118,11 @@ func _probe_palette() -> void:
 		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
 		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
 		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
+	# Tacos: cada um carrega a textura inteira do taco desenrolado.
+	_equals(Cosmetics.cue_skin({"cue": "cue_nada"}), {}, "taco desconhecido é o de sempre")
+	for id in Cosmetics.of_slot(Cosmetics.CUE):
+		var cue := Cosmetics.cue_skin({"cue": id})
+		_check(cue.get("art") is Texture2D and (cue["art"] as Texture2D).get_size() == Vector2(1024, 128), "%s: a textura do taco carrega" % id)
 	# Acabamentos das peças: geram todas as peças dos dois jogos a partir dos SVGs
 	# crus, uma vez só, e as brancas continuam diferentes das pretas.
 	var kinds := [Board.Kind.PAWN, Board.Kind.KNIGHT, Board.Kind.BISHOP, Board.Kind.ROOK,

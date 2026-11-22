@@ -12,6 +12,9 @@ const BALL := "ball"
 const BOARD := "board"
 const FINISH := "finish"
 const PIECES := "pieces"
+const CUE := "cue"
+## O taco de sempre desenrolado, só para a amostra da loja.
+const DEFAULT_CUE := "res://assets/pool/cues/cue_default.png"
 ## A textura da bola padrão (o mármore que a cor do assento pinta), para a amostra.
 const MARBLE := "res://assets/bowling/ball_ball_marble.png"
 
@@ -59,6 +62,13 @@ const ITEMS := {
 	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
 	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
 	# contorno e os detalhes.
+	# Tacos da sinuca (`tools/build_cue_skins.gd`, desenhados por `ui/cue_skin.gdshader`).
+	# `glow` é o quanto a cor brilha sozinha.
+	"cue_ebony": {"slot": CUE, "name": "Ébano e marfim", "art": "res://assets/pool/cues/cue_ebony.png"},
+	"cue_carbon": {"slot": CUE, "name": "Carbono", "art": "res://assets/pool/cues/cue_carbon.png"},
+	"cue_flames": {"slot": CUE, "name": "Chamas", "art": "res://assets/pool/cues/cue_flames.png"},
+	"cue_neon": {"slot": CUE, "name": "Neon", "art": "res://assets/pool/cues/cue_neon.png", "glow": 1.6},
+	"cue_gold": {"slot": CUE, "name": "Ouro", "art": "res://assets/pool/cues/cue_gold.png"},
 	# Conjuntos de peças do xadrez (`tools/build_piece_sets.gd`): o mesmo nome de
 	# arquivo das peças de sempre, noutra pasta. As damas não mudam de formato.
 	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
@@ -137,6 +147,15 @@ static func board_skin(look: Dictionary) -> Dictionary:
 static func finish_of(look: Dictionary) -> String:
 	var id := str(look.get(FINISH, ""))
 	return id if ITEMS.has(id) and ITEMS[id]["slot"] == FINISH else ""
+
+
+## O taco de um visual: `{"art": textura, "glow": brilho}`, ou vazio para o de
+## sempre (item que este app não conhece também).
+static func cue_skin(look: Dictionary) -> Dictionary:
+	var id := str(look.get(CUE, ""))
+	if not ITEMS.has(id) or ITEMS[id]["slot"] != CUE:
+		return {}
+	return {"art": load(ITEMS[id]["art"]), "glow": float(ITEMS[id].get("glow", 0.0))}
 
 
 ## A pasta do conjunto de peças de um visual, ou vazio para as de sempre.

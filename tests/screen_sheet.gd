@@ -44,6 +44,7 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18c_loja"],
 	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
 	["res://scenes/settings.tscn", "18e_loja_pecas"],
+	["res://scenes/settings.tscn", "18f_loja_taco"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
@@ -95,6 +96,8 @@ func _ready() -> void:
 	for id in Cosmetics.of_slot(Cosmetics.BOARD):
 		_shots.append(["res://scenes/match.tscn", "28_xadrez_" + id.trim_prefix("board_")])
 		_shots.append(["res://scenes/match.tscn", "28b_damas_" + id.trim_prefix("board_")])
+	for id in Cosmetics.of_slot(Cosmetics.CUE):
+		_shots.append(["res://scenes/pool_match.tscn", "22c_taco_" + id.trim_prefix("cue_")])
 	for id in Cosmetics.of_slot(Cosmetics.PIECES):
 		_shots.append(["res://scenes/match.tscn", "32_conjunto_" + id.trim_prefix("pieces_")])
 	for id in Cosmetics.of_slot(Cosmetics.FINISH):
@@ -174,6 +177,10 @@ func _next() -> void:
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
 		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
+	if shot.begins_with("22c"):
+		# Um taco da loja, na mesa de sempre (o assento 0 é o dono do aparelho).
+		Game.start_hotseat(Game.POOL)
+		Account.look = {"cue": "cue_" + shot.split("_", true, 2)[2]}
 	if shot.begins_with("32"):
 		# Um conjunto de peças da loja no tabuleiro de sempre.
 		Game.start_hotseat(Game.CHESS)
@@ -248,6 +255,14 @@ func _next() -> void:
 			}
 			Account.owned = ["pieces_staunton", "finish_metal"]
 			Account.look = {"pieces": "pieces_staunton", "finish": "finish_metal"}
+		"18f_loja_taco":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {
+				"cue_ebony": 250, "cue_carbon": 300, "cue_flames": 200, "cue_neon": 350, "cue_gold": 400,
+			}
+			Account.owned = ["cue_flames"]
+			Account.look = {"cue": "cue_flames"}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)
@@ -371,7 +386,7 @@ func _next() -> void:
 			Net.player_names = {0: "Ana", 1: "Bia", 2: "Caio", 3: "Duda"}
 	# O palco gira **antes** de a cena existir: a cena deitada se mede no
 	# `_ready`, e medida num palco em pé ela sai espremida.
-	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW)
+	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) or shot.begins_with("22c") else PORTRAIT_WINDOW)
 
 	_scene = load(_shots[_index][0]).instantiate()
 	_stage.add_child(_scene)
@@ -415,8 +430,8 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
-	elif shot == "18d_loja_tabuleiro" or shot == "18e_loja_pecas":
-		var tab := 1 if shot == "18d_loja_tabuleiro" else 2
+	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco"]:
+		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3}[shot]
 		_scene._open_shop()
 		_scene._shop._tabs.set_current(tab)
 		_scene._shop._tabs.selected.emit(tab)
@@ -505,6 +520,10 @@ func _next() -> void:
 		_stage_bowling(_scene, shot == "25b_boliche_balanco")
 	elif shot == "22_sinuca" or shot == "22b_sinuca_brasileira":
 		_stage_pool(_scene)
+	elif shot.begins_with("22c"):
+		_stage_pool(_scene)
+		# A mira da folha é do assento da vez; o taco que se julga é o do dono.
+		_scene._view.cue_look = Account.look
 	elif shot == "17_ludo":
 		_stage_ludo(_scene)
 	elif shot == "17d_ludo_pilha":

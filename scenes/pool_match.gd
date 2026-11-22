@@ -253,6 +253,15 @@ func _build_overlay() -> void:
 # --- a vez --------------------------------------------------------------------
 
 
+## O visual (`Cosmetics`) de um assento, para o taco. Como no boliche: online, o
+## que cada aparelho disse no aperto de mão; aqui, o do dono do aparelho no
+## assento 0. Máquinas e o segundo jogador do mesmo aparelho ficam no padrão.
+func seat_look(seat: int) -> Dictionary:
+	if Game.mode == Game.Mode.ONLINE:
+		return Net.look_of(seat)
+	return Account.look if seat == 0 else {}
+
+
 func _my_turn() -> bool:
 	if Game.mode == Game.Mode.HOTSEAT:
 		return true
@@ -433,6 +442,7 @@ func _on_opponent_left() -> void:
 
 func _refresh() -> void:
 	_view.state = _state
+	_view.cue_look = seat_look(PoolRules.turn_of(_state))
 	_view.enabled = _can_act()
 	_hint.text = _rules.status_hint(_state).trim_suffix(".")
 	var lit := _can_act()

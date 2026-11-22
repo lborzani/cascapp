@@ -52,6 +52,7 @@ const Rules := preload("res://core/pool_rules.gd")
 const TABLE_SCENE := preload("res://assets/pool/table.glb")
 const BALL_SCENE := preload("res://assets/pool/ball.glb")
 const CUE_SCENE := preload("res://assets/pool/cue.glb")
+const CUE_SHADER := preload("res://ui/cue_skin.gdshader")
 
 ## Quanto da mesa a câmera enquadra além do pano, em unidades de mesa: a borracha
 ## e a madeira de `art/pool/build_pool.py`, mais uma folga.
@@ -110,6 +111,14 @@ var state: MatchState = null:
 		_sync_cue()
 		_render()
 		queue_redraw()
+
+## O visual (`Cosmetics`) de quem tem a vez: o taco dele. Vazio é o de sempre.
+var cue_look := {}:
+	set(value):
+		if value == cue_look:
+			return
+		cue_look = value
+		_dress_cue()
 
 ## A mesa aceita mira. Falso na vez do outro e enquanto a tacada corre.
 var enabled := false:
@@ -229,6 +238,7 @@ func _build_world() -> void:
 	_cue = CUE_SCENE.instantiate()
 	_cue.visible = false
 	_viewport.add_child(_cue)
+	_dress_cue()
 
 
 ## A câmera enquadra a mesa inteira no tamanho que o controle tiver, e a
@@ -374,6 +384,31 @@ func _advance_sinks(delta: float) -> void:
 
 ## O taco 3D atrás da bola, durante a vez inteira de quem joga, recuado pela
 ## barra de força.
+## Veste o taco com o da loja (`cue_look`): a haste, a junta, o antebraço e o
+## cabo passam ao `cue_skin.gdshader`; a ponta e a virola ficam as do modelo.
+## Sem item, volta aos materiais do `cue.glb`.
+func _dress_cue() -> void:
+	if _cue != null:
+		dress_cue(_cue, cue_look)
+
+
+## Veste um taco (o `cue.glb` instanciado) com o da loja. Também serve à folha
+## dos tacos (`tests/cue_sheet.gd`).
+static func dress_cue(cue: Node3D, look: Dictionary) -> void:
+	var skin := Cosmetics.cue_skin(look)
+	var material: ShaderMaterial = null
+	if not skin.is_empty():
+		material = ShaderMaterial.new()
+		material.shader = CUE_SHADER
+		material.set_shader_parameter("skin", skin["art"])
+		material.set_shader_parameter("glow", skin["glow"])
+	for mesh_instance: MeshInstance3D in cue.find_children("*", "MeshInstance3D", true, false):
+		for i in mesh_instance.mesh.get_surface_count():
+			var name := mesh_instance.mesh.surface_get_material(i).resource_name
+			if name in ["shaft", "joint", "forearm", "grip"]:
+				mesh_instance.set_surface_override_material(i, material)
+
+
 func _sync_cue() -> void:
 	if _cue == null:
 		return
