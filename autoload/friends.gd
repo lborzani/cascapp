@@ -34,6 +34,8 @@ const INVITE_SECONDS := 60.0
 ## plano. `ponytail:` consulta, e não empurrão; o socket de presença pode avisar
 ## quando a carga do PocketBase incomodar.
 const UNREAD_SECONDS := 20.0
+## A lista de amigos e os pedidos, de 3 em 3 tiques das não lidas (1 min).
+const LISTS_EVERY := 3
 
 ## Os amigos da conta, cada um com o perfil público (ver `Account.friends()`).
 var list: Array = []
@@ -59,6 +61,7 @@ var _poll := 0.0
 var _retry := 0.0
 var _unread_poll := 0.0
 var _unread_busy := false
+var _lists_ticks := 0
 ## O app foi para o fundo: presença fechada até ele voltar.
 var _paused := false
 
@@ -254,6 +257,12 @@ func _tick_unread(delta: float) -> void:
 	_unread_poll = UNREAD_SECONDS
 	refresh_unread()
 	_sync_push_token()
+	# A lista e os pedidos, a cada [constant LISTS_EVERY] tiques: quem aceitou o
+	# nosso pedido, e o pedido novo que chegou, aparecem sem abrir a gaveta.
+	_lists_ticks += 1
+	if _lists_ticks >= LISTS_EVERY:
+		_lists_ticks = 0
+		refresh()
 
 
 var _push_sent := ""
@@ -295,7 +304,13 @@ func _load_lists() -> void:
 	var fresh: Variant = await Account.friends()
 	var pending: Variant = await Account.friend_requests()
 	if fresh is Array:
+		var before := _ids()
 		list = fresh
+		# O relay só mostra B online para A quando os dois se listam, e a lista
+		# dele é a que este aparelho mandou por último. Amigo novo (pedido aceito
+		# do outro lado) sem este aviso ficava "Offline" até alguém abrir a gaveta.
+		if _ids() != before:
+			_send({"t": "who", "friends": _ids()})
 	if pending is Dictionary:
 		requests = pending
 	if fresh is Array or pending is Dictionary:
