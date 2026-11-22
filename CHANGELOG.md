@@ -7,6 +7,14 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.59
+
+- Pedido de amizade: ler o código ou o QR de alguém agora manda um pedido, e a amizade só começa quando a pessoa aceita. Os pedidos aparecem no topo da lista de amigos, com Aceitar e Recusar.
+- Conversa com os amigos: mande mensagens e emojis direto para cada amigo. Os convites para jogar também ficam na conversa, com o botão Entrar. Uma bolinha vermelha avisa quando chega mensagem nova.
+- Toque num amigo para ver o perfil dele: quantas partidas jogou em cada jogo, as vitórias e as partidas mais recentes.
+- O histórico agora guarda as partidas de todos os jogos, e não só as de xadrez.
+- Corrige a análise do xadrez no celular, que às vezes dizia "Não foi possível analisar a partida agora." Esta correção vem na versão completa do app.
+
 ## 1.58
 
 - Arrastar o dedo por cima de um botão não conta mais como toque. Vale para as abas de baixo, as cartas do Uno, o dado e os peões do Ludo, e para o fundo escuro que fecha as janelas. O toque só vale quando o dedo solta no mesmo lugar onde encostou.
