@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.60
+
+- Mensagem de amigo chega como notificação no celular, mesmo com o app fechado. Toque na notificação para abrir a conversa.
+- Versão nova do app agora é avisada assim que sai, e não mais algumas horas depois.
+
 ## 1.59
 
 - Pedido de amizade: ler o código ou o QR de alguém agora manda um pedido, e a amizade só começa quando a pessoa aceita. Os pedidos aparecem no topo da lista de amigos, com Aceitar e Recusar.
