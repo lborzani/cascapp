@@ -78,15 +78,20 @@ func _ready() -> void:
 	_bubbles.add_theme_constant_override("separation", 8)
 	_scroll.add_child(_bubbles)
 
-	var emotes := HBoxContainer.new()
-	emotes.add_theme_constant_override("separation", 4)
+	# Como no chat da partida (`ChatPanel._emotes`): quadrados sem folga numa
+	# grade. Com a folga do botão comum, as oito não cabiam na largura do
+	# celular, e a fileira esticava a tela inteira para os lados.
+	var emotes := GridContainer.new()
+	emotes.columns = ChatLog.EMOTES.size()
+	emotes.add_theme_constant_override("h_separation", AppTheme.SPACE_XS)
 	for index in ChatLog.EMOTES.size():
 		var emote := Button.new()
 		emote.text = ChatLog.EMOTES[index]
-		emote.flat = true
-		emote.custom_minimum_size = Vector2(0, 44)
+		MatchBar.frame_button(emote)
+		emote.focus_mode = FOCUS_NONE
+		emote.custom_minimum_size = Vector2(ChatPanel.EMOTE_SIZE, ChatPanel.EMOTE_SIZE)
 		emote.size_flags_horizontal = SIZE_EXPAND_FILL
-		emote.add_theme_font_size_override("font_size", 22)
+		emote.add_theme_font_size_override("font_size", ChatPanel.EMOTE_FONT)
 		emote.set_meta(&"emote", index)
 		emote.pressed.connect(func() -> void: send({"kind": "emote", "emote": index}))
 		emotes.add_child(emote)
@@ -99,11 +104,14 @@ func _ready() -> void:
 	_input.max_length = ChatLog.TEXT_LIMIT
 	_input.size_flags_horizontal = SIZE_EXPAND_FILL
 	_input.custom_minimum_size = Vector2(0, 48)
+	_input.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
 	_input.text_submitted.connect(func(_text: String) -> void: _send_text())
 	line.add_child(_input)
 	var send_button := Button.new()
 	send_button.text = "Enviar"
 	send_button.theme_type_variation = &"PrimaryButton"
+	# Sem foco: tocar em Enviar não tira o teclado do campo.
+	send_button.focus_mode = FOCUS_NONE
 	send_button.custom_minimum_size = Vector2(0, 48)
 	send_button.pressed.connect(_send_text)
 	line.add_child(send_button)

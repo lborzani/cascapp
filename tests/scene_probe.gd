@@ -2962,6 +2962,8 @@ func _test_friend_requests() -> void:
 				{"id": "m4", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "OLD123", "at": now - 3600},
 				{"id": "m5", "from": "euueuueuueu123", "kind": "invite", "game": "uno", "room": "MINE12", "at": now - 10},
 			], now)
+			var grid: GridContainer = chat.find_children("", "GridContainer", true, false).front()
+			_check(grid != null and grid.get_combined_minimum_size().x <= 432.0 - 32.0, "os oito emojis cabem na largura do celular (%s)" % (grid.get_combined_minimum_size().x if grid != null else -1))
 			var rows := chat._bubbles.get_children()
 			_equals(rows.size(), 5, "um balão por mensagem")
 			_equals(rows.map(func(r: HBoxContainer) -> int: return r.alignment), [
