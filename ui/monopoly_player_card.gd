@@ -39,6 +39,7 @@ var _player := -1
 ## dinheiro mudando de mão.
 var _last_cash := -1
 var _delta_tween: Tween = null
+var _press := Tap.Press.new()
 
 
 func _ready() -> void:
@@ -91,7 +92,7 @@ func _ready() -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	# Por [Tap]: ver o cabeçalho dele. Um clique chega duas vezes.
-	if Tap.began(event) and _player >= 0:
+	if _press.feed(event) and _player >= 0:
 		accept_event()
 		chosen.emit(_player)
 

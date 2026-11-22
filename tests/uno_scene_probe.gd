@@ -240,11 +240,7 @@ func _probe_hand_hit(area: Vector2) -> void:
 	hand.card_tapped.connect(func(card: int): taken.append(card))
 	for index in cards.size():
 		taken.clear()
-		var press := InputEventMouseButton.new()
-		press.button_index = MOUSE_BUTTON_LEFT
-		press.pressed = true
-		press.position = hand._spots[index].origin
-		hand._gui_input(press)
+		_tap(hand, hand._spots[index].origin)
 		_equals(
 			taken, [cards[index]],
 			"o toque no centro da carta %d entrega ela mesma" % index
@@ -255,12 +251,23 @@ func _probe_hand_hit(area: Vector2) -> void:
 	hand.playable = PackedInt32Array([cards[cards.size() - 1]])
 	hand._layout()
 	taken.clear()
-	var blocked := InputEventMouseButton.new()
-	blocked.button_index = MOUSE_BUTTON_LEFT
-	blocked.pressed = true
-	blocked.position = hand._spots[0].origin
-	hand._gui_input(blocked)
+	_tap(hand, hand._spots[0].origin)
 	_equals(taken, [], "tocar numa carta apagada não joga nada")
+
+	# Arrastar o dedo pela mão não joga a carta por onde ele passou.
+	hand.playable = PackedInt32Array(cards)
+	hand._layout()
+	var drag := InputEventScreenDrag.new()
+	drag.position = hand._spots[1].origin
+	var down := InputEventScreenTouch.new()
+	down.pressed = true
+	down.position = hand._spots[0].origin
+	hand._gui_input(down)
+	hand._gui_input(drag)
+	var up := InputEventScreenTouch.new()
+	up.position = drag.position
+	hand._gui_input(up)
+	_equals(taken, [], "arrastar pela mão não joga carta nenhuma")
 
 	# O leque inteiro cabe na largura: a última carta não pode sair da tela numa
 	# mão grande, que é o que uma fila não garante sem um gesto a mais.
@@ -625,6 +632,15 @@ func _probe_late_names() -> void:
 	scene.free()
 	Net.leave()
 	Game.start_solo(Game.UNO)
+
+
+## Um toque: encosta e solta no mesmo ponto.
+func _tap(target: Control, at: Vector2) -> void:
+	for pressed in [true, false]:
+		var touch := InputEventScreenTouch.new()
+		touch.pressed = pressed
+		touch.position = at
+		target._gui_input(touch)
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:

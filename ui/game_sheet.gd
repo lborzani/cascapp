@@ -542,8 +542,12 @@ func _select_visibility(listed: bool) -> void:
 	_mark(_visibility, 1 if listed else 0)
 
 
+## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a folha.
+var _scrim_press := Tap.Press.new()
+
+
 func _on_scrim_input(event: InputEvent) -> void:
 	# Tocar fora fecha, como toda folha do Android. Por [Tap]: um clique chega duas
 	# vezes, e a mesma porta de toque do resto do app é uma porta só.
-	if Tap.began(event):
+	if _scrim_press.feed(event):
 		close()

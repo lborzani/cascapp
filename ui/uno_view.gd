@@ -184,6 +184,7 @@ func release_pile() -> void:
 ## que acende num lugar e aceita toque em outro é pior que um monte que não acende.
 var _card_height := 0.0
 var _deck_center := Vector2.ZERO
+var _press := Tap.Press.new()
 var _pile_center := Vector2.ZERO
 
 
@@ -557,12 +558,12 @@ func _draw_hint() -> void:
 func _gui_input(event: InputEvent) -> void:
 	if not can_draw:
 		return
-	var press := event as InputEventMouseButton
-	if press == null or not press.pressed or press.button_index != MOUSE_BUTTON_LEFT:
+	# Por [Tap], ao soltar, como as cartas da mão.
+	if not _press.feed(event):
 		return
 	var half := Vector2(_card_height * UnoCardArt.ASPECT, _card_height) * 0.5
 	# Alvo maior que o desenho: o monte é o toque mais frequente da partida depois
 	# das cartas da mão, e um polegar não acerta 60 px de largura com precisão.
-	if Rect2(_deck_center - half * 1.35, half * 2.7).has_point(press.position):
+	if Rect2(_deck_center - half * 1.35, half * 2.7).has_point(_press.origin):
 		deck_tapped.emit()
 		accept_event()

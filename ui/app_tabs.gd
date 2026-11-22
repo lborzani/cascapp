@@ -48,6 +48,9 @@ var disabled: Array[StringName] = []:
 		queue_redraw()
 
 
+var _press := Tap.Press.new()
+
+
 func _init() -> void:
 	custom_minimum_size.y = HEIGHT
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -70,11 +73,12 @@ func pick(route: StringName) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	# Por [Tap]: um clique chega duas vezes, e trocar de cena duas vezes seguidas
-	# deixa a segunda mandando numa tela que a primeira já descartou.
-	if not Tap.began(event):
+	# deixa a segunda mandando numa tela que a primeira já descartou. Ao soltar,
+	# para o gesto do Android de subir pela base da tela não trocar de aba.
+	if not _press.feed(event):
 		return
 	accept_event()
-	pick(route_at(Tap.at(event)))
+	pick(route_at(_press.origin))
 
 
 func _draw() -> void:

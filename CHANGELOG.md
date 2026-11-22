@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.58
+
+- Arrastar o dedo por cima de um botão não conta mais como toque. Vale para as abas de baixo, as cartas do Uno, o dado e os peões do Ludo, e para o fundo escuro que fecha as janelas. O toque só vale quando o dedo solta no mesmo lugar onde encostou.
+
 ## 1.57
 
 - As partidas online e a conta agora rodam no nosso próprio servidor. Entrar na conta, carregar fotos e a análise do xadrez ficaram mais rápidos.

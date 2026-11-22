@@ -129,6 +129,7 @@ var _offset := Vector2.ZERO
 ## dar um salto: mudando a velocidade de um seno lido de `t * f`, o argumento pula
 ## junto; acumulando a fase, ele só passa a crescer mais devagar.
 var _wobble := 0.0
+var _press := Tap.Press.new()
 
 
 ## O `mouse_filter` **não** é escrito aqui, e a ausência é a correção.
@@ -155,7 +156,7 @@ func _gui_input(event: InputEvent) -> void:
 	# Por [Tap]: um clique chega duas vezes, e o segundo pedido cairia no dado que
 	# já está rolando. Contar uma vez é a diferença entre ignorar um evento e nunca
 	# tê-lo recebido.
-	if Tap.began(event):
+	if _press.feed(event):
 		accept_event()
 		roll()
 

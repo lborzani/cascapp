@@ -62,8 +62,10 @@ func _ready() -> void:
 	var scrim := ColorRect.new()
 	scrim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	scrim.color = Color(AppTheme.SCRIM, 0.35)
+	# Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a conversa.
+	var scrim_press := Tap.Press.new()
 	scrim.gui_input.connect(func(event: InputEvent) -> void:
-		if Tap.began(event):
+		if scrim_press.feed(event):
 			dismiss()
 	)
 	add_child(scrim)

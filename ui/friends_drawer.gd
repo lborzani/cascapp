@@ -44,8 +44,10 @@ func _ready() -> void:
 	var scrim := ColorRect.new()
 	scrim.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	scrim.color = AppTheme.SCRIM
+	# Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a gaveta.
+	var scrim_press := Tap.Press.new()
 	scrim.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed:
+		if scrim_press.feed(event):
 			close()
 	)
 	add_child(scrim)

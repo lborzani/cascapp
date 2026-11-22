@@ -249,6 +249,27 @@ func _probe_tabs() -> void:
 	_equals(heard.size(), 0, "nem na desabilitada")
 	tabs.pick(AppTabs.YOU)
 	_equals(heard, [AppTabs.YOU] as Array[StringName], "a outra avisa")
+	heard.clear()
+	tabs.current = AppTabs.GAMES
+	tabs.disabled = [] as Array[StringName]
+	var you := Vector2(400, 30)
+	tabs._gui_input(_touch(you, true))
+	_equals(heard.size(), 0, "encostar não navega")
+	tabs._gui_input(_touch(you + Vector2(3, 2), false))
+	_equals(heard, [AppTabs.YOU] as Array[StringName], "soltar no lugar navega, mesmo com o dedo tremendo")
+	heard.clear()
+	tabs._gui_input(_touch(you, true))
+	tabs._gui_input(_drag(you + Vector2(-60, 0)))
+	tabs._gui_input(_drag(you))
+	tabs._gui_input(_touch(you, false))
+	_equals(heard.size(), 0, "arrastar e voltar ao ponto não navega")
+	tabs._gui_input(_touch(you, false))
+	_equals(heard.size(), 0, "soltar sem ter encostado não navega")
+	tabs._gui_input(_touch(you, true))
+	var canceled := _touch(you, false)
+	canceled.canceled = true
+	tabs._gui_input(canceled)
+	_equals(heard.size(), 0, "o sistema tomando o dedo não navega")
 	tabs.free()
 	var bar := AppBar.new()
 	root.add_child(bar)
@@ -462,6 +483,19 @@ func _probe_rules_page() -> void:
 
 
 
+
+
+func _touch(at: Vector2, pressed: bool) -> InputEventScreenTouch:
+	var touch := InputEventScreenTouch.new()
+	touch.position = at
+	touch.pressed = pressed
+	return touch
+
+
+func _drag(at: Vector2) -> InputEventScreenDrag:
+	var drag := InputEventScreenDrag.new()
+	drag.position = at
+	return drag
 
 
 func _equals(actual: Variant, expected: Variant, label: String) -> void:

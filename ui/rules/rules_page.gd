@@ -236,7 +236,11 @@ func dismiss() -> void:
 	queue_free()
 
 
+## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a folha.
+var _scrim_press := Tap.Press.new()
+
+
 func _on_scrim_input(event: InputEvent) -> void:
 	# Tocar fora fecha, como a folha do jogo. Por [Tap]: um clique chega duas vezes.
-	if Tap.began(event):
+	if _scrim_press.feed(event):
 		dismiss()

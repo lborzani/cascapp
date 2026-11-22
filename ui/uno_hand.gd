@@ -80,6 +80,7 @@ var enabled := false:
 ## depende da contagem.
 var _spots: Array[Transform2D] = []
 var _card_height := 0.0
+var _press := Tap.Press.new()
 
 
 func _ready() -> void:
@@ -157,15 +158,16 @@ func _is_playable(card: int) -> bool:
 func _gui_input(event: InputEvent) -> void:
 	if not enabled:
 		return
-	var press := event as InputEventMouseButton
-	if press == null or not press.pressed or press.button_index != MOUSE_BUTTON_LEFT:
+	# Por [Tap], ao soltar: arrastar o dedo pela mão não joga a carta por onde ele
+	# passou.
+	if not _press.feed(event):
 		return
 
 	var half := Vector2(UnoCardArt.width_for(_card_height), _card_height) * 0.5
 	# De cima para baixo: a última desenhada é a que está por cima, e é ela que o
 	# dedo acha que tocou.
 	for index in range(_spots.size() - 1, -1, -1):
-		var local: Vector2 = _spots[index].affine_inverse() * press.position
+		var local: Vector2 = _spots[index].affine_inverse() * _press.origin
 		if not Rect2(-half, half * 2.0).has_point(local):
 			continue
 		var card := cards[index]

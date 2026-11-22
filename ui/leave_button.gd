@@ -178,9 +178,12 @@ func _host() -> Node:
 	return best
 
 
+## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a pergunta.
+var _shade_press := Tap.Press.new()
+
+
 func _on_shade_input(event: InputEvent) -> void:
-	var press := event as InputEventMouseButton
-	if press != null and press.pressed and press.button_index == MOUSE_BUTTON_LEFT:
+	if _shade_press.feed(event):
 		_dismiss()
 
 

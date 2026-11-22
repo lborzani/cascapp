@@ -32,6 +32,10 @@ class_name Tap
 ## importa. Aqui basta o toque simples, e o simples é decidir antes.
 
 const EMULATION := "input_devices/pointing/emulate_touch_from_mouse"
+## Quanto o dedo anda, em pixels da base, e ainda é um toque. É também a folga
+## das listas (`Nav.SCROLL_DEADZONE`): com uma folga menor que a delas, um dedo
+## que treme entre as duas não rolaria a lista nem tocaria no item.
+const SLOP := 8
 
 ## Lido uma vez por execução: a configuração não muda com o app aberto, e
 ## perguntar ao `ProjectSettings` a cada evento de dedo seria um dicionário
@@ -59,6 +63,11 @@ static func ended(event: InputEvent) -> bool:
 	return false
 
 
+## O evento é o dedo **andando**.
+static func moved(event: InputEvent) -> bool:
+	return event is InputEventScreenDrag or (event is InputEventMouseMotion and not _mirrored())
+
+
 ## Onde o dedo encostou, em coordenadas do `Control` que recebeu o evento.
 static func at(event: InputEvent) -> Vector2:
 	if event is InputEventScreenTouch:
@@ -82,3 +91,48 @@ static func _mirrored() -> bool:
 ## Só para os testes: obriga a próxima pergunta a reler a configuração.
 static func forget() -> void:
 	_mouse_is_mirrored = -1
+
+
+## Um toque que conta ao **soltar**, e só se o dedo não andou.
+##
+## Agir quando o dedo encosta faz todo gesto que começa em cima do controle virar
+## um toque: rolar a lista começando numa linha abria o jogo, e o gesto do
+## Android de subir pela base da tela trocava de aba. O `Button` da engine já
+## espera o soltar. Os controles desenhados à mão esperam por aqui.
+##
+## Um por controle, porque guarda onde o dedo encostou:
+##
+##     var _press := Tap.Press.new()
+##     func _gui_input(event):
+##         if _press.feed(event):
+##             accept_event()
+##             agir(_press.origin)
+##
+## Só o toque que conta é aceito. Encostar e arrastar seguem para cima, e é isso
+## que deixa a lista em volta rolar quando o controle é `MOUSE_FILTER_PASS`.
+class Press:
+	## Onde o dedo encostou. É o ponto que a ação usa, e não o do soltar: o alvo é
+	## o que estava embaixo do dedo quando ele desceu.
+	var origin := Vector2.ZERO
+	var _down := false
+
+	## `true` no soltar de um toque que conta. Recebe todo evento do controle.
+	func feed(event: InputEvent) -> bool:
+		if Tap.began(event):
+			_down = true
+			origin = Tap.at(event)
+			return false
+		if not _down:
+			# Soltar sem ter encostado aqui: o dedo veio de outro controle.
+			return false
+		if Tap.ended(event):
+			_down = false
+			# Cancelado é o sistema tomando o dedo (o gesto de voltar ou de ir
+			# para o início do Android), não uma pessoa soltando.
+			var canceled: bool = event.get(&"canceled") == true
+			return not canceled and Tap.at(event).distance_to(origin) <= Tap.SLOP
+		if Tap.moved(event) and Tap.at(event).distance_to(origin) > Tap.SLOP:
+			# Andou demais: deixa de ser toque e não volta a ser, nem se o dedo
+			# voltar ao ponto de partida.
+			_down = false
+		return false

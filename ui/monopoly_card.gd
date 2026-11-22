@@ -241,9 +241,11 @@ static func _let_touch_through(node: Node) -> void:
 		_let_touch_through(child)
 
 
+## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a carta.
+var _shade_press := Tap.Press.new()
+
+
 func _on_shade_input(event: InputEvent) -> void:
-	if not _settled:
-		return
 	# Por [Tap]: ver o cabeçalho dele.
-	if Tap.began(event):
+	if _shade_press.feed(event) and _settled:
 		close()

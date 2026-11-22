@@ -41,7 +41,7 @@ extends Node
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 ## Quanto o dedo anda, em pixels da base (432 de largura), antes de a lista
 ## entender arrasto e não toque. 8 é ~20 px num celular comum.
-const SCROLL_DEADZONE := 8
+const SCROLL_DEADZONE := Tap.SLOP
 
 ## Quadro do último gesto atendido. Existe porque o mesmo "voltar" pode chegar
 ## duas vezes no mesmo quadro — pela notificação e pelo atalho de teclado — e duas

@@ -201,6 +201,7 @@ var _pulse := 0.0
 var _walk := {}
 ## Peões mandados para a base neste lance, voltando do lugar em que estavam.
 var _knocked: Array[Dictionary] = []
+var _press := Tap.Press.new()
 
 
 func _ready() -> void:
@@ -303,10 +304,10 @@ func _process(delta: float) -> void:
 func _gui_input(event: InputEvent) -> void:
 	# Por [Tap]: um clique chega duas vezes, e o segundo escolheria o peão de novo
 	# — no Ludo isso é o lance saindo em dobro.
-	if not Tap.began(event):
+	if not _press.feed(event):
 		return
 	accept_event()
-	var token := _token_at(Tap.at(event))
+	var token := _token_at(_press.origin)
 	if token >= 0:
 		token_tapped.emit(token)
 
