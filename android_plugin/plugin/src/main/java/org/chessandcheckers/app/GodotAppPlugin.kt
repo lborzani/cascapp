@@ -12,6 +12,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.google.firebase.messaging.FirebaseMessaging
 import org.godotengine.godot.Godot
 import org.godotengine.godot.plugin.GodotPlugin
 import org.godotengine.godot.plugin.UsedByGodot
@@ -62,6 +63,12 @@ class GodotAppPlugin(godot: Godot) : GodotPlugin(godot) {
             .build()
         WorkManager.getInstance(host)
             .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, work)
+        // O aviso na hora: a esteira de release manda ao tópico (`PushService`).
+        // A consulta periódica fica como rede, para celular sem Play Services.
+        try {
+            FirebaseMessaging.getInstance().subscribeToTopic(UPDATES_TOPIC)
+        } catch (_: Exception) {
+        }
     }
 
     /**
@@ -94,8 +101,44 @@ class GodotAppPlugin(godot: Godot) : GodotPlugin(godot) {
         return true
     }
 
+    /**
+     * O token do Firebase deste aparelho, para a conta mandar a notificação de
+     * mensagem de amigo (`PushService`). Vazio enquanto o Firebase não deu um:
+     * o pedido sai agora, a resposta fica guardada, e a próxima pergunta já a
+     * encontra.
+     */
+    @UsedByGodot
+    fun pushToken(): String {
+        val host = activity ?: return ""
+        val prefs = host.getSharedPreferences(PushService.PREFS, Context.MODE_PRIVATE)
+        val saved = prefs.getString(PushService.KEY_TOKEN, "") ?: ""
+        if (saved.isEmpty()) {
+            try {
+                FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                    prefs.edit().putString(PushService.KEY_TOKEN, token).apply()
+                }
+            } catch (_: Exception) {
+                // Sem Google Play Services (ou Firebase fora): fica sem notificação.
+            }
+        }
+        return saved
+    }
+
+    /**
+     * O app abriu (ou voltou) pelo toque na notificação de mensagem: o id do
+     * amigo, uma vez só. Vazio no resto das aberturas.
+     */
+    @UsedByGodot
+    fun takeChatLaunch(): String {
+        val intent = activity?.intent ?: return ""
+        val friend = intent.getStringExtra(PushService.EXTRA_CHAT) ?: return ""
+        intent.removeExtra(PushService.EXTRA_CHAT)
+        return friend
+    }
+
     companion object {
         private const val CHECK_HOURS = 3L
+        private const val UPDATES_TOPIC = "updates"
         private const val WORK_NAME = "update-check"
         private const val KEY_ASKED = "asked_to_notify"
         private const val REQ_NOTIFY = 0xC46

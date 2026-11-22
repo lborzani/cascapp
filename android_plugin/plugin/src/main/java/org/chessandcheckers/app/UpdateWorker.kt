@@ -31,16 +31,12 @@ class UpdateWorker(context: Context, params: WorkerParameters) : Worker(context,
     override fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val url = prefs.getString(KEY_URL, null) ?: return Result.success()
-        val installed = prefs.getString(KEY_INSTALLED, null) ?: return Result.success()
         val newest = try {
             newest(url)
         } catch (e: Exception) {
             null
         } ?: return Result.success()
-        val notified = prefs.getString(KEY_NOTIFIED, "") ?: ""
-        if (compare(newest, installed) > 0 && compare(newest, notified) > 0 && notify(applicationContext, newest)) {
-            prefs.edit().putString(KEY_NOTIFIED, newest).apply()
-        }
+        announce(applicationContext, newest)
         return Result.success()
     }
 
@@ -82,6 +78,21 @@ class UpdateWorker(context: Context, params: WorkerParameters) : Worker(context,
         const val NOTIFICATION_ID = 0xC45
         private const val CHANNEL = "updates"
         private const val TIMEOUT_MS = 10_000
+
+        /**
+         * Avisa da versão `newest` se ela é mais nova que a instalada e que a
+         * já avisada. Duas portas chegam aqui: a consulta de algumas em algumas
+         * horas (este worker) e o aviso na hora, que a esteira de release manda
+         * pelo Firebase ao tópico `updates` (`PushService`).
+         */
+        fun announce(context: Context, newest: String) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val installed = prefs.getString(KEY_INSTALLED, null) ?: return
+            val notified = prefs.getString(KEY_NOTIFIED, "") ?: ""
+            if (compare(newest, installed) > 0 && compare(newest, notified) > 0 && notify(context, newest)) {
+                prefs.edit().putString(KEY_NOTIFIED, newest).apply()
+            }
+        }
 
         /** O mesmo que `AppVersion.compare`: "1.51" contra "1.9" compara 51 com 9. */
         fun compare(a: String, b: String): Int {

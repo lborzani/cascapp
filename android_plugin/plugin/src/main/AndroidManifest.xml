@@ -78,6 +78,18 @@
             android:value="org.chessandcheckers.app.GodotAppPlugin" />
 
         <!--
+          Mensagem de amigo com o app fechado (Firebase Cloud Messaging). Sem
+          exportar: só o Google Play Services entrega aqui.
+        -->
+        <service
+            android:name="org.chessandcheckers.app.PushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
           Host Card Emulation: enquanto a sala está aberta, este aparelho
           responde ao SELECT do convidado com o código dela.
         -->

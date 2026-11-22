@@ -52,4 +52,7 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-runtime:${versions.lifecycle}"
     // Consulta de versão nova com o app fechado (`app/UpdateWorker.kt`).
     implementation "androidx.work:work-runtime:${versions.work}"
+    // Mensagem de amigo com o app fechado (`app/PushService.kt`). Sem o plugin
+    // Gradle google-services: os valores do projeto vão em `res/values/firebase.xml`.
+    implementation "com.google.firebase:firebase-messaging:${versions.firebaseMessaging}"
 }

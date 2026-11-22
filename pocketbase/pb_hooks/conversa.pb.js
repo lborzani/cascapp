@@ -77,5 +77,25 @@ routerAdd("POST", "/api/cascapp/chat/{friend}", (e) => {
   for (const key of Object.keys(fields)) row.set(key, fields[key])
   e.app.save(row)
   conversa.trim(e.app, me, friend)
+  conversa.notify(e.app, row)
   return e.json(200, conversa.toJson(row))
+}, $apis.requireAuth("users"))
+
+// O token do Firebase deste aparelho (`pb_migrations/1761050000_tokens_push.js`).
+// O mesmo token que estava em outra conta passa para esta: o aparelho é um só.
+routerAdd("PUT", "/api/cascapp/push-token", (e) => {
+  const token = String((e.requestInfo().body || {}).token || "")
+  if (token.length < 10 || token.length > 500 || /\s/.test(token)) {
+    return e.json(400, { message: "Token inválido." })
+  }
+  let row
+  try {
+    row = e.app.findFirstRecordByData("push_tokens", "token", token)
+  } catch (_) {
+    row = new Record(e.app.findCollectionByNameOrId("push_tokens"))
+    row.set("token", token)
+  }
+  row.set("owner", e.auth.id)
+  e.app.save(row)
+  return e.noContent(204)
 }, $apis.requireAuth("users"))

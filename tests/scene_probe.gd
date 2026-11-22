@@ -2976,6 +2976,11 @@ func _test_friend_requests() -> void:
 			Account.user_id = ""
 			drawer2.close()
 			_check(chat.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha a conversa antes da gaveta")
+			# O toque na notificação de mensagem chega como `open_chat` (sem conta
+			# aqui, ele espera o teto e abre mesmo assim).
+			await menu2.open_chat("evaevaevaeva123")
+			var opened := drawer2.find_children("", "FriendChat", false, false).filter(func(c: Node) -> bool: return not c.is_queued_for_deletion())
+			_check(opened.size() == 1 and opened[0].friend_id == "evaevaevaeva123", "a notificação abre a conversa daquele amigo")
 		Friends.unread = {}
 	menu2.queue_free()
 	await get_tree().process_frame

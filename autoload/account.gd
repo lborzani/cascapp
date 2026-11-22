@@ -234,6 +234,15 @@ func send_chat(friend: String, body: Dictionary) -> Dictionary:
 	return await _call(HTTPClient.METHOD_POST, "/api/cascapp/chat/" + friend.uri_encode(), body)
 
 
+## O token do Firebase deste aparelho, para a notificação de mensagem com o app
+## fechado. Verdadeiro se o servidor guardou.
+func push_token(token: String) -> bool:
+	if not signed_in() or token.is_empty():
+		return false
+	var reply := await _call(HTTPClient.METHOD_PUT, "/api/cascapp/push-token", {"token": token})
+	return reply["code"] == 204
+
+
 ## Id do amigo → mensagens não lidas. `null` quando não deu para perguntar.
 func unread() -> Variant:
 	if not signed_in():

@@ -213,6 +213,14 @@ func _ready() -> void:
 	print("conversa")
 	_equals((await Account.send_chat(second, {"kind": "text", "text": "oi"}))["code"], 404, "quem não é amigo não manda mensagem")
 	_equals(await Account.chat(second), null, "nem lê a conversa dos outros")
+
+	print("token de notificação")
+	# O mesmo token entra na terceira e passa para a segunda: o aparelho é um só.
+	var push := "probe-push-%d" % Time.get_ticks_usec()
+	_check(await Account.push_token(push), "o aparelho registra o token")
+	_check(not await Account.push_token("curto"), "token que não parece token: recusado")
+	await _as(other_device)
+	_check(await Account.push_token(push), "o mesmo aparelho em outra conta leva o token")
 	await _as(device)
 	_equals(await Account.chat(second), [], "conversa nova vazia")
 	var sent_text := await Account.send_chat(second, {"kind": "text", "text": "  oi\n\ntudo   bem?  "})

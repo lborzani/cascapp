@@ -249,6 +249,28 @@ jobs:
               --title "${{ github.ref_name }}" --notes "$notas" --verify-tag
           fi
 
+      # O aviso na hora: uma mensagem do Firebase ao tópico `updates`, em que todo
+      # app desde a 1.60 se inscreve (`GodotAppPlugin.watchUpdates`). Com o app
+      # fechado, o `PushService` mostra a notificação de versão nova; a consulta a
+      # cada 3 horas fica como rede. Depois de publicar: o aviso leva ao download.
+      #
+      # A chave da conta de serviço do Firebase entra pelo segredo
+      # `FIREBASE_SA_JSON` (o JSON inteiro), vira um arquivo só durante o passo e
+      # some. Sem o segredo, a release sai igual, só sem o aviso na hora.
+      - name: Avisar os celulares
+        if: github.event_name == 'push'
+        env:
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SA_JSON" ]; then
+            echo "::warning::sem o segredo FIREBASE_SA_JSON: a versão nova não foi avisada na hora"
+            exit 0
+          fi
+          sa="$RUNNER_TEMP/firebase-sa.json"
+          ( umask 077; printf '%s' "$FIREBASE_SA_JSON" > "$sa" )
+          FIREBASE_SA="$sa" node pocketbase/worker/push.mjs topic updates type=update "version=${{ steps.versao.outputs.version }}" || echo "::warning::o aviso pelo Firebase falhou"
+          rm -f "$sa"
+
       - name: Guardar o APK como artefato
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v5

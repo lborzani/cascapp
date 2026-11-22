@@ -253,6 +253,25 @@ func _tick_unread(delta: float) -> void:
 		return
 	_unread_poll = UNREAD_SECONDS
 	refresh_unread()
+	_sync_push_token()
+
+
+var _push_sent := ""
+
+
+## O token do Firebase deste aparelho (plugin `GodotApp`) vai para a conta, para a
+## notificação de mensagem com o app fechado. Uma vez por token e por abertura;
+## sem plugin (editor, desktop) ou sem conta, nada. O Firebase demora a dar o
+## primeiro token: o tique seguinte pergunta de novo.
+func _sync_push_token() -> void:
+	if not OS.has_feature("template") or not Engine.has_singleton("GodotApp") or not Account.signed_in():
+		return
+	var token: String = Engine.get_singleton("GodotApp").pushToken()
+	if token.is_empty() or token == _push_sent:
+		return
+	_push_sent = token
+	if not await Account.push_token(token):
+		_push_sent = ""
 
 
 ## Só a autoload reconecta sozinha, e só com conta, relay e o app na frente.

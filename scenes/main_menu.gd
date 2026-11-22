@@ -28,6 +28,8 @@ extends Control
 
 const JOIN_SCENE := "res://scenes/join.tscn"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
+## Quanto a conversa aberta pela notificação espera a conta entrar.
+const CHAT_WAIT_SECONDS := 10.0
 
 ## Duas colunas de favorito: o cartão precisa de largura para a peça aparecer, e
 ## três deles num celular de 432 px voltariam ao problema da grade.
@@ -78,6 +80,7 @@ func _ready() -> void:
 	_offer_rejoin()
 	_greet()
 	_check_update()
+	_open_chat_launch()
 	_show_news()
 
 	# A folha volta aberta para quem chegou aqui saindo de uma partida ou da sala:
@@ -250,6 +253,34 @@ func _drawer() -> FriendsDrawer:
 	return null
 
 
+## O app abriu (ou voltou) pelo toque na notificação de mensagem de amigo
+## (`PushService.kt`): a conversa daquele amigo, por cima da gaveta.
+func _open_chat_launch() -> void:
+	if not OS.has_feature("template") or not Engine.has_singleton(UpdateGate.APP_PLUGIN):
+		return
+	var friend: String = Engine.get_singleton(UpdateGate.APP_PLUGIN).takeChatLaunch()
+	if not friend.is_empty():
+		open_chat(friend)
+
+
+## Abre a gaveta e a conversa com `friend`. Na abertura fria a conta ainda está
+## entrando: espera até [constant CHAT_WAIT_SECONDS] por ela e pela lista, para
+## a conversa nascer com o nome e as mensagens.
+func open_chat(friend: String) -> void:
+	var waited := 0.0
+	while not Account.signed_in() and waited < CHAT_WAIT_SECONDS:
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	if Account.signed_in() and Friends.profile_of(friend).is_empty():
+		await Friends.refresh()
+	if not is_inside_tree() or _leaving:
+		return
+	_open_friends()
+	var drawer := _drawer()
+	if drawer != null:
+		drawer.open_chat(friend)
+
+
 func _open_friends() -> void:
 	if _leaving or _drawer() != null:
 		return
@@ -408,9 +439,11 @@ func _watch_updates() -> bool:
 
 
 func _notification(what: int) -> void:
-	# Voltou do segundo plano, talvez pelo toque na notificação de versão nova.
+	# Voltou do segundo plano, talvez pelo toque na notificação de versão nova ou
+	# de mensagem de amigo.
 	if what == NOTIFICATION_APPLICATION_RESUMED and is_node_ready():
 		_check_update()
+		_open_chat_launch()
 
 
 ## A resposta do GitHub, já lida. Recebe a lista pronta, e não a busca, para o

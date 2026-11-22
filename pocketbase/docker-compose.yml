@@ -21,6 +21,10 @@ services:
     # rota do resultado recusa tudo e o Elo não muda.
     environment:
       CASCAPP_RELAY_SECRET: ${CASCAPP_RELAY_SECRET:-}
+      # Notificação de mensagem de amigo (serviço `push` abaixo). Vazio, o
+      # hook da conversa não chama ninguém.
+      CASCAPP_PUSH_URL: http://push:8095
+      CASCAPP_PUSH_SECRET: ${PUSH_SECRET:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/api/health"]
       interval: 30s
@@ -66,6 +70,22 @@ services:
     environment:
       PB_URL: http://pocketbase:8090
       SEARCH_NODES: ${SEARCH_NODES:-100000}
+
+  # Notificação no celular pelo Firebase (`worker/push.mjs`). Só o PocketBase
+  # chama, pela rede do compose e com `PUSH_SECRET`; sem porta para fora. A
+  # chave da conta de serviço do Firebase fica em `firebase-sa.json` ao lado
+  # deste arquivo, só na Pi (`chmod 600`), fora do repositório, e é montada só
+  # aqui.
+  push:
+    image: cascapp-worker:sf19
+    restart: unless-stopped
+    command: ["node", "/app/push.mjs"]
+    cpus: "0.5"
+    environment:
+      PUSH_SECRET: ${PUSH_SECRET:-}
+      FIREBASE_SA: /run/secrets/firebase-sa.json
+    volumes:
+      - ./firebase-sa.json:/run/secrets/firebase-sa.json:ro
 
   # O relay das partidas online (`relay/` na raiz do repositório). As salas moram
   # na memória do processo: um container só, nunca réplicas. Sai para a internet

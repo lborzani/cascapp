@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  O projeto Firebase do app (cascapp-ff1c2), para a notificação de mensagem de
+  amigo (app/PushService.kt). São os valores que o plugin Gradle google-services
+  geraria do google-services.json; aqui à mão porque o android/build é refeito
+  a cada release. O FirebaseInitProvider lê estes nomes sozinho.
+
+  Não são segredo: identificam o projeto, e o Firebase os trata como públicos.
+  A chave fica restrita no Google Cloud ao app e ao FCM. Segredo é a chave da
+  conta de serviço, que mora só no servidor.
+-->
+<resources>
+    <string name="google_app_id" translatable="false">1:129807026731:android:6831229d861c8c0d78786e</string>
+    <string name="gcm_defaultSenderId" translatable="false">129807026731</string>
+    <string name="google_api_key" translatable="false">AIzaSyBmL2qU1vMNYJsqncQi1cG5CWVR6wf2ZF0</string>
+    <string name="project_id" translatable="false">cascapp-ff1c2</string>
+</resources>
