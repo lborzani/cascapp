@@ -12,6 +12,12 @@ const PRICES = {
   ball_melon: 200,
   ball_wood: 150,
   ball_checker: 200,
+  board_wood: 200,
+  board_marble: 300,
+  board_tournament: 150,
+  board_ocean: 200,
+  board_neon: 300,
+  board_candy: 250,
 }
 
 const DAILY = 50

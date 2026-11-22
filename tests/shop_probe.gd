@@ -197,6 +197,23 @@ func _app_wallet() -> void:
 	_check(Cosmetics.ball_texture(Account.look) != null, "o catálogo acha a textura dela")
 	_check(await Account.equip(Cosmetics.BALL, ""), "voltar ao padrão")
 	_equals(Account.look, {}, "deixa o visual vazio")
+
+	print("tabuleiro")
+	_equals(await Account.equip(Cosmetics.BOARD, "board_tournament"), false, "o tabuleiro não comprado não entra")
+	# Saldo 0 + seis vitórias (150) dá o torneio (150).
+	for i in 6:
+		await Account.reward(Game.CHESS, "win", "tabuleiro:%d" % i)
+	_equals(await Account.buy("board_tournament"), 200, "o torneio (150) com 150")
+	_check(await Account.equip(Cosmetics.BOARD, "board_tournament"), "e entra em uso")
+	_equals(Account.look, {"board": "board_tournament"}, "o visual guarda o tabuleiro")
+	var board := BoardView.new()
+	_equals(board.skin["dark"], Color("769656"), "o tabuleiro aberto depois tem as casas do torneio")
+	_equals(board.frame_color, Color("2c3a24"), "e a moldura dele")
+	board.free()
+	_check(await Account.equip(Cosmetics.BOARD, ""), "o tabuleiro volta ao padrão")
+	board = BoardView.new()
+	_equals(board.skin, Cosmetics.DEFAULT_BOARD, "e o próximo tabuleiro é o do tema")
+	board.free()
 	Account.sign_out()
 	Prefs.set_look({"ball": "ball_wood"})
 	Prefs.forget()

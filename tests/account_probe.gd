@@ -26,6 +26,10 @@ func _ready() -> void:
 	DirAccess.remove_absolute(Account.AVATAR_CACHE)
 	Account._local_texture = null
 	Prefs.set_avatar_pending(false)
+	# Idem para as partidas que outra suíte deixou no histórico (o `user://` é um
+	# só para todas): a primeira entrada subiria uma delas para a conta nova, e a
+	# contagem de revisões lá embaixo daria uma a mais.
+	Prefs.forget_history()
 
 	print("conta do aparelho")
 	# Um aparelho novo por execução: o PocketBase local guarda as anteriores.

@@ -11,12 +11,15 @@ extends Control
 signal closed
 
 const SWATCH := 92.0
-## Encaixe → título da seção, na ordem da tela.
-const SECTIONS := [[Cosmetics.BALL, "Bola de boliche"]]
+## As abas, uma por encaixe: `[encaixe, rótulo]`, na ordem da tela.
+const TABS := [[Cosmetics.BALL, "Bola"], [Cosmetics.BOARD, "Tabuleiro"]]
 
 var _balance: Label = null
 var _note: Label = null
 var _grid: GridContainer = null
+var _tabs: SegmentedControl = null
+## O encaixe da aba aberta.
+var _slot: String = TABS[0][0]
 var _toast: Banner = null
 ## O item à espera do segundo toque para comprar; vazio sem nenhum.
 var _confirming := ""
@@ -63,6 +66,19 @@ func _ready() -> void:
 	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_note)
 
+	_tabs = SegmentedControl.new()
+	var labels := PackedStringArray()
+	for tab: Array in TABS:
+		labels.append(tab[1])
+	_tabs.setup(labels)
+	_tabs.selected.connect(func(index: int) -> void:
+		Sound.play(Sound.Cue.TAP)
+		_slot = TABS[index][0]
+		_confirming = ""
+		_fill()
+	)
+	column.add_child(_tabs)
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -71,16 +87,11 @@ func _ready() -> void:
 	rows.size_flags_horizontal = SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", 10)
 	scroll.add_child(rows)
-	for section: Array in SECTIONS:
-		var heading := Label.new()
-		heading.text = section[1]
-		heading.theme_type_variation = &"SectionHeader"
-		rows.add_child(heading)
-		_grid = GridContainer.new()
-		_grid.columns = 2
-		_grid.add_theme_constant_override("h_separation", 10)
-		_grid.add_theme_constant_override("v_separation", 10)
-		rows.add_child(_grid)
+	_grid = GridContainer.new()
+	_grid.columns = 2
+	_grid.add_theme_constant_override("h_separation", 10)
+	_grid.add_theme_constant_override("v_separation", 10)
+	rows.add_child(_grid)
 
 	_toast = Banner.new()
 	safe.add_child(_toast)
@@ -109,7 +120,7 @@ func _fill() -> void:
 		_grid.remove_child(child)
 		child.queue_free()
 	_grid.add_child(_card(""))
-	for id in Cosmetics.of_slot(Cosmetics.BALL):
+	for id in Cosmetics.of_slot(_slot):
 		if Account.prices.has(id) or id in Account.owned:
 			_grid.add_child(_card(id))
 
@@ -126,19 +137,7 @@ func _card(id: String) -> Control:
 	column.add_theme_constant_override("separation", 8)
 	card.add_child(column)
 
-	# A textura é o mapa da bola inteira; a amostra mostra o meio dele num círculo.
-	var swatch := Panel.new()
-	swatch.custom_minimum_size = Vector2(SWATCH, SWATCH)
-	swatch.size_flags_horizontal = SIZE_SHRINK_CENTER
-	swatch.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
-	swatch.add_theme_stylebox_override("panel", AppTheme.box(Color.WHITE, int(SWATCH / 2)))
-	var art := TextureRect.new()
-	art.texture = Cosmetics.ball_texture({Cosmetics.BALL: id}) if not id.is_empty() else load(Cosmetics.MARBLE)
-	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	art.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	swatch.add_child(art)
-	column.add_child(swatch)
+	column.add_child(_swatch(id))
 
 	var name := Label.new()
 	name.text = Cosmetics.name_of(id) if not id.is_empty() else "Padrão"
@@ -150,7 +149,7 @@ func _card(id: String) -> Control:
 	var action := Button.new()
 	action.custom_minimum_size = Vector2(0, 44)
 	action.focus_mode = FOCUS_NONE
-	var using := str(Account.look.get(Cosmetics.BALL, "")) == id
+	var using := str(Account.look.get(_slot, "")) == id
 	var owned := id.is_empty() or Account.owns(id)
 	if using:
 		action.text = "Em uso"
@@ -166,6 +165,30 @@ func _card(id: String) -> Control:
 	action.pressed.connect(_on_action.bind(id, owned))
 	column.add_child(action)
 	return card
+
+
+## A amostra do item na aba aberta. `id` vazio é o padrão do encaixe.
+func _swatch(id: String) -> Control:
+	var look := {_slot: id}
+	if _slot == Cosmetics.BOARD:
+		var sample := BoardSample.new()
+		sample.skin = Cosmetics.board_skin(look)
+		sample.custom_minimum_size = Vector2(SWATCH, SWATCH)
+		sample.size_flags_horizontal = SIZE_SHRINK_CENTER
+		return sample
+	# A textura é o mapa da bola inteira; a amostra mostra o meio dele num círculo.
+	var swatch := Panel.new()
+	swatch.custom_minimum_size = Vector2(SWATCH, SWATCH)
+	swatch.size_flags_horizontal = SIZE_SHRINK_CENTER
+	swatch.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+	swatch.add_theme_stylebox_override("panel", AppTheme.box(Color.WHITE, int(SWATCH / 2)))
+	var art := TextureRect.new()
+	art.texture = Cosmetics.ball_texture(look) if not id.is_empty() else load(Cosmetics.MARBLE)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	swatch.add_child(art)
+	return swatch
 
 
 func _on_action(id: String, owned: bool) -> void:
@@ -199,10 +222,35 @@ func _on_action(id: String, owned: bool) -> void:
 func _equip(id: String) -> void:
 	_busy = true
 	_fill()
-	var ok := await Account.equip(Cosmetics.BALL, id)
+	var ok := await Account.equip(_slot, id)
 	_busy = false
 	if not is_inside_tree():
 		return
 	if not ok:
 		_toast.show_message("Não deu para trocar agora. Tente de novo.", Banner.Kind.DANGER)
 	_fill()
+
+
+## A amostra de um tabuleiro: o miolo dele (d4, e4, d5, e5) na moldura, com a casa
+## do último lance acesa e um cavalo de cada cor, para ver o contraste das peças.
+class BoardSample:
+	extends Control
+
+	var skin: Dictionary = Cosmetics.DEFAULT_BOARD
+
+	func _draw() -> void:
+		var side := minf(size.x, size.y)
+		var outer := Rect2((size - Vector2.ONE * side) * 0.5, Vector2.ONE * side)
+		draw_style_box(AppTheme.box(skin["frame"], int(side * 0.12)), outer)
+		var inner := outer.grow(-side * 0.09)
+		var cell := inner.size.x / 2.0
+		for row in 2:
+			for col in 2:
+				var square := Board.square(3 + col, 4 - row)
+				var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
+				var color: Color = skin["dark"] if dark else skin["light"]
+				if row == 1 and col == 1:
+					color = skin["last_dark"] if dark else skin["last"]
+				BoardView.paint_square(self, skin, Rect2(inner.position + Vector2(col, row) * cell, Vector2.ONE * cell), square, color)
+		PieceRenderer.draw_piece(self, Board.piece(Board.Side.BLACK, Board.Kind.KNIGHT), inner.position + Vector2(0.5, 0.5) * cell, cell)
+		PieceRenderer.draw_piece(self, Board.piece(Board.Side.WHITE, Board.Kind.KNIGHT), inner.position + Vector2(1.5, 1.5) * cell, cell)

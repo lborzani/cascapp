@@ -9,6 +9,7 @@ extends RefCounted
 ## guarda e que viaja aos outros aparelhos no aperto de mão (`Net.look_of`).
 
 const BALL := "ball"
+const BOARD := "board"
 ## A textura da bola padrão (o mármore que a cor do assento pinta), para a amostra.
 const MARBLE := "res://assets/bowling/ball_ball_marble.png"
 
@@ -19,6 +20,45 @@ const ITEMS := {
 	"ball_melon": {"slot": BALL, "name": "Melancia", "art": "res://assets/bowling/skins/ball_melon.png"},
 	"ball_wood": {"slot": BALL, "name": "Madeira", "art": "res://assets/bowling/skins/ball_wood.png"},
 	"ball_checker": {"slot": BALL, "name": "Xadrez", "art": "res://assets/bowling/skins/ball_checker.png"},
+	# Tabuleiros do xadrez e das damas (`BoardView`). `light`/`dark` são as casas,
+	# `last`/`last_dark` o último lance em cada uma, `frame` a moldura. Com
+	# `texture`, a casa é a textura (tons de cinza, de `tools/build_board_textures.gd`)
+	# multiplicada pela cor; `turn` deita a textura nas casas escuras, para o veio
+	# da madeira alternar.
+	"board_wood": {
+		"slot": BOARD, "name": "Madeira", "light": Color("eccb98"), "dark": Color("a8683a"),
+		"frame": Color("4a2c17"), "last": Color("f7e27a"), "last_dark": Color("d9b23f"),
+		"texture": "res://assets/boards/wood.png", "turn": true,
+	},
+	"board_marble": {
+		"slot": BOARD, "name": "Mármore", "light": Color("f4f1ea"), "dark": Color("7d8a84"),
+		"frame": Color("33393a"), "last": Color("e3f08e"), "last_dark": Color("b4c45a"),
+		"texture": "res://assets/boards/marble.png",
+	},
+	"board_tournament": {
+		"slot": BOARD, "name": "Torneio", "light": Color("eeeed2"), "dark": Color("769656"),
+		"frame": Color("2c3a24"), "last": Color("f6f68a"), "last_dark": Color("bbcb44"),
+	},
+	"board_ocean": {
+		"slot": BOARD, "name": "Oceano", "light": Color("dcf0f6"), "dark": Color("4f8db3"),
+		"frame": Color("143a52"), "last": Color("fff09a"), "last_dark": Color("e2c35a"),
+	},
+	"board_neon": {
+		"slot": BOARD, "name": "Neon", "light": Color("e23ec6"), "dark": Color("3fe6ff"),
+		"frame": Color("120b24"), "last": Color("e8ff5a"), "last_dark": Color("e8ff5a"),
+		"texture": "res://assets/boards/neon.png",
+	},
+	"board_candy": {
+		"slot": BOARD, "name": "Doces", "light": Color("fff4e6"), "dark": Color("ff86b4"),
+		"frame": Color("8a3a5c"), "last": Color("fff08a"), "last_dark": Color("ffc95a"),
+		"texture": "res://assets/boards/candy.png",
+	},
+}
+
+## O tabuleiro sem skin: o violeta do tema.
+const DEFAULT_BOARD := {
+	"light": AppTheme.BOARD_LIGHT, "dark": AppTheme.BOARD_DARK, "frame": AppTheme.BOARD_FRAME,
+	"last": AppTheme.LAST_MOVE, "last_dark": AppTheme.LAST_MOVE_DARK,
 }
 
 
@@ -43,6 +83,18 @@ static func ball_texture(look: Dictionary) -> Texture2D:
 	if not ITEMS.has(id):
 		return null
 	return load(ITEMS[id]["art"]) as Texture2D
+
+
+## A skin de tabuleiro de um visual (as chaves de `DEFAULT_BOARD`, mais `texture`
+## já carregada e `turn`), ou o padrão. Item desconhecido também cai no padrão.
+static func board_skin(look: Dictionary) -> Dictionary:
+	var id := str(look.get(BOARD, ""))
+	if not ITEMS.has(id) or ITEMS[id]["slot"] != BOARD:
+		return DEFAULT_BOARD
+	var skin: Dictionary = ITEMS[id].duplicate()
+	if skin.has("texture"):
+		skin["texture"] = load(skin["texture"])
+	return skin
 
 
 ## Um visual vindo da rede, só com encaixes e ids em texto curto. O que não

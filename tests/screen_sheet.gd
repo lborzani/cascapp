@@ -42,6 +42,7 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/settings.tscn", "18b_historico"],
 	["res://scenes/settings.tscn", "18c_loja"],
+	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
@@ -71,6 +72,8 @@ const OPENING := [
 const Stage := preload("res://tests/shot_stage.gd")
 
 var _index := -1
+## `SHOTS` mais um xadrez e umas damas por tabuleiro da loja (`28_*`, `28b_*`).
+var _shots: Array = SHOTS.duplicate()
 var _frames := 0
 var _scene: Node = null
 var _stage: SubViewport = null
@@ -82,6 +85,9 @@ func _ready() -> void:
 	# quem nunca abriu o app — com um painel cobrindo metade dos prints de menu.
 	# O print das boas-vindas desfaz a marca sozinho, e só ele.
 	Prefs.set_welcomed()
+	for id in Cosmetics.of_slot(Cosmetics.BOARD):
+		_shots.append(["res://scenes/match.tscn", "28_xadrez_" + id.trim_prefix("board_")])
+		_shots.append(["res://scenes/match.tscn", "28b_damas_" + id.trim_prefix("board_")])
 	_stage = Stage.make(self, PORTRAIT_WINDOW)
 	_next()
 
@@ -122,14 +128,14 @@ func _next() -> void:
 		_scene.free()
 		_scene = null
 	_index += 1
-	if _index >= SHOTS.size():
+	if _index >= _shots.size():
 		print("PRONTO ", ProjectSettings.globalize_path("user://shots"))
 		get_tree().quit()
 		return
 	# Pelo nome do print, e não pelo índice: com índices, acrescentar um print no
 	# meio da lista deslocava todos os seguintes e cada `elif` passava a preparar
 	# a tela errada — em silêncio, porque o print continuava saindo.
-	var shot: String = SHOTS[_index][1]
+	var shot: String = _shots[_index][1]
 	var only := OS.get_environment("SHOT")
 	if not only.is_empty() and not shot.begins_with(only):
 		_next()
@@ -151,6 +157,10 @@ func _next() -> void:
 	# A conta de mentira da loja vale só no print dela; a bola, só no do boliche.
 	Account.token = ""
 	Account.look = {}
+	if shot.begins_with("28"):
+		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
+		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
+		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
@@ -173,6 +183,15 @@ func _next() -> void:
 			}
 			Account.owned = ["ball_wood", "ball_galaxy"]
 			Account.look = {"ball": "ball_galaxy"}
+		"18d_loja_tabuleiro":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {
+				"board_wood": 200, "board_marble": 300, "board_tournament": 150,
+				"board_ocean": 200, "board_neon": 300, "board_candy": 250,
+			}
+			Account.owned = ["board_wood"]
+			Account.look = {"board": "board_wood"}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)
@@ -298,7 +317,7 @@ func _next() -> void:
 	# `_ready`, e medida num palco em pé ela sai espremida.
 	Stage.fit(_stage, LANDSCAPE_WINDOW if LANDSCAPE_SHOTS.has(shot) else PORTRAIT_WINDOW)
 
-	_scene = load(SHOTS[_index][0]).instantiate()
+	_scene = load(_shots[_index][0]).instantiate()
 	_stage.add_child(_scene)
 	if shot == "02_xadrez":
 		_setup_check(_scene)
@@ -340,6 +359,14 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
+	elif shot == "18d_loja_tabuleiro":
+		_scene._open_shop()
+		_scene._shop._tabs.set_current(1)
+		_scene._shop._tabs.selected.emit(1)
+	elif shot.begins_with("28_"):
+		_play_opening(_scene)
+	elif shot.begins_with("28b_"):
+		_stage_double_jump(_scene)
 	elif shot == "18b_historico":
 		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina
 		# nova, cheio na de quem joga. Os dois estados valem ser vistos.
@@ -580,21 +607,21 @@ func _setup_check(scene: Node) -> void:
 
 func _process(_delta: float) -> void:
 	_frames += 1
-	if _frames == 30 and SHOTS[_index][1] == "11_arrasto":
+	if _frames == 30 and _shots[_index][1] == "11_arrasto":
 		_stage_drag(_scene)
-	if _frames == 20 and SHOTS[_index][1].begins_with("26"):
-		_stage_chat(_scene, SHOTS[_index][1])
+	if _frames == 20 and _shots[_index][1].begins_with("26"):
+		_stage_chat(_scene, _shots[_index][1])
 	# O aviso da partida mora na barra: uma frase de duas linhas, em pé, é o caso
 	# apertado. Mostrado tarde, e não no `_ready`: o primeiro quadro de uma cena
 	# leva segundos de verdade, e um aviso que nasce ali já sumiu na hora do print.
-	if _frames == 20 and SHOTS[_index][1] == "27_aviso_xadrez":
+	if _frames == 20 and _shots[_index][1] == "27_aviso_xadrez":
 		_scene._banner.show_message("Conexão instável. Tentando reconectar…", Banner.Kind.ALERT, true)
 	# As cenas entram com um fade de 0,16s, e `modulate` no nó raiz é aplicado a
 	# cada filho separadamente — no meio do fade um painel opaco deixa o que está
 	# atrás aparecer. Um print tirado cedo demais documenta um bug que não existe.
 	if _frames == 40:
-		Stage.save(_stage, "user://shots/%s.png" % SHOTS[_index][1])
-		print("shot ", SHOTS[_index][1])
+		Stage.save(_stage, "user://shots/%s.png" % _shots[_index][1])
+		print("shot ", _shots[_index][1])
 		_next()
 
 

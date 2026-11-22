@@ -17,6 +17,14 @@ const MOVE_STEP := 0.17
 const HOP := 0.22
 const TARGET_GROW := 0.16
 
+## A skin do tabuleiro (`Cosmetics.board_skin`). É de quem olha: a do dono do
+## aparelho, em qualquer partida, e nada dela viaja pela rede.
+var skin: Dictionary = Cosmetics.board_skin(Account.look):
+	set(value):
+		skin = value
+		frame_color = skin["frame"]
+		queue_redraw()
+
 var ruleset: Ruleset = null
 var state: MatchState = null
 
@@ -68,6 +76,11 @@ const POP_TIME := 0.4
 var _burst_squares := PackedInt32Array()
 var _burst_time := BURST_TIME
 const BURST_TIME := 0.45
+
+
+func _init() -> void:
+	# O valor inicial de `skin` não passa pelo setter.
+	frame_color = skin["frame"]
 
 
 func _ready() -> void:
@@ -155,20 +168,33 @@ func _can_drag(square: int) -> bool:
 	return picked or square == premove_pick
 
 
+## Pinta uma casa na cor dada. Com textura na skin, a casa é o recorte dela que
+## cabe àquela posição do tabuleiro (não da tela: girar o tabuleiro não mexe no
+## veio), multiplicado pela cor. Também desenha a amostra da loja.
+static func paint_square(canvas: CanvasItem, board_skin: Dictionary, rect: Rect2, square: int, color: Color) -> void:
+	var texture: Texture2D = board_skin.get("texture")
+	if texture == null:
+		canvas.draw_rect(rect, color)
+		return
+	var cell := texture.get_size() / Board.SIZE
+	var source := Rect2(Vector2(Board.file_of(square), Board.SIZE - 1 - Board.rank_of(square)) * cell, cell)
+	var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
+	canvas.draw_texture_rect_region(texture, rect, source, color, dark and board_skin.get("turn", false))
+
+
 func _draw() -> void:
 	layout()
 	draw_frame()
 
 	for square in Board.SQUARE_COUNT:
-		var rect := rect_of(square)
 		var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
-		var color := AppTheme.BOARD_DARK if dark else AppTheme.BOARD_LIGHT
+		var color: Color = skin["dark"] if dark else skin["light"]
 		# Nas damas metade do tabuleiro nunca é usada. Puxar essas casas para a
 		# cor da moldura, em vez de só escurecê-las, faz elas lerem como "fora do
 		# jogo"; escurecer a madeira apenas cria uma terceira cor competindo.
 		if ruleset != null and not ruleset.square_is_playable(square):
-			color = color.lerp(AppTheme.BOARD_FRAME, 0.62)
-		draw_rect(rect, color)
+			color = color.lerp(skin["frame"], 0.62)
+		paint_square(self, skin, rect_of(square), square, color)
 
 	_draw_last_move()
 	_draw_premove()
@@ -280,7 +306,7 @@ func _draw_travelling(arriving: int) -> void:
 func _draw_last_move() -> void:
 	for square in last_move:
 		var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
-		draw_rect(rect_of(square), AppTheme.LAST_MOVE_DARK if dark else AppTheme.LAST_MOVE)
+		paint_square(self, skin, rect_of(square), square, skin["last_dark"] if dark else skin["last"])
 
 
 ## O rei em xeque pulsa em vez de ficar com um fundo vermelho fixo. Movimento é
