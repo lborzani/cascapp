@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.61
+
+- Corrige a tela da conversa com os amigos, que ficava esticada para os lados no celular. Os emojis agora cabem numa fileira só, e tocar em Enviar não fecha mais o teclado.
+
 ## 1.60
 
 - Mensagem de amigo chega como notificação no celular, mesmo com o app fechado. Toque na notificação para abrir a conversa.
