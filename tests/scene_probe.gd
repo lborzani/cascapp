@@ -2962,6 +2962,10 @@ func _test_friend_requests() -> void:
 				{"id": "m4", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "OLD123", "at": now - 3600},
 				{"id": "m5", "from": "euueuueuueu123", "kind": "invite", "game": "uno", "room": "MINE12", "at": now - 10},
 			], now)
+			var margins := chat.find_children("", "SafeAreaMargin", true, false)
+			_check(not margins.is_empty() and margins[0].follow_keyboard, "a conversa sobe junto com o teclado")
+			_equals(SafeAreaMargin.keyboard_inset(600, 1280, 768.0), 360.0, "teclado de 600 px numa tela de 1280 vira 360 da interface")
+			_equals(SafeAreaMargin.keyboard_inset(0, 1280, 768.0), 0.0, "teclado fechado não sobe nada")
 			var grid: GridContainer = chat.find_children("", "GridContainer", true, false).front()
 			_check(grid != null and grid.get_combined_minimum_size().x <= 432.0 - 32.0, "os oito emojis cabem na largura do celular (%s)" % (grid.get_combined_minimum_size().x if grid != null else -1))
 			var rows := chat._bubbles.get_children()

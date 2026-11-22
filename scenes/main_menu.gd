@@ -441,9 +441,11 @@ func _watch_updates() -> bool:
 func _notification(what: int) -> void:
 	# Voltou do segundo plano, talvez pelo toque na notificação de versão nova ou
 	# de mensagem de amigo.
+	# Adiados: durante a notificação o Godot não deixa a cena ganhar filhos (a
+	# consulta e a gaveta nasceriam fora da árvore).
 	if what == NOTIFICATION_APPLICATION_RESUMED and is_node_ready():
-		_check_update()
-		_open_chat_launch()
+		_check_update.call_deferred()
+		_open_chat_launch.call_deferred()
 
 
 ## A resposta do GitHub, já lida. Recebe a lista pronta, e não a busca, para o

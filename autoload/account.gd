@@ -76,7 +76,10 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_IN and not signed_in() and not base_url().is_empty():
-		sign_in()
+		# Adiado: durante a notificação o Godot não deixa este nó ganhar filhos, e
+		# o `HTTPRequest` do pedido nascia fora da árvore ("Parent node is busy
+		# setting up children"). A entrada falhava e só voltava 60 s depois.
+		sign_in.call_deferred()
 
 
 func signed_in() -> bool:

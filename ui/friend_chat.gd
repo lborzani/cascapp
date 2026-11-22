@@ -36,6 +36,7 @@ func _ready() -> void:
 	add_child(background)
 
 	var safe := SafeAreaMargin.new()
+	safe.follow_keyboard = true
 	for side in ["left", "top", "right", "bottom"]:
 		safe.add_theme_constant_override("margin_" + side, 16)
 	safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)

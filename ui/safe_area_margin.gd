@@ -15,7 +15,14 @@ extends MarginContainer
 ## era lido como um notch de 900 px que empurrava a tela inteira para fora da
 ## janela. Janela de desktop não tem notch.
 
+## Sobe a margem de baixo até o topo do teclado virtual quando ele abre. No
+## Android o Godot desenha o teclado **por cima** da tela, sem encolher a janela:
+## quem tem campo de texto embaixo (a conversa com o amigo) precisa disto, ou o
+## jogador digita sem ver o campo.
+var follow_keyboard := false
+
 var _base := {}
+var _keyboard := 0
 
 
 func _ready() -> void:
@@ -23,6 +30,16 @@ func _ready() -> void:
 		_base[side] = get_theme_constant("margin_" + side)
 	_apply()
 	get_window().size_changed.connect(_apply)
+	set_process(follow_keyboard and OS.has_feature("mobile"))
+
+
+## O teclado não avisa quando abre ou fecha: pergunta-se a altura a cada quadro,
+## e só se refaz a margem quando ela muda.
+func _process(_delta: float) -> void:
+	var height := DisplayServer.virtual_keyboard_get_height()
+	if height != _keyboard:
+		_keyboard = height
+		_apply()
 
 
 func _apply() -> void:
@@ -38,7 +55,17 @@ func _apply() -> void:
 	add_theme_constant_override("margin_left", int(_base["left"] + insets.position.x))
 	add_theme_constant_override("margin_top", int(_base["top"] + insets.position.y))
 	add_theme_constant_override("margin_right", int(_base["right"] + insets.size.x))
-	add_theme_constant_override("margin_bottom", int(_base["bottom"] + insets.size.y))
+	# O teclado cobre a barra de navegação: com ele aberto, vale o maior dos dois.
+	var bottom := maxf(insets.size.y, keyboard_inset(_keyboard, DisplayServer.window_get_size().y, get_viewport_rect().size.y))
+	add_theme_constant_override("margin_bottom", int(_base["bottom"] + bottom))
+
+
+## A altura do teclado (pixels de tela) em unidades da interface, que com
+## `stretch/canvas_items` não são as mesmas.
+static func keyboard_inset(keyboard_px: int, window_height: int, viewport_height: float) -> float:
+	if keyboard_px <= 0 or window_height <= 0:
+		return 0.0
+	return keyboard_px * viewport_height / float(window_height)
 
 
 ## Devolve as sobras em coordenadas do viewport: `position` é o recuo em cima e à
