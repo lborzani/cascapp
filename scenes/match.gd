@@ -1375,6 +1375,16 @@ func _seat_of(side: int) -> int:
 	return Net.local_seat if side == Game.local_side else 1 - Net.local_seat
 
 
+## Online, cada metade do tabuleiro é de quem joga com aquela cor, com o
+## tabuleiro que ele escolheu na loja (o `look` do aperto de mão). Segue o
+## `_seat_of`, então troca junto na revanche e vale para quem assiste.
+func _board_skins() -> Array:
+	return [
+		Cosmetics.board_skin(Net.look_of(_seat_of(Board.Side.WHITE))),
+		Cosmetics.board_skin(Net.look_of(_seat_of(Board.Side.BLACK))),
+	]
+
+
 ## O transporte caiu mas a sessão ainda pode voltar. `Net.connected` já é falso,
 ## então o tabuleiro para de aceitar toques sozinho; o que falta é dizer por quê,
 ## porque um tabuleiro mudo é indistinguível de um jogo travado.
@@ -1792,6 +1802,8 @@ func _is_local_turn() -> bool:
 
 func _refresh() -> void:
 	_board.state = _state
+	if Game.mode == Game.Mode.ONLINE:
+		_board.skins = _board_skins()
 	_board.selection = _selection
 	_board.check_square = _check_square()
 	if _match_status != null:

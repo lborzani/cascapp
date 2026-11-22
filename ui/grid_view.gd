@@ -47,6 +47,8 @@ var _origin := Vector2.ZERO
 ## A cor da moldura. O `BoardView` troca pela da skin do tabuleiro.
 var frame_color := AppTheme.BOARD_FRAME:
 	set(value):
+		if frame_color == value:
+			return
 		frame_color = value
 		_frame_cache = null
 		queue_redraw()

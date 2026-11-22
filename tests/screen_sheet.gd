@@ -58,6 +58,10 @@ const SHOTS := [
 	["res://scenes/match.tscn", "26e_reacao_xadrez"],
 	["res://scenes/ludo_match.tscn", "26f_reacao_ludo"],
 	["res://scenes/match.tscn", "27_aviso_xadrez"],
+	# Online, cada metade do tabuleiro com a skin de quem joga com aquela cor.
+	["res://scenes/match.tscn", "29_xadrez_dividido"],
+	["res://scenes/match.tscn", "29b_damas_dividido"],
+	["res://scenes/match.tscn", "29c_xadrez_dividido_pretas"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -157,10 +161,28 @@ func _next() -> void:
 	# A conta de mentira da loja vale só no print dela; a bola, só no do boliche.
 	Account.token = ""
 	Account.look = {}
+	Net.looks = {}
 	if shot.begins_with("28"):
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
 		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
+	if shot.begins_with("29"):
+		# Eu de um lado e o adversário do outro, cada um com o seu tabuleiro.
+		var black_view := shot.ends_with("pretas")
+		Game.start_hotseat(Game.CHECKERS if shot.begins_with("29b") else Game.CHESS)
+		Game.mode = Game.Mode.ONLINE
+		Game.local_side = Board.Side.BLACK if black_view else Board.Side.WHITE
+		Net.local_side = Game.local_side
+		Net.local_seat = 0
+		Net.connected = true
+		Net.player_names = {0: "Você", 1: "Bia"}
+		var pairs := {
+			"29_xadrez_dividido": ["board_wood", "board_neon"],
+			"29b_damas_dividido": ["board_marble", "board_candy"],
+			"29c_xadrez_dividido_pretas": ["board_tournament", "board_ocean"],
+		}
+		Net.looks = {0: {"board": pairs[shot][0]}, 1: {"board": pairs[shot][1]}}
+		Account.look = Net.looks[0]
 	match shot:
 		"00_boas_vindas":
 			# A única marca desfeita da folha inteira, e o print seguinte a repõe.
@@ -363,9 +385,13 @@ func _next() -> void:
 		_scene._open_shop()
 		_scene._shop._tabs.set_current(1)
 		_scene._shop._tabs.selected.emit(1)
-	elif shot.begins_with("28_"):
+	if shot.begins_with("29") and is_instance_valid(_scene._coin_toss):
+		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
+		_scene._coin_toss.free()
+	if shot.begins_with("28_") or shot == "29_xadrez_dividido" or shot == "29c_xadrez_dividido_pretas":
 		_play_opening(_scene)
-	elif shot.begins_with("28b_"):
+		_scene._refresh()
+	elif shot.begins_with("28b_") or shot == "29b_damas_dividido":
 		_stage_double_jump(_scene)
 	elif shot == "18b_historico":
 		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina

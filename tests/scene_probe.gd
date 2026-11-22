@@ -1240,11 +1240,17 @@ func _test_spectator() -> void:
 	Net.connected = true
 	Net.white_seat = 1
 	Net.player_names = {0: "Ana", 1: "Bia"}
+	Net.looks = {0: {"board": "board_wood"}, 1: {"board": "board_neon"}}
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
 	await get_tree().process_frame
 
 	_equals(scene._board.flipped, false, "brancas embaixo")
+	var wood := Cosmetics.board_skin({"board": "board_wood"})
+	var neon := Cosmetics.board_skin({"board": "board_neon"})
+	_equals(scene._board.skins, [neon, wood], "cada metade do tabuleiro tem a skin de quem joga com aquela cor")
+	_equals(scene._board.skin_of(_square("e2")), neon, "a metade das brancas é a de quem joga de brancas")
+	_equals(scene._board.skin_of(_square("e7")), wood, "e a das pretas, a do outro")
 	scene._on_square_tapped(_square("e2"))
 	_check(
 		scene._selection.is_empty() and scene._premove_pick == Board.NO_SQUARE,
@@ -1283,6 +1289,7 @@ func _test_spectator() -> void:
 	)
 	scene._on_rematch_accepted()
 	_equals(Net.white_seat, 0, "a revanche dos jogadores troca as cores de quem assiste")
+	_equals(scene._board.skins, [wood, neon], "e as metades do tabuleiro trocam junto")
 	_equals(scene._state.ply, 0, "e começa a partida nova")
 	_equals(_node(scene, "%BottomTag").title, "Ana", "com os nomes no lado certo")
 	scene._on_rematch_accepted()
@@ -1306,6 +1313,7 @@ func _test_spectator() -> void:
 	Net.is_spectator = false
 	Net.white_seat = 0
 	Net.player_names = {}
+	Net.looks = {}
 	Game.mode = Game.Mode.HOTSEAT
 
 

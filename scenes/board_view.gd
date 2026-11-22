@@ -17,13 +17,18 @@ const MOVE_STEP := 0.17
 const HOP := 0.22
 const TARGET_GROW := 0.16
 
-## A skin do tabuleiro (`Cosmetics.board_skin`). É de quem olha: a do dono do
-## aparelho, em qualquer partida, e nada dela viaja pela rede.
-var skin: Dictionary = Cosmetics.board_skin(Account.look):
+## As skins do tabuleiro (`Cosmetics.board_skin`), uma por metade, pela cor
+## (`Board.Side`): as fileiras 1 a 4 são das brancas, 5 a 8 das pretas. Online
+## a partida põe a de quem joga com cada cor, e cada um vê a própria metade do
+## seu lado. Fora de rede as duas são a do dono do aparelho.
+var skins: Array = [Cosmetics.board_skin(Account.look), Cosmetics.board_skin(Account.look)]:
 	set(value):
-		skin = value
-		frame_color = skin["frame"]
+		if value == skins:
+			return
+		skins = value
 		queue_redraw()
+## O cache da metade de cima da moldura, quando as duas metades diferem.
+var _half_frame: StyleBoxFlat = null
 
 var ruleset: Ruleset = null
 var state: MatchState = null
@@ -76,11 +81,6 @@ const POP_TIME := 0.4
 var _burst_squares := PackedInt32Array()
 var _burst_time := BURST_TIME
 const BURST_TIME := 0.45
-
-
-func _init() -> void:
-	# O valor inicial de `skin` não passa pelo setter.
-	frame_color = skin["frame"]
 
 
 func _ready() -> void:
@@ -168,6 +168,32 @@ func _can_drag(square: int) -> bool:
 	return picked or square == premove_pick
 
 
+## A skin da metade do tabuleiro onde fica a casa.
+func skin_of(square: int) -> Dictionary:
+	return skins[Board.Side.WHITE if Board.rank_of(square) < Board.SIZE / 2.0 else Board.Side.BLACK]
+
+
+## A moldura também se divide: a metade de baixo na tela é a do lado que está
+## embaixo (as brancas, ou as pretas com o tabuleiro girado), e a de cima é
+## desenhada por cima dela, sem sombra e com os cantos de baixo retos.
+func draw_frame() -> void:
+	var bottom := Board.Side.BLACK if flipped else Board.Side.WHITE
+	frame_color = skins[bottom]["frame"]
+	var board := Rect2(_origin, Vector2.ONE * _cell * Board.SIZE)
+	var outer := board.grow(_cell * FRAME)
+	draw_style_box(_frame_style(), outer)
+	var top: Color = skins[Board.opponent(bottom)]["frame"]
+	if top != frame_color:
+		if _half_frame == null or _half_frame.bg_color != top or _half_frame.corner_radius_top_left != int(_cell * 0.20):
+			_half_frame = AppTheme.box(top, int(_cell * 0.20), Color(AppTheme.TEXT, 0.10), 1)
+			_half_frame.corner_radius_bottom_left = 0
+			_half_frame.corner_radius_bottom_right = 0
+			_half_frame.border_width_bottom = 0
+		draw_style_box(_half_frame, Rect2(outer.position, Vector2(outer.size.x, outer.size.y * 0.5)))
+	# Fio escuro na borda interna, como no `GridView`.
+	draw_rect(board.grow(1.5), Color(0, 0, 0, 0.28), false, 2.0)
+
+
 ## Pinta uma casa na cor dada. Com textura na skin, a casa é o recorte dela que
 ## cabe àquela posição do tabuleiro (não da tela: girar o tabuleiro não mexe no
 ## veio), multiplicado pela cor. Também desenha a amostra da loja.
@@ -188,6 +214,7 @@ func _draw() -> void:
 
 	for square in Board.SQUARE_COUNT:
 		var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
+		var skin := skin_of(square)
 		var color: Color = skin["dark"] if dark else skin["light"]
 		# Nas damas metade do tabuleiro nunca é usada. Puxar essas casas para a
 		# cor da moldura, em vez de só escurecê-las, faz elas lerem como "fora do
@@ -306,6 +333,7 @@ func _draw_travelling(arriving: int) -> void:
 func _draw_last_move() -> void:
 	for square in last_move:
 		var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
+		var skin := skin_of(square)
 		paint_square(self, skin, rect_of(square), square, skin["last_dark"] if dark else skin["last"])
 
 
