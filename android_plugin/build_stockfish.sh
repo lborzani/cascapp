@@ -12,19 +12,27 @@
 # Compilado, e não baixado: o binário oficial de Android tem segmentos
 # alinhados a 4 KB, e num aparelho com páginas de 16 KB (o padrão dos Android
 # novos, e exigência da Play Store) o kernel se recusa a executá-lo. Fora o
-# `max-page-size` e a rede, os comandos são os da CI do próprio Stockfish.
+# `max-page-size`, a rede e o link, os comandos são os da CI do próprio Stockfish.
+#
+# Link dinâmico, sem o `-static` da CI deles: o executável estático sai com o
+# segmento TLS alinhado em 8, e o Bionic do arm64 (Android 10+) exige 64 e
+# aborta na largada ("executable's TLS segment is underaligned"). O dinâmico é
+# PIE, usa o TLS da libc e só depende de libc, libm e libdl do sistema; o
+# Makefile já liga `-static-libstdc++ -pie` para o `COMP=ndk`.
 set -eu
 VERSION=sf_15.1
+# Muda quando muda o jeito de compilar, para refazer o binário de quem já tem.
+BUILD="$VERSION-dyn"
 NDK_VERSION=27.1.12297006
 JNI="$(cd "$(dirname "$0")" && pwd)/plugin/src/main/jniLibs"
 DEST="$JNI/arm64-v8a"
 # A marca fica fora da pasta da ABI, que é o que vai para o AAR. Sem ela, quem
 # já tinha o binário do 19 continuaria com ele.
-[ -s "$DEST/libstockfish.so" ] && [ "$(cat "$JNI/stockfish.version" 2>/dev/null)" = "$VERSION" ] && exit 0
+[ -s "$DEST/libstockfish.so" ] && [ "$(cat "$JNI/stockfish.version" 2>/dev/null)" = "$BUILD" ] && exit 0
 
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
 export PATH="$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
-export LDFLAGS="-static -Wno-unused-command-line-argument"
+export LDFLAGS="-Wno-unused-command-line-argument"
 
 tmp=$(mktemp -d)
 curl -fsSL "https://github.com/official-stockfish/Stockfish/archive/refs/tags/$VERSION.tar.gz" | tar xz -C "$tmp"
@@ -38,5 +46,5 @@ make strip ARCH=armv8 COMP=ndk
 
 mkdir -p "$DEST"
 mv stockfish "$DEST/libstockfish.so"
-echo "$VERSION" > "$JNI/stockfish.version"
+echo "$BUILD" > "$JNI/stockfish.version"
 rm -rf "$tmp"
