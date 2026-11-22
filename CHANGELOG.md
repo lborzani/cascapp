@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.62
+
+- Na conversa com os amigos, o teclado não cobre mais o campo de texto: a conversa sobe junto com ele.
+- Amigo novo aparece online sem precisar abrir a lista de amigos, e pedido de amizade novo também chega sozinho.
+- Ao voltar para o app depois de um tempo fora, a conta reconecta na hora, e não mais um minuto depois.
+
 ## 1.61
 
 - Corrige a tela da conversa com os amigos, que ficava esticada para os lados no celular. Os emojis agora cabem numa fileira só, e tocar em Enviar não fecha mais o teclado.
