@@ -70,6 +70,17 @@ export const MAX_SEATS = 6;
  */
 export const MAX_WATCHERS = 8;
 
+/**
+ * O `from` da conversa de quem assiste. Espectador não tem assento, e a plateia
+ * inteira fala por este número; o nome vem dentro da mensagem (`n`).
+ */
+export const AUDIENCE: Seat = -1;
+
+/** O único envelope que o relay aceita de espectador: a conversa (`t: 'chat'`). */
+export function isChat(d: unknown): boolean {
+  return typeof d === 'object' && d !== null && (d as { t?: unknown }).t === 'chat';
+}
+
 export type ClientMessage =
   | {
       t: 'host';
@@ -207,7 +218,10 @@ export type ServerMessage =
   | { t: 'swap'; seat: Seat; name: string; watchers: number; key?: string }
   | { t: 'peer'; seat: Seat }
   | { t: 'peer_left'; seat: Seat }
-  /** `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir. */
+  /**
+   * `from` é quem falou. Com mais de dois na sala, "o outro" deixou de existir.
+   * [AUDIENCE] é a plateia, e dela só chega `chat`.
+   */
   | { t: 'msg'; d: unknown; from: Seat }
   /**
    * O nome da conta de quem está no assento, conferido pelo servidor. Chega
