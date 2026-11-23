@@ -21,6 +21,7 @@ var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
+var _openings: OpeningsPanel = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
@@ -81,6 +82,15 @@ func _ready() -> void:
 	for shortcut: Button in [%HistoryButton, %TrainingButton]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
+	var openings := Button.new()
+	openings.custom_minimum_size = Vector2(0, 76)
+	openings.focus_mode = Control.FOCUS_NONE
+	openings.theme_type_variation = &"IconButton"
+	openings.set_meta(&"title", "Aberturas")
+	openings.set_meta(&"detail", "%d linhas para treinar, de ataque e de defesa" % Openings.LINES.size())
+	openings.draw.connect(_draw_shortcut.bind(openings))
+	openings.pressed.connect(_open_openings)
+	%HistoryButton.get_parent().add_sibling(openings)
 	_refresh_games()
 	%HistoryButton.pressed.connect(_open_history)
 	%TrainingButton.pressed.connect(_open_training)
@@ -272,6 +282,9 @@ func go_back() -> void:
 	if is_instance_valid(_training):
 		_training.close()
 		return
+	if is_instance_valid(_openings):
+		_openings.close()
+		return
 	_leave()
 
 
@@ -320,6 +333,12 @@ func _open_history() -> void:
 	# Uma revisão aberta lá dentro pode ter mandado erros para o treino.
 	_history.closed.connect(_refresh_games)
 	add_child(_history)
+
+
+func _open_openings() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_openings = OpeningsPanel.new()
+	add_child(_openings)
 
 
 func _open_training() -> void:

@@ -47,6 +47,8 @@ func _ready() -> void:
 	await _test_premove_limit()
 	await _test_premove_captures()
 	await _test_bot()
+	await _test_training_undo()
+	await _test_opening_book()
 	await _test_battleship()
 	_test_back_navigation()
 	await _test_scroll_drag()
@@ -1983,6 +1985,127 @@ func _test_bot() -> void:
 	Prefs.set_player_name(saved_name)
 	Game.bot_side = Board.Side.BLACK
 	Game.mode = Game.Mode.HOTSEAT
+	Game.local_side = Board.Side.WHITE
+
+
+## Treino: sem relógio, sem modo mesa, e desfazer volta o lance (sem bot) ou até
+## a minha vez (com bot), inclusive depois do mate.
+func _test_training_undo() -> void:
+	print("treino com desfazer")
+	Game.training_bot = false
+	Game.time_control = _time_control_with_increment()
+	Game.start_training(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	_check(Game.training and Game.mode == Game.Mode.HOTSEAT, "treino sem bot é o mesmo aparelho")
+	_check(not Game.has_clock(), "sem relógio, mesmo com ritmo escolhido")
+	_check(not scene._table_mode, "e sem virar as peças de cima")
+	_check(scene._undo_button != null and scene._undo_button.disabled, "botão de desfazer, apagado no começo")
+	_equals(scene._end_options(), [], "nem desistir nem empatar")
+
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	_check(scene._outcome != Ruleset.Outcome.ONGOING, "mate do louco acaba a partida")
+	_check(not _node(scene, "%ResultLayer").visible, "sem cobrir o tabuleiro")
+	_check(scene._recorded_game.is_empty(), "e sem ir para o histórico")
+	scene._undo()
+	_equals(scene._state.history.size(), 3, "desfazer volta um lance")
+	_equals(scene._outcome, Ruleset.Outcome.ONGOING, "e reabre a partida")
+	_equals(scene._notation.size(), 3, "a notação acompanha")
+	_equals(scene._state.side_to_move, Board.Side.BLACK, "e a vez volta para quem jogou")
+
+	var live: LiveReview = scene._live
+	_check(live != null, "treino tem a avaliação de cada lance")
+	await _settle_live(live)
+	if live._no_engine:
+		_check(live.entry.is_empty(), "sem motor, nenhum veredito")
+	else:
+		_equals(live.entry.get("uci"), "g2g4", "o veredito é o do lance que ficou")
+		_check(live.entry.get("verdict", -1) >= GameReview.Verdict.MISTAKE, "2.g4 é erro")
+		_equals(scene._board.badge_square, _square("g4"), "com o selo na casa dele")
+		scene._undo()
+		_check(live.entry.is_empty(), "desfazer apaga o veredito")
+		_equals(scene._board.badge_square, Board.NO_SQUARE, "e o selo some na hora")
+		await _settle_live(live)
+		_equals(live.entry.get("uci"), "e7e5", "e a nota volta para o lance anterior")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.training_bot = true
+	Game.bot_side = Board.Side.BLACK
+	Game.chess_level = 0
+	Game.start_training(Game.CHESS)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	_play(scene, "e2", "e4")
+	var deadline := Time.get_ticks_msec() + 8000
+	while scene._bot_pending and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	_equals(scene._state.ply, 2, "o bot responde")
+	scene._undo()
+	_equals(scene._state.ply, 0, "contra o bot, desfazer volta até a minha vez")
+	_check(not scene._bot_pending, "e o bot não pensa")
+	_play(scene, "d2", "d4")
+	_check(scene._bot_pending, "meu lance põe o bot a pensar")
+	scene._undo()
+	_equals(scene._state.ply, 0, "desfazer com o bot pensando cancela a busca")
+	_check(not scene._bot_pending, "sem lance dele chegando depois")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.reset_to_menu()
+	Game.time_control = 0
+	Game.local_side = Board.Side.WHITE
+
+
+## Guia de aberturas: o bot segue a linha, sair dela avisa o lance do livro, e
+## a defesa põe o bot do lado da abertura.
+func _test_opening_book() -> void:
+	print("treino de abertura")
+	var panel := OpeningsPanel.new()
+	add_child(panel)
+	_equals(panel.find_children("*", "Button", true, false).size(), 1 + 2 * Openings.LINES.size(), "fechar e dois botões por abertura")
+	panel.free()
+
+	var italian: Dictionary = Openings.LINES[0]
+	Game.training_bot = true
+	Game.chess_level = 0
+	Game.bot_side = Board.Side.BLACK
+	Game.start_training(Game.CHESS)
+	Game.training_line = Openings.moves_of(italian)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["e2", "e4"], ["g1", "f3"], ["f1", "c4"]]:
+		_play(scene, step[0], step[1])
+		var deadline := Time.get_ticks_msec() + 5000
+		while scene._bot_pending and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+	_equals((scene._ruleset as ChessRules).uci_line(scene._state.history), "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5", "o bot responde pelo livro")
+	_check(scene._match_status.note.ends_with("Italiana"), "e a barra diz a abertura (%s)" % scene._match_status.note)
+	_play(scene, "d2", "d4")
+	_equals(scene._banner._message, "Fora do livro: a linha joga c3", "sair da linha mostra o lance dela")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.bot_side = Board.Side.WHITE
+	Game.start_training(Game.CHESS)
+	Game.training_line = Openings.moves_of(italian)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var wait := Time.get_ticks_msec() + 5000
+	while scene._bot_pending and Time.get_ticks_msec() < wait:
+		await get_tree().process_frame
+	_equals((scene._ruleset as ChessRules).uci_line(scene._state.history), "e2e4", "na defesa o bot abre com a linha")
+	_check(scene._board.flipped, "e eu vejo do lado das pretas")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.reset_to_menu()
+	Game.bot_side = Board.Side.BLACK
 	Game.local_side = Board.Side.WHITE
 
 

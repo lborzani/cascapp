@@ -4,7 +4,9 @@ extends Node
 ## match scenes need to read. Adding a third board game means adding one entry
 ## to `make_ruleset` and one button in the menu.
 
-enum Mode { HOTSEAT, ONLINE, SOLO }
+## `TRAINING` só existe na folha: ao começar vira SOLO (com bot) ou HOTSEAT (sem),
+## com `training` ligado. Assim cada `mode == SOLO` do app continua valendo.
+enum Mode { HOTSEAT, ONLINE, SOLO, TRAINING }
 enum Role { HOST, GUEST }
 
 const CHESS := &"chess"
@@ -79,7 +81,7 @@ const GAMES := [
 		"icon": Board.Kind.KNIGHT,
 		"scene": "res://scenes/match.tscn",
 		"coin_toss": true,
-		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO],
+		"modes": [Mode.ONLINE, Mode.HOTSEAT, Mode.SOLO, Mode.TRAINING],
 		"clock": true,
 		"visible": true,
 	},
@@ -624,7 +626,7 @@ func supports_clock(id: StringName = game_id) -> bool:
 
 
 func has_clock() -> bool:
-	return supports_clock() and clock_initial() > 0.0
+	return not training and supports_clock() and clock_initial() > 0.0
 
 
 func clock_initial() -> float:
@@ -693,13 +695,32 @@ func game_title(id: StringName = game_id) -> String:
 	return str(entry_of(id).get("title", ""))
 
 
+## Partida de estudo: dá para desfazer lances e cada um ganha a nota do motor.
+## Sem relógio, sem histórico, sem rating.
+var training := false
+## No treino, se há bot do outro lado. Sem bot, quem segura o aparelho joga os dois.
+var training_bot := true
+## Lances (UCI) já jogados ao abrir o treino — a linha escolhida no guia de aberturas.
+var training_line := PackedStringArray()
+
+
+func start_training(id: StringName) -> void:
+	if training_bot:
+		start_solo(id)
+	else:
+		start_hotseat(id)
+	training = true
+
+
 func start_hotseat(id: StringName) -> void:
+	training = false
 	mode = Mode.HOTSEAT
 	game_id = id
 	local_side = Board.Side.WHITE
 
 
 func start_solo(id: StringName) -> void:
+	training = false
 	mode = Mode.SOLO
 	game_id = id
 	local_side = Board.opponent(bot_side)
@@ -810,6 +831,8 @@ func reset_to_menu() -> void:
 	# custa nada — `Orientation` compara antes de escrever.
 	Orientation.reset(get_tree())
 	mode = Mode.HOTSEAT
+	training = false
+	training_line = PackedStringArray()
 	join_info = {}
 	# Fora de partida não há relógio a contar. O que ficou gravado no disco não é
 	# apagado aqui de propósito: é justamente o que faz a volta pela mesma sala

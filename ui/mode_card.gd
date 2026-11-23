@@ -13,7 +13,9 @@ extends Button
 ## textos. Marcado, ganha o contorno limão e a bolinha cheia — o limão aqui é
 ## "é este que vai valer quando você apertar o botão lá embaixo".
 
-const HEIGHT := 60.0
+## 56 e não 60: com o cartão de Treino do xadrez, quatro de 60 empurravam a folha
+## para fora da tela de referência (432×768).
+const HEIGHT := 56.0
 const PAD := 12.0
 const BADGE := 40.0
 const DOT := 20.0
