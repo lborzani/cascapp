@@ -5,6 +5,8 @@ import { decide, MIN_PLIES, type Report, type ResultReporter } from './ratings.j
 import { WebSocket, WebSocketServer } from 'ws';
 
 import {
+  AUDIENCE,
+  isChat,
   isValidRoomCode,
   parseClientMessage,
   type ClientMessage,
@@ -309,10 +311,20 @@ export function createRelay(options: RelayOptions = {}): Relay {
         // assentos "o outro" era um endereço; com quatro, quem recebe precisa
         // saber de quem veio para saber de quem é a vez.
         //
-        // Espectador não tem assento e cai aqui: o que ele manda não sai para
-        // ninguém. É isso que deixa a sala aberta a quem só tem o código sem
-        // abrir a partida a um lance, um `bye` ou um `sync` forjado por ele.
-        if (session.seat === null) break;
+        // Espectador não tem assento: do que ele manda só a conversa sai, com o
+        // `from` da plateia. É isso que deixa a sala aberta a quem só tem o
+        // código sem abrir a partida a um lance, um `bye` ou um `sync` forjado
+        // por ele.
+        if (session.seat === null) {
+          if (session.watching && isChat(message.d)) {
+            const said: ServerMessage = { t: 'msg', d: message.d, from: AUDIENCE };
+            for (const peer of peersOf(session.room, AUDIENCE)) send(peer, said);
+            for (const watcher of watchersOf(session.room)) {
+              if (watcher !== socket) send(watcher, said);
+            }
+          }
+          break;
+        }
         const relayed: ServerMessage = { t: 'msg', d: message.d, from: session.seat };
         for (const peer of peersOf(session.room, session.seat)) {
           send(peer, relayed);

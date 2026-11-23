@@ -30,10 +30,18 @@ const COOLDOWN_MS := 1500
 const BURST := 5
 const BURST_WINDOW_MS := 5000
 const HISTORY_LIMIT := 50
+## O assento da plateia. Espectador não tem assento: o relay carimba a conversa
+## dele com este `from`, e o apelido viaja dentro da mensagem (`n`).
+##
+## ponytail: a plateia inteira divide um [constant BURST]. Basta para até oito
+## espectadores; separar por apelido seria confiar num campo que eles escolhem.
+const AUDIENCE := -1
+const NAME_LIMIT := 20
 
 ## `{"seat", "kind", "id", "text"}`, da mais antiga à mais nova. `text` já é o
 ## que se mostra: o emoji, a frase ou o texto limpo. `id` é o índice do emote ou
-## da frase, e -1 no texto livre.
+## da frase, e -1 no texto livre. Da plateia ([constant AUDIENCE]) vem também
+## `name`, o apelido de quem assiste. `Net` marca `mine` no que saiu daqui.
 var entries := []
 
 var _muted := {}
@@ -90,6 +98,13 @@ func is_muted(seat: int) -> bool:
 
 ## A mensagem do envelope (`e`, `q` ou `s`) virada entrada. Vazio se não vale.
 static func read(seat: int, body: Dictionary) -> Dictionary:
+	var entry := _read(seat, body)
+	if not entry.is_empty() and seat == AUDIENCE:
+		entry["name"] = clean(body.get("n")).substr(0, NAME_LIMIT).strip_edges()
+	return entry
+
+
+static func _read(seat: int, body: Dictionary) -> Dictionary:
 	if body.has("e"):
 		var emote := _index(body["e"], EMOTES.size())
 		if emote < 0:
@@ -108,12 +123,17 @@ static func read(seat: int, body: Dictionary) -> Dictionary:
 
 ## A entrada de volta ao envelope, para mandar.
 static func wire(entry: Dictionary) -> Dictionary:
+	var out := {"t": "chat"}
 	match int(entry["kind"]):
 		Kind.EMOTE:
-			return {"t": "chat", "e": entry["id"]}
+			out["e"] = entry["id"]
 		Kind.PHRASE:
-			return {"t": "chat", "q": entry["id"]}
-	return {"t": "chat", "s": entry["text"]}
+			out["q"] = entry["id"]
+		_:
+			out["s"] = entry["text"]
+	if entry.has("name"):
+		out["n"] = entry["name"]
+	return out
 
 
 ## Uma linha só, sem caracteres de controle, sem os que invertem a direção do

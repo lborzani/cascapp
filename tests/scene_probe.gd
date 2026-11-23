@@ -647,10 +647,12 @@ func _test_coin_toss() -> void:
 	_equals(coin._caption.text, "Você joga de pretas", "com a cor de quem vê")
 	_equals(coin.kind, Board.Kind.PAWN, "e um peão nas faces do xadrez")
 	_equals(coin.mouse_filter, Control.MOUSE_FILTER_IGNORE, "sem segurar o toque")
+	_check(not scene._premove_allowed(), "com a moeda na tela não se planeja lance")
 	await get_tree().create_timer(CoinToss.SPIN).timeout
 	_equals(float(scene._clock[Board.Side.WHITE]), Game.clock_initial(), "o relógio não anda com a moeda na tela")
 	await get_tree().create_timer(CoinToss.HOLD + CoinToss.FADE + 0.4).timeout
 	_check(not is_instance_valid(coin), "e some sozinha")
+	_equals(scene._premove_allowed(), Prefs.premove_on(), "sem a moeda o lance planejado volta")
 	await get_tree().create_timer(0.3).timeout
 	_check(float(scene._clock[Board.Side.WHITE]) < Game.clock_initial(), "e depois dela o relógio de brancas corre")
 	scene.queue_free()
@@ -1513,6 +1515,7 @@ func _test_premove() -> void:
 	Game.game_id = Game.CHESS
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 
 	_check(not scene._premove_allowed(), "na própria vez não há o que planejar")
@@ -1664,6 +1667,7 @@ func _test_premove_captures() -> void:
 	Game.time_control = 3
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 	var W := Board.Side.WHITE
 	var B := Board.Side.BLACK
@@ -1870,6 +1874,7 @@ func _test_premove_limit() -> void:
 	Game.game_id = Game.CHESS
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 
 	# Uma torre num tabuleiro quase vazio: ela anda para frente e para trás, então
@@ -2313,12 +2318,38 @@ func _test_chat() -> bool:
 	panel.dismiss()
 	await get_tree().process_frame
 
+	# Quem assiste fala como plateia: o envelope leva o apelido, e a reação dele
+	# sai num balão na barra, porque a plateia não tem etiqueta na mesa.
 	Net.is_spectator = true
+	Net.player_name = "Caio"
+	Net.chat._last_sent = -ChatLog.COOLDOWN_MS
 	panel = button.open()
 	await get_tree().process_frame
-	_check(panel._input == null and panel._senders.is_empty(), "quem assiste só lê a conversa")
-	_equals(panel._rows.get_child_count(), 5, "mas lê tudo")
-	panel.dismiss()
+	_check(panel._input != null and not panel._senders.is_empty(), "quem assiste também manda")
+	_equals(panel._rows.get_child_count(), 5, "e lê tudo")
+	panel._senders[1].pressed.emit()
+	var cheer: Dictionary = Net.chat.entries.back()
+	_equals(cheer["seat"], ChatLog.AUDIENCE, "a mensagem de quem assiste sai da plateia")
+	_equals(ChatPanel.speaker(cheer), "Você", "e para ele é dele")
+	var mine_cheer := _emote_pop(scene, "Você " + ChatLog.EMOTES[1])
+	_check(mine_cheer != null, "a reação da plateia sai num balão")
+	if mine_cheer != null:
+		_check(
+			bar.get_global_rect().grow(1.0).encloses(mine_cheer.get_global_rect()),
+			"dentro da barra, fora da mesa (%s em %s)" % [mine_cheer.get_global_rect(), bar.get_global_rect()]
+		)
+		_check(
+			mine_cheer.get_global_rect().end.x <= button.get_global_rect().position.x,
+			"sem cobrir o balão da conversa"
+		)
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Net._handle_message({"t": "chat", "e": 2, "n": "Caio"}, ChatLog.AUDIENCE)
+	_check(_emote_pop(scene, "Caio " + ChatLog.EMOTES[2]) != null, "quem joga vê o balão com o nome de quem torceu")
+	Net._handle_message({"t": "chat", "q": 4, "n": "Caio"}, ChatLog.AUDIENCE)
+	_equals(bar.notice._message, "Caio (plateia): " + ChatLog.PHRASES[4], "quem joga vê quem da plateia falou")
+	Net._handle_message({"t": "bye"}, ChatLog.AUDIENCE)
+	_check(Net.connected, "e da plateia nada além da conversa vale: um bye não encerra a partida")
 
 	Net.is_spectator = false
 	Net.connected = false
@@ -2331,6 +2362,13 @@ func _test_chat() -> bool:
 
 
 ## A reação que subiu na mesa, se houver: um `Label` solto na raiz da cena.
+## A moeda da primeira partida em rede trava o lance planejado enquanto gira
+## (`_premove_allowed`). Os testes do plano começam com ela já fora da tela.
+func _past_coin(scene: Node) -> void:
+	if is_instance_valid(scene._coin_toss):
+		scene._coin_toss.free()
+
+
 func _emote_pop(scene: Node, emote: String) -> Label:
 	for child in scene.get_children():
 		if child is Label and (child as Label).text == emote:

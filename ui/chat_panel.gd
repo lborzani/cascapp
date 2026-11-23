@@ -16,7 +16,8 @@ extends Control
 ## conversa: quem reagiu quer voltar à mesa, e a própria mensagem aparece no aviso
 ## embaixo da barra (ver `ChatButton`).
 ##
-## Quem assiste só lê. A gaveta dele mostra o histórico e mais nada.
+## Quem assiste fala também, como plateia: o nome dele sai com "(plateia)", para
+## ninguém confundir quem torce com quem joga.
 
 signal closed
 
@@ -43,10 +44,14 @@ static func open(host: Node) -> ChatPanel:
 	return panel
 
 
-## Quem disse: "Você", o nome que o assento deu ou "Jogador N".
-static func speaker(seat: int) -> String:
-	if seat == Net.local_seat and not Net.is_spectator:
+## Quem disse: "Você", o nome que o assento deu, "Jogador N" ou alguém da plateia.
+static func speaker(entry: Dictionary) -> String:
+	if entry.get("mine", false):
 		return "Você"
+	var seat := int(entry["seat"])
+	if seat == ChatLog.AUDIENCE:
+		var watcher := str(entry.get("name", ""))
+		return "Plateia" if watcher.is_empty() else "%s (plateia)" % watcher
 	var known := Net.name_of(seat)
 	return known if not known.is_empty() else "Jogador %d" % (seat + 1)
 
@@ -110,16 +115,9 @@ func _ready() -> void:
 	header.add_child(close_button)
 	column.add_child(header)
 
-	if Net.is_spectator:
-		var note := Label.new()
-		note.text = "Quem assiste só lê a conversa."
-		note.theme_type_variation = &"Subtitle"
-		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(note)
-	else:
-		column.add_child(_emotes(8 if screen.x > screen.y else 4))
-		column.add_child(_phrases())
-		column.add_child(_text_row())
+	column.add_child(_emotes(8 if screen.x > screen.y else 4))
+	column.add_child(_phrases())
+	column.add_child(_text_row())
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -234,7 +232,7 @@ func _add_row(entry: Dictionary) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	var who := Label.new()
-	who.text = speaker(int(entry["seat"]))
+	who.text = speaker(entry)
 	who.add_theme_font_override("font", AppTheme.font(700))
 	who.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
 	who.add_theme_color_override("font_color", AppTheme.TEXT_DIM)

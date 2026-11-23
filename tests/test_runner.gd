@@ -102,6 +102,16 @@ func _test_chat_log() -> void:
 	_check(chat.is_muted(1) and not chat.is_muted(2), "só ele fica calado")
 	_check(not chat.receive(2, {"s": "oi"}, 99000).is_empty(), "os outros continuam")
 
+	var cheer := ChatLog.read(ChatLog.AUDIENCE, {"e": 0, "n": "  Caio\n"})
+	_equals(cheer.get("name"), "Caio", "da plateia vem o apelido, limpo")
+	_equals(ChatLog.read(ChatLog.AUDIENCE, ChatLog.wire(cheer)), cheer, "e vai e volta com ele")
+	_equals(
+		ChatLog.read(ChatLog.AUDIENCE, {"e": 0, "n": "x".repeat(99)})["name"].length(),
+		ChatLog.NAME_LIMIT,
+		"com teto no tamanho"
+	)
+	_check(not ChatLog.read(1, {"e": 0, "n": "Caio"}).has("name"), "de assento o nome não vem da mensagem")
+
 	chat = ChatLog.new()
 	for i in ChatLog.HISTORY_LIMIT + 10:
 		chat.receive(i % 4, {"s": "m%d" % i}, i * 2000)

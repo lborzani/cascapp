@@ -719,6 +719,8 @@ func _stage_chat(scene: Node, shot: String) -> void:
 	# etiqueta de quem mandou. Deitado, três cadeiras reagindo juntas.
 	if shot.begins_with("26e") or shot.begins_with("26f"):
 		Net._handle_message({"t": "chat", "e": 1}, 1)
+		# E a da plateia, no balão da barra.
+		Net._handle_message({"t": "chat", "e": 0, "n": "Caio"}, ChatLog.AUDIENCE)
 		if shot.begins_with("26f"):
 			Net._handle_message({"t": "chat", "e": 6}, 2)
 		Net.send_emote(5)

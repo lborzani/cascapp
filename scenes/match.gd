@@ -593,6 +593,10 @@ func _premove_allowed() -> bool:
 	# Aba Você › "Planejar lance (premove)".
 	if not Prefs.premove_on():
 		return false
+	# Com a moeda na tela a cor ainda está saindo: quem planeja antes de ver o
+	# resultado planeja às cegas.
+	if is_instance_valid(_coin_toss):
+		return false
 	return (
 		Game.mode == Game.Mode.ONLINE
 		and Net.connected

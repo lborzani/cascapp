@@ -281,8 +281,10 @@ func leave() -> void:
 
 
 ## Uma reação, uma frase pronta ou um texto digitado, pelos índices de
-## `ChatLog.EMOTES` e `ChatLog.PHRASES`. Falso quando nada saiu: espectador, sem
-## conexão, ainda na espera do `ChatLog.COOLDOWN_MS` ou nada a dizer.
+## `ChatLog.EMOTES` e `ChatLog.PHRASES`. Falso quando nada saiu: sem conexão,
+## ainda na espera do `ChatLog.COOLDOWN_MS` ou nada a dizer.
+##
+## Espectador fala também, como plateia (`ChatLog.AUDIENCE`) e com o apelido.
 ##
 ## Quem mandou também recebe o [signal chat_received]: a tela escuta um sinal só
 ## para a própria mensagem e para a dos outros.
@@ -299,12 +301,23 @@ func send_text(text: String) -> bool:
 
 
 func _say(body: Dictionary) -> bool:
-	if is_spectator or not connected:
+	if not connected:
 		return false
-	var entry := chat.say(local_seat, body, Time.get_ticks_msec())
+	var seat := local_seat
+	if is_spectator:
+		seat = ChatLog.AUDIENCE
+		body["n"] = player_name
+	var entry := chat.say(seat, body, Time.get_ticks_msec())
 	if entry.is_empty():
 		return false
-	_send(ChatLog.wire(entry))
+	entry["mine"] = true
+	# O envelope do espectador é mudo (`_send_direct`), menos a conversa: dele o
+	# relay só repassa o `chat`.
+	if is_spectator:
+		if _relay_bridge() != null:
+			_relay_bridge().send(ChatLog.wire(entry))
+	else:
+		_send(ChatLog.wire(entry))
 	chat_received.emit(entry)
 	return true
 
@@ -436,6 +449,10 @@ func _send_direct(message: Dictionary) -> void:
 ## modificado não consegue forjar. É por isso que ele viaja adiante em vez de
 ## ser descartado.
 func _handle_message(message: Dictionary, from_seat: int) -> void:
+	# Da plateia só vale a conversa. O relay já filtra; um `bye` de -1 aqui
+	# derrubaria um assento que não existe.
+	if from_seat == ChatLog.AUDIENCE and str(message.get("t", "")) != "chat":
+		return
 	if is_spectator and _handle_as_spectator(message, from_seat):
 		return
 	match str(message.get("t", "")):
@@ -536,7 +553,7 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 		"bye":
 			_drop_seat(from_seat)
 		"chat":
-			# Também para quem assiste: o espectador lê, só não fala.
+			# Para todos, quem assiste inclusive; e de todos, a plateia inclusive.
 			var entry := chat.receive(from_seat, message, Time.get_ticks_msec())
 			if not entry.is_empty():
 				chat_received.emit(entry)
