@@ -313,11 +313,11 @@ func live_url() -> String:
 	return rooms_url().trim_suffix("/rooms") + "/live" if is_configured() else ""
 
 
-## Espectador não fala. O servidor já descarta o que ele mandar; recusar aqui
-## também garante que nem um bug da camada de cima ponha na rede um `sync` ou
-## um `bye` de quem só assiste.
+## Espectador só fala na conversa. O servidor já descarta o resto que ele mandar;
+## recusar aqui também garante que nem um bug da camada de cima ponha na rede um
+## `sync` ou um `bye` de quem só assiste.
 func send(message: Dictionary) -> void:
-	if _role == "watch":
+	if _role == "watch" and message.get("t") != "chat":
 		return
 	if _socket == null or _socket.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		return
