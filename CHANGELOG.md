@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.64
+
+- Quem assiste a uma partida agora também conversa: manda reações, frases prontas e texto. O nome aparece como "Caio (plateia)", e a reação de quem assiste surge num balãozinho na barra de cima, sem cobrir o tabuleiro.
+- Xadrez: enquanto a moeda decide as cores, não dá mais para planejar lance (premove).
+
 ## 1.63
 
 - Convite para partida: se quem chamou fechar a sala (ou a mesa encher), o convite deixa de levar até ela. Na conversa aparece "A sala já fechou", e o aviso de convite some da tela.
