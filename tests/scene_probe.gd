@@ -2955,13 +2955,15 @@ func _test_friend_requests() -> void:
 			var chat: FriendChat = chats[0]
 			var now := 10000
 			Account.user_id = "euueuueuueu123"
+			# A Eva está sentada na AB12CD, esperando: esse convite vale. A OLD123 fechou.
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "uno", "room": "AB12CD", "playing": false}
 			chat.show_items([
 				{"id": "m1", "from": "euueuueuueu123", "kind": "text", "text": "oi", "at": now - 60},
 				{"id": "m2", "from": "evaevaevaeva123", "kind": "emote", "emote": 1, "at": now - 50},
 				{"id": "m3", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "AB12CD", "at": now - 30},
 				{"id": "m4", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "OLD123", "at": now - 3600},
 				{"id": "m5", "from": "euueuueuueu123", "kind": "invite", "game": "uno", "room": "MINE12", "at": now - 10},
-			], now)
+			])
 			var margins := chat.find_children("", "SafeAreaMargin", true, false)
 			_check(not margins.is_empty() and margins[0].follow_keyboard, "a conversa sobe junto com o teclado")
 			_equals(SafeAreaMargin.keyboard_inset(600, 1280, 768.0), 360.0, "teclado de 600 px numa tela de 1280 vira 360 da interface")
@@ -2974,11 +2976,20 @@ func _test_friend_requests() -> void:
 				BoxContainer.ALIGNMENT_END, BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_BEGIN,
 				BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_END,
 			], "os meus à direita")
-			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Join", true, false) != null), [false, false, true, false, false], "Entrar só no convite recebido e recente")
+			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Join", true, false) != null), [false, false, true, false, false], "Entrar só no convite recebido com a sala ainda esperando")
+			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Closed", true, false) != null), [false, false, false, true, false], "o de sala fechada diz que fechou")
 			var bubble_texts := chat._bubbles.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
 			_check(bubble_texts.has(ChatLog.EMOTES[1]) and bubble_texts.has("Te chamou para %s" % Game.game_title(&"uno")), "o emoji e o convite aparecem no fio")
 			_equals(FriendChat.preview({"kind": "text", "text": "oi"}, "Eva"), "Eva: oi", "a prévia do texto")
 			_equals(FriendChat.preview({"kind": "invite", "game": "uno"}, "Eva"), "Eva te chamou para %s" % Game.game_title(&"uno"), "e do convite")
+			# A Eva fechou a sala: o próximo `who` a mostra fora dela, e o convite cai.
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}
+			chat.show_items(chat._items)
+			var after := chat._bubbles.get_children()
+			_check(after[2].find_child("Join", true, false) == null and after[2].find_child("Closed", true, false) != null, "fechar a sala revoga o convite na conversa")
+			_check(not Friends.invite_live("evaevaevaeva123", "AB12CD"), "e o Friends diz que ele não vale mais")
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "uno", "room": "AB12CD", "playing": true}
+			_check(not Friends.invite_live("evaevaevaeva123", "AB12CD"), "mesa cheia também derruba o convite")
 			Account.user_id = ""
 			drawer2.close()
 			_check(chat.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha a conversa antes da gaveta")
@@ -3091,6 +3102,23 @@ func _test_friends_drawer() -> bool:
 	card.declined.connect(func() -> void: declined[0] = true)
 	(card.find_child("Agoranão", true, false) as Button).pressed.emit()
 	_check(declined[0], "Agora não recusa")
+
+	# O aviso some quando quem chamou fecha a sala. Montado à mão: a cena de teste
+	# não é uma das telas em que o aviso aparece.
+	var layer := CanvasLayer.new()
+	layer.add_child(InviteCard.new())
+	Friends.add_child(layer)
+	Friends._invite_layer = layer
+	Friends._invite_from = "biabiabiabia123"
+	Friends._invite_code = "ABC234"
+	var saved_online := Friends.online
+	Friends.online = {"biabiabiabia123": {"id": "biabiabiabia123", "game": "chess", "room": "ABC234", "playing": false}}
+	Friends._drop_dead_invite()
+	_check(Friends.invite_card() != null, "com a sala esperando, o aviso fica")
+	Friends.online = {"biabiabiabia123": {"id": "biabiabiabia123", "game": "", "room": "", "playing": false}}
+	Friends._drop_dead_invite()
+	_check(Friends.invite_card() == null, "a sala fechou: o aviso some")
+	Friends.online = saved_online
 	card.queue_free()
 	Friends.list = []
 	Friends.online = {}

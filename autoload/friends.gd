@@ -234,7 +234,9 @@ func _process(delta: float) -> void:
 				_send({"t": "presence", "token": _token, "friends": _ids()})
 			while _socket.get_available_packet_count() > 0:
 				_handle(_socket.get_packet().get_string_from_utf8())
-			if watching and _socket != null:
+			# Com o aviso de convite na tela também: é a resposta do `who` que o
+			# derruba quando a sala fecha (`_drop_dead_invite`).
+			if (watching or invite_card() != null) and _socket != null:
 				_poll -= delta
 				if _poll <= 0.0:
 					_poll = POLL_SECONDS
@@ -329,6 +331,7 @@ func _handle(text: String) -> void:
 					now[str(entry.get("id", ""))] = entry
 			online = now
 			changed.emit()
+			_drop_dead_invite()
 		"invited":
 			var from := str(message.get("from", ""))
 			var game := StringName(str(message.get("game", "")))
@@ -343,6 +346,16 @@ func _handle(text: String) -> void:
 # --- convite recebido ------------------------------------------------------------
 
 var _invite_layer: CanvasLayer = null
+## De quem e para qual sala é o aviso na tela.
+var _invite_from := ""
+var _invite_code := ""
+
+
+## Quem chamou fechou a sala (ou ela encheu, ou ele saiu do app): o aviso some,
+## em vez de levar a uma sala que não existe mais.
+func _drop_dead_invite() -> void:
+	if invite_card() != null and not invite_live(_invite_from, _invite_code):
+		dismiss_invite()
 
 
 ## O aviso "Fulano te chamou", por cima da tela. Só nas telas fora de partida; um
@@ -355,6 +368,11 @@ func show_invite(from: String, game: StringName, code: String) -> void:
 	if scene.get_children().any(func(child: Node) -> bool: return child is UpdateGate):
 		return
 	dismiss_invite()
+	_invite_from = from
+	_invite_code = code
+	# Pergunta já: a resposta confirma a sala, e as seguintes derrubam o aviso
+	# quando ela fechar.
+	_poll = 0.0
 	_invite_layer = CanvasLayer.new()
 	_invite_layer.layer = 50
 	add_child(_invite_layer)
@@ -375,6 +393,15 @@ func show_invite(from: String, game: StringName, code: String) -> void:
 			dismiss_invite()
 	)
 	Sound.play(Sound.Cue.TAP)
+
+
+## O convite de `from` para a sala `code` ainda vale: quem chamou está sentado
+## nela e a mesa ainda espera gente. Sala fechada, mesa cheia ou quem chamou fora
+## do app derrubam o convite. Sem rota nova no relay: é o mesmo `who` da gaveta,
+## que diz onde cada amigo está sentado.
+func invite_live(from: String, code: String) -> bool:
+	var status: Variant = status_of(from)
+	return status is Dictionary and str(status.get("room", "")) == code and not bool(status.get("playing", false))
 
 
 func invite_card() -> InviteCard:
