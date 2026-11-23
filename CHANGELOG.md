@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.63
+
+- Convite para partida: se quem chamou fechar a sala (ou a mesa encher), o convite deixa de levar até ela. Na conversa aparece "A sala já fechou", e o aviso de convite some da tela.
+
 ## 1.62
 
 - Na conversa com os amigos, o teclado não cobre mais o campo de texto: a conversa sobe junto com ele.
