@@ -37,4 +37,31 @@ function befriend(tx, a, b) {
   }
 }
 
-module.exports = { MAX_PENDING, areFriends, findRequest, befriend }
+// `owner` bloqueou `blocked` (`pb_migrations/1764300000_bloqueios.js`).
+function findBlock(app, owner, blocked) {
+  try {
+    return app.findFirstRecordByFilter("blocks", "owner = {:owner} && blocked = {:blocked}", { owner, blocked })
+  } catch (_) {
+    return null
+  }
+}
+
+// Desfaz a amizade nos dois sentidos e some com os pedidos entre os dois.
+// Dentro de uma transação (`tx`).
+function unfriend(tx, a, b) {
+  for (const [name, x, y] of [["friendships", "owner", "friend"], ["friend_requests", "from", "to"]]) {
+    const filter = `(${x} = {:a} && ${y} = {:b}) || (${x} = {:b} && ${y} = {:a})`
+    for (const row of tx.findRecordsByFilter(name, filter, "", 2, 0, { a, b })) tx.delete(row)
+  }
+}
+
+// `owner` silenciou `friend`: as mensagens de `friend` não viram notificação.
+function isMuted(app, owner, friend) {
+  try {
+    return app.findFirstRecordByFilter("friendships", "owner = {:owner} && friend = {:friend}", { owner, friend }).getBool("muted")
+  } catch (_) {
+    return false
+  }
+}
+
+module.exports = { MAX_PENDING, areFriends, findRequest, befriend, findBlock, unfriend, isMuted }

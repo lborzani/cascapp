@@ -10,6 +10,9 @@ extends Control
 ## responde a amigo. As partidas são as que o amigo subiu do aparelho dele
 ## (`Account.push_matches`): contra o bot e online, de todos os jogos.
 ##
+## Embaixo dos botões de conversar, convidar e presentear: Silenciar (sem
+## notificação das mensagens dele), Remover e Bloquear (`Account.block`).
+##
 ## Por cima da gaveta, como o painel de amigos: fechar devolve a gaveta.
 
 signal closed
@@ -137,6 +140,7 @@ func _ready() -> void:
 		_paint_gift(gift)
 		gift.pressed.connect(_send_gift.bind(gift))
 		column.add_child(gift)
+		column.add_child(_manage_row())
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
 	column.add_child(_rows)
@@ -170,6 +174,66 @@ func _send_gift(button: Button) -> void:
 		_:
 			button.text = "Tente de novo"
 			button.disabled = false
+
+
+## Silenciar, Remover e Bloquear. Remover e Bloquear pedem um segundo toque.
+func _manage_row() -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var mute := _small_button("Mute", "")
+	_paint_mute(mute)
+	mute.pressed.connect(_toggle_mute.bind(mute))
+	row.add_child(mute)
+	var remove := _small_button("Remove", "Remover")
+	remove.pressed.connect(_confirm.bind(remove, "Remover", Account.remove_friend))
+	row.add_child(remove)
+	var block := _small_button("Block", "Bloquear")
+	block.pressed.connect(_confirm.bind(block, "Bloquear", Account.block))
+	row.add_child(block)
+	return row
+
+
+func _small_button(node_name: String, text: String) -> Button:
+	var button := Button.new()
+	button.name = node_name
+	button.text = text
+	button.theme_type_variation = &"GhostButton"
+	button.custom_minimum_size = Vector2(0, 44)
+	button.size_flags_horizontal = SIZE_EXPAND_FILL
+	return button
+
+
+func _paint_mute(button: Button) -> void:
+	button.text = "Reativar avisos" if Friends.is_muted(friend_id) else "Silenciar"
+
+
+func _toggle_mute(button: Button) -> void:
+	Sound.play(Sound.Cue.TAP)
+	button.disabled = true
+	var ok := await Friends.set_muted(friend_id, not Friends.is_muted(friend_id))
+	if not is_inside_tree():
+		return
+	button.disabled = false
+	if ok:
+		_paint_mute(button)
+	else:
+		button.text = "Tente de novo"
+
+
+## O primeiro toque pergunta; o segundo chama `action(friend_id)`. Dando certo,
+## a lista recarrega e o perfil fecha: o amigo não é mais amigo.
+func _confirm(button: Button, label: String, action: Callable) -> void:
+	Sound.play(Sound.Cue.TAP)
+	if button.text == label:
+		button.text = "Confirmar?"
+		return
+	button.disabled = true
+	if await action.call(friend_id):
+		Friends.refresh()
+		close()
+	elif is_inside_tree():
+		button.disabled = false
+		button.text = label
 
 
 func close() -> void:

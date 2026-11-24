@@ -220,6 +220,44 @@ func remove_friend(id: String) -> bool:
 	return reply["code"] == 204
 
 
+## Silencia (ou reativa) as notificações das mensagens de um amigo. Só do lado
+## desta conta.
+func mute_friend(id: String, muted: bool) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_PUT, "/api/cascapp/friends/%s/mute" % id.uri_encode(), {"muted": muted})
+	return reply["code"] == 204
+
+
+## Bloqueia: desfaz a amizade e os pedidos entre os dois, e o outro não consegue
+## mais pedir (`pocketbase/pb_hooks/amigos.pb.js`).
+func block(id: String) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/blocks/" + id.uri_encode(), {})
+	return reply["code"] == 204
+
+
+## Desbloqueia. A amizade não volta sozinha.
+func unblock(id: String) -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_DELETE, "/api/cascapp/blocks/" + id.uri_encode(), {})
+	return reply["code"] == 204
+
+
+## As contas bloqueadas, com o perfil público. `null` quando não deu para
+## perguntar.
+func blocks() -> Variant:
+	if not signed_in():
+		return null
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/blocks", {})
+	var data: Variant = reply["data"]
+	if reply["code"] != 200 or not data is Dictionary or not data.get("items") is Array:
+		return null
+	return data["items"]
+
+
 ## Os pedidos esperando resposta: `{"incoming": [...], "outgoing": [...]}`, cada
 ## um `{"id", "created", "profile"}`. `null` quando não deu para perguntar.
 func friend_requests() -> Variant:

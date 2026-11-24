@@ -7,7 +7,8 @@ extends Control
 ##
 ## Adicionar manda um pedido (`pocketbase/pb_hooks/amigos.pb.js`): a amizade
 ## nasce quando o outro aceita, ou na hora se ele já tinha pedido. Os pedidos
-## recebidos (Aceitar, Recusar) e os enviados (Cancelar) ficam acima da lista.
+## recebidos (Aceitar, Recusar) e os enviados (Cancelar) ficam acima da lista;
+## os bloqueados (Desbloquear), abaixo.
 ##
 ## Por cima da tela "Você", como o histórico: fechar devolve a tela como estava.
 
@@ -21,6 +22,7 @@ var _code_input: CodeInput = null
 var _status: Label = null
 var _rows: VBoxContainer = null
 var _requests: VBoxContainer = null
+var _blocked: VBoxContainer = null
 ## Id do amigo cujo "Remover" já foi tocado uma vez e espera a confirmação.
 var _confirming := ""
 
@@ -76,6 +78,10 @@ func _ready() -> void:
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
 	column.add_child(_rows)
+
+	_blocked = VBoxContainer.new()
+	_blocked.add_theme_constant_override("separation", 10)
+	column.add_child(_blocked)
 
 	Pairing.qr_scanner.scanned.connect(_on_scanned)
 	Pairing.qr_scanner.failed.connect(_say)
@@ -196,9 +202,11 @@ static func added_text(friend: Dictionary) -> String:
 func _load() -> void:
 	var friends: Variant = await Account.friends()
 	var pending: Variant = await Account.friend_requests()
+	var blocked: Variant = await Account.blocks()
 	if not is_inside_tree():
 		return
 	_fill_requests(pending if pending is Dictionary else {"incoming": [], "outgoing": []})
+	_fill_blocked(blocked if blocked is Array else [])
 	for child in _rows.get_children():
 		child.queue_free()
 	if friends == null:
@@ -220,6 +228,31 @@ func _fill_requests(pending: Dictionary) -> void:
 		_requests.add_child(_text(pair[1], &"Hint"))
 		for request: Dictionary in items:
 			_requests.add_child(_request_row(request, pair[0] == "incoming"))
+
+
+## Quem esta conta bloqueou, com Desbloquear. Sem ninguém, a seção some.
+func _fill_blocked(items: Array) -> void:
+	for child in _blocked.get_children():
+		child.queue_free()
+	if items.is_empty():
+		return
+	_blocked.add_child(_text("Bloqueados", &"Hint"))
+	for profile: Dictionary in items:
+		var card := _card(profile, "Não consegue te pedir amizade")
+		var unblock := _button("Desbloquear", &"GhostButton")
+		unblock.pressed.connect(_unblock.bind(str(profile.get("id", "")), unblock))
+		card.get_child(0).add_child(unblock)
+		_blocked.add_child(card)
+
+
+func _unblock(id: String, button: Button) -> void:
+	Sound.play(Sound.Cue.TAP)
+	button.disabled = true
+	if await Account.unblock(id):
+		_load()
+	elif is_inside_tree():
+		button.disabled = false
+		_say("Não deu para desbloquear agora. Tente de novo.")
 
 
 func _row(friend: Dictionary) -> Control:
@@ -314,7 +347,7 @@ func _remove(id: String, button: Button) -> void:
 
 
 func _refresh_photos() -> void:
-	for card in _rows.get_children() + _requests.get_children():
+	for card in _rows.get_children() + _requests.get_children() + _blocked.get_children():
 		for coaster in card.find_children("", "Coaster", true, false):
 			var friend: Dictionary = coaster.get_meta(&"friend", {})
 			if coaster.photo == null and not friend.is_empty():

@@ -70,13 +70,15 @@ function preview(row) {
   return row.getString("text")
 }
 
-// Avisa os aparelhos de quem recebeu, pelo serviço `push` do compose. Sem
+// Avisa os aparelhos de quem recebeu (menos quem silenciou o remetente), pelo serviço `push` do compose. Sem
 // segredo configurado (teste local, servidor antigo), não faz nada. Tokens que
 // o Firebase diz que morreram saem da coleção. Qualquer erro aqui fica aqui: a
 // mensagem já foi gravada, e a notificação é só um aviso.
 // ponytail: síncrono dentro do POST da mensagem (~300 ms do FCM a mais na
 // resposta); fila à parte se isso pesar.
 function notify(app, row) {
+  const amizade = require(`${__hooks}/amizade.js`)
+  if (amizade.isMuted(app, row.getString("to"), row.getString("from"))) return
   push(app, row.getString("to"), row.getString("from"), preview(row))
 }
 

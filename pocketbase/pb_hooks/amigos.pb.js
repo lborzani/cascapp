@@ -13,7 +13,8 @@ routerAdd("GET", "/api/cascapp/friends", (e) => {
   const friends = []
   for (const row of rows) {
     try {
-      friends.push(perfil.publicProfile(e.app.findRecordById("users", row.getString("friend"))))
+      const profile = perfil.publicProfile(e.app.findRecordById("users", row.getString("friend")))
+      friends.push(Object.assign(profile, { muted: row.getBool("muted") }))
     } catch (_) {}
   }
   return e.json(200, { items: friends })
@@ -40,6 +41,13 @@ routerAdd("POST", "/api/cascapp/friends/{code}", (e) => {
     return e.json(400, { message: "Esse é o seu próprio código." })
   }
   const reply = (status) => Object.assign(perfil.publicProfile(other), { status })
+  if (amizade.findBlock(e.app, me, other.id)) {
+    return e.json(409, { message: "Você bloqueou essa conta. Desbloqueie no painel de amigos." })
+  }
+  // Quem foi bloqueado não fica sabendo: o pedido "vai", e nada é gravado.
+  if (amizade.findBlock(e.app, other.id, me)) {
+    return e.json(200, reply("requested"))
+  }
   if (amizade.areFriends(e.app, me, other.id)) {
     return e.json(200, reply("friends"))
   }
@@ -61,15 +69,76 @@ routerAdd("POST", "/api/cascapp/friends/{code}", (e) => {
 
 // Desfaz a amizade, nos dois sentidos. Quem não era amigo: 204 do mesmo jeito.
 routerAdd("DELETE", "/api/cascapp/friends/{id}", (e) => {
+  const amizade = require(`${__hooks}/amizade.js`)
   const other = String(e.request.pathValue("id") || "")
-  e.app.runInTransaction((tx) => {
-    const rows = tx.findRecordsByFilter(
-      "friendships",
-      "(owner = {:me} && friend = {:other}) || (owner = {:other} && friend = {:me})",
-      "", 2, 0, { me: e.auth.id, other }
+  e.app.runInTransaction((tx) => amizade.unfriend(tx, e.auth.id, other))
+  return e.noContent(204)
+}, $apis.requireAuth("users"))
+
+// Silencia (`{muted: true}`) ou reativa as notificações das mensagens de um
+// amigo. Só o meu lado da amizade; quem não é amigo: 404.
+routerAdd("PUT", "/api/cascapp/friends/{id}/mute", (e) => {
+  const muted = (e.requestInfo().body || {}).muted
+  if (typeof muted !== "boolean") {
+    return e.json(400, { message: "Diga se é para silenciar." })
+  }
+  let row
+  try {
+    row = e.app.findFirstRecordByFilter(
+      "friendships", "owner = {:me} && friend = {:friend}",
+      { me: e.auth.id, friend: String(e.request.pathValue("id") || "") }
     )
-    for (const row of rows) tx.delete(row)
+  } catch (_) {
+    return e.json(404, { message: "Amigo não encontrado." })
+  }
+  row.set("muted", muted)
+  e.app.save(row)
+  return e.noContent(204)
+}, $apis.requireAuth("users"))
+
+// As contas que eu bloqueei, mais novas primeiro, com o perfil público.
+routerAdd("GET", "/api/cascapp/blocks", (e) => {
+  const perfil = require(`${__hooks}/perfil.js`)
+  const items = []
+  for (const row of e.app.findRecordsByFilter("blocks", "owner = {:me}", "-created", 500, 0, { me: e.auth.id })) {
+    try {
+      items.push(perfil.publicProfile(e.app.findRecordById("users", row.getString("blocked"))))
+    } catch (_) {}
+  }
+  return e.json(200, { items })
+}, $apis.requireAuth("users"))
+
+// Bloqueia uma conta pelo id: desfaz a amizade e os pedidos entre os dois, e o
+// outro não consegue mais pedir. Já bloqueada: 204 do mesmo jeito.
+routerAdd("POST", "/api/cascapp/blocks/{id}", (e) => {
+  const amizade = require(`${__hooks}/amizade.js`)
+  const me = e.auth.id
+  const other = String(e.request.pathValue("id") || "")
+  if (other === me) {
+    return e.json(400, { message: "Não dá para bloquear a si mesmo." })
+  }
+  try {
+    e.app.findRecordById("users", other)
+  } catch (_) {
+    return e.json(404, { message: "Conta não encontrada." })
+  }
+  e.app.runInTransaction((tx) => {
+    amizade.unfriend(tx, me, other)
+    if (!amizade.findBlock(tx, me, other)) {
+      const row = new Record(tx.findCollectionByNameOrId("blocks"))
+      row.set("owner", me)
+      row.set("blocked", other)
+      tx.save(row)
+    }
   })
+  return e.noContent(204)
+}, $apis.requireAuth("users"))
+
+// Desbloqueia. A amizade não volta sozinha: precisa de pedido novo.
+routerAdd("DELETE", "/api/cascapp/blocks/{id}", (e) => {
+  const amizade = require(`${__hooks}/amizade.js`)
+  const row = amizade.findBlock(e.app, e.auth.id, String(e.request.pathValue("id") || ""))
+  if (row) e.app.delete(row)
   return e.noContent(204)
 }, $apis.requireAuth("users"))
 
