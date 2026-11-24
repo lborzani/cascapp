@@ -790,9 +790,10 @@ func _fetch_own_avatar() -> void:
 
 # --- conta protegida por e-mail ---------------------------------------------------
 #
-# Rotas de `pocketbase/pb_hooks/conta.pb.js`. O e-mail não vira login: o app
-# continua entrando com a credencial do aparelho, e o e-mail só serve para
-# trazer a conta de volta a um aparelho novo.
+# Rotas de `pocketbase/pb_hooks/conta.pb.js`. O servidor grava o e-mail
+# confirmado como o da conta, mas o app continua entrando com a credencial do
+# aparelho (o `device_login` de lá), e o e-mail só serve para trazer a conta de
+# volta a um aparelho novo.
 
 
 ## Pede o código para `email`, com `purpose` "protect" ou "recover". O código

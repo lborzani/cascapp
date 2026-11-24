@@ -11,11 +11,21 @@
 // Recuperar não entra na conta antiga: ela passa a aceitar a credencial do
 // aparelho novo. O aparelho novo já tem uma conta vazia, criada sozinha na
 // abertura, com o e-mail sintético dele. A rota apaga essa conta e grava o
-// e-mail sintético e a senha dela na conta antiga. Na próxima entrada, o
-// `sign_in` de sempre cai na conta antiga, e a forma de entrar não muda.
+// `device_login` (o e-mail sintético) e a senha dela na conta antiga. Na
+// próxima entrada, o `sign_in` de sempre cai na conta antiga, e a forma de
+// entrar não muda.
 //
 // Cada handler roda num contexto isolado: o que é comum mora em `conta.js` e
 // entra por `require` dentro do handler.
+
+// A conta nasce com o e-mail sintético, que é também a identidade de login do
+// aparelho (`pb_migrations/1764400000_device_login.js`).
+onRecordCreate((e) => {
+  if (e.record.getString("device_login") === "") {
+    e.record.set("device_login", e.record.email())
+  }
+  e.next()
+}, "users")
 
 routerAdd("POST", "/api/cascapp/email/start", (e) => {
   const conta = require(`${__hooks}/conta.js`)
@@ -115,8 +125,20 @@ routerAdd("POST", "/api/cascapp/email/protect", (e) => {
 
   try {
     const user = e.app.findRecordById("users", e.auth.id)
+    // O e-mail confirmado vira também o da conta; o app segue entrando pelo
+    // `device_login`.
+    const tokenKey = user.tokenKey()
     user.set("contact_email", email)
+    user.setEmail(email)
+    user.setVerified(true)
     e.app.save(user)
+    // Salvar com e-mail novo renova o `tokenKey` e derruba a sessão do app,
+    // que não entra de novo sozinho. O código já provou que é a mesma pessoa,
+    // então a chave antiga volta.
+    e.app.db()
+      .newQuery("UPDATE users SET tokenKey = {:key} WHERE id = {:id}")
+      .bind({ key: tokenKey, id: user.id })
+      .execute()
   } catch (_) {
     // O índice único: outra conta já tem este e-mail.
     return e.json(409, { message: "Este e-mail já protege outra conta." })
@@ -170,11 +192,11 @@ routerAdd("POST", "/api/cascapp/email/recover", (e) => {
   e.app.runInTransaction((tx) => {
     const mine = tx.findRecordById("users", e.auth.id)
     const old = tx.findRecordById("users", targetId)
-    const synthetic = mine.email()
-    // A conta vazia sai antes, para o e-mail sintético dela ficar livre. O
-    // que ela tinha (partidas, códigos) vai junto, pelo `cascadeDelete`.
+    const login = mine.getString("device_login")
+    // A conta vazia sai antes, para o `device_login` dela ficar livre. O que
+    // ela tinha (partidas, códigos) vai junto, pelo `cascadeDelete`.
     tx.delete(mine)
-    old.setEmail(synthetic)
+    old.set("device_login", login)
     old.setPassword(password)
     tx.save(old)
     tx.db().newQuery("DELETE FROM email_codes WHERE email = {:email}").bind({ email: email }).execute()

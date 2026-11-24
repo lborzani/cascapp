@@ -54,6 +54,14 @@ func _ready() -> void:
 	_equals(protect["data"].get("contact_email"), email, "e devolve o e-mail")
 	var record: Dictionary = (await Account._call(HTTPClient.METHOD_GET, USERS + old_id, {}))["data"]
 	_equals(record.get("contact_email"), email, "a conta guarda o e-mail")
+	_equals(record.get("email"), email, "e ele vira o e-mail da conta")
+	_equals(record.get("verified"), true, "verificado")
+	_check(not record.has("device_login"), "sem a identidade do aparelho")
+	# Campo oculto: o PocketBase ignora no corpo vindo do app (a resposta pode
+	# ser 200). O que prova que não trocou é o aparelho seguir entrando.
+	await Account._call(HTTPClient.METHOD_PATCH, USERS + old_id, {"device_login": "outro@anon.cascapp.invalid"})
+	Account.sign_out()
+	_check(await Account.sign_in() and Account.user_id == old_id, "o aparelho segue entrando nela, e o app não troca a identidade dele")
 	var forged := await Account._call(HTTPClient.METHOD_PATCH, USERS + old_id, {"contact_email": "outro@example.com"})
 	_check(forged["code"] != 200, "o app não escreve o e-mail direto (HTTP %d)" % forged["code"])
 	_equals((await _post("/api/cascapp/email/protect", {"code": code}))["code"], 400, "o código usado não vale de novo")
@@ -86,8 +94,9 @@ func _ready() -> void:
 	record = (await Account._call(HTTPClient.METHOD_GET, USERS + old_id, {}))["data"]
 	_equals(record.get("coins"), old_record.get("coins"), "e as moedas dela")
 	_equals(record.get("contact_email"), email, "ainda protegida pelo e-mail")
-	# A conta vazia sumiu: o e-mail da conta é único, e a conta antiga só pôde
-	# ficar com o sintético deste aparelho porque a vazia saiu antes. Ler pelo
+	_equals(record.get("email"), email, "com o mesmo e-mail na conta")
+	# A conta vazia sumiu: o `device_login` é único, e a conta antiga só pôde
+	# ficar com o deste aparelho porque a vazia saiu antes. Ler pelo
 	# id não provaria nada, porque a conta dos outros já responde 404.
 	await _become("conta-a-%d" % stamp)
 	_check(Account.signed_in() and Account.user_id != old_id, "o celular antigo não entra mais nela")

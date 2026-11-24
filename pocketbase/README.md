@@ -178,20 +178,23 @@ Teste: `node --test pocketbase/presentes.test.js` e `tests/gifts_probe.tscn`.
 
 A credencial da conta anônima vem do `ANDROID_ID`, que muda quando o celular é
 formatado. Quem quiser liga um e-mail à conta e, depois de formatar, volta para
-ela com um código mandado para esse e-mail. O e-mail fica em `contact_email`, e
-não no `email` da conta, que continua sendo o sintético pelo qual o app entra.
-Só as rotas de `pb_hooks/conta.pb.js` escrevem `contact_email`, e um e-mail
-protege uma conta só.
+ela com um código mandado para esse e-mail. Confirmado, o e-mail vai para o
+`email` da conta (com `verified`) e para `contact_email`. O app continua
+entrando com o e-mail sintético do aparelho, que mora em `device_login`
+(oculto, segunda identidade de login em `passwordAuth.identityFields`). Só as
+rotas de `pb_hooks/conta.pb.js` escrevem esses campos, e um e-mail protege uma
+conta só.
 
 - `POST /api/cascapp/email/start` com `{email, purpose}` (`protect` ou
   `recover`): manda um código de 6 dígitos, que vale 10 minutos e aceita 5
   tentativas. No máximo 3 envios por e-mail a cada 15 minutos e 10 por dia
   (429). Para recuperar, um e-mail sem conta responde 200 e nada sai.
-- `POST /api/cascapp/email/protect` com `{code}`: grava `contact_email` na conta
-  de quem pede; 409 se o e-mail já protege outra conta.
+- `POST /api/cascapp/email/protect` com `{code}`: grava o e-mail em `email` e
+  `contact_email` na conta de quem pede, com `verified`, sem derrubar a sessão;
+  409 se o e-mail já protege outra conta.
 - `POST /api/cascapp/email/recover` com `{email, code, password}`, sendo
   `password` a do aparelho que pede: apaga a conta vazia de quem pede e grava o
-  e-mail sintético e a senha dela na conta protegida. A próxima entrada normal
+  `device_login` e a senha dela na conta protegida. A próxima entrada normal
   do app cai na conta antiga. 403 senha errada, 400 código inválido (o motivo
   vai em `reason`) ou conta que já é deste aparelho.
 
