@@ -49,6 +49,8 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18i_missoes"],
 	["res://scenes/settings.tscn", "18j_missoes_conquistas"],
 	["res://scenes/settings.tscn", "18k_missoes_evento"],
+	["res://scenes/main_menu.tscn", "01h_missoes_inicio"],
+	["res://scenes/main_menu.tscn", "01i_missoes_folha"],
 	["res://scenes/settings.tscn", "18l_presentes"],
 	["res://scenes/settings.tscn", "18m_presentes_aberto"],
 	["res://scenes/settings.tscn", "18n_presentear"],
@@ -278,7 +280,8 @@ func _next() -> void:
 			Account.paid = Account.prices.keys() + Account.exclusive
 			Account.owned = ["frame_laurel", "banner_sunset", "title_boteco", "name_gold"]
 			Account.look = {"frame": "frame_laurel", "banner": "banner_sunset", "title": "title_boteco", "name_color": "name_gold"}
-		"18i_missoes", "18j_missoes_conquistas", "18k_missoes_evento":
+		"18i_missoes", "18j_missoes_conquistas", "18k_missoes_evento", "01h_missoes_inicio", "01i_missoes_folha":
+			Prefs.set_welcomed()
 			# Uma de cada estado: em andamento, pronta, resgatada; e um evento no ar.
 			Account.token = "print"
 			Account.coins = 350
@@ -498,6 +501,8 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
+	elif shot == "01i_missoes_folha":
+		_scene._open_missions()
 	elif shot == "18l_presentes":
 		_scene._open_gifts()
 	elif shot == "18m_presentes_aberto":

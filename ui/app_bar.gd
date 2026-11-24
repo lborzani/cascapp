@@ -25,6 +25,8 @@ signal action_pressed
 signal friends_pressed
 ## A pílula de moedas da saudação do menu.
 signal coins_pressed
+## A pílula das missões da saudação do menu.
+signal missions_pressed
 
 
 var title := "":
@@ -57,6 +59,9 @@ var _label: Label = null
 var _leading_button: IconButton = null
 var _friends: Button = null
 var _coins: Button = null
+var _missions: Button = null
+## Missões prontas para resgatar: o número vermelho no canto da pílula.
+var _missions_ready := 0
 var _online := 0
 var _alerts := 0
 var _action_button: IconButton = null
@@ -183,6 +188,23 @@ func _build_greeting() -> void:
 	_greeting.add_child(_coins)
 	set_coins(-1)
 
+	# As missões: só o ícone, para caber ao lado das moedas e dos amigos num
+	# celular em pé. O número de prontas aparece no canto, como os pedidos de
+	# amizade na pílula dos amigos.
+	_missions = Button.new()
+	_missions.name = "MissionsButton"
+	_missions.tooltip_text = "Missões"
+	_missions.theme_type_variation = &"GhostButton"
+	_missions.focus_mode = Control.FOCUS_NONE
+	_missions.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_missions.custom_minimum_size = Vector2(44, 44)
+	var mission_pill := AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_ICON)
+	for state: String in ["normal", "hover", "pressed"]:
+		_missions.add_theme_stylebox_override(state, mission_pill)
+	_missions.pressed.connect(func() -> void: missions_pressed.emit())
+	_missions.draw.connect(_draw_missions)
+	_greeting.add_child(_missions)
+
 	_friends = Button.new()
 	_friends.name = "FriendsButton"
 	_friends.theme_type_variation = &"GhostButton"
@@ -229,6 +251,28 @@ func set_alerts(count: int) -> void:
 
 func alerts() -> int:
 	return _alerts
+
+
+## Quantas missões estão prontas para resgatar; zero apaga o número.
+func set_missions_ready(count: int) -> void:
+	_missions_ready = count
+	if _missions != null:
+		_missions.queue_redraw()
+
+
+## Um alvo: três anéis e o centro na cor do app.
+func _draw_missions() -> void:
+	var center := _missions.size * 0.5
+	_missions.draw_arc(center, 11.0, 0.0, TAU, 32, AppTheme.TEXT_DIM, 2.0, true)
+	_missions.draw_arc(center, 6.5, 0.0, TAU, 24, AppTheme.TEXT_DIM, 2.0, true)
+	_missions.draw_circle(center, 2.5, AppTheme.ACCENT)
+	if _missions_ready > 0:
+		var badge := Vector2(_missions.size.x - 6.0, 6.0)
+		_missions.draw_circle(badge, 9.0, AppTheme.DANGER)
+		var font := AppTheme.font(800)
+		var text := str(mini(_missions_ready, 9))
+		var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		_missions.draw_string(font, badge + Vector2(-width * 0.5, 4.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, AppTheme.TEXT)
 
 
 func _draw_online_dot() -> void:

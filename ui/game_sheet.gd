@@ -23,9 +23,9 @@ extends Control
 signal confirmed(mode: int)
 signal closed
 
-const SLIDE := 0.26
-## Canto de cima da folha: bem redondo, para ela ler como camada e não como tela.
-const SHEET_RADIUS := 32
+## Os mesmos números de toda folha do app (`BottomSheet`).
+const SLIDE := BottomSheet.SLIDE
+const SHEET_RADIUS := BottomSheet.RADIUS
 const ICON := 60.0
 const PAIRING_SCENE := "res://scenes/pairing.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
