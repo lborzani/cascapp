@@ -118,6 +118,19 @@ func _probe_palette() -> void:
 		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
 		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
 		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
+	# Perfil: moldura, título e cor do nome.
+	_equals(Cosmetics.frame_of({"frame": "frame_laurel"}), "laurel", "a moldura dos louros")
+	_equals(Cosmetics.frame_of({"frame": "frame_nada"}), "", "moldura desconhecida, nenhuma")
+	_equals(Cosmetics.title_of({"title": "title_strike"}), "Strike!", "o título é o texto do catálogo")
+	_check(ProfileStyle.title_label({}) == null, "sem título, nenhum rótulo")
+	var painted := Label.new()
+	ProfileStyle.paint_name(painted, {"name_color": "name_ruby"})
+	_equals(painted.get_theme_color("font_color"), Color("ff5a7a"), "o nome em rubi")
+	ProfileStyle.paint_name(painted, {"name_color": "name_rainbow"})
+	_check(painted.material == ProfileStyle.rainbow_material(), "e o arco-íris pelo shader")
+	painted.free()
+	for id in Cosmetics.of_slot(Cosmetics.BANNER):
+		_check((Cosmetics.ITEMS[id]["colors"] as Array).size() >= 2, "%s: a capa tem degradê" % id)
 	# Tacos: cada um carrega a textura inteira do taco desenrolado.
 	_equals(Cosmetics.cue_skin({"cue": "cue_nada"}), {}, "taco desconhecido é o de sempre")
 	for id in Cosmetics.of_slot(Cosmetics.CUE):

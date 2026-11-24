@@ -1240,7 +1240,7 @@ func _test_spectator() -> void:
 	Net.connected = true
 	Net.white_seat = 1
 	Net.player_names = {0: "Ana", 1: "Bia"}
-	Net.looks = {0: {"board": "board_wood", "finish": "finish_neon"}, 1: {"board": "board_neon", "finish": "finish_gems"}}
+	Net.looks = {0: {"board": "board_wood", "finish": "finish_neon"}, 1: {"board": "board_neon", "finish": "finish_gems", "frame": "frame_neon", "name_color": "name_gold"}}
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
 	await get_tree().process_frame
@@ -1252,6 +1252,8 @@ func _test_spectator() -> void:
 	_equals(scene._board.skin_of(_square("e2")), neon, "a metade das brancas é a de quem joga de brancas")
 	_equals(scene._board.skin_of(_square("e7")), wood, "e a das pretas, a do outro")
 	_equals(scene._board.looks.map(Cosmetics.finish_of), ["finish_gems", "finish_neon"], "as peças de cada cor têm o acabamento de quem joga com ela")
+	_equals(_node(scene, "%BottomTag")._coaster.frame, "neon", "a etiqueta de quem joga de brancas tem a moldura dele")
+	_equals(_node(scene, "%TopTag")._coaster.frame, "", "e a do outro, sem moldura")
 	scene._on_square_tapped(_square("e2"))
 	_check(
 		scene._selection.is_empty() and scene._premove_pick == Board.NO_SQUARE,
@@ -2909,7 +2911,10 @@ func _test_friend_requests() -> void:
 	print("perfil do amigo")
 	_equals(FriendProfile.stat_line({"played": 12, "won": 7, "lost": 4, "draw": 1}), "12 partidas · 7 vitórias · 4 derrotas · 1 empate", "a linha de cada jogo")
 	_equals(FriendProfile.stat_line({"played": 1, "won": 0, "lost": 1, "draw": 0}), "1 partida · 1 derrota", "sem zeros sobrando")
-	Friends.list = [{"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350}]
+	Friends.list = [{
+		"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350,
+		"look": {"frame": "frame_gold", "title": "title_pool", "name_color": "name_rainbow", "banner": "banner_night"},
+	}]
 	Friends.online = {"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}}
 	var menu2: Control = load("res://scenes/main_menu.tscn").instantiate()
 	add_child(menu2)
@@ -2918,6 +2923,8 @@ func _test_friend_requests() -> void:
 	await get_tree().process_frame
 	var drawer2: FriendsDrawer = menu2._drawer()
 	var card: Control = drawer2._rows.get_child(0)
+	_equals((card.find_children("", "Coaster", true, false)[0] as Coaster).frame, "gold", "a gaveta mostra a moldura do amigo")
+	_check(card.find_child("Title", true, false) != null, "e o título dele")
 	var touch := InputEventScreenTouch.new()
 	touch.pressed = true
 	card.gui_input.emit(touch)
@@ -2930,6 +2937,10 @@ func _test_friend_requests() -> void:
 	if profile != null:
 		var words := profile.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
 		_check(words.has("Eva") and words.has("Elo 1350 no xadrez"), "com o nome e o Elo")
+		_check(words.has("Rei da Sinuca"), "e o título da loja")
+		_equals((profile.find_children("", "Coaster", true, false)[0] as Coaster).frame, "gold", "a foto com a moldura")
+		var eva_name: Label = profile.find_children("", "Label", true, false).filter(func(l: Label) -> bool: return l.text == "Eva")[0]
+		_check(eva_name.material == ProfileStyle.rainbow_material(), "e o nome em arco-íris")
 		_check(profile.find_child("Invite", true, false) != null, "e Convidar para quem está livre")
 		profile.show_data({
 			"stats": {"uno": {"played": 3, "won": 2, "lost": 1, "draw": 0}, "chess": {"played": 1, "won": 0, "lost": 0, "draw": 1}},

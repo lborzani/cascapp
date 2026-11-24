@@ -60,17 +60,33 @@ func _ready() -> void:
 	header.add_child(close_button)
 	column.add_child(header)
 
+	# A capa do amigo (`ProfileCover`) atrás da foto e do nome, desenhada pelo
+	# próprio contêiner, com uma folga em volta.
+	var look := Cosmetics.clean(profile.get("look", {}))
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 16)
+	var cover := Cosmetics.item_of(look, Cosmetics.BANNER)
+	if not cover.is_empty():
+		var framed := MarginContainer.new()
+		for side in ["left", "top", "right", "bottom"]:
+			framed.add_theme_constant_override("margin_" + side, 14)
+		framed.draw.connect(func() -> void: ProfileCover.paint(framed, Rect2(Vector2.ZERO, framed.size), cover))
+		framed.add_child(top)
 	var coaster := Coaster.new()
 	coaster.custom_minimum_size = Vector2(PHOTO, PHOTO)
 	coaster.player_name = str(profile.get("name", ""))
 	coaster.photo = Account.avatar_of(friend_id, str(profile.get("avatar", "")))
+	coaster.frame = Cosmetics.frame_of(look)
 	top.add_child(coaster)
 	var words := VBoxContainer.new()
 	words.size_flags_horizontal = SIZE_EXPAND_FILL
 	words.size_flags_vertical = SIZE_SHRINK_CENTER
-	words.add_child(_text(str(profile.get("name", "")), &"Greeting"))
+	var name_label := _text(str(profile.get("name", "")), &"Greeting")
+	ProfileStyle.paint_name(name_label, look)
+	words.add_child(name_label)
+	var title_label := ProfileStyle.title_label(look)
+	if title_label != null:
+		words.add_child(title_label)
 	var status: Variant = Friends.status_of(friend_id)
 	_status = _text(Friends.status_text(status), &"Caption")
 	if status != null:
@@ -80,7 +96,7 @@ func _ready() -> void:
 	if elo > 0:
 		words.add_child(_text("Elo %d no xadrez" % elo, &"Hint"))
 	top.add_child(words)
-	column.add_child(top)
+	column.add_child(top if top.get_parent() == null else top.get_parent())
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)

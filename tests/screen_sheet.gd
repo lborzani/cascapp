@@ -45,6 +45,9 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
 	["res://scenes/settings.tscn", "18e_loja_pecas"],
 	["res://scenes/settings.tscn", "18f_loja_taco"],
+	["res://scenes/settings.tscn", "18g_loja_perfil"],
+	["res://scenes/main_menu.tscn", "34_perfil_amigo"],
+	["res://scenes/main_menu.tscn", "34b_gaveta_amigos"],
 	["res://scenes/main_menu.tscn", "19_folha_metropole"],
 	["res://scenes/main_menu.tscn", "19b_folha_uno"],
 	["res://scenes/pool_match.tscn", "22_sinuca"],
@@ -66,6 +69,7 @@ const SHOTS := [
 	["res://scenes/match.tscn", "29c_xadrez_dividido_pretas"],
 	["res://scenes/match.tscn", "31_pecas_divididas"],
 	["res://scenes/match.tscn", "33_conjuntos_divididos"],
+	["res://scenes/match.tscn", "35_etiqueta_perfil"],
 ]
 
 ## Espanhola até a troca em c6: material trocado dos dois lados, então as duas
@@ -175,6 +179,9 @@ func _next() -> void:
 	Account.token = ""
 	Account.look = {}
 	Net.looks = {}
+	# Os amigos de mentira valem só nos prints deles.
+	Friends.list = []
+	Friends.online = {}
 	if shot.begins_with("28"):
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
@@ -196,7 +203,7 @@ func _next() -> void:
 		# Um acabamento da loja no tabuleiro de sempre.
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("30b") else Game.CHESS)
 		Account.look = {"finish": "finish_" + shot.split("_", true, 2)[2]}
-	if shot.begins_with("29") or shot == "31_pecas_divididas" or shot == "33_conjuntos_divididos":
+	if shot.begins_with("29") or shot in ["31_pecas_divididas", "33_conjuntos_divididos", "35_etiqueta_perfil"]:
 		# Eu de um lado e o adversário do outro, cada um com o seu tabuleiro.
 		var black_view := shot.ends_with("pretas")
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("29b") else Game.CHESS)
@@ -212,11 +219,16 @@ func _next() -> void:
 			"29c_xadrez_dividido_pretas": ["board_tournament", "board_ocean"],
 			"31_pecas_divididas": ["board_wood", "board_neon"],
 			"33_conjuntos_divididos": ["board_marble", "board_ocean"],
+			"35_etiqueta_perfil": ["", ""],
 		}
 		Net.looks = {0: {"board": pairs[shot][0]}, 1: {"board": pairs[shot][1]}}
 		if shot == "31_pecas_divididas":
 			Net.looks[0]["finish"] = "finish_metal"
 			Net.looks[1]["finish"] = "finish_neon"
+		if shot == "35_etiqueta_perfil":
+			# A moldura e a cor do nome na etiqueta, dos dois lados.
+			Net.looks[0] = {"frame": "frame_gold", "name_color": "name_gold"}
+			Net.looks[1] = {"frame": "frame_neon", "name_color": "name_rainbow"}
 		if shot == "33_conjuntos_divididos":
 			Net.looks[0].merge({"pieces": "pieces_staunton", "finish": "finish_wood"})
 			Net.looks[1].merge({"pieces": "pieces_medieval", "finish": "finish_gems"})
@@ -271,6 +283,27 @@ func _next() -> void:
 			}
 			Account.owned = ["cue_flames"]
 			Account.look = {"cue": "cue_flames"}
+		"18g_loja_perfil":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {}
+			for id in Cosmetics.ITEMS:
+				if Cosmetics.ITEMS[id]["slot"] in ShopPanel.PROFILE_SLOTS:
+					Account.prices[id] = 200
+			Account.owned = ["frame_laurel", "banner_sunset", "title_boteco", "name_gold"]
+			Account.look = {"frame": "frame_laurel", "banner": "banner_sunset", "title": "title_boteco", "name_color": "name_gold"}
+		"34_perfil_amigo", "34b_gaveta_amigos":
+			# Três amigos com visuais diferentes; o perfil é o da Eva.
+			Prefs.set_welcomed()
+			Friends.list = [
+				{"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350,
+					"look": {"frame": "frame_gold", "title": "title_pool", "name_color": "name_rainbow", "banner": "banner_night"}},
+				{"id": "brunobrunobru12", "name": "Bruno", "avatar": "", "elo_chess": 0,
+					"look": {"frame": "frame_flames", "title": "title_strike", "name_color": "name_neon"}},
+				{"id": "carlacarlacarl1", "name": "Carla", "avatar": "", "elo_chess": 1100,
+					"look": {"frame": "frame_laurel", "name_color": "name_emerald"}},
+			]
+			Friends.online = {"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)
@@ -438,12 +471,12 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
-	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco"]:
-		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3}[shot]
+	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil"]:
+		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18g_loja_perfil": 4}[shot]
 		_scene._open_shop()
 		_scene._shop._tabs.set_current(tab)
 		_scene._shop._tabs.selected.emit(tab)
-	if (shot.begins_with("29") or shot.begins_with("31") or shot.begins_with("33")) and is_instance_valid(_scene._coin_toss):
+	if (shot.begins_with("29") or shot.begins_with("31") or shot.begins_with("33") or shot.begins_with("35")) and is_instance_valid(_scene._coin_toss):
 		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
 		_scene._coin_toss.free()
 	if shot.begins_with("28_") or shot.begins_with("30_") or shot.begins_with("32_") or shot in ["29_xadrez_dividido", "29c_xadrez_dividido_pretas", "31_pecas_divididas", "33_conjuntos_divididos"]:
@@ -451,6 +484,10 @@ func _next() -> void:
 		_scene._refresh()
 	elif shot.begins_with("28b_") or shot.begins_with("30b_") or shot == "29b_damas_dividido":
 		_stage_double_jump(_scene)
+	elif shot == "34_perfil_amigo" or shot == "34b_gaveta_amigos":
+		_scene._open_friends()
+		if shot == "34_perfil_amigo":
+			_scene._drawer().open_profile("evaevaevaeva123")
 	elif shot == "18b_historico":
 		# O histórico é o do aparelho de quem roda a folha: vazio numa máquina
 		# nova, cheio na de quem joga. Os dois estados valem ser vistos.

@@ -272,6 +272,8 @@ func _card(profile: Dictionary, detail: String) -> PanelContainer:
 	coaster.player_name = str(profile.get("name", ""))
 	coaster.photo = Account.avatar_of(str(profile.get("id", "")), str(profile.get("avatar", "")))
 	coaster.set_meta(&"friend", profile)
+	var look := Cosmetics.clean(profile.get("look", {}))
+	coaster.frame = Cosmetics.frame_of(look)
 	line.add_child(coaster)
 
 	var words := VBoxContainer.new()
@@ -279,6 +281,7 @@ func _card(profile: Dictionary, detail: String) -> PanelContainer:
 	var name := _text(str(profile.get("name", "")), &"")
 	name.add_theme_font_override("font", AppTheme.font(800))
 	name.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	ProfileStyle.paint_name(name, look)
 	words.add_child(name)
 	words.add_child(_text(detail, &"Caption"))
 	line.add_child(words)

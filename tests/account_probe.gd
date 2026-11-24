@@ -205,6 +205,7 @@ func _ready() -> void:
 	await Account.add_friend(code)
 	await _as(device)
 	var friend_view: Variant = await Account.friend_profile(second)
+	_check(friend_view is Dictionary and (friend_view as Dictionary).get("profile", {}).get("look") is Dictionary, "o perfil do amigo traz o visual da loja")
 	var stats: Dictionary = friend_view.get("stats", {}) if friend_view is Dictionary else {}
 	_equals(stats.get("uno"), {"played": 2.0, "won": 1.0, "lost": 1.0, "draw": 0.0}, "o amigo vê os números do Uno")
 	_equals(stats.get("pool"), {"played": 1.0, "won": 0.0, "lost": 0.0, "draw": 1.0}, "e os da sinuca")

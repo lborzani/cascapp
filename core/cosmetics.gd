@@ -13,6 +13,12 @@ const BOARD := "board"
 const FINISH := "finish"
 const PIECES := "pieces"
 const CUE := "cue"
+## O perfil: a moldura da foto (`Coaster`), a capa do perfil (`ProfileCover`), um
+## título abaixo do nome e a cor do nome (`ProfileStyle`).
+const FRAME := "frame"
+const BANNER := "banner"
+const TITLE := "title"
+const NAME_COLOR := "name_color"
 ## O taco de sempre desenrolado, só para a amostra da loja.
 const DEFAULT_CUE := "res://assets/pool/cues/cue_default.png"
 ## A textura da bola padrão (o mármore que a cor do assento pinta), para a amostra.
@@ -75,6 +81,34 @@ const ITEMS := {
 	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
 	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
 	# contorno e os detalhes.
+	# Molduras da foto: `style` é o desenho em `Coaster._draw_frame`.
+	"frame_gold": {"slot": FRAME, "name": "Ouro", "style": "gold"},
+	"frame_silver": {"slot": FRAME, "name": "Prata", "style": "silver"},
+	"frame_neon": {"slot": FRAME, "name": "Neon", "style": "neon"},
+	"frame_flames": {"slot": FRAME, "name": "Chamas", "style": "flames"},
+	"frame_laurel": {"slot": FRAME, "name": "Louros", "style": "laurel"},
+	# Capas do perfil: um degradê de cima para baixo (`colors`) e um desenho por
+	# cima (`pattern`), em `ProfileCover.paint`.
+	"banner_sunset": {"slot": BANNER, "name": "Pôr do sol", "colors": [Color("ff9a5a"), Color("ff5f8f"), Color("6b3fa0")], "pattern": "sun"},
+	"banner_night": {"slot": BANNER, "name": "Noite estrelada", "colors": [Color("0b1030"), Color("2a2266")], "pattern": "stars"},
+	"banner_felt": {"slot": BANNER, "name": "Feltro", "colors": [Color("1f7a4f"), Color("125236")], "pattern": "felt"},
+	"banner_checker": {"slot": BANNER, "name": "Tabuleiro", "colors": [Color("3b3478"), Color("272250")], "pattern": "checker"},
+	"banner_waves": {"slot": BANNER, "name": "Ondas", "colors": [Color("2f9bd6"), Color("124a7a")], "pattern": "waves"},
+	# Títulos: o nome é o texto que aparece. Nunca texto livre.
+	"title_pool": {"slot": TITLE, "name": "Rei da Sinuca"},
+	"title_chess": {"slot": TITLE, "name": "Mestre do Xadrez"},
+	"title_strike": {"slot": TITLE, "name": "Strike!"},
+	"title_board": {"slot": TITLE, "name": "Rainha do Tabuleiro"},
+	"title_uno": {"slot": TITLE, "name": "Mão de Uno"},
+	"title_boteco": {"slot": TITLE, "name": "Lenda do Boteco"},
+	"title_lucky": {"slot": TITLE, "name": "Sortudo"},
+	"title_unbeaten": {"slot": TITLE, "name": "Imbatível"},
+	# Cores do nome; `rainbow` pinta cada letra de uma cor.
+	"name_gold": {"slot": NAME_COLOR, "name": "Ouro", "color": Color("ffd25a")},
+	"name_ruby": {"slot": NAME_COLOR, "name": "Rubi", "color": Color("ff5a7a")},
+	"name_emerald": {"slot": NAME_COLOR, "name": "Esmeralda", "color": Color("3ee08f")},
+	"name_neon": {"slot": NAME_COLOR, "name": "Neon", "color": Color("39e6ff")},
+	"name_rainbow": {"slot": NAME_COLOR, "name": "Arco-íris", "rainbow": true},
 	# Tacos da sinuca (`tools/build_cue_skins.gd`, desenhados por `ui/cue_skin.gdshader`).
 	# `glow` é o quanto a cor brilha sozinha.
 	"cue_ebony": {"slot": CUE, "name": "Ébano e marfim", "art": "res://assets/pool/cues/cue_ebony.png"},
@@ -169,6 +203,22 @@ static func cue_skin(look: Dictionary) -> Dictionary:
 	if not ITEMS.has(id) or ITEMS[id]["slot"] != CUE:
 		return {}
 	return {"art": load(ITEMS[id]["art"]), "glow": float(ITEMS[id].get("glow", 0.0))}
+
+
+## O item de um encaixe do visual, se este app o conhece; vazio senão.
+static func item_of(look: Dictionary, slot: String) -> Dictionary:
+	var id := str(look.get(slot, ""))
+	return ITEMS[id] if ITEMS.has(id) and ITEMS[id]["slot"] == slot else {}
+
+
+## O estilo da moldura da foto (`Coaster.frame`), ou vazio.
+static func frame_of(look: Dictionary) -> String:
+	return str(item_of(look, FRAME).get("style", ""))
+
+
+## O texto do título, ou vazio.
+static func title_of(look: Dictionary) -> String:
+	return str(item_of(look, TITLE).get("name", ""))
 
 
 ## A pasta do conjunto de peças de um visual, ou vazio para as de sempre.

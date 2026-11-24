@@ -82,6 +82,15 @@ var photo: Texture2D = null:
 			_coaster.player_name = value
 		queue_redraw()
 
+## O visual da loja (`Cosmetics`) de quem está na etiqueta: a moldura da foto e
+## a cor do nome. O título e a capa ficam para o perfil, que tem espaço.
+var look := {}:
+	set(value):
+		look = value
+		if _coaster != null:
+			_coaster.frame = Cosmetics.frame_of(value)
+		queue_redraw()
+
 @export var subtitle := "":
 	set(value):
 		subtitle = value
@@ -275,10 +284,9 @@ func _draw() -> void:
 	# Com largura, e não `-1`: um apelido longo numa etiqueta ancorada passava por
 	# cima do leque do vizinho. Cortar é feio; escrever por cima da mesa é pior.
 	var room := maxf(0.0, size.x - text_x - _right_room())
-	draw_string(
-		AppTheme.display(600), Vector2(text_x, name_y), title,
-		HORIZONTAL_ALIGNMENT_LEFT, room, name_size,
-		AppTheme.TEXT if awake else AppTheme.TEXT_DIM
+	ProfileStyle.draw_name(
+		self, AppTheme.display(600), Vector2(text_x, name_y), title, room, name_size,
+		AppTheme.TEXT if awake else AppTheme.TEXT_DIM, look
 	)
 
 	var detail := subtitle

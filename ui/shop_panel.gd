@@ -18,8 +18,14 @@ const TABS := [
 	[[Cosmetics.CUE], "Taco"],
 	[[Cosmetics.BOARD], "Tabuleiro"],
 	[[Cosmetics.PIECES, Cosmetics.FINISH], "Peças"],
+	[[Cosmetics.FRAME, Cosmetics.BANNER, Cosmetics.TITLE, Cosmetics.NAME_COLOR], "Perfil"],
 ]
-const SECTIONS := {Cosmetics.PIECES: "Formato", Cosmetics.FINISH: "Acabamento"}
+const SECTIONS := {
+	Cosmetics.PIECES: "Formato", Cosmetics.FINISH: "Acabamento",
+	Cosmetics.FRAME: "Moldura", Cosmetics.BANNER: "Capa", Cosmetics.TITLE: "Título", Cosmetics.NAME_COLOR: "Cor do nome",
+}
+## Os encaixes do perfil: a aba deles abre com o meu cartão como os amigos o veem.
+const PROFILE_SLOTS := [Cosmetics.FRAME, Cosmetics.BANNER, Cosmetics.TITLE, Cosmetics.NAME_COLOR]
 
 var _balance: Label = null
 var _note: Label = null
@@ -78,6 +84,11 @@ func _ready() -> void:
 	for tab: Array in TABS:
 		labels.append(tab[1])
 	_tabs.setup(labels)
+	# Cinco abas num celular em pé: com larguras iguais, "Tabuleiro" cortava e
+	# "Bola" sobrava. Cada aba ganha largura pelo tamanho do rótulo.
+	for button in _tabs._buttons:
+		button.size_flags_stretch_ratio = maxf(1.0, button.text.length() / 4.5)
+		button.add_theme_font_size_override("font_size", 14)
 	_tabs.selected.connect(func(index: int) -> void:
 		Sound.play(Sound.Cue.TAP)
 		_slots = TABS[index][0]
@@ -121,6 +132,8 @@ func _fill() -> void:
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.queue_free()
+	if _slots.has(Cosmetics.FRAME):
+		_rows.add_child(_profile_card(Account.look))
 	for slot: String in _slots:
 		if _slots.size() > 1:
 			var heading := Label.new()
@@ -183,6 +196,8 @@ func _card(slot: String, id: String) -> Control:
 ## A amostra do item. `id` vazio é o padrão do encaixe.
 func _swatch(slot: String, id: String) -> Control:
 	var look := {slot: id}
+	if slot in PROFILE_SLOTS:
+		return _profile_swatch(slot, Account.look.merged(look, true))
 	if slot == Cosmetics.CUE:
 		var cue := CueSample.new()
 		cue.clip_contents = true
@@ -216,6 +231,79 @@ func _swatch(slot: String, id: String) -> Control:
 	art.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	swatch.add_child(art)
 	return swatch
+
+
+## O meu cartão de perfil com o visual `look`: a capa, a foto com a moldura, o
+## nome na cor e o título. É como os amigos o veem no perfil e na gaveta.
+func _profile_card(look: Dictionary) -> Control:
+	var framed := MarginContainer.new()
+	for side in ["left", "top", "right", "bottom"]:
+		framed.add_theme_constant_override("margin_" + side, 14)
+	var cover := Cosmetics.item_of(look, Cosmetics.BANNER)
+	framed.draw.connect(func() -> void: ProfileCover.paint(framed, Rect2(Vector2.ZERO, framed.size), cover))
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 14)
+	framed.add_child(line)
+	var coaster := Coaster.new()
+	coaster.custom_minimum_size = Vector2(64, 64)
+	coaster.player_name = Prefs.player_name()
+	coaster.photo = Account.local_avatar()
+	coaster.frame = Cosmetics.frame_of(look)
+	line.add_child(coaster)
+	var words := VBoxContainer.new()
+	words.size_flags_vertical = SIZE_SHRINK_CENTER
+	var name := Label.new()
+	name.text = Prefs.player_name() if Prefs.has_name() else "Você"
+	name.add_theme_font_override("font", AppTheme.display(700))
+	name.add_theme_font_size_override("font_size", 22)
+	ProfileStyle.paint_name(name, look)
+	words.add_child(name)
+	var title := ProfileStyle.title_label(look)
+	if title != null:
+		words.add_child(title)
+	line.add_child(words)
+	return framed
+
+
+## A amostra de um item de perfil, já com o resto do meu visual em volta.
+func _profile_swatch(slot: String, look: Dictionary) -> Control:
+	var box := Control.new()
+	box.custom_minimum_size = Vector2(SWATCH, SWATCH)
+	box.size_flags_horizontal = SIZE_SHRINK_CENTER
+	match slot:
+		Cosmetics.FRAME:
+			var coaster := Coaster.new()
+			coaster.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+			coaster.player_name = Prefs.player_name()
+			coaster.photo = Account.local_avatar()
+			coaster.frame = Cosmetics.frame_of(look)
+			box.add_child(coaster)
+		Cosmetics.BANNER:
+			var cover := ProfileCover.new()
+			cover.look = look
+			cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+			box.add_child(cover)
+		_:
+			# O título e a cor: o nome, ou o título, escrito como vai aparecer.
+			box.draw.connect(func() -> void:
+				box.draw_style_box(AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS), Rect2(Vector2.ZERO, box.size))
+			)
+			var text := Label.new()
+			text.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+			text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			text.add_theme_font_override("font", AppTheme.display(700))
+			text.add_theme_font_size_override("font_size", 16)
+			if slot == Cosmetics.TITLE:
+				var title := Cosmetics.title_of(look)
+				text.text = title if not title.is_empty() else "Sem título"
+				text.add_theme_color_override("font_color", AppTheme.ACCENT if not title.is_empty() else AppTheme.TEXT_DIM)
+			else:
+				text.text = Prefs.player_name() if Prefs.has_name() else "Você"
+				ProfileStyle.paint_name(text, look)
+			box.add_child(text)
+	return box
 
 
 func _on_action(slot: String, id: String, owned: bool) -> void:

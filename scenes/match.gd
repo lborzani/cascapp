@@ -1953,6 +1953,15 @@ func _refresh_cards() -> void:
 ## confirmada, a etiqueta fica como sempre foi.
 func _apply_profile(view: PlayerTag, side: int) -> void:
 	view.photo = null
+	# A moldura e a cor do nome da loja: as minhas na minha etiqueta, e online as
+	# de quem está sentado do outro lado. O bot e o segundo jogador do aparelho
+	# ficam sem.
+	if side == Game.local_side and not Net.is_spectator:
+		view.look = Account.look
+	elif Game.mode == Game.Mode.ONLINE:
+		view.look = Net.look_of(_seat_of(side))
+	else:
+		view.look = {}
 	if Game.mode != Game.Mode.ONLINE:
 		return
 	var elo := 0

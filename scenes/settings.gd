@@ -107,6 +107,8 @@ func _ready() -> void:
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)
 	Account.wallet_changed.connect(_refresh_games)
+	# A moldura comprada ou trocada na loja já aparece na foto daqui.
+	Account.wallet_changed.connect(_update_preview)
 	_update_preview()
 
 
@@ -173,6 +175,7 @@ func _update_preview() -> void:
 	# A bolacha é a mesma que os outros vão ver na mesa.
 	%Avatar.player_name = Prefs.player_name()
 	%Avatar.photo = Account.local_avatar()
+	%Avatar.frame = Cosmetics.frame_of(Account.look)
 
 
 ## Uma linha do cartão de interruptores. `save` grava a escolha; quem precisa de

@@ -16,7 +16,8 @@ function newFriendCode(app) {
   }
 }
 
-// O que uma conta pode ver de outra. O e-mail nunca.
+// O que uma conta pode ver de outra. O e-mail nunca. O visual da loja (`look`)
+// vai junto, para o amigo ver a moldura, a capa, o título e a cor do nome.
 function publicProfile(record) {
   return {
     id: record.id,
@@ -25,6 +26,18 @@ function publicProfile(record) {
     friend_code: record.getString("friend_code"),
     elo_chess: record.getInt("elo_chess"),
     games_chess: record.getInt("games_chess"),
+    look: lookOf(record),
+  }
+}
+
+// O campo JSON `look` (`pb_migrations/1763300000_loja.js`), já decodificado;
+// vazio quando não há ou não é objeto.
+function lookOf(record) {
+  try {
+    const look = JSON.parse(record.getString("look") || "{}")
+    return look !== null && typeof look === "object" && !Array.isArray(look) ? look : {}
+  } catch (_) {
+    return {}
   }
 }
 

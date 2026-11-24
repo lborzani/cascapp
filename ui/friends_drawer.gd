@@ -266,6 +266,8 @@ func _row(friend: Dictionary) -> Control:
 	coaster.mouse_filter = MOUSE_FILTER_IGNORE
 	coaster.player_name = str(friend.get("name", ""))
 	coaster.photo = Account.avatar_of(id, str(friend.get("avatar", "")))
+	var look := Cosmetics.clean(friend.get("look", {}))
+	coaster.frame = Cosmetics.frame_of(look)
 	photo_box.add_child(coaster)
 	if status != null:
 		var dot := Panel.new()
@@ -285,7 +287,11 @@ func _row(friend: Dictionary) -> Control:
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	name_label.add_theme_font_override("font", AppTheme.font(800))
 	name_label.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	ProfileStyle.paint_name(name_label, look)
 	words.add_child(name_label)
+	var title_label := ProfileStyle.title_label(look)
+	if title_label != null:
+		words.add_child(title_label)
 	var status_label := _text(Friends.status_text(status), &"Caption")
 	status_label.name = "Status"
 	if status != null:
