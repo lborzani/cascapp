@@ -86,10 +86,17 @@ var photo: Texture2D = null:
 ## a cor do nome. O título e a capa ficam para o perfil, que tem espaço.
 var look := {}:
 	set(value):
+		# A etiqueta é reescrita a cada atualização da partida; refazer a capa
+		# zeraria a animação dela.
+		if value == look:
+			return
 		look = value
 		if _coaster != null:
 			_coaster.frame = Cosmetics.frame_of(value)
+		_sync_cover()
 		queue_redraw()
+## A capa da loja atrás da etiqueta (`ProfileCover`); `null` sem capa no visual.
+var _cover: Panel = null
 
 @export var subtitle := "":
 	set(value):
@@ -266,8 +273,29 @@ static func material(pieces: Array) -> int:
 	return total
 
 
+## A capa entra como filho desenhado atrás da etiqueta, recortado nos cantos dela;
+## a etiqueta, por cima, deixa o fundo translúcido e mantém a borda da vez.
+func _sync_cover() -> void:
+	if _cover != null:
+		_cover.queue_free()
+		_cover = null
+	if Cosmetics.item_of(look, Cosmetics.BANNER).is_empty():
+		return
+	_cover = ProfileCover.rounded(look, AppTheme.RADIUS_LARGE)
+	_cover.show_behind_parent = true
+	_cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	add_child(_cover)
+
+
 func _draw() -> void:
-	draw_style_box(_background(), Rect2(Vector2.ZERO, size))
+	var background := _background()
+	if _cover != null:
+		# A capa aparece pelo fundo, escurecida pelo próprio fundo translúcido.
+		var radius := (background as StyleBoxFlat).corner_radius_top_left
+		(_cover.get_theme_stylebox("panel") as StyleBoxFlat).set_corner_radius_all(radius)
+		background = background.duplicate()
+		(background as StyleBoxFlat).bg_color = Color((background as StyleBoxFlat).bg_color, 0.5)
+	draw_style_box(background, Rect2(Vector2.ZERO, size))
 
 	var awake := active or alert
 	var text_x := _pad() + _coaster.size.x + 12.0

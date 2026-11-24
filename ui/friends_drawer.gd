@@ -253,7 +253,9 @@ func _row(friend: Dictionary) -> Control:
 	card.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS))
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation", AppTheme.SPACE_M)
-	card.add_child(line)
+	# O visual da loja do amigo: a capa é o fundo do cartão.
+	var look := Cosmetics.clean(friend.get("look", {}))
+	ProfileCover.dress_card(card, line, look, AppTheme.RADIUS)
 
 	# A bolinha verde por cima do canto da foto, como nos mensageiros.
 	var photo_box := Control.new()
@@ -266,7 +268,6 @@ func _row(friend: Dictionary) -> Control:
 	coaster.mouse_filter = MOUSE_FILTER_IGNORE
 	coaster.player_name = str(friend.get("name", ""))
 	coaster.photo = Account.avatar_of(id, str(friend.get("avatar", "")))
-	var look := Cosmetics.clean(friend.get("look", {}))
 	coaster.frame = Cosmetics.frame_of(look)
 	photo_box.add_child(coaster)
 	if status != null:

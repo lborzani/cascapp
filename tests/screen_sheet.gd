@@ -45,6 +45,7 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18e_loja_pecas"],
 	["res://scenes/settings.tscn", "18f_loja_taco"],
 	["res://scenes/settings.tscn", "18g_loja_perfil"],
+	["res://scenes/settings.tscn", "18h_voce_capa"],
 	["res://scenes/main_menu.tscn", "34_perfil_amigo"],
 	["res://scenes/main_menu.tscn", "34b_gaveta_amigos"],
 	# O perfil com a moldura e a capa animadas, em três instantes (0, 0,4 e 0,8 s).
@@ -211,8 +212,8 @@ func _next() -> void:
 			Net.looks[1]["finish"] = "finish_neon"
 		if shot == "35_etiqueta_perfil":
 			# A moldura e a cor do nome na etiqueta, dos dois lados.
-			Net.looks[0] = {"frame": "frame_gold", "name_color": "name_gold"}
-			Net.looks[1] = {"frame": "frame_neon", "name_color": "name_rainbow"}
+			Net.looks[0] = {"frame": "frame_gold", "name_color": "name_gold", "banner": "banner_waves"}
+			Net.looks[1] = {"frame": "frame_neon", "name_color": "name_rainbow", "banner": "banner_aurora"}
 		if shot == "33_conjuntos_divididos":
 			Net.looks[0].merge({"pieces": "pieces_staunton", "finish": "finish_wood"})
 			Net.looks[1].merge({"pieces": "pieces_medieval", "finish": "finish_gems"})
@@ -267,6 +268,10 @@ func _next() -> void:
 					Account.prices[id] = 200
 			Account.owned = ["frame_laurel", "banner_sunset", "title_boteco", "name_gold"]
 			Account.look = {"frame": "frame_laurel", "banner": "banner_sunset", "title": "title_boteco", "name_color": "name_gold"}
+		"18h_voce_capa":
+			# A aba Você com a capa e a moldura da loja.
+			Account.coins = 350
+			Account.look = {"banner": "banner_aurora", "frame": "frame_rainbow"}
 		"34c_perfil_animado_0", "34c_perfil_animado_1", "34c_perfil_animado_2":
 			Prefs.set_welcomed()
 			Friends.list = [{
@@ -281,7 +286,7 @@ func _next() -> void:
 				{"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350,
 					"look": {"frame": "frame_gold", "title": "title_pool", "name_color": "name_rainbow", "banner": "banner_night"}},
 				{"id": "brunobrunobru12", "name": "Bruno", "avatar": "", "elo_chess": 0,
-					"look": {"frame": "frame_flames", "title": "title_strike", "name_color": "name_neon"}},
+					"look": {"frame": "frame_flames", "title": "title_strike", "name_color": "name_neon", "banner": "banner_sunset"}},
 				{"id": "carlacarlacarl1", "name": "Carla", "avatar": "", "elo_chess": 1100,
 					"look": {"frame": "frame_laurel", "name_color": "name_emerald"}},
 			]

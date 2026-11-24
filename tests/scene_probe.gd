@@ -1249,6 +1249,11 @@ func _test_spectator() -> void:
 	_equals(scene._board.looks.map(Cosmetics.finish_of), ["finish_gems", "finish_neon"], "as peças de cada cor têm o acabamento de quem joga com ela")
 	_equals(_node(scene, "%BottomTag")._coaster.frame, "neon", "a etiqueta de quem joga de brancas tem a moldura dele")
 	_equals(_node(scene, "%TopTag")._coaster.frame, "", "e a do outro, sem moldura")
+	_check(_node(scene, "%BottomTag")._cover == null, "sem capa no visual, a etiqueta fica como era")
+	# Um visual novo, como o da rede (o `Cosmetics.clean` sempre faz outro).
+	Net.looks[1] = Net.looks[1].merged({"banner": "banner_aurora"})
+	scene._refresh_cards()
+	_check(_node(scene, "%BottomTag")._cover != null, "com capa, ela aparece atrás da etiqueta")
 	scene._on_square_tapped(_square("e2"))
 	_check(
 		scene._selection.is_empty() and scene._premove_pick == Board.NO_SQUARE,
@@ -2918,6 +2923,7 @@ func _test_friend_requests() -> void:
 	var drawer2: FriendsDrawer = menu2._drawer()
 	var card: Control = drawer2._rows.get_child(0)
 	_equals((card.find_children("", "Coaster", true, false)[0] as Coaster).frame, "gold", "a gaveta mostra a moldura do amigo")
+	_check(card.find_child("Cover", true, false) != null, "e a capa dele no fundo do cartão")
 	_check(card.find_child("Title", true, false) != null, "e o título dele")
 	var touch := InputEventScreenTouch.new()
 	touch.pressed = true

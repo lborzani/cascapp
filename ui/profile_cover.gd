@@ -27,6 +27,15 @@ var fade := false:
 	set(value):
 		fade = value
 		queue_redraw()
+## Escurece a capa inteira por igual (0 a 1): atrás de um cartão pequeno, com
+## nome e botões por cima, a capa é fundo e não pode brigar com eles.
+var shade := 0.0:
+	set(value):
+		shade = value
+		queue_redraw()
+## O quanto a capa escurece atrás dos cartões (lista de amigos, etiqueta da
+## partida, aba Você).
+const CARD_SHADE := 0.38
 
 
 func _ready() -> void:
@@ -42,6 +51,8 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var rect := Rect2(Vector2.ZERO, size)
 	paint(self, rect, Cosmetics.item_of(look, Cosmetics.BANNER), time)
+	if shade > 0.0:
+		draw_rect(rect, Color(AppTheme.BACKGROUND, shade))
 	if fade:
 		var clear := Color(AppTheme.BACKGROUND, 0.0)
 		var dim := Color(AppTheme.BACKGROUND, 0.62)
@@ -53,16 +64,40 @@ static func animated(banner: Dictionary) -> bool:
 
 
 ## A capa do visual dentro de um painel de cantos arredondados que a recorta.
-static func rounded(look_value: Dictionary, radius: int) -> Panel:
+static func rounded(look_value: Dictionary, radius: int, shade_value := 0.0) -> Panel:
 	var panel := Panel.new()
 	panel.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
 	panel.add_theme_stylebox_override("panel", AppTheme.box(Color.WHITE, radius))
 	panel.mouse_filter = MOUSE_FILTER_IGNORE
 	var cover := ProfileCover.new()
 	cover.look = look_value
+	cover.shade = shade_value
 	cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	panel.add_child(cover)
 	return panel
+
+
+## Põe a capa do visual atrás do conteúdo de um cartão (`PanelContainer`): o
+## cartão perde o próprio fundo, a capa recortada vem primeiro e o conteúdo vai
+## por cima, com as mesmas margens do `AppTheme.box`. Sem capa no visual, o
+## conteúdo entra direto, e o cartão fica como era.
+static func dress_card(card: PanelContainer, content: Control, look_value: Dictionary, radius: int) -> void:
+	if Cosmetics.item_of(look_value, Cosmetics.BANNER).is_empty():
+		card.add_child(content)
+		return
+	var empty := StyleBoxEmpty.new()
+	card.add_theme_stylebox_override("panel", empty)
+	var cover := rounded(look_value, radius, CARD_SHADE)
+	cover.name = "Cover"
+	card.add_child(cover)
+	var pad := MarginContainer.new()
+	pad.mouse_filter = MOUSE_FILTER_PASS
+	for side: String in ["left", "right"]:
+		pad.add_theme_constant_override("margin_" + side, 18)
+	for side: String in ["top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 14)
+	pad.add_child(content)
+	card.add_child(pad)
 
 
 ## Desenha a capa `banner` (um item do catálogo, ou vazio para a superfície de

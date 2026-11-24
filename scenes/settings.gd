@@ -22,6 +22,10 @@ var _history: HistoryPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
 var _shop: ShopPanel = null
+## A capa da loja atrás da foto e do nome (`_wrap_profile`), e a margem em volta
+## deles, que só existe com capa.
+var _profile_cover: Panel = null
+var _profile_pad: MarginContainer = null
 var _shop_button: Button = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
@@ -106,6 +110,7 @@ func _ready() -> void:
 	%PhotoButton.disabled = not DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG_FILE)
 	%PhotoButton.pressed.connect(_pick_photo)
 	Account.avatar_changed.connect(_update_preview)
+	_wrap_profile()
 	Account.wallet_changed.connect(_refresh_games)
 	# A moldura comprada ou trocada na loja já aparece na foto daqui.
 	Account.wallet_changed.connect(_update_preview)
@@ -166,6 +171,30 @@ func _save() -> void:
 	Account.push_name(Prefs.player_name())
 
 
+## Põe a fileira da foto e do nome dentro de um cartão que pode ter a capa da
+## loja atrás (`ProfileCover`). A fileira vem da cena; o cartão nasce aqui.
+func _wrap_profile() -> void:
+	var row: Control = %PhotoButton.get_parent()
+	var content := row.get_parent()
+	var index := row.get_index()
+	var card := PanelContainer.new()
+	card.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	_profile_cover = ProfileCover.rounded({}, AppTheme.RADIUS_LARGE, ProfileCover.CARD_SHADE)
+	card.add_child(_profile_cover)
+	_profile_pad = MarginContainer.new()
+	card.add_child(_profile_pad)
+	# Tirar da árvore apaga o dono dos nós, e com ele os `%nomes` (`%Preview`,
+	# `%NameEdit`): o dono volta depois da mudança.
+	var owned: Array[Node] = [row]
+	owned.append_array(row.find_children("*", "", true, false).filter(func(node: Node) -> bool: return node.owner == self))
+	content.remove_child(row)
+	_profile_pad.add_child(row)
+	content.add_child(card)
+	content.move_child(card, index)
+	for node in owned:
+		node.owner = self
+
+
 ## A linha sob o nome diz que ele salva sozinho e, com conta, o código de amigo —
 ## que é o que se dita para alguém adicionar você.
 func _update_preview() -> void:
@@ -176,6 +205,12 @@ func _update_preview() -> void:
 	%Avatar.player_name = Prefs.player_name()
 	%Avatar.photo = Account.local_avatar()
 	%Avatar.frame = Cosmetics.frame_of(Account.look)
+	if _profile_cover != null:
+		var has_cover := not Cosmetics.item_of(Account.look, Cosmetics.BANNER).is_empty()
+		_profile_cover.visible = has_cover
+		(_profile_cover.get_child(0) as ProfileCover).look = Account.look
+		for side: String in ["left", "top", "right", "bottom"]:
+			_profile_pad.add_theme_constant_override("margin_" + side, 14 if has_cover else 0)
 
 
 ## Uma linha do cartão de interruptores. `save` grava a escolha; quem precisa de
@@ -367,7 +402,7 @@ func _refresh_games() -> void:
 	%HistoryButton.queue_redraw()
 	%TrainingButton.queue_redraw()
 	_shop_button.set_meta(&"title", "Loja")
-	_shop_button.set_meta(&"detail", "Bolas de boliche · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
+	_shop_button.set_meta(&"detail", "Bolas, tacos, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
 	_shop_button.set_meta(&"lit", true)
 	_shop_button.queue_redraw()
 
