@@ -82,6 +82,17 @@ para aceitar. `GET /api/cascapp/friends` lista os amigos com o perfil público, 
 `DELETE /api/cascapp/friends/{id}` desfaz dos dois lados. A coleção `friendships`
 não tem regra aberta: só essas rotas (`pb_hooks/amigos.pb.js`) leem e escrevem.
 
+Silenciar (`PUT /api/cascapp/friends/{id}/mute` com `{muted}`) marca só o lado
+de quem silenciou (`friendships.muted`): as mensagens daquele amigo não viram
+notificação, e o app não as conta na bolinha da pílula.
+
+Bloquear (`POST /api/cascapp/blocks/{id}`) desfaz a amizade e os pedidos entre
+os dois e grava em `blocks`. Enquanto durar, o pedido do bloqueado responde
+"requested" como se tivesse ido, sem gravar nada (ele não fica sabendo), e o de
+quem bloqueou recebe 409. `GET /api/cascapp/blocks` lista, e `DELETE
+/api/cascapp/blocks/{id}` desbloqueia sem refazer a amizade. Teste:
+`tests/blocks_probe.tscn`.
+
 ## Revisões de xadrez
 
 Cada partida de xadrez que termina no app (online, contra o bot ou no mesmo

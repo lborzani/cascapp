@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.70
+
+- No perfil de um amigo: Silenciar (as mensagens dele param de notificar), Remover e Bloquear. Quem você bloqueia sai da sua lista e não consegue mais te pedir amizade; desbloqueie em Amigos, na aba Você.
+
 ## 1.69
 
 - Missões, na aba Você: três novas todo dia, que pagam moedas, e conquistas que não zeram nunca e dão títulos que não se vendem na loja (Veterano, Campeão e Explorador). No fim da partida, um aviso mostra quando uma missão ficou pronta para resgatar.
