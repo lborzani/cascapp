@@ -235,11 +235,17 @@ func _swatch(slot: String, id: String) -> Control:
 ## O meu cartão de perfil com o visual `look`: a capa, a foto com a moldura, o
 ## nome na cor e o título. É como os amigos o veem no perfil e na gaveta.
 func _profile_card(look: Dictionary) -> Control:
+	# A capa recortada pelos cantos do cartão, e o conteúdo por cima dela.
+	var card := Control.new()
+	card.custom_minimum_size = Vector2(0, 92)
+	var cover := ProfileCover.rounded(look, AppTheme.RADIUS_LARGE)
+	cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	card.add_child(cover)
 	var framed := MarginContainer.new()
+	framed.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	for side in ["left", "top", "right", "bottom"]:
 		framed.add_theme_constant_override("margin_" + side, 14)
-	var cover := Cosmetics.item_of(look, Cosmetics.BANNER)
-	ProfileCover.behind(framed, cover)
+	card.add_child(framed)
 	var line := HBoxContainer.new()
 	line.add_theme_constant_override("separation", 14)
 	framed.add_child(line)
@@ -261,7 +267,7 @@ func _profile_card(look: Dictionary) -> Control:
 	if title != null:
 		words.add_child(title)
 	line.add_child(words)
-	return framed
+	return card
 
 
 ## A amostra de um item de perfil, já com o resto do meu visual em volta.
@@ -278,8 +284,7 @@ func _profile_swatch(slot: String, look: Dictionary) -> Control:
 			coaster.frame = Cosmetics.frame_of(look)
 			box.add_child(coaster)
 		Cosmetics.BANNER:
-			var cover := ProfileCover.new()
-			cover.look = look
+			var cover := ProfileCover.rounded(look, AppTheme.RADIUS)
 			cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 			box.add_child(cover)
 		_:

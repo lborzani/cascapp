@@ -475,10 +475,10 @@ func _next() -> void:
 			if node is Coaster:
 				node.frame_time = moment
 				node.set_process(false)
-			elif node is ProfileCover.Clock:
+			elif node is ProfileCover:
 				node.time = moment * 2.0
 				node.set_process(false)
-				node.target.queue_redraw()
+				node.queue_redraw()
 	elif shot == "34_perfil_amigo" or shot == "34b_gaveta_amigos":
 		_scene._open_friends()
 		if shot == "34_perfil_amigo":

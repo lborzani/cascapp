@@ -33,6 +33,16 @@ func _ready() -> void:
 	background.color = AppTheme.BACKGROUND
 	background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	add_child(background)
+	# A capa da loja do amigo é o fundo da tela inteira, escurecida embaixo para o
+	# texto continuar legível.
+	var profile := Friends.profile_of(friend_id)
+	var look := Cosmetics.clean(profile.get("look", {}))
+	if not Cosmetics.item_of(look, Cosmetics.BANNER).is_empty():
+		var cover := ProfileCover.new()
+		cover.look = look
+		cover.fade = true
+		cover.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+		add_child(cover)
 
 	var safe := SafeAreaMargin.new()
 	for side in ["left", "top", "right", "bottom"]:
@@ -47,7 +57,6 @@ func _ready() -> void:
 	column.size_flags_horizontal = SIZE_EXPAND_FILL
 	scroll.add_child(column)
 
-	var profile := Friends.profile_of(friend_id)
 	var header := HBoxContainer.new()
 	var title := _text("Perfil", &"Title")
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -60,18 +69,8 @@ func _ready() -> void:
 	header.add_child(close_button)
 	column.add_child(header)
 
-	# A capa do amigo (`ProfileCover`) atrás da foto e do nome, desenhada pelo
-	# próprio contêiner, com uma folga em volta.
-	var look := Cosmetics.clean(profile.get("look", {}))
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 16)
-	var cover := Cosmetics.item_of(look, Cosmetics.BANNER)
-	if not cover.is_empty():
-		var framed := MarginContainer.new()
-		for side in ["left", "top", "right", "bottom"]:
-			framed.add_theme_constant_override("margin_" + side, 14)
-		ProfileCover.behind(framed, cover)
-		framed.add_child(top)
 	var coaster := Coaster.new()
 	coaster.custom_minimum_size = Vector2(PHOTO, PHOTO)
 	coaster.player_name = str(profile.get("name", ""))
@@ -96,7 +95,7 @@ func _ready() -> void:
 	if elo > 0:
 		words.add_child(_text("Elo %d no xadrez" % elo, &"Hint"))
 	top.add_child(words)
-	column.add_child(top if top.get_parent() == null else top.get_parent())
+	column.add_child(top)
 
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
