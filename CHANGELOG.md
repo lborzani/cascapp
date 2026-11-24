@@ -7,6 +7,20 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.65
+
+- Treino de xadrez: escolha "Treino" no xadrez para jogar contra o bot ou sozinho com os dois lados, sem relógio. Dá para desfazer lances, e cada lance ganha uma nota, como quando se assiste a uma partida.
+- Guia de aberturas na aba Você: 16 aberturas com os lances e a ideia de cada uma. Treine a abertura ou a defesa contra ela: o bot segue a linha e avisa quando você sai dela.
+
+## 1.64
+
+- Quem assiste a uma partida agora também conversa: manda reações, frases prontas e texto. O nome aparece como "Caio (plateia)", e a reação de quem assiste surge num balãozinho na barra de cima, sem cobrir o tabuleiro.
+- Xadrez: enquanto a moeda decide as cores, não dá mais para planejar lance (premove).
+
+## 1.63
+
+- Convite para partida: se quem chamou fechar a sala (ou a mesa encher), o convite deixa de levar até ela. Na conversa aparece "A sala já fechou", e o aviso de convite some da tela.
+
 ## 1.62
 
 - Na conversa com os amigos, o teclado não cobre mais o campo de texto: a conversa sobe junto com ele.

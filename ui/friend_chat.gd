@@ -2,8 +2,9 @@ class_name FriendChat
 extends Control
 
 ## A conversa direta com um amigo: balões (os meus à direita), a fileira de
-## emojis e o campo de texto. Os convites para partida ficam no mesmo fio; o de
-## até [constant INVITE_FRESH_SECONDS] atrás, recebido, tem "Entrar".
+## emojis e o campo de texto. Os convites para partida ficam no mesmo fio; o
+## recebido tem "Entrar" enquanto quem chamou está na sala esperando, e "A sala
+## já fechou" depois (ver `_invite_state`).
 ##
 ## As mensagens moram no PocketBase (`Account.chat`, `pocketbase/pb_hooks/
 ## conversa.pb.js`), então o amigo offline lê depois. Aberta, a tela pergunta a
@@ -14,8 +15,6 @@ extends Control
 signal closed
 
 const POLL_SECONDS := 3.0
-## A sala de um convite não espera para sempre. Depois disso, só o registro.
-const INVITE_FRESH_SECONDS := 10 * 60
 
 var friend_id := ""
 
@@ -23,7 +22,11 @@ var _bubbles: VBoxContainer = null
 var _scroll: ScrollContainer = null
 var _input: LineEdit = null
 var _note: Label = null
-var _shown: Array = []
+## O que está desenhado. Começa diferente de qualquer fio, até o vazio, para a
+## primeira resposta sempre desenhar.
+var _shown: Array = [null]
+## As mensagens da última consulta, para redesenhar quando um convite cai.
+var _items: Array = []
 var _sending := false
 
 
@@ -126,6 +129,9 @@ func _ready() -> void:
 	timer.timeout.connect(_load)
 	add_child(timer)
 	timer.start()
+	# O `who` da gaveta diz quem está em qual sala: um convite pode cair entre
+	# duas consultas da conversa.
+	Friends.changed.connect(func() -> void: show_items(_items))
 	_load()
 
 
@@ -137,9 +143,11 @@ func close() -> void:
 
 
 ## Redesenha o fio, só quando ele mudou: a consulta de 3 em 3 segundos não pode
-## piscar a tela nem tirar a rolagem de quem está lendo lá em cima.
-func show_items(items: Array, now := int(Time.get_unix_time_from_system())) -> void:
-	var ids := items.map(func(item: Dictionary) -> String: return str(item.get("id", "")))
+## piscar a tela nem tirar a rolagem de quem está lendo lá em cima. "Mudou"
+## inclui um convite que deixou de valer (a sala fechou).
+func show_items(items: Array) -> void:
+	_items = items
+	var ids := items.map(func(item: Dictionary) -> String: return "%s:%s" % [item.get("id", ""), _invite_state(item)])
 	if ids == _shown:
 		return
 	_shown = ids
@@ -149,7 +157,7 @@ func show_items(items: Array, now := int(Time.get_unix_time_from_system())) -> v
 	if items.is_empty():
 		_bubbles.add_child(_text("Nenhuma mensagem ainda. Mande um oi ou um emoji.", &"Subtitle"))
 	for item: Dictionary in items:
-		_bubbles.add_child(_bubble(item, now))
+		_bubbles.add_child(_bubble(item))
 	# Depois do layout: antes dele o fim da rolagem ainda é o do fio antigo.
 	await get_tree().process_frame
 	if is_instance_valid(_scroll):
@@ -192,8 +200,14 @@ static func preview(item: Dictionary, sender: String) -> String:
 	return "%s: %s" % [sender, str(item.get("text", ""))]
 
 
-static func invite_open(item: Dictionary, mine: bool, now: int) -> bool:
-	return str(item.get("kind", "")) == "invite" and not mine and now - int(item.get("at", 0)) <= INVITE_FRESH_SECONDS
+## "open" (recebido, a sala ainda espera), "closed" (recebido, a sala fechou ou
+## encheu) ou "" (não é convite recebido). Quem diz é `Friends.invite_live`, pelo
+## que o relay conta de onde quem chamou está sentado: fechar a sala revoga o
+## convite sem ninguém mexer na mensagem.
+func _invite_state(item: Dictionary) -> String:
+	if str(item.get("kind", "")) != "invite" or str(item.get("from", "")) == Account.user_id:
+		return ""
+	return "open" if Friends.invite_live(str(item.get("from", "")), str(item.get("room", ""))) else "closed"
 
 
 func _load() -> void:
@@ -213,7 +227,7 @@ func _send_text() -> void:
 		send({"kind": "text", "text": text})
 
 
-func _bubble(item: Dictionary, now: int) -> Control:
+func _bubble(item: Dictionary) -> Control:
 	var mine := str(item.get("from", "")) == Account.user_id
 	var row := HBoxContainer.new()
 	row.set_meta(&"message", item)
@@ -243,7 +257,14 @@ func _bubble(item: Dictionary, now: int) -> Control:
 			# Curto sempre ("Te chamou para Batalha naval"): uma linha só.
 			invite_text.autowrap_mode = TextServer.AUTOWRAP_OFF
 			words.add_child(invite_text)
-			if invite_open(item, mine, now):
+			var state := _invite_state(item)
+			if state == "closed":
+				var gone := _text("A sala já fechou", &"Caption")
+				gone.name = "Closed"
+				gone.autowrap_mode = TextServer.AUTOWRAP_OFF
+				gone.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
+				words.add_child(gone)
+			elif state == "open":
 				var join := Button.new()
 				join.name = "Join"
 				join.text = "Entrar"

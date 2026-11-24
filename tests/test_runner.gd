@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_test_chess_special_moves()
 	_test_chess_notation()
 	_test_chess_uci()
+	_test_openings()
 	_test_chess_draws()
 	_test_review_rules()
 	_test_review_curve()
@@ -101,6 +102,16 @@ func _test_chat_log() -> void:
 	_check(chat.receive(1, {"s": "oi"}, 99000).is_empty(), "e o que ele disser depois não entra")
 	_check(chat.is_muted(1) and not chat.is_muted(2), "só ele fica calado")
 	_check(not chat.receive(2, {"s": "oi"}, 99000).is_empty(), "os outros continuam")
+
+	var cheer := ChatLog.read(ChatLog.AUDIENCE, {"e": 0, "n": "  Caio\n"})
+	_equals(cheer.get("name"), "Caio", "da plateia vem o apelido, limpo")
+	_equals(ChatLog.read(ChatLog.AUDIENCE, ChatLog.wire(cheer)), cheer, "e vai e volta com ele")
+	_equals(
+		ChatLog.read(ChatLog.AUDIENCE, {"e": 0, "n": "x".repeat(99)})["name"].length(),
+		ChatLog.NAME_LIMIT,
+		"com teto no tamanho"
+	)
+	_check(not ChatLog.read(1, {"e": 0, "n": "Caio"}).has("name"), "de assento o nome não vem da mensagem")
 
 	chat = ChatLog.new()
 	for i in ChatLog.HISTORY_LIMIT + 10:
@@ -490,6 +501,32 @@ func _test_checkers_notation() -> void:
 ## Notação do lance `from`-`to` na posição dada, ou uma mensagem de falha se o
 ## lance não existir — assim um teste que erra a posição diz isso, em vez de
 ## comparar contra uma string vazia e parecer um bug de notação.
+func _test_openings() -> void:
+	print("guia de aberturas")
+	var rules := ChessRules.new()
+	for line: Dictionary in Openings.LINES:
+		var state := rules.initial_state()
+		var legal := true
+		for uci in Openings.moves_of(line):
+			var move := rules.move_from_uci(state, uci)
+			if move == null:
+				legal = false
+				break
+			rules.apply_move(state, move)
+		_check(legal, "%s: todos os lances são legais" % line["name"])
+	var italian := PackedStringArray("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 e8g8".split(" "))
+	_equals(Openings.name_for(italian), "Italiana", "nome da linha percorrida")
+	_equals(Openings.name_for(italian.slice(0, 6)), "Italiana", "linha pela metade já tem nome")
+	_equals(Openings.name_for(italian.slice(0, 4)), "", "lances que servem a várias, nenhum")
+	_equals(Openings.name_for(PackedStringArray(["e2e4", "c7c5", "b1c3"])), "Siciliana (Najdorf)", "e segue o nome depois de sair da linha")
+	_equals(Openings.name_for(PackedStringArray("e2e4 e7e5 g1f3 b8c6 f1c4 g8f6".split(" "))), "Dois Cavalos", "a mais longa que casa")
+	var line := Openings.moves_of(Openings.LINES[0])
+	_equals(Openings.next_in(line, PackedStringArray(["e2e4"])), "e7e5", "próximo lance da linha")
+	_equals(Openings.next_in(line, PackedStringArray(["d2d4"])), "", "fora da linha, nada")
+	_equals(Openings.next_in(line, line), "", "linha acabou, nada")
+	_equals(Openings.san(PackedStringArray(["e2e4", "e7e5", "g1f3"])), "1.e4 e5 2.Cf3", "notação da linha")
+
+
 func _test_chess_uci() -> void:
 	print("xadrez FEN/UCI")
 	var rules := ChessRules.new()

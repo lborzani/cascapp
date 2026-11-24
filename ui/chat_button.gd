@@ -15,10 +15,17 @@ extends Button
 ## que é onde o olho já procura "quem". A tela diz onde fica cada um pelo
 ## `chat_spot(seat) -> Rect2` (global; vazio quando não sabe), e sem ele a reação
 ## cai no aviso como o resto.
+##
+## A da plateia não tem etiqueta: sai num balão dentro da barra, com o rabicho
+## apontando para este botão. A barra fica fora da mesa, então a torcida nunca
+## cobre a casa onde se vai jogar.
 
 const POP_FONT := 40
 const POP_RISE := 56.0
 const POP_TIME := 1.4
+const CHEER_TAIL := 7.0
+const CHEER_HOLD := 1.8
+const CHEER_FADE := 0.3
 
 ## O aviso da barra. A barra o entrega ao criar o botão.
 var notice: Banner = null
@@ -59,16 +66,20 @@ func open() -> ChatPanel:
 ## sempre, porque é a mesa que reage, e não a lista.
 func _on_chat(entry: Dictionary) -> void:
 	var seat := int(entry["seat"])
-	var mine := seat == Net.local_seat and not Net.is_spectator
+	var mine: bool = entry.get("mine", false)
 	if not mine and not _is_open():
 		unread += 1
-	if int(entry["kind"]) == ChatLog.Kind.EMOTE and _pop(seat, str(entry["text"])):
-		return
+	if int(entry["kind"]) == ChatLog.Kind.EMOTE:
+		if seat == ChatLog.AUDIENCE:
+			_cheer(entry)
+			return
+		if _pop(seat, str(entry["text"])):
+			return
 	if _is_open() and not mine:
 		return
 	if notice != null:
 		notice.show_message(
-			"%s: %s" % [ChatPanel.speaker(seat), entry["text"]], Banner.Kind.INFO, false, true
+			"%s: %s" % [ChatPanel.speaker(entry), entry["text"]], Banner.Kind.INFO, false, true
 		)
 
 
@@ -108,6 +119,62 @@ func _pop(seat: int, emote: String) -> bool:
 	tween.parallel().tween_property(label, "modulate:a", 0.0, POP_TIME * 0.5).set_delay(POP_TIME * 0.5)
 	tween.tween_callback(label.queue_free)
 	return true
+
+
+## O balão da plateia: "Caio 😂", colado à esquerda deste botão e dentro da altura
+## da barra. Passa por cima do título por uns segundos, nunca da mesa; o aviso
+## não serve de limite, porque escondido ele não tem largura. Um `Label` com fundo (`normal`), e não
+## um painel com um `Label` dentro: uma peça só para criar, animar e soltar.
+func _cheer(entry: Dictionary) -> void:
+	var host := RulesPage.host_of(self) as Control
+	if host == null:
+		return
+	var who := "Você" if entry.get("mine", false) else str(entry.get("name", ""))
+	var bubble := Label.new()
+	bubble.text = "%s %s" % [who if not who.is_empty() else "Plateia", entry["text"]]
+	bubble.mouse_filter = MOUSE_FILTER_IGNORE
+	bubble.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bubble.add_theme_font_override("font", AppTheme.font(700))
+	bubble.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	var tall := size.y - 8.0
+	var style := AppTheme.box(AppTheme.SURFACE_TOP, int(tall * 0.5), AppTheme.LINE_SOFT, 1)
+	style.content_margin_left = tall * 0.4
+	style.content_margin_right = tall * 0.4
+	style.content_margin_top = 0.0
+	style.content_margin_bottom = 0.0
+	bubble.add_theme_stylebox_override("normal", style)
+	# Acima da mesa e dos cartões, abaixo das gavetas (90).
+	bubble.z_index = 85
+	host.add_child(bubble)
+	bubble.custom_minimum_size.y = tall
+	bubble.reset_size()
+
+	var right := global_position.x - CHEER_TAIL
+	# O corte só depois de medir, e só quando não cabe: ligado, a largura mínima do
+	# `Label` vira zero, e na medida justa ele apara o emoji do fim.
+	var room := right - AppTheme.SPACE_L
+	if bubble.size.x > room:
+		bubble.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		bubble.size.x = room
+	bubble.global_position = Vector2(right - bubble.size.x, global_position.y + (size.y - bubble.size.y) * 0.5)
+
+	var tail := Polygon2D.new()
+	tail.color = AppTheme.SURFACE_TOP
+	var mid := bubble.size.y * 0.5
+	tail.polygon = PackedVector2Array([
+		Vector2(bubble.size.x - 1.0, mid - CHEER_TAIL), Vector2(bubble.size.x + CHEER_TAIL, mid),
+		Vector2(bubble.size.x - 1.0, mid + CHEER_TAIL),
+	])
+	bubble.add_child(tail)
+
+	bubble.pivot_offset = Vector2(bubble.size.x, mid)
+	bubble.scale = Vector2.ONE * 0.4
+	var tween := bubble.create_tween()
+	tween.tween_property(bubble, "scale", Vector2.ONE * 1.08, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(bubble, "scale", Vector2.ONE, 0.1)
+	tween.tween_interval(CHEER_HOLD)
+	tween.tween_property(bubble, "modulate:a", 0.0, CHEER_FADE)
+	tween.tween_callback(bubble.queue_free)
 
 
 func _draw() -> void:

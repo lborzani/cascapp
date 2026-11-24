@@ -41,7 +41,7 @@ var _rejected := ""
 var _host_left_early := false
 ## Chat recebido por cada um, e se o `send_text` do espectador disse que saiu.
 var _chat := {"host": [], "guest": [], "early": [], "late": []}
-var _watcher_sent := true
+var _watcher_sent := false
 
 
 func _initialize() -> void:
@@ -151,11 +151,12 @@ func _process(delta: float) -> bool:
 				_late.send_move({"p": PackedInt32Array([57, 42]), "pr": 0}, 3)
 				_late._send_direct({"t": "bye"})
 				_late.send_sync([], [])
-				# Chat: o anfitrião reage, e o espectador tenta falar pelo `Net` e
-				# direto pela ponte, como faria um cliente modificado.
+				# Chat: o anfitrião reage e o espectador fala, como plateia. Pela
+				# ponte, como faria um cliente modificado, um `bye`: do espectador o
+				# relay só repassa a conversa.
 				_host.send_emote(0)
 				_watcher_sent = _late.send_text("oi")
-				_bridge(_late).send({"t": "chat", "s": "forjado"})
+				_bridge(_late).send({"t": "bye"})
 				_wait = 0.6
 				_phase = 8
 		8:
@@ -190,15 +191,19 @@ func _report() -> void:
 	_check(_host.watcher_count >= 1, "o anfitrião sabe que é assistido (%d)" % _host.watcher_count)
 	_equals(_late.name_of(1), "GuestSide", "o espectador conhece o nome do convidado")
 	_check(_left.has("early") and _left.has("late"), "a saída de um jogador chega a quem assiste")
-	for who in ["early", "late"]:
+	_check(_watcher_sent, "o send_text do espectador diz que saiu")
+	for who in ["host", "guest", "early", "late"]:
 		var said: Array = _chat[who]
+		_equals(said.size(), 2, "%s ouve o emote e a plateia, uma vez cada (%s)" % [who, said])
 		_check(
-			said.size() == 1 and said[0]["seat"] == 0 and said[0]["text"] == ChatLog.EMOTES[0],
-			"o espectador %s lê o emote do anfitrião (%s)" % [who, said]
+			said.any(func(e: Dictionary) -> bool: return e["seat"] == 0 and e["text"] == ChatLog.EMOTES[0]),
+			"%s lê o emote do anfitrião" % who
 		)
-	_check(not _watcher_sent, "o send_text do espectador diz que não saiu")
-	_equals(_chat["host"].size(), 1, "o anfitrião só ouve a própria mensagem, nada do espectador")
-	_equals(_chat["guest"].size(), 1, "o convidado ouve o anfitrião, e nada do espectador")
+		_check(
+			said.any(func(e: Dictionary) -> bool:
+				return e["seat"] == ChatLog.AUDIENCE and e["text"] == "oi" and e.get("name") == "LateSide"),
+			"%s lê o que a plateia disse, com o apelido" % who
+		)
 
 	if _failures == 0:
 		print("OK — espectador funcionando.")

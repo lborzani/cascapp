@@ -21,6 +21,7 @@ var _haptics_switch: SwitchRow = null
 var _history: HistoryPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
+var _openings: OpeningsPanel = null
 var _shop: ShopPanel = null
 ## A capa da loja atrás da foto e do nome (`_wrap_profile`), e a margem em volta
 ## deles, que só existe com capa.
@@ -84,7 +85,7 @@ func _ready() -> void:
 	for state: String in ["font_color", "font_hover_color"]:
 		%NewsButton.add_theme_color_override(state, AppTheme.ACCENT)
 	%NewsButton.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
-	# A loja é o terceiro atalho, numa linha inteira embaixo dos dois.
+	# A loja é um atalho numa linha inteira, embaixo dos outros.
 	_shop_button = Button.new()
 	_shop_button.custom_minimum_size = Vector2(0, 76)
 	_shop_button.focus_mode = Control.FOCUS_NONE
@@ -94,6 +95,15 @@ func _ready() -> void:
 	for shortcut: Button in [%HistoryButton, %TrainingButton, _shop_button]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
+	var openings := Button.new()
+	openings.custom_minimum_size = Vector2(0, 76)
+	openings.focus_mode = Control.FOCUS_NONE
+	openings.theme_type_variation = &"IconButton"
+	openings.set_meta(&"title", "Aberturas")
+	openings.set_meta(&"detail", "%d linhas para treinar, de ataque e de defesa" % Openings.LINES.size())
+	openings.draw.connect(_draw_shortcut.bind(openings))
+	openings.pressed.connect(_open_openings)
+	%HistoryButton.get_parent().add_sibling(openings)
 	_refresh_games()
 	%HistoryButton.pressed.connect(_open_history)
 	%TrainingButton.pressed.connect(_open_training)
@@ -324,6 +334,9 @@ func go_back() -> void:
 	if is_instance_valid(_shop):
 		_shop.close()
 		return
+	if is_instance_valid(_openings):
+		_openings.close()
+		return
 	_leave()
 
 
@@ -372,6 +385,12 @@ func _open_history() -> void:
 	# Uma revisão aberta lá dentro pode ter mandado erros para o treino.
 	_history.closed.connect(_refresh_games)
 	add_child(_history)
+
+
+func _open_openings() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_openings = OpeningsPanel.new()
+	add_child(_openings)
 
 
 func _open_training() -> void:

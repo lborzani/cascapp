@@ -51,6 +51,7 @@ var _levels: HBoxContainer = null
 var _title_label: Label = null
 var _elo_label: Label = null
 var _sides: HBoxContainer = null
+var _opponent: HBoxContainer = null
 var _visibility: HBoxContainer = null
 var _start: Button = null
 var _unavailable: Label = null
@@ -64,7 +65,7 @@ static func modes_for(id: StringName) -> Array[int]:
 	# Do que começa na hora para o que precisa de mais gente: bot, mesmo celular,
 	# sala. Lista aqui dentro e não em constante: `Game` é autoload, e autoload não
 	# entra em constante.
-	var order: Array[int] = [Game.Mode.SOLO, Game.Mode.HOTSEAT, Game.Mode.ONLINE]
+	var order: Array[int] = [Game.Mode.SOLO, Game.Mode.TRAINING, Game.Mode.HOTSEAT, Game.Mode.ONLINE]
 	var available: Array[int] = []
 	for candidate in order:
 		if Game.mode_available(candidate, id):
@@ -79,7 +80,9 @@ static func launch(tree: SceneTree, chosen_mode: int) -> void:
 		Game.role = Game.Role.HOST
 		tree.change_scene_to_file(PAIRING_SCENE)
 		return
-	if chosen_mode == Game.Mode.SOLO:
+	if chosen_mode == Game.Mode.TRAINING:
+		Game.start_training(Game.game_id)
+	elif chosen_mode == Game.Mode.SOLO:
 		Game.start_solo(Game.game_id)
 	else:
 		Game.start_hotseat(Game.game_id)
@@ -187,6 +190,10 @@ func _build_body() -> VBoxContainer:
 	_formats.add_theme_constant_override("v_separation", AppTheme.SPACE_S)
 	body.add_child(_wrap("format", "Formato", _formats))
 
+	_opponent = HBoxContainer.new()
+	_opponent.add_theme_constant_override("separation", AppTheme.SPACE_S)
+	body.add_child(_wrap("opponent", "Do outro lado", _opponent))
+
 	_levels = HBoxContainer.new()
 	_levels.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	body.add_child(_wrap("level", "Nível do bot", _levels))
@@ -276,6 +283,7 @@ func open(id: StringName, preferred_mode := -1) -> void:
 	_build_formats()
 	_build_levels()
 	_build_sides()
+	_build_opponent()
 	_build_visibility()
 
 	# Quem pediu um modo manda (o convite de amigo pede Online); depois vem o
@@ -312,17 +320,20 @@ func select_mode(chosen: int) -> void:
 		(_mode_box.get_child(index) as ModeCard).chosen = _modes[index] == chosen
 	var online := chosen == Game.Mode.ONLINE
 	var solo := chosen == Game.Mode.SOLO
+	var training := chosen == Game.Mode.TRAINING
 	# Nível e cor só existem onde há escolha: o bot do Ludo é uma heurística fixa,
 	# e lá as cores são quatro e vêm do assento, não de um par de botões.
-	var tunable := solo and Game.bot_levels(game_id)
+	var tunable := (solo or (training and Game.training_bot)) and Game.bot_levels(game_id)
 	_section("players").visible = not Game.players_range(game_id).is_empty()
-	_section("clock").visible = Game.supports_clock(game_id)
+	# Treino não tem relógio: é para pensar e voltar atrás.
+	_section("clock").visible = Game.supports_clock(game_id) and not training
+	_section("opponent").visible = training
 	_section("format").visible = not Game.formats_of(game_id).is_empty()
 	_section("level").visible = tunable
 	_section("side").visible = tunable
 	_section("visibility").visible = online
 	# O botão diz o que vai acontecer, com as palavras do cartão escolhido.
-	_start.text = "Criar sala" if online else ("Jogar contra o bot" if solo else "Jogar aqui")
+	_start.text = "Criar sala" if online else ("Jogar contra o bot" if solo else ("Treinar" if training else "Jogar aqui"))
 
 
 ## O selo, a cor dele, o nome e a linha de um modo: [selo, cor, título, detalhe].
@@ -331,6 +342,11 @@ func _mode_words(candidate: int, id: StringName) -> Array:
 	match candidate:
 		Game.Mode.ONLINE:
 			return ["Sala", AppTheme.GAME_COLORS["battleship"], "Online", "Cria uma sala e chama por código"]
+		Game.Mode.TRAINING:
+			return [
+				"Treino", AppTheme.GAME_COLORS["checkers"],
+				"Treino", "Volta lances e vê a nota de cada um",
+			]
 		Game.Mode.SOLO:
 			return [
 				"Bot", AppTheme.GAME_COLORS["chess"],
@@ -525,6 +541,21 @@ func _build_sides() -> void:
 func _select_side(side: int) -> void:
 	Game.bot_side = Board.opponent(side)
 	_mark(_sides, 0 if side == Board.Side.WHITE else 1)
+
+
+func _build_opponent() -> void:
+	_clear(_opponent)
+	_opponent.add_child(_chip("Bot", _select_opponent.bind(true)))
+	_opponent.add_child(_chip("Ninguém, jogo os dois", _select_opponent.bind(false)))
+	_select_opponent(Game.training_bot)
+
+
+func _select_opponent(bot: bool) -> void:
+	Game.training_bot = bot
+	_mark(_opponent, 0 if bot else 1)
+	# Nível e cor aparecem ou somem junto.
+	if mode == Game.Mode.TRAINING:
+		select_mode(mode)
 
 
 func _build_visibility() -> void:

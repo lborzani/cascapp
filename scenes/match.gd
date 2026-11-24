@@ -106,6 +106,14 @@ var _review: ReviewPanel = null
 var _live: LiveReview = null
 ## Um lance do bot foi pedido e ainda não foi jogado.
 var _bot_pending := false
+## Só no treino: volta lances.
+var _undo_button: Button = null
+## Treino de abertura: a linha que o bot segue enquanto a partida estiver nela.
+var _book := PackedStringArray()
+## O lance do livro que o bot vai jogar, no lugar da busca.
+var _book_move: Move = null
+## A nota da barra sem o nome da abertura, que muda a cada lance.
+var _base_note := ""
 var _bot_wait := 0.0
 
 ## Estado do convite de revanche. `ASKED` = pedimos e esperamos; `INVITED` = o
@@ -177,11 +185,13 @@ func _ready() -> void:
 		# Contra o bot vale a mesma regra: quem escolheu jogar de pretas vê o
 		# tabuleiro do lado das pretas.
 		_board.flipped = Game.local_side == Board.Side.BLACK
+	if Game.training:
+		_attach_live()
 
 	# Modo mesa é o jogo no mesmo aparelho: cada peça e o cartão de cima apontam
 	# para o dono, e o aparelho fica parado sobre a mesa. Em rede cada um vê a
 	# própria tela e nada disso faz sentido.
-	_table_mode = Game.mode == Game.Mode.HOTSEAT
+	_table_mode = Game.mode == Game.Mode.HOTSEAT and not Game.training
 	_board.table_mode = _table_mode
 	%TopTag.upside_down = _table_mode
 	_top_last_move.upside_down = _table_mode
@@ -211,6 +221,17 @@ func _ready() -> void:
 	_match_status.round_word = "Lance"
 	if Game.mode == Game.Mode.SOLO:
 		_match_status.note = "contra o bot %s" % Bot.level_label(Game.game_id, Game.current_bot_level())
+	if Game.training:
+		_match_status.note = "treino" + ("" if _match_status.note.is_empty() else ", " + _match_status.note)
+		_base_note = _match_status.note
+		_book = Game.training_line
+		_undo_button = Button.new()
+		_undo_button.text = "Desfazer lance"
+		_undo_button.theme_type_variation = &"GhostButton"
+		_undo_button.custom_minimum_size.y = 48
+		_undo_button.focus_mode = Control.FOCUS_NONE
+		_undo_button.pressed.connect(_undo)
+		%QueueButton.add_sibling(_undo_button)
 	_match_status.watchers = Net.watcher_count if Game.mode == Game.Mode.ONLINE else 0
 
 	_new_game()
@@ -235,6 +256,7 @@ func _new_game() -> void:
 	# trocar o estado é o que impede o lance dela de cair no tabuleiro novo.
 	_bot.abandon()
 	_bot_pending = false
+	_book_move = null
 	_recorded_game = {}
 	_reported = false
 	_rating_text = ""
@@ -534,6 +556,10 @@ func _maybe_think() -> void:
 		return
 	_bot_pending = true
 	_bot_wait = BOT_MIN_THINK
+	var book := _book_next()
+	if not book.is_empty():
+		_book_move = (_ruleset as ChessRules).move_from_uci(_state, book)
+		return
 	# Começa junto com a animação do lance do jogador, e não depois dela: o tempo
 	# que a peça leva para andar é tempo de busca de graça.
 	_bot.think(Game.game_id, _state, Game.current_bot_level(), _bot_budget())
@@ -561,7 +587,8 @@ func _tick_bot(delta: float) -> void:
 	_bot_wait -= delta
 	if _bot_wait > 0.0 or _board.remaining_animation() > 0.0:
 		return
-	var chosen := _bot.take_move()
+	var chosen := _book_move if _book_move != null else _bot.take_move()
+	_book_move = null
 	if chosen == null:
 		return
 	_bot_pending = false
@@ -592,6 +619,10 @@ func _tick_bot(delta: float) -> void:
 func _premove_allowed() -> bool:
 	# Aba Você › "Planejar lance (premove)".
 	if not Prefs.premove_on():
+		return false
+	# Com a moeda na tela a cor ainda está saindo: quem planeja antes de ver o
+	# resultado planeja às cegas.
+	if is_instance_valid(_coin_toss):
 		return false
 	return (
 		Game.mode == Game.Mode.ONLINE
@@ -861,6 +892,7 @@ func _play(move: Move, broadcast: bool) -> void:
 	# torna comum — seja reconhecido como repetido em vez de recusado.
 	var index := _state.history.size()
 	var mover := _state.side_to_move
+	var off_book := _off_book(move)
 	_notation.append(_record(_state, move, _captured))
 	# Antes de aplicar: `is_capture()` lê o lance, não o tabuleiro, mas o som tem
 	# de sair junto com a animação, e ela começa duas linhas abaixo.
@@ -886,6 +918,8 @@ func _play(move: Move, broadcast: bool) -> void:
 	if broadcast and Game.mode == Game.Mode.ONLINE:
 		Net.send_move(move.to_dict(), index, _clock_pair())
 	_recompute()
+	if not off_book.is_empty():
+		_banner.show_message("Fora do livro: a linha joga %s" % off_book, Banner.Kind.ALERT)
 
 
 ## `[brancas, pretas]` em segundos, ou vazio sem relógio.
@@ -917,6 +951,9 @@ func _recompute() -> void:
 		_outcome = Ruleset.Outcome.DRAW
 	if _live != null:
 		_live.follow(_state.history)
+	if Game.training and _match_status != null:
+		var opening := Openings.name_for(_played_uci())
+		_match_status.note = _base_note if opening.is_empty() else "%s · %s" % [_base_note, opening]
 	if _outcome != Ruleset.Outcome.ONGOING:
 		_show_result()
 	_refresh()
@@ -927,6 +964,10 @@ func _recompute() -> void:
 ## decide a partida é o que o jogador mais quer ver, e é justamente o que um
 ## painel imediato esconderia.
 func _show_result() -> void:
+	# No treino o fim é só um aviso: o tabuleiro continua ali para desfazer.
+	if Game.training:
+		_banner.show_message(_ruleset.outcome_text(_outcome), Banner.Kind.ALERT, true)
+		return
 	# Na hora, e não depois da animação: quem fecha o app no lance do mate não
 	# pode levar o relato junto.
 	match _outcome:
@@ -1010,6 +1051,8 @@ func _open_review() -> void:
 ## O que o diálogo do botão de sair oferece além de sair. Só com a partida em
 ## curso, e só para quem joga: quem assiste não tem o que encerrar.
 func _end_options() -> Array:
+	if Game.training:
+		return []
 	if Net.is_spectator or _outcome != Ruleset.Outcome.ONGOING or _abandoned or _flagged >= 0:
 		return []
 	if Game.mode == Game.Mode.ONLINE and not Net.connected:
@@ -1424,6 +1467,18 @@ func _apply_sync(moves: Array, clocks: Array = []) -> void:
 	if moves.size() == _state.history.size():
 		return
 
+	var bad := _replay(moves)
+	if bad >= 0:
+		_show_desync(bad)
+	else:
+		_adopt_clocks(clocks)
+		_recompute()
+
+
+## Refaz a partida do zero com `moves` (formato de `Move.to_dict`) e põe o
+## resultado na tela, sem recalcular. Devolve -1, ou o índice do primeiro lance
+## ilegal — e aí a partida atual fica intacta.
+func _replay(moves: Array) -> int:
 	# Tudo em variáveis locais até o replay terminar: um histórico inválido tem
 	# de deixar a partida atual intacta, não meio reconstruída.
 	var rebuilt := _ruleset.initial_state()
@@ -1431,8 +1486,7 @@ func _apply_sync(moves: Array, clocks: Array = []) -> void:
 	var captured := _empty_captured()
 	for entry in moves:
 		if entry is not Dictionary:
-			_show_desync(rebuilt.history.size())
-			return
+			return rebuilt.history.size()
 		var wanted := Move.from_dict(entry)
 		var applied := false
 		for candidate in _ruleset.generate_moves(rebuilt):
@@ -1442,13 +1496,11 @@ func _apply_sync(moves: Array, clocks: Array = []) -> void:
 				applied = true
 				break
 		if not applied:
-			_show_desync(rebuilt.history.size())
-			return
+			return rebuilt.history.size()
 
 	_state = rebuilt
 	_notation = notation
 	_captured = captured
-	_adopt_clocks(clocks)
 	_selection.clear()
 	# A posição foi reconstruída de outro histórico: um plano montado sobre a
 	# anterior não descreve mais nada que se possa jogar.
@@ -1460,6 +1512,48 @@ func _apply_sync(moves: Array, clocks: Array = []) -> void:
 	if not _state.history.is_empty():
 		var last: Dictionary = _state.history[_state.history.size() - 1]
 		_board.last_move = PackedInt32Array(last.get("p", []))
+	return -1
+
+
+## Os lances da partida em UCI, a língua do livro.
+func _played_uci() -> PackedStringArray:
+	return (_ruleset as ChessRules).uci_line(_state.history).split(" ", false) if _ruleset is ChessRules else PackedStringArray()
+
+
+func _book_next() -> String:
+	return "" if _book.is_empty() else Openings.next_in(_book, _played_uci())
+
+
+## O lance do livro, em notação, quando `move` — meu, ainda não aplicado — sai da
+## linha. Vazio se está nela, se ela já acabou ou se quem joga é o bot.
+func _off_book(move: Move) -> String:
+	var expected := _book_next()
+	if expected.is_empty() or Game.bot_turn(_state.side_to_move):
+		return ""
+	var rules := _ruleset as ChessRules
+	if rules.uci(move) == expected:
+		return ""
+	return rules.notation(_state, rules.move_from_uci(_state, expected))
+
+
+## Treino: volta até ser a vez de quem segura o aparelho — contra o bot, o lance
+## dele sai junto com o seu. Desfazer o lance que deu mate reabre a partida.
+func _undo() -> void:
+	var count := _state.history.size()
+	if count == 0:
+		return
+	var target := count - 1
+	# Xadrez: a vez nos lances pares é das brancas.
+	while target > 0 and Game.bot_turn(Board.Side.WHITE if target % 2 == 0 else Board.Side.BLACK):
+		target -= 1
+	_bot.abandon()
+	_bot_pending = false
+	_book_move = null
+	_conceded = -1
+	_agreed = false
+	_banner.hide_message()
+	_replay(_state.history.slice(0, target))
+	Sound.play(Sound.Cue.MOVE)
 	_recompute()
 
 
@@ -1613,7 +1707,8 @@ func _refresh_rematch() -> void:
 ## A barra da avaliação ao vivo, só para quem assiste xadrez. Também na troca
 ## pela fila: quem cedeu o lugar passa a ver a avaliação, quem sentou deixa de ver.
 func _attach_live() -> void:
-	if _live != null or not Net.is_spectator or _ruleset is not ChessRules:
+	# Quem assiste, e quem treina: os dois querem a nota de cada lance.
+	if _live != null or not (Net.is_spectator or Game.training) or _ruleset is not ChessRules:
 		return
 	_live = LiveReview.new()
 	_live.board = _board
@@ -1801,6 +1896,8 @@ func _refresh() -> void:
 	_board.state = _state
 	if Game.mode == Game.Mode.ONLINE:
 		_board.looks = _board_looks()
+	if _undo_button != null:
+		_undo_button.disabled = _state.history.is_empty()
 	_board.selection = _selection
 	_board.check_square = _check_square()
 	if _match_status != null:

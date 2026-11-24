@@ -47,6 +47,8 @@ func _ready() -> void:
 	await _test_premove_limit()
 	await _test_premove_captures()
 	await _test_bot()
+	await _test_training_undo()
+	await _test_opening_book()
 	await _test_battleship()
 	_test_back_navigation()
 	await _test_scroll_drag()
@@ -647,10 +649,12 @@ func _test_coin_toss() -> void:
 	_equals(coin._caption.text, "Você joga de pretas", "com a cor de quem vê")
 	_equals(coin.kind, Board.Kind.PAWN, "e um peão nas faces do xadrez")
 	_equals(coin.mouse_filter, Control.MOUSE_FILTER_IGNORE, "sem segurar o toque")
+	_check(not scene._premove_allowed(), "com a moeda na tela não se planeja lance")
 	await get_tree().create_timer(CoinToss.SPIN).timeout
 	_equals(float(scene._clock[Board.Side.WHITE]), Game.clock_initial(), "o relógio não anda com a moeda na tela")
 	await get_tree().create_timer(CoinToss.HOLD + CoinToss.FADE + 0.4).timeout
 	_check(not is_instance_valid(coin), "e some sozinha")
+	_equals(scene._premove_allowed(), Prefs.premove_on(), "sem a moeda o lance planejado volta")
 	await get_tree().create_timer(0.3).timeout
 	_check(float(scene._clock[Board.Side.WHITE]) < Game.clock_initial(), "e depois dela o relógio de brancas corre")
 	scene.queue_free()
@@ -1524,6 +1528,7 @@ func _test_premove() -> void:
 	Game.game_id = Game.CHESS
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 
 	_check(not scene._premove_allowed(), "na própria vez não há o que planejar")
@@ -1675,6 +1680,7 @@ func _test_premove_captures() -> void:
 	Game.time_control = 3
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 	var W := Board.Side.WHITE
 	var B := Board.Side.BLACK
@@ -1881,6 +1887,7 @@ func _test_premove_limit() -> void:
 	Game.game_id = Game.CHESS
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
+	_past_coin(scene)
 	await get_tree().process_frame
 
 	# Uma torre num tabuleiro quase vazio: ela anda para frente e para trás, então
@@ -1989,6 +1996,127 @@ func _test_bot() -> void:
 	Prefs.set_player_name(saved_name)
 	Game.bot_side = Board.Side.BLACK
 	Game.mode = Game.Mode.HOTSEAT
+	Game.local_side = Board.Side.WHITE
+
+
+## Treino: sem relógio, sem modo mesa, e desfazer volta o lance (sem bot) ou até
+## a minha vez (com bot), inclusive depois do mate.
+func _test_training_undo() -> void:
+	print("treino com desfazer")
+	Game.training_bot = false
+	Game.time_control = _time_control_with_increment()
+	Game.start_training(Game.CHESS)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	_check(Game.training and Game.mode == Game.Mode.HOTSEAT, "treino sem bot é o mesmo aparelho")
+	_check(not Game.has_clock(), "sem relógio, mesmo com ritmo escolhido")
+	_check(not scene._table_mode, "e sem virar as peças de cima")
+	_check(scene._undo_button != null and scene._undo_button.disabled, "botão de desfazer, apagado no começo")
+	_equals(scene._end_options(), [], "nem desistir nem empatar")
+
+	for step in [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]:
+		_play(scene, step[0], step[1])
+	_check(scene._outcome != Ruleset.Outcome.ONGOING, "mate do louco acaba a partida")
+	_check(not _node(scene, "%ResultLayer").visible, "sem cobrir o tabuleiro")
+	_check(scene._recorded_game.is_empty(), "e sem ir para o histórico")
+	scene._undo()
+	_equals(scene._state.history.size(), 3, "desfazer volta um lance")
+	_equals(scene._outcome, Ruleset.Outcome.ONGOING, "e reabre a partida")
+	_equals(scene._notation.size(), 3, "a notação acompanha")
+	_equals(scene._state.side_to_move, Board.Side.BLACK, "e a vez volta para quem jogou")
+
+	var live: LiveReview = scene._live
+	_check(live != null, "treino tem a avaliação de cada lance")
+	await _settle_live(live)
+	if live._no_engine:
+		_check(live.entry.is_empty(), "sem motor, nenhum veredito")
+	else:
+		_equals(live.entry.get("uci"), "g2g4", "o veredito é o do lance que ficou")
+		_check(live.entry.get("verdict", -1) >= GameReview.Verdict.MISTAKE, "2.g4 é erro")
+		_equals(scene._board.badge_square, _square("g4"), "com o selo na casa dele")
+		scene._undo()
+		_check(live.entry.is_empty(), "desfazer apaga o veredito")
+		_equals(scene._board.badge_square, Board.NO_SQUARE, "e o selo some na hora")
+		await _settle_live(live)
+		_equals(live.entry.get("uci"), "e7e5", "e a nota volta para o lance anterior")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.training_bot = true
+	Game.bot_side = Board.Side.BLACK
+	Game.chess_level = 0
+	Game.start_training(Game.CHESS)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	_play(scene, "e2", "e4")
+	var deadline := Time.get_ticks_msec() + 8000
+	while scene._bot_pending and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	_equals(scene._state.ply, 2, "o bot responde")
+	scene._undo()
+	_equals(scene._state.ply, 0, "contra o bot, desfazer volta até a minha vez")
+	_check(not scene._bot_pending, "e o bot não pensa")
+	_play(scene, "d2", "d4")
+	_check(scene._bot_pending, "meu lance põe o bot a pensar")
+	scene._undo()
+	_equals(scene._state.ply, 0, "desfazer com o bot pensando cancela a busca")
+	_check(not scene._bot_pending, "sem lance dele chegando depois")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.reset_to_menu()
+	Game.time_control = 0
+	Game.local_side = Board.Side.WHITE
+
+
+## Guia de aberturas: o bot segue a linha, sair dela avisa o lance do livro, e
+## a defesa põe o bot do lado da abertura.
+func _test_opening_book() -> void:
+	print("treino de abertura")
+	var panel := OpeningsPanel.new()
+	add_child(panel)
+	_equals(panel.find_children("*", "Button", true, false).size(), 1 + 2 * Openings.LINES.size(), "fechar e dois botões por abertura")
+	panel.free()
+
+	var italian: Dictionary = Openings.LINES[0]
+	Game.training_bot = true
+	Game.chess_level = 0
+	Game.bot_side = Board.Side.BLACK
+	Game.start_training(Game.CHESS)
+	Game.training_line = Openings.moves_of(italian)
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	for step in [["e2", "e4"], ["g1", "f3"], ["f1", "c4"]]:
+		_play(scene, step[0], step[1])
+		var deadline := Time.get_ticks_msec() + 5000
+		while scene._bot_pending and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+	_equals((scene._ruleset as ChessRules).uci_line(scene._state.history), "e2e4 e7e5 g1f3 b8c6 f1c4 f8c5", "o bot responde pelo livro")
+	_check(scene._match_status.note.ends_with("Italiana"), "e a barra diz a abertura (%s)" % scene._match_status.note)
+	_play(scene, "d2", "d4")
+	_equals(scene._banner._message, "Fora do livro: a linha joga c3", "sair da linha mostra o lance dela")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.bot_side = Board.Side.WHITE
+	Game.start_training(Game.CHESS)
+	Game.training_line = Openings.moves_of(italian)
+	scene = preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var wait := Time.get_ticks_msec() + 5000
+	while scene._bot_pending and Time.get_ticks_msec() < wait:
+		await get_tree().process_frame
+	_equals((scene._ruleset as ChessRules).uci_line(scene._state.history), "e2e4", "na defesa o bot abre com a linha")
+	_check(scene._board.flipped, "e eu vejo do lado das pretas")
+	scene.queue_free()
+	await get_tree().process_frame
+
+	Game.reset_to_menu()
+	Game.bot_side = Board.Side.BLACK
 	Game.local_side = Board.Side.WHITE
 
 
@@ -2324,12 +2452,38 @@ func _test_chat() -> bool:
 	panel.dismiss()
 	await get_tree().process_frame
 
+	# Quem assiste fala como plateia: o envelope leva o apelido, e a reação dele
+	# sai num balão na barra, porque a plateia não tem etiqueta na mesa.
 	Net.is_spectator = true
+	Net.player_name = "Caio"
+	Net.chat._last_sent = -ChatLog.COOLDOWN_MS
 	panel = button.open()
 	await get_tree().process_frame
-	_check(panel._input == null and panel._senders.is_empty(), "quem assiste só lê a conversa")
-	_equals(panel._rows.get_child_count(), 5, "mas lê tudo")
-	panel.dismiss()
+	_check(panel._input != null and not panel._senders.is_empty(), "quem assiste também manda")
+	_equals(panel._rows.get_child_count(), 5, "e lê tudo")
+	panel._senders[1].pressed.emit()
+	var cheer: Dictionary = Net.chat.entries.back()
+	_equals(cheer["seat"], ChatLog.AUDIENCE, "a mensagem de quem assiste sai da plateia")
+	_equals(ChatPanel.speaker(cheer), "Você", "e para ele é dele")
+	var mine_cheer := _emote_pop(scene, "Você " + ChatLog.EMOTES[1])
+	_check(mine_cheer != null, "a reação da plateia sai num balão")
+	if mine_cheer != null:
+		_check(
+			bar.get_global_rect().grow(1.0).encloses(mine_cheer.get_global_rect()),
+			"dentro da barra, fora da mesa (%s em %s)" % [mine_cheer.get_global_rect(), bar.get_global_rect()]
+		)
+		_check(
+			mine_cheer.get_global_rect().end.x <= button.get_global_rect().position.x,
+			"sem cobrir o balão da conversa"
+		)
+	await get_tree().process_frame
+	Net.is_spectator = false
+	Net._handle_message({"t": "chat", "e": 2, "n": "Caio"}, ChatLog.AUDIENCE)
+	_check(_emote_pop(scene, "Caio " + ChatLog.EMOTES[2]) != null, "quem joga vê o balão com o nome de quem torceu")
+	Net._handle_message({"t": "chat", "q": 4, "n": "Caio"}, ChatLog.AUDIENCE)
+	_equals(bar.notice._message, "Caio (plateia): " + ChatLog.PHRASES[4], "quem joga vê quem da plateia falou")
+	Net._handle_message({"t": "bye"}, ChatLog.AUDIENCE)
+	_check(Net.connected, "e da plateia nada além da conversa vale: um bye não encerra a partida")
 
 	Net.is_spectator = false
 	Net.connected = false
@@ -2342,6 +2496,13 @@ func _test_chat() -> bool:
 
 
 ## A reação que subiu na mesa, se houver: um `Label` solto na raiz da cena.
+## A moeda da primeira partida em rede trava o lance planejado enquanto gira
+## (`_premove_allowed`). Os testes do plano começam com ela já fora da tela.
+func _past_coin(scene: Node) -> void:
+	if is_instance_valid(scene._coin_toss):
+		scene._coin_toss.free()
+
+
 func _emote_pop(scene: Node, emote: String) -> Label:
 	for child in scene.get_children():
 		if child is Label and (child as Label).text == emote:
@@ -2976,13 +3137,15 @@ func _test_friend_requests() -> void:
 			var chat: FriendChat = chats[0]
 			var now := 10000
 			Account.user_id = "euueuueuueu123"
+			# A Eva está sentada na AB12CD, esperando: esse convite vale. A OLD123 fechou.
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "uno", "room": "AB12CD", "playing": false}
 			chat.show_items([
 				{"id": "m1", "from": "euueuueuueu123", "kind": "text", "text": "oi", "at": now - 60},
 				{"id": "m2", "from": "evaevaevaeva123", "kind": "emote", "emote": 1, "at": now - 50},
 				{"id": "m3", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "AB12CD", "at": now - 30},
 				{"id": "m4", "from": "evaevaevaeva123", "kind": "invite", "game": "uno", "room": "OLD123", "at": now - 3600},
 				{"id": "m5", "from": "euueuueuueu123", "kind": "invite", "game": "uno", "room": "MINE12", "at": now - 10},
-			], now)
+			])
 			var margins := chat.find_children("", "SafeAreaMargin", true, false)
 			_check(not margins.is_empty() and margins[0].follow_keyboard, "a conversa sobe junto com o teclado")
 			_equals(SafeAreaMargin.keyboard_inset(600, 1280, 768.0), 360.0, "teclado de 600 px numa tela de 1280 vira 360 da interface")
@@ -2995,11 +3158,20 @@ func _test_friend_requests() -> void:
 				BoxContainer.ALIGNMENT_END, BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_BEGIN,
 				BoxContainer.ALIGNMENT_BEGIN, BoxContainer.ALIGNMENT_END,
 			], "os meus à direita")
-			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Join", true, false) != null), [false, false, true, false, false], "Entrar só no convite recebido e recente")
+			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Join", true, false) != null), [false, false, true, false, false], "Entrar só no convite recebido com a sala ainda esperando")
+			_equals(rows.map(func(r: Node) -> bool: return r.find_child("Closed", true, false) != null), [false, false, false, true, false], "o de sala fechada diz que fechou")
 			var bubble_texts := chat._bubbles.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
 			_check(bubble_texts.has(ChatLog.EMOTES[1]) and bubble_texts.has("Te chamou para %s" % Game.game_title(&"uno")), "o emoji e o convite aparecem no fio")
 			_equals(FriendChat.preview({"kind": "text", "text": "oi"}, "Eva"), "Eva: oi", "a prévia do texto")
 			_equals(FriendChat.preview({"kind": "invite", "game": "uno"}, "Eva"), "Eva te chamou para %s" % Game.game_title(&"uno"), "e do convite")
+			# A Eva fechou a sala: o próximo `who` a mostra fora dela, e o convite cai.
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}
+			chat.show_items(chat._items)
+			var after := chat._bubbles.get_children()
+			_check(after[2].find_child("Join", true, false) == null and after[2].find_child("Closed", true, false) != null, "fechar a sala revoga o convite na conversa")
+			_check(not Friends.invite_live("evaevaevaeva123", "AB12CD"), "e o Friends diz que ele não vale mais")
+			Friends.online["evaevaevaeva123"] = {"id": "evaevaevaeva123", "game": "uno", "room": "AB12CD", "playing": true}
+			_check(not Friends.invite_live("evaevaevaeva123", "AB12CD"), "mesa cheia também derruba o convite")
 			Account.user_id = ""
 			drawer2.close()
 			_check(chat.is_queued_for_deletion() and not drawer2.is_queued_for_deletion(), "voltar fecha a conversa antes da gaveta")
@@ -3112,6 +3284,23 @@ func _test_friends_drawer() -> bool:
 	card.declined.connect(func() -> void: declined[0] = true)
 	(card.find_child("Agoranão", true, false) as Button).pressed.emit()
 	_check(declined[0], "Agora não recusa")
+
+	# O aviso some quando quem chamou fecha a sala. Montado à mão: a cena de teste
+	# não é uma das telas em que o aviso aparece.
+	var layer := CanvasLayer.new()
+	layer.add_child(InviteCard.new())
+	Friends.add_child(layer)
+	Friends._invite_layer = layer
+	Friends._invite_from = "biabiabiabia123"
+	Friends._invite_code = "ABC234"
+	var saved_online := Friends.online
+	Friends.online = {"biabiabiabia123": {"id": "biabiabiabia123", "game": "chess", "room": "ABC234", "playing": false}}
+	Friends._drop_dead_invite()
+	_check(Friends.invite_card() != null, "com a sala esperando, o aviso fica")
+	Friends.online = {"biabiabiabia123": {"id": "biabiabiabia123", "game": "", "room": "", "playing": false}}
+	Friends._drop_dead_invite()
+	_check(Friends.invite_card() == null, "a sala fechou: o aviso some")
+	Friends.online = saved_online
 	card.queue_free()
 	Friends.list = []
 	Friends.online = {}

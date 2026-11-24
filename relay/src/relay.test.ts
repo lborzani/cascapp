@@ -391,6 +391,22 @@ describe('relay', () => {
     );
     assert.deepEqual(await viewer.next(), e5);
 
+    // A conversa é a exceção: ela sai, com o `from` da plateia, para os
+    // jogadores e para os outros espectadores, e não volta para quem mandou.
+    const other = await Client.open(url);
+    other.send({ t: 'watch', room: 'WATCH5' });
+    assert.equal((await other.next()).t, 'watching');
+    assert.deepEqual(await host.next(), { t: 'watchers', n: 2 });
+    assert.deepEqual(await guest.next(), { t: 'watchers', n: 2 });
+    const cheer = { t: 'msg', d: { t: 'chat', e: 0, n: 'Caio' }, from: -1 };
+    viewer.send({ t: 'msg', d: cheer.d });
+    assert.deepEqual(await host.next(), cheer);
+    assert.deepEqual(await guest.next(), cheer);
+    assert.deepEqual(await other.next(), cheer);
+    other.close();
+    assert.deepEqual(await host.next(), { t: 'watchers', n: 1 });
+    assert.deepEqual(await guest.next(), { t: 'watchers', n: 1 });
+
     // A saída de um jogador chega a quem assiste; a do espectador baixa o contador.
     guest.kill();
     assert.deepEqual(await host.next(), { t: 'peer_left', seat: 1 });
