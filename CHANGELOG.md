@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.68
+
+- Proteja sua conta com o e-mail, na aba Você: se formatar ou trocar de celular, você volta para ela com moedas, itens, amigos e Elo. Sem senha, só um código que chega no e-mail.
+- Celular novo? Na primeira tela, toque em "Já tenho conta" para voltar para a conta protegida.
+- Suas moedas agora aparecem na tela inicial. Toque nelas para abrir a loja.
+
 ## 1.67
 
 - Listas que rolam (histórico, amigos, regras e outras): arrastar o dedo começando em cima de um cartão agora rola a lista. Antes, dependendo de onde se encostava, ela não mexia.
