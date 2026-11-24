@@ -45,6 +45,9 @@ static var _gifts_seen: Array = []
 var _shop: ShopPanel = null
 var _missions: MissionsPanel = null
 var _toast: Banner = null
+## O convite para proteger a conta, e o `EmailPanel` que ele abre.
+var _nudge: BottomSheet = null
+var _email: EmailPanel = null
 
 
 func _ready() -> void:
@@ -98,6 +101,12 @@ func _ready() -> void:
 	_check_update()
 	_open_chat_launch()
 	_show_news()
+	# A conta entra depois do menu abrir na abertura fria: o convite espera ela.
+	Account.signed_in_changed.connect(func(now: bool) -> void:
+		if now:
+			_nudge_protect()
+	)
+	_nudge_protect()
 
 	# A folha volta aberta para quem chegou aqui saindo de uma partida ou da sala:
 	# quem voltou está escolhendo como jogar de novo, e não navegando do zero.
@@ -247,6 +256,12 @@ func go_back() -> void:
 	var news := _news()
 	if news != null:
 		news.close()
+		return
+	if is_instance_valid(_email):
+		_email.close()
+		return
+	if is_instance_valid(_nudge):
+		_nudge.close()
 		return
 	var drawer := _drawer()
 	if drawer != null:
@@ -544,6 +559,60 @@ func _show_news(installed := AppVersion.text()) -> void:
 	var panel := ChangelogPanel.new()
 	panel.sections = [{"version": installed, "items": items}]
 	add_child(panel)
+
+
+## Conta sem e-mail confirmado: uma vez por dia, a folha que explica por que
+## proteger e leva ao `EmailPanel`. Não por cima das boas-vindas, da versão nova
+## nem das novidades; nesses dias fica para a próxima abertura.
+func _nudge_protect() -> void:
+	if not Account.signed_in() or not Account.contact_email.is_empty() or not Prefs.welcomed():
+		return
+	var today := Time.get_date_string_from_system()
+	if Prefs.protect_nudged() == today or _gate != null or _news() != null or is_instance_valid(_nudge):
+		return
+	Prefs.set_protect_nudged(today)
+
+	_nudge = BottomSheet.new()
+	_nudge.top = -1.0
+	var title := Label.new()
+	title.text = "Proteja sua conta"
+	title.theme_type_variation = &"Title"
+	_nudge.body.add_child(title)
+	var why := Label.new()
+	why.text = "Hoje sua conta está presa a este celular. Se ele for formatado, trocado ou perdido, você perde moedas, itens, amigos e partidas. Com um e-mail confirmado, você recupera tudo em qualquer celular."
+	why.theme_type_variation = &"Subtitle"
+	why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_nudge.body.add_child(why)
+	var how := Label.new()
+	how.text = "Leva um minuto: mandamos um código para o seu e-mail, e ele não vira senha nem é mostrado a ninguém."
+	how.theme_type_variation = &"Hint"
+	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_nudge.body.add_child(how)
+	var protect := Button.new()
+	protect.text = "Proteger com e-mail"
+	protect.theme_type_variation = &"PrimaryButton"
+	protect.custom_minimum_size.y = 52
+	protect.pressed.connect(func() -> void:
+		_nudge.close()
+		_open_email()
+	)
+	_nudge.body.add_child(protect)
+	var later := Button.new()
+	later.text = "Agora não"
+	later.theme_type_variation = &"GhostButton"
+	later.custom_minimum_size.y = 44
+	later.pressed.connect(func() -> void: _nudge.close())
+	_nudge.body.add_child(later)
+	add_child(_nudge)
+
+
+## O mesmo `EmailPanel` da aba Você.
+func _open_email() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_email = EmailPanel.new()
+	# Voltou para a conta antiga: nome, foto e moedas são outros.
+	_email.recovered.connect(func() -> void: get_tree().reload_current_scene.call_deferred())
+	add_child(_email)
 
 
 func _news() -> ChangelogPanel:

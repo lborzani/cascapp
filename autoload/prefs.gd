@@ -555,3 +555,14 @@ static func seen_version() -> String:
 static func set_seen_version(version: String) -> void:
 	_file().set_value(UPDATE_SECTION, "seen", version)
 	_file().save(PATH)
+
+
+## O dia (`AAAA-MM-DD`) em que o menu pediu, pela última vez, para proteger a
+## conta com e-mail. Vazio: nunca pediu.
+static func protect_nudged() -> String:
+	return str(_file().get_value(SECTION, "protect_nudged", ""))
+
+
+static func set_protect_nudged(day: String) -> void:
+	_file().set_value(SECTION, "protect_nudged", day)
+	_file().save(PATH)

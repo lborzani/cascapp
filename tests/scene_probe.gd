@@ -65,6 +65,7 @@ func _ready() -> void:
 	_check(await _test_friends_drawer() == true, "gaveta de amigos rodou até o fim")
 	await _test_friend_requests()
 	_check(await _test_coins_pill() == true, "moedas na tela inicial rodou até o fim")
+	await _test_protect_nudge()
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -3472,3 +3473,51 @@ func _test_coins_pill() -> bool:
 	menu.queue_free()
 	await get_tree().process_frame
 	return true
+
+
+## O convite para proteger a conta: aparece para conta sem e-mail, uma vez por
+## dia, e leva ao `EmailPanel`. O token é de mentira: só `signed_in()` olha para
+## ele aqui.
+func _test_protect_nudge() -> void:
+	print("convite para proteger a conta")
+	var saved := [Prefs.protect_nudged(), Prefs.welcomed(), Prefs.seen_version(), Account.token, Account.contact_email]
+	Prefs.set_welcomed()
+	Prefs.set_seen_version(AppVersion.text())
+	Prefs.set_protect_nudged("")
+	Account.token = "teste"
+	Account.contact_email = ""
+
+	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	_check(is_instance_valid(menu._nudge), "conta sem e-mail vê o convite")
+	_equals(Prefs.protect_nudged(), Time.get_date_string_from_system(), "e o dia fica marcado")
+	menu.go_back()
+	await get_tree().create_timer(0.5).timeout
+	_check(not is_instance_valid(menu._nudge), "voltar fecha o convite")
+	menu._nudge_protect()
+	_check(not is_instance_valid(menu._nudge), "no mesmo dia, não volta")
+
+	Prefs.set_protect_nudged("")
+	menu._nudge_protect()
+	menu._nudge.body.get_child(3).pressed.emit()
+	await get_tree().process_frame
+	_check(is_instance_valid(menu._email), "proteger abre o e-mail")
+	menu.go_back()
+	await get_tree().process_frame
+	_check(not is_instance_valid(menu._email), "voltar fecha o e-mail")
+	await get_tree().create_timer(0.5).timeout  # a folha termina de descer
+
+	Prefs.set_protect_nudged("")
+	Account.contact_email = "a@b.com"
+	menu._nudge_protect()
+	_check(not is_instance_valid(menu._nudge), "conta protegida não vê o convite")
+	menu.queue_free()
+	await get_tree().process_frame
+
+	Prefs.set_protect_nudged(saved[0])
+	if not saved[1]:
+		Prefs.forget_welcome()
+	Prefs.set_seen_version(saved[2])
+	Account.token = saved[3]
+	Account.contact_email = saved[4]
