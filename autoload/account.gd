@@ -48,6 +48,9 @@ var avatar_file := ""
 var elo := 0
 ## O código de amigo desta conta, como a última entrada disse; vazio sem conta.
 var friend_code := ""
+## O e-mail que protege esta conta (`pocketbase/pb_hooks/conta.pb.js`); vazio
+## sem proteção.
+var contact_email := ""
 ## O saldo de moedas, como a última resposta disse; -1 antes da primeira.
 var coins := -1
 ## Os itens pagos que esta conta comprou (`pocketbase/pb_hooks/loja.js`).
@@ -627,8 +630,80 @@ func _fetch_own_avatar() -> void:
 	avatar_changed.emit()
 
 
-## Esquece a sessão (não a conta). Para os testes.
+# --- conta protegida por e-mail ---------------------------------------------------
+#
+# Rotas de `pocketbase/pb_hooks/conta.pb.js`. O e-mail não vira login: o app
+# continua entrando com a credencial do aparelho, e o e-mail só serve para
+# trazer a conta de volta a um aparelho novo.
+
+
+## Pede o código para `email`, com `purpose` "protect" ou "recover". O código
+## HTTP: 200 saiu, 400 e-mail inválido, 429 códigos demais, 502 o e-mail não
+## saiu, 0 sem conta ou sem servidor.
+func email_start(email: String, purpose: String) -> int:
+	if not signed_in():
+		return 0
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/email/start", {"email": email.strip_edges(), "purpose": purpose})
+	return reply["code"]
+
+
+## Confirma a proteção com o código que chegou. `{"code": HTTP, "reason"}`:
+## 200 protegida, 400 código inválido (`reason` "wrong", "expired", "locked" ou
+## "missing"), 409 o e-mail já protege outra conta, 0 sem conta ou sem servidor.
+func email_protect(code: String) -> Dictionary:
+	if not signed_in():
+		return {"code": 0, "reason": ""}
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/email/protect", {"code": code})
+	var data: Variant = reply["data"]
+	if reply["code"] == 200 and data is Dictionary:
+		contact_email = str(data.get("contact_email", ""))
+	return {"code": reply["code"], "reason": str(data.get("reason", "")) if data is Dictionary else ""}
+
+
+## Volta para a conta protegida por `email`, com o código que chegou nele. O
+## servidor apaga a conta deste aparelho e passa a credencial dele para a conta
+## antiga; aqui o app entra de novo e fica com o nome e a foto de lá.
+## `{"code": HTTP, "reason"}`: 200 voltou, 400 código inválido (`reason` como
+## em [method email_protect], ou "same" quando a conta já é esta), 403
+## credencial recusada, 0 sem conta ou sem servidor.
+func email_recover(email: String, code: String) -> Dictionary:
+	if not signed_in():
+		return {"code": 0, "reason": ""}
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/email/recover", {
+		"email": email.strip_edges(), "code": code, "password": _credentials()["password"],
+	})
+	var data: Variant = reply["data"]
+	if reply["code"] == 200:
+		await _adopt()
+	return {"code": reply["code"], "reason": str(data.get("reason", "")) if data is Dictionary else ""}
+
+
+## O aparelho deixa o que era da conta vazia e fica com o da conta antiga. Sem
+## isto, a entrada empurraria o nome e a foto deste aparelho por cima dos de lá.
+func _adopt() -> void:
+	Prefs.set_player_name("")
+	Prefs.set_avatar_pending(false)
+	if FileAccess.file_exists(AVATAR_CACHE):
+		DirAccess.remove_absolute(AVATAR_CACHE)
+	_local_texture = null
+	sign_out()
+	if await sign_in() and not _name.is_empty():
+		Prefs.set_player_name(_name)
+	# Sem foto na conta antiga, quem mostra a deste aparelho passa a mostrar
+	# nenhuma; com foto, ela chega depois pelo mesmo sinal.
+	avatar_changed.emit()
+
+
+## "lucas@gmail.com" → "l***@gmail.com", como em `pocketbase/pb_hooks/conta.js`.
+static func masked_email(email: String) -> String:
+	var at := email.find("@")
+	return "" if at < 1 else email[0] + "***" + email.substr(at)
+
+
+## Esquece a sessão (não a conta): os testes, e a volta para a conta antiga.
 func sign_out() -> void:
+	# Antes do token: quem escuta `signed_in_changed` já lê a conta vazia.
+	contact_email = ""
 	_set_token("", "")
 	coins = -1
 	owned = []
@@ -681,6 +756,7 @@ func _authenticate(credentials: Dictionary) -> int:
 	avatar_file = str(data["record"].get("avatar", ""))
 	elo = int(data["record"].get("elo_chess", 0))
 	friend_code = str(data["record"].get("friend_code", ""))
+	contact_email = str(data["record"].get("contact_email", ""))
 	_set_token(str(data["token"]), str(data["record"]["id"]))
 	_take_wallet(data["record"])
 	return 200

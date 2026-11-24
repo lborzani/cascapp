@@ -40,6 +40,7 @@ const PANEL_WIDTH := 320
 
 
 var _edit: LineEdit = null
+var _email: EmailPanel = null
 
 
 ## Deve ser mostrado agora? Uma pergunta só, num lugar só: a tela inicial não
@@ -123,6 +124,15 @@ func _ready() -> void:
 	start.pressed.connect(finish)
 	column.add_child(start)
 
+	# Discreto, porque quase todo mundo que abre aqui é novo. Quem formatou o
+	# celular e protegeu a conta antes acha o caminho de volta logo na porta.
+	var returning := Button.new()
+	returning.text = "Já tenho conta"
+	returning.flat = true
+	returning.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
+	returning.pressed.connect(_recover)
+	column.add_child(returning)
+
 
 ## O foco vai para o campo, mas só depois de o painel estar desenhado: pedir foco
 ## a um `LineEdit` que ainda não tem retângulo não abre o teclado do Android.
@@ -136,6 +146,9 @@ func open() -> void:
 ## sistema entra por aqui — e ele tem de fazer exatamente o mesmo que o botão,
 ## e não um segundo caminho de saída que esqueça de gravar alguma coisa.
 func finish() -> void:
+	if is_instance_valid(_email) and not _email.is_queued_for_deletion():
+		_email.close()
+		return
 	# Vazio é uma resposta: `set_player_name("")` apaga a chave e devolve o
 	# padrão, que é exatamente o que "não quero escolher agora" significa.
 	Prefs.set_player_name(_edit.text)
@@ -143,3 +156,18 @@ func finish() -> void:
 	Sound.play(Sound.Cue.TAP)
 	finished.emit()
 	queue_free()
+
+
+## Por cima da boas-vindas. Voltou para a conta antiga: o nome já veio de lá,
+## então a pergunta do nome não se aplica, e a boas-vindas sai sem gravar o
+## campo.
+func _recover() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_email = EmailPanel.new()
+	_email.recover = true
+	_email.recovered.connect(func() -> void:
+		Prefs.set_welcomed()
+		finished.emit()
+		queue_free()
+	)
+	add_child(_email)

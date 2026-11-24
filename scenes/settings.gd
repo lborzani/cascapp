@@ -28,6 +28,9 @@ var _shop: ShopPanel = null
 var _profile_cover: Panel = null
 var _profile_pad: MarginContainer = null
 var _shop_button: Button = null
+var _email: EmailPanel = null
+## "Proteja sua conta", ou o e-mail que já protege.
+var _protect_button: Button = null
 ## O APK da versão nova que a busca manual achou; vazio enquanto não achou.
 
 
@@ -92,7 +95,16 @@ func _ready() -> void:
 	_shop_button.theme_type_variation = &"IconButton"
 	_shop_button.pressed.connect(_open_shop)
 	%HistoryButton.get_parent().add_sibling(_shop_button)
-	for shortcut: Button in [%HistoryButton, %TrainingButton, _shop_button]:
+	# Logo depois da loja: o que se compra lá é o que a proteção guarda.
+	_protect_button = Button.new()
+	_protect_button.name = "ProtectButton"
+	_protect_button.custom_minimum_size = Vector2(0, 76)
+	_protect_button.focus_mode = Control.FOCUS_NONE
+	_protect_button.theme_type_variation = &"IconButton"
+	_protect_button.pressed.connect(_open_email)
+	_shop_button.add_sibling(_protect_button)
+	Account.signed_in_changed.connect(_refresh_protect.unbind(1))
+	for shortcut: Button in [%HistoryButton, %TrainingButton, _shop_button, _protect_button]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
 	var openings := Button.new()
@@ -334,6 +346,9 @@ func go_back() -> void:
 	if is_instance_valid(_shop):
 		_shop.close()
 		return
+	if is_instance_valid(_email):
+		_email.close()
+		return
 	if is_instance_valid(_openings):
 		_openings.close()
 		return
@@ -424,6 +439,37 @@ func _refresh_games() -> void:
 	_shop_button.set_meta(&"detail", "Bolas, tacos, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
 	_shop_button.set_meta(&"lit", true)
 	_shop_button.queue_redraw()
+	_refresh_protect()
+
+
+## Protegida, a linha só mostra o e-mail; sem conta, avisa e não abre nada:
+## proteger precisa do servidor.
+func _refresh_protect() -> void:
+	if not Account.contact_email.is_empty():
+		_protect_button.set_meta(&"title", "Conta protegida")
+		_protect_button.set_meta(&"detail", Account.masked_email(Account.contact_email))
+		_protect_button.set_meta(&"lit", false)
+	elif not Account.signed_in():
+		_protect_button.set_meta(&"title", "Proteja sua conta")
+		_protect_button.set_meta(&"detail", "Precisa de internet")
+		_protect_button.set_meta(&"lit", false)
+	else:
+		_protect_button.set_meta(&"title", "Proteja sua conta")
+		_protect_button.set_meta(&"detail", "Não perca nada se formatar o celular")
+		_protect_button.set_meta(&"lit", true)
+	_protect_button.queue_redraw()
+
+
+func _open_email() -> void:
+	if not Account.signed_in() or not Account.contact_email.is_empty():
+		return
+	Sound.play(Sound.Cue.TAP)
+	_email = EmailPanel.new()
+	_email.closed.connect(_refresh_protect)
+	# Voltou para a conta antiga: nome, foto e números são outros. Remontar a
+	# tela é mais curto que atualizar cada pedaço.
+	_email.recovered.connect(func() -> void: get_tree().reload_current_scene.call_deferred())
+	add_child(_email)
 
 
 static func history_detail(games: int) -> String:

@@ -68,6 +68,11 @@ func grab() -> void:
 	_edit.grab_focus()
 
 
+## Teclado só de números, para o código do e-mail. O código da sala tem letras.
+func numeric() -> void:
+	_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+
+
 ## Maiúsculas e só letras e números, no tamanho do código. É a porta: o resto do
 ## app pode contar com o que sai daqui.
 static func clean(raw: String) -> String:
