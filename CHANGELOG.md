@@ -7,6 +7,14 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.66
+
+- Loja e moedas: ganhe moedas terminando partidas contra o bot ou online e com o bônus de todo dia, e troque na loja da aba Você.
+- Boliche: dez bolas para escolher, e quatro especiais: cromada, neon que brilha, cristal e lava.
+- Sinuca: cinco tacos, de ébano e marfim, carbono, chamas, neon e ouro.
+- Xadrez e damas: três conjuntos de peças novos (Clássico, Minimalista e Medieval) e cinco acabamentos (madeira, mármore, ouro e prata, neon, rubi e safira). Online, o adversário vê as suas peças, e você as dele.
+- Perfil: moldura da foto, capa, título e cor do nome, algumas animadas. Os amigos veem na lista e no seu perfil, que ganha a capa na tela inteira; no xadrez e nas damas online, aparecem na etiqueta da partida.
+
 ## 1.65
 
 - Treino de xadrez: escolha "Treino" no xadrez para jogar contra o bot ou sozinho com os dois lados, sem relógio. Dá para desfazer lances, e cada lance ganha uma nota, como quando se assiste a uma partida.

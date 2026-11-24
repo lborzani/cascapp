@@ -51,8 +51,9 @@ Backup automático todo dia às 4h, guardando 7, dentro do volume `pb_data`.
 
 ## Perfil público
 
-Qualquer conta logada vê o perfil das outras: nome, avatar, código de amigo e
-Elo do xadrez — o e-mail não. Listar todas continua fechado; acha-se alguém
+Qualquer conta logada vê o perfil das outras: nome, avatar, código de amigo,
+Elo do xadrez e o visual da loja (`look`, para a moldura, a capa, o título e a
+cor do nome aparecerem para os amigos) — o e-mail não. Listar todas continua fechado; acha-se alguém
 pelo código, em `GET /api/cascapp/by-code/{code}` (`pb_hooks/perfil.pb.js`).
 O código e o Elo são do servidor: nascem no hook de criação e a regra de
 atualização recusa qualquer pedido do app que tente escrevê-los.
@@ -94,7 +95,7 @@ relay só conhece um hash da partida.
 ## Loja e moedas
 
 Cada conta tem saldo (`coins`), itens pagos comprados (`owned`) e o visual
-equipado (`look`, `{"ball": "ball_wood", "hair": "hair_mohawk", ...}`). O saldo
+equipado (`look`, `{"ball": "ball_wood", "frame": "frame_neon", ...}`). O saldo
 e os itens são do servidor: só as rotas de `pb_hooks/loja.pb.js` mexem neles,
 e a regra de atualização recusa o app escrevendo `coins`, `owned` ou os campos
 do dia. A conta nova nasce zerada por cima do que vier no corpo.

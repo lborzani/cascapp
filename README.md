@@ -1203,6 +1203,29 @@ mesmo aparelho ou em rede.
   atrito do contato, então a bola começa com o atrito do óleo e passa ao cheio
   depois dos 40 pés.
 
+### Loja e visual
+
+Moedas se ganham terminando partidas contra o bot ou online e com o bônus do dia
+(ver `pocketbase/README.md`, "Loja e moedas"), e se trocam na loja da aba Você
+(`ui/shop_panel.gd`). O catálogo visual é `core/cosmetics.gd`; o preço mora só
+no servidor, e item sem preço lá não aparece à venda. O visual equipado (`look`,
+um dicionário encaixe → item) é da conta e viaja no aperto de mão como o nome.
+
+| Encaixe | O que muda | Onde |
+|---|---|---|
+| `ball` | a bola do boliche (dez texturas, quatro com material próprio) | `BowlingLane.tint_ball` |
+| `cue` | o taco da sinuca, por shader (`ui/cue_skin.gdshader`) | `PoolView.dress_cue` |
+| `pieces`, `finish` | o conjunto e o acabamento das peças do xadrez (o acabamento vale nas damas) | `PieceRenderer.styled_texture` |
+| `frame`, `banner`, `title`, `name_color` | a moldura da foto, a capa, o título e a cor do nome | `Coaster`, `ProfileCover`, `ProfileStyle` |
+
+Online, as peças, o taco e a bola de cada um aparecem para todos com a escolha
+dele; no mesmo aparelho e contra o bot, o visual é o do dono. As peças vêm de
+SVGs crus (`importer="keep"`), porque o acabamento troca as cores no texto do
+SVG. Os desenhos saem de scripts: `tools/build_piece_sets.gd`,
+`tools/build_cue_skins.gd`, `art/bowling/build_skins.py` e
+`art/bowling/build_special_balls.py`. As folhas de conferência são
+`tests/cue_sheet`, `tests/ball_sheet` e `tests/profile_sheet`.
+
 ### Transporte: uma sala, e só
 
 O anfitrião abre uma **sala** no relay e mostra um código de 6 caracteres. O
