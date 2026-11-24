@@ -23,15 +23,28 @@ test("prêmio por desfecho, dentro do teto do dia", () => {
   assert.strictEqual(loja.rewardFor("uno", "victory", 0), null)
 })
 
+test("catálogo: à venda só o ativo e não exclusivo; pago é todo registro", () => {
+  const catalog = loja.catalogOf([
+    { item: "ball_wood", price: 150, exclusive: false, active: true },
+    { item: "ball_old", price: 90, exclusive: false, active: false },
+    { item: "title_mission", price: 0, exclusive: true, active: true },
+  ])
+  assert.deepStrictEqual(catalog.prices, { ball_wood: 150 })
+  assert.deepStrictEqual(catalog.paid, ["ball_wood", "ball_old", "title_mission"])
+  assert.deepStrictEqual(catalog.exclusive, ["title_mission"])
+})
+
 test("visual: item pago só equipado se comprado", () => {
-  assert.strictEqual(loja.lookProblem({ ball: "ball_galaxy" }, []), "ball_galaxy")
-  assert.strictEqual(loja.lookProblem({ ball: "ball_galaxy" }, ["ball_galaxy"]), "")
-  assert.strictEqual(loja.lookProblem({ skin: "skin_3", hair_color: "hc_red" }, []), "")
-  assert.strictEqual(loja.lookProblem({}, []), "")
-  assert.strictEqual(loja.lookProblem([], []), null)
-  assert.strictEqual(loja.lookProblem("ball_galaxy", []), null)
-  assert.strictEqual(loja.lookProblem({ ball: 3 }, []), null)
+  const paid = ["ball_galaxy", "title_mission"]
+  assert.strictEqual(loja.lookProblem({ ball: "ball_galaxy" }, [], paid), "ball_galaxy")
+  assert.strictEqual(loja.lookProblem({ ball: "ball_galaxy" }, ["ball_galaxy"], paid), "")
+  assert.strictEqual(loja.lookProblem({ title: "title_mission" }, [], paid), "title_mission")
+  assert.strictEqual(loja.lookProblem({ skin: "skin_3", hair_color: "hc_red" }, [], paid), "")
+  assert.strictEqual(loja.lookProblem({}, [], paid), "")
+  assert.strictEqual(loja.lookProblem([], [], paid), null)
+  assert.strictEqual(loja.lookProblem("ball_galaxy", [], paid), null)
+  assert.strictEqual(loja.lookProblem({ ball: 3 }, [], paid), null)
   const many = {}
   for (let i = 0; i < 13; i++) many["s" + i] = "x"
-  assert.strictEqual(loja.lookProblem(many, []), null)
+  assert.strictEqual(loja.lookProblem(many, [], paid), null)
 })

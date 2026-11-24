@@ -115,10 +115,56 @@ func _ready() -> void:
 	_equals((await Account._call(HTTPClient.METHOD_PATCH, me, {"look": ["ball_wood"]}))["code"], 400, "visual fora do formato: 400")
 	_equals((await Account._call(HTTPClient.METHOD_PATCH, me, {"name": "Loja"}))["code"], 200, "mudar o nome continua livre")
 
+	await _admin_catalog()
 	await _app_wallet()
 	Prefs.forget_rewards()
 	print("%s — %d falha(s)" % ["OK" if _failures == 0 else "FALHOU", _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## O catálogo editado no painel admin (`shop_items`). Precisa de um superusuário
+## em `CASCAPP_PB_SUPERUSER=email:senha`; sem ele, pula com aviso.
+func _admin_catalog() -> void:
+	print("catálogo no admin")
+	_check((await Account._call(HTTPClient.METHOD_GET, "/api/collections/shop_items/records", {}))["code"] != 200, "o app não lê a coleção do catálogo")
+	_check((await _post("/api/collections/shop_items/records", {"item": "ball_free", "price": 0, "active": true}))["code"] != 200, "nem escreve nela")
+	_admin_api = preload("res://tests/pb_admin.gd").new(self)
+	if not await _admin_api.sign_in():
+		print("  (pulado: sem CASCAPP_PB_SUPERUSER)")
+		return
+	var ocean: Dictionary = await _admin_api.find("shop_items", "item", "ball_ocean")
+	var gold: Dictionary = await _admin_api.find("shop_items", "item", "frame_gold")
+	_check(not ocean.is_empty() and not gold.is_empty(), "os itens estão no catálogo")
+	var rows := "/api/collections/shop_items/records/"
+
+	await _admin(HTTPClient.METHOD_PATCH, rows + ocean["id"], {"price": 7})
+	_equals((await _prices()).get("ball_ocean"), 7.0, "o preço novo vale na hora")
+	await _admin(HTTPClient.METHOD_PATCH, rows + ocean["id"], {"active": false})
+	_check(not (await _prices()).has("ball_ocean"), "inativo some da loja")
+	_equals((await _post("/api/cascapp/buy", {"item": "ball_ocean"}))["code"], 404, "e não se compra")
+
+	await _admin(HTTPClient.METHOD_PATCH, rows + gold["id"], {"exclusive": true})
+	_check(not (await _prices()).has("frame_gold"), "exclusivo fica fora da loja")
+	_equals((await _post("/api/cascapp/buy", {"item": "frame_gold"}))["code"], 404, "e não se compra")
+	_equals((await Account._call(HTTPClient.METHOD_PATCH, USERS + Account.user_id, {"look": {"frame": "frame_gold"}}))["code"], 403, "nem se equipa sem ter")
+	var equip := await Account._call(HTTPClient.METHOD_PATCH, USERS + Account.user_id, {"look": {"ball": "ball_wood"}})
+	_equals(equip["code"], 200, "o que já é dela segue equipando")
+
+	await _admin(HTTPClient.METHOD_PATCH, rows + ocean["id"], {"price": ocean["price"], "active": true})
+	await _admin(HTTPClient.METHOD_PATCH, rows + gold["id"], {"exclusive": false})
+	_equals((await _prices()).get("ball_ocean"), float(ocean["price"]), "o catálogo volta ao de antes")
+
+
+var _admin_api: RefCounted = null
+
+
+func _prices() -> Dictionary:
+	var shop := await Account._call(HTTPClient.METHOD_GET, "/api/cascapp/shop", {})
+	return shop["data"].get("items", {}) if shop["data"] is Dictionary else {}
+
+
+func _admin(method: int, path: String, body: Dictionary) -> Dictionary:
+	return await _admin_api.call_api(method, path, body)
 
 
 ## O lado do app: `Account` pede o bônus na entrada, e o cartão de fim

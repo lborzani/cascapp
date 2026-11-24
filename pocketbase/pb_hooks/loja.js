@@ -2,58 +2,38 @@
 // `.pb.js` no nome: não é carregado sozinho, só por `require`. As funções de
 // cima não usam nada do PocketBase, e `pocketbase/loja.test.js` as testa no Node.
 
-// O preço de cada item pago. Item que não está aqui é grátis (as cores, por
-// exemplo) e pode ser equipado sem compra. O catálogo visual (nome, arquivo,
-// tipo) mora no app, em `core/cosmetics.gd`; o preço mora só aqui.
-const PRICES = {
-  ball_galaxy: 400,
-  ball_flames: 300,
-  ball_ocean: 250,
-  ball_melon: 200,
-  ball_wood: 150,
-  ball_checker: 200,
-  ball_chrome: 400,
-  ball_neon: 450,
-  ball_crystal: 500,
-  ball_lava: 450,
-  frame_gold: 300,
-  frame_silver: 200,
-  frame_neon: 250,
-  frame_flames: 350,
-  frame_laurel: 400,
-  frame_rainbow: 450,
-  banner_sunset: 200,
-  banner_night: 250,
-  banner_felt: 150,
-  banner_checker: 150,
-  banner_waves: 200,
-  banner_aurora: 400,
-  title_pool: 150,
-  title_chess: 150,
-  title_strike: 150,
-  title_board: 150,
-  title_uno: 100,
-  title_boteco: 250,
-  title_lucky: 100,
-  title_unbeaten: 250,
-  name_gold: 200,
-  name_ruby: 150,
-  name_emerald: 150,
-  name_neon: 200,
-  name_rainbow: 300,
-  finish_wood: 200,
-  finish_marble: 250,
-  finish_metal: 350,
-  finish_neon: 300,
-  finish_gems: 350,
-  pieces_staunton: 400,
-  pieces_minimal: 400,
-  pieces_medieval: 400,
-  cue_ebony: 250,
-  cue_carbon: 300,
-  cue_flames: 200,
-  cue_neon: 350,
-  cue_gold: 400,
+// O catálogo mora na coleção `shop_items` (ver
+// `pb_migrations/1764000000_shop_items.js`), editada no painel admin. Item sem
+// registro lá é grátis (as cores, por exemplo). O visual (nome, arquivo, tipo)
+// mora no app, em `core/cosmetics.gd`.
+
+// O catálogo a partir das linhas da coleção: `prices` só com o que está à venda
+// (ativo e não exclusivo), `paid` com todo item que precisa estar no `owned`
+// para ser equipado e `exclusive` com os que só saem por missão.
+function catalogOf(rows) {
+  const prices = {}
+  const paid = []
+  const exclusive = []
+  for (const row of rows) {
+    paid.push(row.item)
+    if (row.exclusive) {
+      exclusive.push(row.item)
+    } else if (row.active) {
+      prices[row.item] = row.price
+    }
+  }
+  return { prices, paid, exclusive }
+}
+
+// O catálogo lido do banco, a cada pedido: a coleção é pequena e o admin quer
+// ver a mudança na hora.
+function loadCatalog(app) {
+  return catalogOf(app.findAllRecords("shop_items").map((record) => ({
+    item: record.getString("item"),
+    price: record.getInt("price"),
+    exclusive: record.getBool("exclusive"),
+    active: record.getBool("active"),
+  })))
 }
 
 const DAILY = 50
@@ -80,9 +60,9 @@ function rewardFor(game, result, earnedToday) {
   return Math.max(0, Math.min(REWARDS[result], REWARD_CAP - earnedToday))
 }
 
-// O primeiro item pago do visual que não está em `owned`, ou "" quando o
-// visual é válido. `null` quando o formato está errado.
-function lookProblem(look, owned) {
+// O primeiro item pago (`paid`, do catálogo) do visual que não está em
+// `owned`, ou "" quando o visual é válido. `null` quando o formato está errado.
+function lookProblem(look, owned, paid) {
   if (look === null || typeof look !== "object" || Array.isArray(look)) {
     return null
   }
@@ -95,7 +75,7 @@ function lookProblem(look, owned) {
     if (typeof item !== "string" || slot.length > 20 || item.length > 40) {
       return null
     }
-    if (item in PRICES && !owned.includes(item)) {
+    if (paid.includes(item) && !owned.includes(item)) {
       return item
     }
   }
@@ -125,4 +105,4 @@ function wallet(record) {
   }
 }
 
-module.exports = { PRICES, DAILY, REWARDS, REWARD_CAP, GAMES, brDay, rewardFor, lookProblem, jsonOf, wallet }
+module.exports = { catalogOf, loadCatalog, DAILY, REWARDS, REWARD_CAP, GAMES, brDay, rewardFor, lookProblem, jsonOf, wallet }

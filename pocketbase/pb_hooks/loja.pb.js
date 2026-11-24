@@ -29,7 +29,7 @@ onRecordUpdateRequest((e) => {
     // O corpo traz o campo JSON em bytes crus; o registro já tem ele carregado.
     const look = loja.jsonOf(e.record, "look", null)
     const stored = e.app.findRecordById("users", e.record.id)
-    const problem = loja.lookProblem(look, loja.jsonOf(stored, "owned", []))
+    const problem = loja.lookProblem(look, loja.jsonOf(stored, "owned", []), loja.loadCatalog(e.app).paid)
     if (problem === null) {
       throw new BadRequestError("Visual inválido.")
     }
@@ -40,12 +40,17 @@ onRecordUpdateRequest((e) => {
   e.next()
 }, "users")
 
-// Os preços, o bônus diário e o prêmio por partida. Aberta: não diz nada de
-// ninguém.
+// Os preços do que está à venda (`items`), o bônus diário e o prêmio por
+// partida. Aberta: não diz nada de ninguém. Exclusivos e inativos ficam fora de
+// `items`; `paid` lista todo item que só se equipa tendo, e `exclusive` os que
+// só saem por missão.
 routerAdd("GET", "/api/cascapp/shop", (e) => {
   const loja = require(`${__hooks}/loja.js`)
+  const catalog = loja.loadCatalog(e.app)
   return e.json(200, {
-    items: loja.PRICES,
+    items: catalog.prices,
+    paid: catalog.paid,
+    exclusive: catalog.exclusive,
     daily: loja.DAILY,
     rewards: loja.REWARDS,
     reward_cap: loja.REWARD_CAP,
@@ -73,11 +78,15 @@ routerAdd("POST", "/api/cascapp/daily", (e) => {
 }, $apis.requireAuth("users"))
 
 // Uma partida terminada: `{game, result: "win"|"draw"|"loss"}`. Paga dentro do
-// teto do dia; acima dele, `granted` 0.
+// teto do dia; acima dele, `granted` 0. Também avança as missões
+// (`missoes.pb.js`), com ou sem teto, e devolve em `missions_done` as que
+// acabaram de completar.
 routerAdd("POST", "/api/cascapp/reward", (e) => {
   const loja = require(`${__hooks}/loja.js`)
+  const missoes = require(`${__hooks}/missoes.js`)
   const body = e.requestInfo().body
-  const today = loja.brDay(Date.now())
+  const now = Date.now()
+  const today = loja.brDay(now)
   let reply = null
   e.app.runInTransaction((tx) => {
     const user = tx.findRecordById("users", e.auth.id)
@@ -89,8 +98,13 @@ routerAdd("POST", "/api/cascapp/reward", (e) => {
     user.set("coins", user.getInt("coins") + granted)
     user.set("earned_day", today)
     user.set("earned_today", earned + granted)
+    const data = missoes.load(tx)
+    const live = missoes.liveMissions(data.missions, data.events, user.id, today, now)
+    const state = loja.jsonOf(user, "missions_state", {})
+    const done = missoes.advance(state, live, String(body.game), String(body.result))
+    user.set("missions_state", missoes.prune(state, live))
     tx.saveNoValidate(user)
-    reply = Object.assign(loja.wallet(user), { granted: granted })
+    reply = Object.assign(loja.wallet(user), { granted: granted, missions_done: done })
   })
   if (reply === null) {
     return e.json(400, { message: "Partida inválida." })
@@ -98,11 +112,12 @@ routerAdd("POST", "/api/cascapp/reward", (e) => {
   return e.json(200, reply)
 }, $apis.requireAuth("users"))
 
-// Compra: `{item}`. O preço é o daqui, nunca o do app.
+// Compra: `{item}`. O preço é o do catálogo, nunca o do app. Exclusivo ou
+// inativo não está à venda: 404, como item que não existe.
 routerAdd("POST", "/api/cascapp/buy", (e) => {
   const loja = require(`${__hooks}/loja.js`)
   const item = String(e.requestInfo().body.item || "")
-  const price = loja.PRICES[item]
+  const price = loja.loadCatalog(e.app).prices[item]
   if (price === undefined) {
     return e.json(404, { message: "Item inexistente." })
   }

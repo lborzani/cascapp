@@ -105,11 +105,16 @@ jobs:
           wget -q "https://github.com/pocketbase/pocketbase/releases/download/v${pb}/pocketbase_${pb}_linux_amd64.zip" -O /tmp/pb.zip
           unzip -q /tmp/pb.zip pocketbase -d /tmp/pb
           export CASCAPP_RELAY_SECRET=segredo-da-ci
+          # O superusuário que o `shop_probe` usa para editar o catálogo como o painel admin.
+          export CASCAPP_PB_SUPERUSER=probe@ci.test:senha-da-ci-123
+          /tmp/pb/pocketbase superuser upsert probe@ci.test senha-da-ci-123 --dir /tmp/pb/data
           /tmp/pb/pocketbase serve --http 127.0.0.1:18091 --dir /tmp/pb/data --migrationsDir pocketbase/pb_migrations --hooksDir pocketbase/pb_hooks > pb.log 2>&1 &
           timeout 30 bash -c 'until curl -sf 127.0.0.1:18091/api/health >/dev/null; do sleep 0.5; done'
           CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/account_probe.tscn
-          node --test pocketbase/loja.test.js
+          node --test pocketbase/loja.test.js pocketbase/missoes.test.js pocketbase/presentes.test.js
           CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/shop_probe.tscn
+          CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/missions_probe.tscn
+          CASCAPP_PB_URL=http://127.0.0.1:18091 godot --headless --path . res://tests/gifts_probe.tscn
 
       # Tema e componentes base: fontes embarcadas com os acentos do português,
       # contraste dos pares de texto, as variações que as telas pedem, e a

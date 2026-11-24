@@ -77,13 +77,18 @@ function preview(row) {
 // ponytail: síncrono dentro do POST da mensagem (~300 ms do FCM a mais na
 // resposta); fila à parte se isso pesar.
 function notify(app, row) {
+  push(app, row.getString("to"), row.getString("from"), preview(row))
+}
+
+// Uma notificação de `from` para os aparelhos de `to`, com `body`. Tocar nela
+// abre a conversa com `from` (`PushService.kt`). Também usada pelos presentes.
+function push(app, to, from, body) {
   const secret = $os.getenv("CASCAPP_PUSH_SECRET")
   if (!secret) return
   try {
-    const to = row.getString("to")
     const tokens = app.findRecordsByFilter("push_tokens", "owner = {:to}", "-updated", MAX_DEVICES, 0, { to })
     if (tokens.length === 0) return
-    const sender = app.findRecordById("users", row.getString("from"))
+    const sender = app.findRecordById("users", from)
     const reply = $http.send({
       url: ($os.getenv("CASCAPP_PUSH_URL") || "http://push:8095") + "/send",
       method: "POST",
@@ -91,7 +96,7 @@ function notify(app, row) {
       body: JSON.stringify({
         tokens: tokens.map((t) => t.getString("token")),
         title: sender.getString("name") || "Um amigo",
-        body: preview(row),
+        body: body,
         friend: sender.id,
       }),
       timeout: 5,
@@ -115,4 +120,4 @@ function trim(app, a, b) {
   for (const row of old) app.delete(row)
 }
 
-module.exports = { PAGE, KEEP, PER_MINUTE, EMOTES, EMOTE_COUNT, cleanText, validate, toJson, trim, preview, notify }
+module.exports = { PAGE, KEEP, PER_MINUTE, EMOTES, EMOTE_COUNT, cleanText, validate, toJson, trim, preview, notify, push }

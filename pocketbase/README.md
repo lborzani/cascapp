@@ -101,8 +101,11 @@ e a regra de atualização recusa o app escrevendo `coins`, `owned` ou os campos
 do dia. A conta nova nasce zerada por cima do que vier no corpo.
 
 - `GET /api/cascapp/shop`, aberta: os preços (`items`), o bônus diário e o
-  prêmio por partida. O preço mora só aqui (`pb_hooks/loja.js`); item fora da
-  tabela é grátis.
+  prêmio por partida. O catálogo mora na coleção `shop_items`, editada no
+  painel admin (`/_/`): `price`, `active` (fora da loja quando falso; quem já
+  tem segue usando) e `exclusive` (não se compra, só sai por missão). Item sem
+  registro é grátis; item com registro só se equipa se estiver no `owned`. O
+  app só desenha os ids que conhece (`core/cosmetics.gd`).
 - `POST /api/cascapp/daily`: 50 moedas, uma vez por dia de Brasília.
 - `POST /api/cascapp/reward` com `{game, result}`: 25 por vitória, 15 por
   empate e 10 por derrota, até 300 por dia. O app conta o próprio desfecho e o
@@ -114,6 +117,51 @@ do dia. A conta nova nasce zerada por cima do que vier no corpo.
 
 As regras puras têm teste no Node (`node --test pocketbase/loja.test.js`), e as
 rotas, no `tests/shop_probe.tscn` contra um PocketBase local.
+
+### Missões e eventos
+
+Editados no painel admin, sem deploy (`pb_migrations/1764100000_missoes.js`):
+
+- `events`: `key`, `name`, `starts`, `ends`. Fora da janela, as missões do
+  evento somem e não se resgatam.
+- `missions`: `track` (`daily`: 3 sorteadas por conta e por dia; `perm`:
+  conquista que nunca zera; `event`: precisa de `event`), `kind` (`play`, `win`,
+  `variety` = jogos diferentes), `game` opcional, `target`, `title` opcional,
+  `reward_coins`, `reward_item` (de `shop_items`, normalmente um exclusivo) e
+  `active`. Um hook recusa missão que não paga nada, item que não está no
+  catálogo e evento faltando ou sobrando.
+
+Para criar um evento: um registro em `events`, as missões com `track = event`
+apontando para ele e, se pagarem item novo, o item em `shop_items` com
+`exclusive = true` (o desenho precisa já existir no app).
+
+- `GET /api/cascapp/missions`: as missões valendo para quem pede, com
+  `progress` e `claimed`, e os eventos no ar.
+- `POST /api/cascapp/missions/claim` com `{key}`: paga moedas e item numa
+  transação; 404 fora do ar, 409 incompleta ou já resgatada.
+- O progresso anda no `/reward`, que devolve `missions_done`. O estado mora em
+  `users.missions_state`, que o app não escreve.
+
+Teste: `node --test pocketbase/missoes.test.js` e `tests/missions_probe.tscn`.
+
+### Presentes
+
+Só entre amigos (`pb_migrations/1764200000_presentes.js`, rotas em
+`pb_hooks/presentes.pb.js`). Quem recebe ganha uma notificação, pelo mesmo
+`push` da conversa.
+
+- `POST /api/cascapp/gifts` com `{to, item}`: presente de um item à venda. Quem
+  manda paga o preço do catálogo, e o item entra no `owned` do amigo na hora.
+  404 sem amizade ou item fora de venda (exclusivo não se presenteia), 409 o
+  amigo já tem, 402 sem saldo.
+- `POST /api/cascapp/gifts/daily` com `{to}`: o presentinho de 10 moedas, de
+  graça, um por amigo por dia; cada conta recebe no máximo 5 por dia (429). As
+  moedas só entram quando o amigo abre.
+- `GET /api/cascapp/gifts`: os presentes fechados que chegaram, `sent_today`
+  (os amigos que já ganharam o meu presentinho hoje) e `daily_coins`.
+- `POST /api/cascapp/gifts/{id}/open`: abre; 404 se não é meu ou já foi aberto.
+
+Teste: `node --test pocketbase/presentes.test.js` e `tests/gifts_probe.tscn`.
 
 ## Conta protegida por e-mail
 
