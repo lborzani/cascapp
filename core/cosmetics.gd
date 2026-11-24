@@ -9,7 +9,6 @@ extends RefCounted
 ## guarda e que viaja aos outros aparelhos no aperto de mão (`Net.look_of`).
 
 const BALL := "ball"
-const BOARD := "board"
 const FINISH := "finish"
 const PIECES := "pieces"
 const CUE := "cue"
@@ -44,49 +43,13 @@ const ITEMS := {
 		"alpha": 0.5, "roughness": 0.02,
 	},
 	"ball_lava": {"slot": BALL, "name": "Lava", "art": "res://assets/bowling/skins/ball_lava.png", "glow": 1.6},
-	# Tabuleiros do xadrez e das damas (`BoardView`). `light`/`dark` são as casas,
-	# `last`/`last_dark` o último lance em cada uma, `frame` a moldura. Com
-	# `texture`, a casa é a textura (tons de cinza, de `tools/build_board_textures.gd`)
-	# multiplicada pela cor; `turn` deita a textura nas casas escuras, para o veio
-	# da madeira alternar.
-	"board_wood": {
-		"slot": BOARD, "name": "Madeira", "light": Color("eccb98"), "dark": Color("a8683a"),
-		"frame": Color("4a2c17"), "last": Color("f7e27a"), "last_dark": Color("d9b23f"),
-		"texture": "res://assets/boards/wood.png", "turn": true,
-	},
-	"board_marble": {
-		"slot": BOARD, "name": "Mármore", "light": Color("f4f1ea"), "dark": Color("7d8a84"),
-		"frame": Color("33393a"), "last": Color("e3f08e"), "last_dark": Color("b4c45a"),
-		"texture": "res://assets/boards/marble.png",
-	},
-	"board_tournament": {
-		"slot": BOARD, "name": "Torneio", "light": Color("eeeed2"), "dark": Color("769656"),
-		"frame": Color("2c3a24"), "last": Color("f6f68a"), "last_dark": Color("bbcb44"),
-	},
-	"board_ocean": {
-		"slot": BOARD, "name": "Oceano", "light": Color("dcf0f6"), "dark": Color("4f8db3"),
-		"frame": Color("143a52"), "last": Color("fff09a"), "last_dark": Color("e2c35a"),
-	},
-	"board_neon": {
-		"slot": BOARD, "name": "Neon", "light": Color("e23ec6"), "dark": Color("3fe6ff"),
-		"frame": Color("120b24"), "last": Color("e8ff5a"), "last_dark": Color("e8ff5a"),
-		"texture": "res://assets/boards/neon.png",
-	},
-	"board_candy": {
-		"slot": BOARD, "name": "Doces", "light": Color("fff4e6"), "dark": Color("ff86b4"),
-		"frame": Color("8a3a5c"), "last": Color("fff08a"), "last_dark": Color("ffc95a"),
-		"texture": "res://assets/boards/candy.png",
-	},
-	# Acabamentos das peças do xadrez e das damas (`PieceRenderer`): o desenho de
-	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
-	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
-	# contorno e os detalhes.
 	# Molduras da foto: `style` é o desenho em `Coaster._draw_frame`.
 	"frame_gold": {"slot": FRAME, "name": "Ouro", "style": "gold"},
 	"frame_silver": {"slot": FRAME, "name": "Prata", "style": "silver"},
 	"frame_neon": {"slot": FRAME, "name": "Neon", "style": "neon"},
 	"frame_flames": {"slot": FRAME, "name": "Chamas", "style": "flames"},
 	"frame_laurel": {"slot": FRAME, "name": "Louros", "style": "laurel"},
+	"frame_rainbow": {"slot": FRAME, "name": "Arco-íris", "style": "rainbow"},
 	# Capas do perfil: um degradê de cima para baixo (`colors`) e um desenho por
 	# cima (`pattern`), em `ProfileCover.paint`.
 	"banner_sunset": {"slot": BANNER, "name": "Pôr do sol", "colors": [Color("ff9a5a"), Color("ff5f8f"), Color("6b3fa0")], "pattern": "sun"},
@@ -94,6 +57,7 @@ const ITEMS := {
 	"banner_felt": {"slot": BANNER, "name": "Feltro", "colors": [Color("1f7a4f"), Color("125236")], "pattern": "felt"},
 	"banner_checker": {"slot": BANNER, "name": "Tabuleiro", "colors": [Color("3b3478"), Color("272250")], "pattern": "checker"},
 	"banner_waves": {"slot": BANNER, "name": "Ondas", "colors": [Color("2f9bd6"), Color("124a7a")], "pattern": "waves"},
+	"banner_aurora": {"slot": BANNER, "name": "Aurora", "colors": [Color("0a1d33"), Color("120f38")], "pattern": "aurora"},
 	# Títulos: o nome é o texto que aparece. Nunca texto livre.
 	"title_pool": {"slot": TITLE, "name": "Rei da Sinuca"},
 	"title_chess": {"slot": TITLE, "name": "Mestre do Xadrez"},
@@ -121,6 +85,10 @@ const ITEMS := {
 	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
 	"pieces_minimal": {"slot": PIECES, "name": "Minimalista", "dir": "res://assets/pieces/sets/minimal"},
 	"pieces_medieval": {"slot": PIECES, "name": "Medieval", "dir": "res://assets/pieces/sets/medieval"},
+	# Acabamentos das peças do xadrez e das damas (`PieceRenderer`): o desenho de
+	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
+	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
+	# contorno e os detalhes.
 	"finish_wood": {
 		"slot": FINISH, "name": "Madeira",
 		"white": {"body": ["#f5dcae", "#e3c28c", "#f2d6a2", "#d9b47a", "#efd09a", "#e0bd84"], "line": "#5a3a1e"},
@@ -148,13 +116,6 @@ const ITEMS := {
 	},
 }
 
-## O tabuleiro sem skin: o violeta do tema.
-const DEFAULT_BOARD := {
-	"light": AppTheme.BOARD_LIGHT, "dark": AppTheme.BOARD_DARK, "frame": AppTheme.BOARD_FRAME,
-	"last": AppTheme.LAST_MOVE, "last_dark": AppTheme.LAST_MOVE_DARK,
-}
-
-
 ## Os itens de um encaixe, na ordem do catálogo.
 static func of_slot(slot: String) -> Array[String]:
 	var found: Array[String] = []
@@ -176,18 +137,6 @@ static func ball_texture(look: Dictionary) -> Texture2D:
 	if not ITEMS.has(id):
 		return null
 	return load(ITEMS[id]["art"]) as Texture2D
-
-
-## A skin de tabuleiro de um visual (as chaves de `DEFAULT_BOARD`, mais `texture`
-## já carregada e `turn`), ou o padrão. Item desconhecido também cai no padrão.
-static func board_skin(look: Dictionary) -> Dictionary:
-	var id := str(look.get(BOARD, ""))
-	if not ITEMS.has(id) or ITEMS[id]["slot"] != BOARD:
-		return DEFAULT_BOARD
-	var skin: Dictionary = ITEMS[id].duplicate()
-	if skin.has("texture"):
-		skin["texture"] = load(skin["texture"])
-	return skin
 
 
 ## O acabamento de peças de um visual, ou vazio para o desenho de sempre.

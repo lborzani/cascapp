@@ -1376,7 +1376,7 @@ func _seat_of(side: int) -> int:
 
 
 ## Online, cada cor tem o visual de quem joga com ela (o `look` do aperto de
-## mão): a metade dele do tabuleiro e o acabamento das peças dele. Segue o
+## mão): o conjunto e o acabamento das peças dele. Segue o
 ## `_seat_of`, então troca junto na revanche e vale para quem assiste.
 func _board_looks() -> Array:
 	return [Net.look_of(_seat_of(Board.Side.WHITE)), Net.look_of(_seat_of(Board.Side.BLACK))]

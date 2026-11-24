@@ -70,7 +70,7 @@ func _ready() -> void:
 		var framed := MarginContainer.new()
 		for side in ["left", "top", "right", "bottom"]:
 			framed.add_theme_constant_override("margin_" + side, 14)
-		framed.draw.connect(func() -> void: ProfileCover.paint(framed, Rect2(Vector2.ZERO, framed.size), cover))
+		ProfileCover.behind(framed, cover)
 		framed.add_child(top)
 	var coaster := Coaster.new()
 	coaster.custom_minimum_size = Vector2(PHOTO, PHOTO)

@@ -44,14 +44,6 @@ var dragging := false
 
 var _cell := 0.0
 var _origin := Vector2.ZERO
-## A cor da moldura. O `BoardView` troca pela da skin do tabuleiro.
-var frame_color := AppTheme.BOARD_FRAME:
-	set(value):
-		if frame_color == value:
-			return
-		frame_color = value
-		_frame_cache = null
-		queue_redraw()
 var _frame_cache: StyleBoxFlat = null
 var _frame_cell := -1.0
 
@@ -217,7 +209,7 @@ func _frame_style() -> StyleBoxFlat:
 	if _frame_cache != null and is_equal_approx(_frame_cell, _cell):
 		return _frame_cache
 	var style := StyleBoxFlat.new()
-	style.bg_color = frame_color
+	style.bg_color = AppTheme.BOARD_FRAME
 	style.set_corner_radius_all(int(_cell * 0.20))
 	style.set_border_width_all(1)
 	style.border_color = Color(AppTheme.TEXT, 0.10)

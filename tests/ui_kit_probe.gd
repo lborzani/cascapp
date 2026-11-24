@@ -104,20 +104,6 @@ func _probe_palette() -> void:
 	# As duas casas têm de se distinguir entre si, e a marca do último lance da casa.
 	_check(AppTheme.contrast(AppTheme.BOARD_LIGHT, AppTheme.BOARD_DARK) >= 3.0, "casa clara e escura se distinguem")
 	_check(AppTheme.LAST_MOVE != AppTheme.ACCENT, "o último lance não é a cor de ação")
-	# As skins da loja (`Cosmetics`, encaixe `board`). O limiar das casas é mais
-	# baixo que o do padrão: madeira e doces vivem de cor, não de claro e escuro.
-	_equals(Cosmetics.board_skin({}), Cosmetics.DEFAULT_BOARD, "sem skin, o tabuleiro do tema")
-	_equals(Cosmetics.board_skin({Cosmetics.BOARD: "board_nada"}), Cosmetics.DEFAULT_BOARD, "skin desconhecida cai no padrão")
-	for id in Cosmetics.of_slot(Cosmetics.BOARD):
-		var skin := Cosmetics.board_skin({Cosmetics.BOARD: id})
-		var squares := AppTheme.contrast(skin["light"], skin["dark"])
-		_check(squares >= 1.8, "%s: casas se distinguem (%.1f:1)" % [id, squares])
-		var gap := minf(_rgb_gap(skin["last"], skin["light"]), _rgb_gap(skin["last_dark"], skin["dark"]))
-		_check(gap >= 0.15, "%s: o último lance aparece nas duas casas (%.2f)" % [id, gap])
-		var frame: Color = skin["frame"]
-		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
-		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
-		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
 	# Perfil: moldura, título e cor do nome.
 	_equals(Cosmetics.frame_of({"frame": "frame_laurel"}), "laurel", "a moldura dos louros")
 	_equals(Cosmetics.frame_of({"frame": "frame_nada"}), "", "moldura desconhecida, nenhuma")
@@ -131,6 +117,18 @@ func _probe_palette() -> void:
 	painted.free()
 	for id in Cosmetics.of_slot(Cosmetics.BANNER):
 		_check((Cosmetics.ITEMS[id]["colors"] as Array).size() >= 2, "%s: a capa tem degradê" % id)
+	# Animados: só as molduras e as capas que se mexem gastam quadro.
+	_check(Coaster.animated("rainbow") and Coaster.animated("neon") and not Coaster.animated("gold"), "o arco-íris e o neon se mexem, o ouro não")
+	_check(ProfileCover.animated(Cosmetics.ITEMS["banner_aurora"]) and not ProfileCover.animated(Cosmetics.ITEMS["banner_sunset"]), "a aurora se mexe, o pôr do sol não")
+	var moving := Coaster.new()
+	moving.frame = "rainbow"
+	var still := Coaster.new()
+	still.frame = "gold"
+	root.add_child(moving)
+	root.add_child(still)
+	_check(moving.is_processing() and not still.is_processing(), "só a bolacha da moldura animada processa")
+	moving.free()
+	still.free()
 	# Tacos: cada um carrega a textura inteira do taco desenrolado.
 	_equals(Cosmetics.cue_skin({"cue": "cue_nada"}), {}, "taco desconhecido é o de sempre")
 	for id in Cosmetics.of_slot(Cosmetics.CUE):

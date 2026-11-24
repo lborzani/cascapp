@@ -45,7 +45,13 @@ const TURN_GAP_RATIO := 0.06
 var frame := "":
 	set(value):
 		frame = value
+		set_process(is_inside_tree() and animated(value))
 		queue_redraw()
+## As molduras que se mexem: o neon pulsa, as chamas tremulam e o arco-íris gira.
+const ANIMATED_FRAMES := ["neon", "flames", "rainbow"]
+## O relógio da moldura animada, em segundos. Anda no `_process`, que só roda
+## com uma delas na tela; a folha de conferência o escreve à mão.
+var frame_time := 0.0
 ## Largura da moldura em relação ao diâmetro.
 const FRAME_RATIO := 0.11
 ## O halo da vez, de 0 a 1: um anel que cresce para fora e some, em laço.
@@ -86,6 +92,12 @@ func _sync_pulse() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_ENTER_TREE:
 		_sync_pulse()
+
+
+## Ter `_process` liga o processamento de toda bolacha; só a da moldura animada
+## precisa dele.
+func _ready() -> void:
+	set_process(animated(frame))
 
 
 func _draw() -> void:
@@ -147,9 +159,19 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 			draw_arc(center, radius - 0.75, 0.0, TAU, 64, edge, 1.5, true)
 			draw_arc(center, radius - band + 0.75, 0.0, TAU, 64, edge, 1.5, true)
 		"neon":
-			draw_arc(center, middle, 0.0, TAU, 64, Color(1.0, 0.31, 0.85, 0.25), band * 1.2, true)
-			draw_arc(center, middle, 0.0, TAU, 64, Color("ff4fd8"), band * 0.5, true)
-			draw_arc(center, middle, 0.0, TAU, 64, Color("ffd6f6"), maxf(1.0, band * 0.16), true)
+			# Pulsa: o halo cresce e acende, e o tubo respira junto.
+			var beat := 0.5 + 0.5 * sin(frame_time * TAU * 0.8)
+			draw_arc(center, middle, 0.0, TAU, 64, Color(1.0, 0.31, 0.85, 0.15 + 0.3 * beat), band * (1.0 + 0.5 * beat), true)
+			draw_arc(center, middle, 0.0, TAU, 64, Color("ff4fd8"), band * (0.42 + 0.16 * beat), true)
+			draw_arc(center, middle, 0.0, TAU, 64, Color("ffd6f6").lerp(Color.WHITE, beat), maxf(1.0, band * 0.16), true)
+		"rainbow":
+			# Um anel de todas as cores, girando devagar.
+			var segments := 48
+			for i in segments:
+				var from := TAU * i / segments
+				var hue := fposmod(float(i) / segments - frame_time * 0.25, 1.0)
+				draw_arc(center, middle, from, from + TAU / segments + 0.02, 4, Color.from_hsv(hue, 0.8, 1.0), band * 0.8, true)
+			draw_arc(center, radius - 0.75, 0.0, TAU, 64, Color(1, 1, 1, 0.5), 1.5, true)
 		"flames":
 			draw_arc(center, radius - band * 0.7, 0.0, TAU, 64, Color("c81d11"), band * 0.6, true)
 			var tongues := 16
@@ -159,7 +181,9 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 				var out := Vector2.from_angle(angle)
 				var base := center + out * (radius - band)
 				for layer: Array in [[1.0, Color("ff7a1a")], [0.6, Color("ffe066")]]:
-					var reach: float = band * layer[0]
+					# Cada língua sobe e desce no próprio ritmo: o fogo tremula.
+					var flicker := 0.7 + 0.3 * sin(frame_time * 9.0 + i * 1.7 + float(layer[0]) * 4.0)
+					var reach: float = band * layer[0] * flicker
 					var half := TAU * radius / tongues * 0.45 * float(layer[0])
 					draw_colored_polygon(PackedVector2Array([
 						base - across * half, base + across * half, base + out * reach + across * half * 0.6,
@@ -176,6 +200,15 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 					var leaf := _leaf(spot, tangent.rotated(side * 0.5), band * 0.9, band * 0.45)
 					draw_colored_polygon(leaf, green)
 					draw_polyline(leaf + PackedVector2Array([leaf[0]]), dark, 1.0, true)
+
+
+static func animated(style: String) -> bool:
+	return style in ANIMATED_FRAMES
+
+
+func _process(delta: float) -> void:
+	frame_time += delta
+	queue_redraw()
 
 
 static func _leaf(at: Vector2, along: Vector2, length: float, width: float) -> PackedVector2Array:
