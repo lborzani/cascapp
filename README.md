@@ -1208,8 +1208,22 @@ mesmo aparelho ou em rede.
 Moedas se ganham terminando partidas contra o bot ou online e com o bônus do dia
 (ver `pocketbase/README.md`, "Loja e moedas"), e se trocam na loja da aba Você
 (`ui/shop_panel.gd`). O catálogo visual é `core/cosmetics.gd`; o preço mora só
-no servidor, e item sem preço lá não aparece à venda. O visual equipado (`look`,
-um dicionário encaixe → item) é da conta e viaja no aperto de mão como o nome.
+no servidor, na coleção `shop_items`, editada no painel admin do PocketBase sem
+deploy, e item sem preço lá não aparece à venda. Item marcado `exclusive` não se
+vende: aparece trancado ("Só por missão") e sai por missão. O visual equipado
+(`look`, um dicionário encaixe → item) é da conta e viaja no aperto de mão como o
+nome.
+
+Missões e eventos também são dados do admin (`missions`, `events`; ver
+`pocketbase/README.md`, "Missões e eventos"). O servidor conta o progresso pelo
+prêmio de cada partida e paga no resgate; o app só mostra
+(`ui/missions_panel.gd`). Item novo de missão ou evento precisa do desenho no app
+primeiro: o admin só distribui ids que `core/cosmetics.gd` conhece.
+
+Presentes vão só entre amigos (`pocketbase/README.md`, "Presentes"): um item da
+loja, pago por quem manda, ou o presentinho diário de moedas. Mandam-se pela
+loja e pelo perfil do amigo (`ui/friend_profile.gd`), e abrem na caixa da aba
+Você (`ui/gifts_panel.gd`).
 
 | Encaixe | O que muda | Onde |
 |---|---|---|

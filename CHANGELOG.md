@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.69
+
+- Missões, na aba Você: três novas todo dia, que pagam moedas, e conquistas que não zeram nunca e dão títulos que não se vendem na loja (Veterano, Campeão e Explorador). No fim da partida, um aviso mostra quando uma missão ficou pronta para resgatar.
+- Eventos: de tempos em tempos, uma aba de missões especiais que só valem enquanto o evento estiver no ar.
+- Presentes: mande um item da loja para um amigo pelo botão "Presentear", ou um presentinho de 10 moedas por dia pelo perfil dele. O que chega fica na caixa de Presentes da aba Você, esperando você abrir.
+
 ## 1.68
 
 - Proteja sua conta com o e-mail, na aba Você: se formatar ou trocar de celular, você volta para ela com moedas, itens, amigos e Elo. Sem senha, só um código que chega no e-mail.
