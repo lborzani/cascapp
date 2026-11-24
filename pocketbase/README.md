@@ -115,6 +115,35 @@ do dia. A conta nova nasce zerada por cima do que vier no corpo.
 As regras puras têm teste no Node (`node --test pocketbase/loja.test.js`), e as
 rotas, no `tests/shop_probe.tscn` contra um PocketBase local.
 
+## Conta protegida por e-mail
+
+A credencial da conta anônima vem do `ANDROID_ID`, que muda quando o celular é
+formatado. Quem quiser liga um e-mail à conta e, depois de formatar, volta para
+ela com um código mandado para esse e-mail. O e-mail fica em `contact_email`, e
+não no `email` da conta, que continua sendo o sintético pelo qual o app entra.
+Só as rotas de `pb_hooks/conta.pb.js` escrevem `contact_email`, e um e-mail
+protege uma conta só.
+
+- `POST /api/cascapp/email/start` com `{email, purpose}` (`protect` ou
+  `recover`): manda um código de 6 dígitos, que vale 10 minutos e aceita 5
+  tentativas. No máximo 3 envios por e-mail a cada 15 minutos e 10 por dia
+  (429). Para recuperar, um e-mail sem conta responde 200 e nada sai.
+- `POST /api/cascapp/email/protect` com `{code}`: grava `contact_email` na conta
+  de quem pede; 409 se o e-mail já protege outra conta.
+- `POST /api/cascapp/email/recover` com `{email, code, password}`, sendo
+  `password` a do aparelho que pede: apaga a conta vazia de quem pede e grava o
+  e-mail sintético e a senha dela na conta protegida. A próxima entrada normal
+  do app cai na conta antiga. 403 senha errada, 400 código inválido (o motivo
+  vai em `reason`) ou conta que já é deste aparelho.
+
+O e-mail sai pelo SMTP das configurações do PocketBase (SES, `sa-east-1`), com
+o remetente de `meta.senderAddress`. Com `CASCAPP_MAIL_CAPTURE=1` nada sai: o
+código fica na memória e `GET /api/cascapp/test/last-code/{email}` o devolve.
+Só os testes locais usam isso.
+
+As regras puras têm teste no Node (`node --test pocketbase/conta.test.js`), e as
+rotas, no `tests/recovery_probe.tscn` contra um PocketBase local com a captura.
+
 ## Subir ou atualizar
 
 Do repositório, com acesso SSH ao `homeserver` pela tailnet (`USUARIO` é o seu
