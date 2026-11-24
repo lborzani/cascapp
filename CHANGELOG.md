@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.73
+
+- Ícone e tela de abertura novos, no visual do app: um dado limão sobre o violeta.
+
 ## 1.72
 
 - Presentes agora podem trazer vários itens de uma vez, com um bilhete. Ao abrir, o "Usar tudo" já veste tudo.
