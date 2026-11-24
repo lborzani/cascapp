@@ -84,22 +84,24 @@ function notify(app, row) {
 
 // Uma notificação de `from` para os aparelhos de `to`, com `body`. Tocar nela
 // abre a conversa com `from` (`PushService.kt`). Também usada pelos presentes.
+// Sem `from` (o kit de testador), o título é "cascapp" e tocar só abre o app,
+// que recarrega a caixa de presentes ao voltar.
 function push(app, to, from, body) {
   const secret = $os.getenv("CASCAPP_PUSH_SECRET")
   if (!secret) return
   try {
     const tokens = app.findRecordsByFilter("push_tokens", "owner = {:to}", "-updated", MAX_DEVICES, 0, { to })
     if (tokens.length === 0) return
-    const sender = app.findRecordById("users", from)
+    const sender = from ? app.findRecordById("users", from) : null
     const reply = $http.send({
       url: ($os.getenv("CASCAPP_PUSH_URL") || "http://push:8095") + "/send",
       method: "POST",
       headers: { "Content-Type": "application/json", "x-push-secret": secret },
       body: JSON.stringify({
         tokens: tokens.map((t) => t.getString("token")),
-        title: sender.getString("name") || "Um amigo",
+        title: sender ? sender.getString("name") || "Um amigo" : "cascapp",
         body: body,
-        friend: sender.id,
+        friend: sender ? sender.id : "",
       }),
       timeout: 5,
     })

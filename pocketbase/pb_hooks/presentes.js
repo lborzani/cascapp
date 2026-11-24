@@ -94,6 +94,12 @@ function withItems(owned, items) {
   return owned.concat(items.filter((item) => !owned.includes(item)))
 }
 
+// O texto da notificação de um kit: com remetente, como o presente de amigo;
+// sem (o kit de testador, que sai "do cascapp"), na voz do app.
+function kitPushText(from) {
+  return from ? "Te mandou um presente 🎁" : "Você ganhou um presente 🎁"
+}
+
 // Se a conta deve receber o kit de testador agora: é testador e ainda não ganhou.
 function owesTesterKit(tester, alreadySent) {
   return tester === true && alreadySent !== true
@@ -116,5 +122,5 @@ function toJson(row, sender) {
 
 module.exports = {
   DAILY_COINS, MAX_RECEIVED, INBOX, MAX_KIT, TESTER_KIT, TESTER_MESSAGE,
-  itemProblem, dailyProblem, parseItems, kitProblem, recordKitProblem, kitItems, withItems, owesTesterKit, toJson,
+  itemProblem, dailyProblem, parseItems, kitProblem, recordKitProblem, kitItems, withItems, owesTesterKit, kitPushText, toJson,
 }

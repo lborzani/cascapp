@@ -23,6 +23,21 @@ onRecordUpdateRequest((e) => {
   e.next()
 }, "gifts")
 
+// Kit (presente com `items`), do admin ou da flag de testador: avisa na hora.
+// Roda depois de gravar (e, dentro de transação, depois do commit), então só
+// avisa presente que existe. Os presentes entre amigos avisam pela rota que os
+// cria, e não têm `items`.
+onRecordAfterCreateSuccess((e) => {
+  const presentes = require(`${__hooks}/presentes.js`)
+  const conversa = require(`${__hooks}/conversa.js`)
+  const gift = e.record
+  if (presentes.kitItems(presentes.parseItems(gift.getString("items"))).length > 0) {
+    const from = gift.getString("from")
+    conversa.push(e.app, gift.getString("to"), from, presentes.kitPushText(from))
+  }
+  e.next()
+}, "gifts")
+
 // A caixa: os presentes fechados que chegaram, os amigos que já ganharam o meu
 // presentinho de hoje e quanto ele vale.
 routerAdd("GET", "/api/cascapp/gifts", (e) => {

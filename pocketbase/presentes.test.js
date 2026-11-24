@@ -54,3 +54,8 @@ test("testador: o kit sai uma vez, só para quem é testador", () => {
   assert.ok(presentes.TESTER_KIT.length > 1 && presentes.TESTER_KIT.length <= presentes.MAX_KIT)
   assert.ok(presentes.TESTER_MESSAGE.length <= 200)
 })
+
+test("kit: a notificação fala por quem mandou, ou pelo app", () => {
+  assert.strictEqual(presentes.kitPushText(""), "Você ganhou um presente 🎁")
+  assert.strictEqual(presentes.kitPushText("abc"), "Te mandou um presente 🎁")
+})
