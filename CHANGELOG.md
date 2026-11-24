@@ -10,6 +10,7 @@ novidade.
 ## 1.70
 
 - No perfil de um amigo: Silenciar (as mensagens dele param de notificar), Remover e Bloquear. Quem você bloqueia sai da sua lista e não consegue mais te pedir amizade; desbloqueie em Amigos, na aba Você.
+- Missões na tela inicial: o alvo na barra de cima abre as missões, e um número vermelho mostra quantas estão prontas para resgatar.
 
 ## 1.69
 
