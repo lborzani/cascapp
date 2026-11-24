@@ -153,7 +153,7 @@ func _fill() -> void:
 		# Os exclusivos aparecem trancados: a vitrine do que as missões dão. Os de
 		# testador (`testers`) não: só quem ganhou vê.
 		for id in Cosmetics.of_slot(slot):
-			var showcase := not Cosmetics.ITEMS[id].get("testers", false) and (Account.prices.has(id) or id in Account.exclusive)
+			var showcase: bool = not Cosmetics.ITEMS[id].get("testers", false) and (Account.prices.has(id) or id in Account.exclusive)
 			if showcase or id in Account.owned:
 				grid.add_child(_card(slot, id))
 
