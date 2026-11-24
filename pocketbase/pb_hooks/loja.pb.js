@@ -22,10 +22,12 @@ onRecordCreate((e) => {
 }, "users")
 
 // O app equipa pelo update normal da conta; aqui só se confere que todo item
-// pago do visual foi comprado.
+// pago do visual foi comprado. O painel admin (superusuário) passa direto: ele
+// reenvia o registro inteiro, e conta antiga tem `look` nulo, que a conferência
+// recusaria ("Visual inválido") ao marcar `tester`, por exemplo.
 onRecordUpdateRequest((e) => {
   const loja = require(`${__hooks}/loja.js`)
-  if (e.requestInfo().body.look !== undefined) {
+  if (e.requestInfo().body.look !== undefined && !e.hasSuperuserAuth()) {
     // O corpo traz o campo JSON em bytes crus; o registro já tem ele carregado.
     const look = loja.jsonOf(e.record, "look", null)
     const stored = e.app.findRecordById("users", e.record.id)
