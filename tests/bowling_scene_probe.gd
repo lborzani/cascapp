@@ -242,8 +242,28 @@ func _probe_skins() -> void:
 	_equals(_ball_tint(scene._view._preview), scene._seat_color(0), "item que este app não conhece cai na bola padrão")
 	scene.free()
 	Net.looks = {}
-	Account.look = look_before
 	Game.mode = Game.Mode.HOTSEAT
+
+	# As especiais mudam o material, na mira e na bola que rola; as de antes não.
+	var expected := {
+		"ball_chrome": func(m: StandardMaterial3D) -> bool: return is_equal_approx(m.metallic, 0.55) and not m.emission_enabled,
+		"ball_neon": func(m: StandardMaterial3D) -> bool: return m.emission_enabled and m.emission_texture == m.albedo_texture,
+		"ball_crystal": func(m: StandardMaterial3D) -> bool: return m.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and is_equal_approx(m.albedo_color.a, 0.5),
+		"ball_lava": func(m: StandardMaterial3D) -> bool: return m.emission_enabled and is_equal_approx(m.emission_energy_multiplier, 1.6),
+		"ball_galaxy": func(m: StandardMaterial3D) -> bool: return not m.emission_enabled and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED,
+	}
+	for id: String in expected:
+		Account.look = {"ball": id}
+		Game.start_hotseat(Game.BOWLING)
+		scene = await _open()
+		var preview := _ball_material(scene._view._preview)
+		_check(preview != null and (expected[id] as Callable).call(preview), "%s: o material da mira" % id)
+		var rolling := BowlingLane.BALL_SCENE.instantiate()
+		BowlingLane.tint_ball(rolling, Color.WHITE, scene._view.lane.ball_skin)
+		_check((expected[id] as Callable).call(_ball_material(rolling)), "%s: e o da bola que a pista arma" % id)
+		rolling.free()
+		scene.free()
+	Account.look = look_before
 
 
 ## A textura que a bola desenha agora (a do material pintado, ou a do mármore).

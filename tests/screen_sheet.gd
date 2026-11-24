@@ -96,6 +96,8 @@ func _ready() -> void:
 	for id in Cosmetics.of_slot(Cosmetics.BOARD):
 		_shots.append(["res://scenes/match.tscn", "28_xadrez_" + id.trim_prefix("board_")])
 		_shots.append(["res://scenes/match.tscn", "28b_damas_" + id.trim_prefix("board_")])
+	for id in ["ball_chrome", "ball_neon", "ball_crystal", "ball_lava"]:
+		_shots.append(["res://scenes/bowling_match.tscn", "25d_bola_" + id.trim_prefix("ball_")])
 	for id in Cosmetics.of_slot(Cosmetics.CUE):
 		_shots.append(["res://scenes/pool_match.tscn", "22c_taco_" + id.trim_prefix("cue_")])
 	for id in Cosmetics.of_slot(Cosmetics.PIECES):
@@ -177,6 +179,11 @@ func _next() -> void:
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
 		Account.look = {"board": "board_" + shot.split("_", true, 2)[2]}
+	if shot.begins_with("25d"):
+		# Uma bola especial da loja, como a 25c: dois na mesa, a vez do dono.
+		Game.start_hotseat(Game.BOWLING)
+		Game.table_size = 2
+		Account.look = {"ball": "ball_" + shot.split("_", true, 2)[2]}
 	if shot.begins_with("22c"):
 		# Um taco da loja, na mesa de sempre (o assento 0 é o dono do aparelho).
 		Game.start_hotseat(Game.POOL)
@@ -233,6 +240,7 @@ func _next() -> void:
 			Account.prices = {
 				"ball_galaxy": 400, "ball_flames": 300, "ball_ocean": 250,
 				"ball_melon": 200, "ball_wood": 150, "ball_checker": 200,
+				"ball_chrome": 400, "ball_neon": 450, "ball_crystal": 500, "ball_lava": 450,
 			}
 			Account.owned = ["ball_wood", "ball_galaxy"]
 			Account.look = {"ball": "ball_galaxy"}
@@ -513,7 +521,7 @@ func _next() -> void:
 		_scene._refresh()
 	elif shot == "16_naval":
 		_stage_battleship(_scene)
-	elif shot == "25c_boliche_bola":
+	elif shot == "25c_boliche_bola" or shot.begins_with("25d"):
 		# Três bolas: strike do 1 e spare do 2, e a vez volta ao dono da bola da loja.
 		_stage_bowling(_scene, true, [1023, 0b0011111111, 0b1100000000])
 	elif shot == "25_boliche" or shot == "25b_boliche_balanco":

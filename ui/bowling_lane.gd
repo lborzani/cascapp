@@ -286,6 +286,8 @@ static func _finish_ball(material: StandardMaterial3D, params: Dictionary) -> vo
 		material.emission_enabled = true
 		material.emission = Color.WHITE
 		material.emission_texture = material.albedo_texture
+		# Multiplica, e não soma: somada ao branco, a bola inteira virava luz.
+		material.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
 		material.emission_energy_multiplier = params["glow"]
 	if params.has("alpha"):
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
