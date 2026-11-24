@@ -64,6 +64,7 @@ func _ready() -> void:
 	await _test_friends()
 	_check(await _test_friends_drawer() == true, "gaveta de amigos rodou até o fim")
 	await _test_friend_requests()
+	_check(await _test_coins_pill() == true, "moedas na tela inicial rodou até o fim")
 
 	if _failures == 0:
 		print("OK — camada de cena consistente.")
@@ -3444,3 +3445,30 @@ func _bs_node(scene: Node, path: String) -> Node:
 		_failures += 1
 		printerr("  FAIL nó %s não existe em battleship_match.tscn" % path)
 	return found
+
+
+## A pílula de moedas da tela inicial: o saldo da carteira, e um toque na loja.
+func _test_coins_pill() -> bool:
+	print("moedas na tela inicial")
+	var saved := Account.coins
+	Account.coins = -1
+	var menu: Control = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await get_tree().process_frame
+	var pill: Button = menu.find_child("CoinsButton", true, false)
+	_check(pill != null, "a pílula existe")
+	_equals(pill.text, "—", "sem conta, um traço")
+	Account.coins = 340
+	Account.wallet_changed.emit()
+	_equals(pill.text, "340", "o saldo acompanha a carteira")
+	pill.pressed.emit()
+	await get_tree().process_frame
+	_check(is_instance_valid(menu._shop), "o toque abre a loja")
+	if is_instance_valid(menu._shop):
+		menu.go_back()
+		await get_tree().process_frame
+		_check(not is_instance_valid(menu._shop) and menu.is_inside_tree(), "voltar fecha a loja e fica na tela inicial")
+	Account.coins = saved
+	menu.queue_free()
+	await get_tree().process_frame
+	return true

@@ -23,6 +23,8 @@ signal leading_pressed
 signal action_pressed
 ## O botão de amigos da saudação do menu.
 signal friends_pressed
+## A pílula de moedas da saudação do menu.
+signal coins_pressed
 
 
 var title := "":
@@ -54,6 +56,7 @@ var action := -1:
 var _label: Label = null
 var _leading_button: IconButton = null
 var _friends: Button = null
+var _coins: Button = null
 var _online := 0
 var _alerts := 0
 var _action_button: IconButton = null
@@ -156,6 +159,30 @@ func _build_greeting() -> void:
 	_greeting_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	words.add_child(_greeting_name)
 
+	# O saldo à vista leva à loja, que antes só se achava na aba Você.
+	_coins = Button.new()
+	_coins.name = "CoinsButton"
+	_coins.theme_type_variation = &"GhostButton"
+	_coins.focus_mode = Control.FOCUS_NONE
+	_coins.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_coins.add_theme_font_override("font", AppTheme.font(800))
+	_coins.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	var coin_pill := AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_ICON)
+	coin_pill.content_margin_top = 10
+	coin_pill.content_margin_bottom = 10
+	coin_pill.content_margin_left = 32
+	coin_pill.content_margin_right = 14
+	for state: String in ["normal", "hover", "pressed"]:
+		_coins.add_theme_stylebox_override(state, coin_pill)
+	_coins.pressed.connect(func() -> void: coins_pressed.emit())
+	_coins.draw.connect(func() -> void:
+		var center := Vector2(18.0, _coins.size.y * 0.5)
+		_coins.draw_circle(center, 8.0, AppTheme.ACCENT_EDGE)
+		_coins.draw_circle(center, 6.0, AppTheme.ACCENT)
+	)
+	_greeting.add_child(_coins)
+	set_coins(-1)
+
 	_friends = Button.new()
 	_friends.name = "FriendsButton"
 	_friends.theme_type_variation = &"GhostButton"
@@ -184,6 +211,12 @@ func set_online(count: int) -> void:
 	for state: String in ["normal", "hover", "pressed"]:
 		_friends.add_theme_stylebox_override(state, pill)
 	_friends.queue_redraw()
+
+
+## O saldo de moedas; negativo é "ainda não sabemos" (sem conta), e mostra "—".
+func set_coins(count: int) -> void:
+	if _coins != null:
+		_coins.text = str(count) if count >= 0 else "—"
 
 
 ## Quantas coisas esperam o jogador na gaveta (pedidos de amizade recebidos):

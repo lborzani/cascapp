@@ -40,6 +40,7 @@ var _leaving := false
 var _sheet: GameSheet = null
 ## A tela de versão nova obrigatória, enquanto está na tela.
 var _gate: UpdateGate = null
+var _shop: ShopPanel = null
 var _toast: Banner = null
 
 
@@ -55,6 +56,9 @@ func _ready() -> void:
 	%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	%AppBar.action_pressed.connect(_open_settings)
 	%AppBar.friends_pressed.connect(_open_friends)
+	%AppBar.coins_pressed.connect(_open_shop)
+	%AppBar.set_coins(Account.coins)
+	Account.wallet_changed.connect(func() -> void: %AppBar.set_coins(Account.coins))
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
 	Account.avatar_changed.connect(func() -> void: %AppBar.greet(Prefs.player_name(), Account.local_avatar()))
 
@@ -240,6 +244,9 @@ func go_back() -> void:
 	if drawer != null:
 		drawer.close()
 		return
+	if is_instance_valid(_shop):
+		_shop.close()
+		return
 	if _sheet_open():
 		_sheet.close()
 		return
@@ -283,6 +290,13 @@ func open_chat(friend: String) -> void:
 	var drawer := _drawer()
 	if drawer != null:
 		drawer.open_chat(friend)
+
+
+## A mesma loja da aba Você, por cima desta tela.
+func _open_shop() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_shop = ShopPanel.new()
+	add_child(_shop)
 
 
 func _open_friends() -> void:
