@@ -46,9 +46,16 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18f_loja_taco"],
 	["res://scenes/settings.tscn", "18g_loja_perfil"],
 	["res://scenes/settings.tscn", "18h_voce_capa"],
+	["res://scenes/settings.tscn", "18i_missoes"],
+	["res://scenes/settings.tscn", "18j_missoes_conquistas"],
+	["res://scenes/settings.tscn", "18k_missoes_evento"],
+	["res://scenes/settings.tscn", "18l_presentes"],
+	["res://scenes/settings.tscn", "18m_presentes_aberto"],
+	["res://scenes/settings.tscn", "18n_presentear"],
 	["res://scenes/main_menu.tscn", "34_perfil_amigo"],
 	["res://scenes/main_menu.tscn", "34b_gaveta_amigos"],
 	# O perfil com a moldura e a capa animadas, em três instantes (0, 0,4 e 0,8 s).
+	["res://scenes/main_menu.tscn", "34d_perfil_presentinho"],
 	["res://scenes/main_menu.tscn", "34c_perfil_animado_0"],
 	["res://scenes/main_menu.tscn", "34c_perfil_animado_1"],
 	["res://scenes/main_menu.tscn", "34c_perfil_animado_2"],
@@ -263,11 +270,44 @@ func _next() -> void:
 			Account.token = "print"
 			Account.coins = 350
 			Account.prices = {}
+			# Os exclusivos aparecem trancados, "Só por missão".
+			Account.exclusive = ["title_veteran", "title_champion", "title_explorer"]
 			for id in Cosmetics.ITEMS:
-				if Cosmetics.ITEMS[id]["slot"] in ShopPanel.PROFILE_SLOTS:
+				if Cosmetics.ITEMS[id]["slot"] in ShopPanel.PROFILE_SLOTS and id not in Account.exclusive:
 					Account.prices[id] = 200
+			Account.paid = Account.prices.keys() + Account.exclusive
 			Account.owned = ["frame_laurel", "banner_sunset", "title_boteco", "name_gold"]
 			Account.look = {"frame": "frame_laurel", "banner": "banner_sunset", "title": "title_boteco", "name_color": "name_gold"}
+		"18i_missoes", "18j_missoes_conquistas", "18k_missoes_evento":
+			# Uma de cada estado: em andamento, pronta, resgatada; e um evento no ar.
+			Account.token = "print"
+			Account.coins = 350
+			Account.events = [{"key": "natal", "name": "Natal no Boteco", "ends": 1798772400}]
+			Account.missions = [
+				{"key": "d_win2", "track": "daily", "event": "", "kind": "win", "game": "", "target": 2, "title": "", "reward_coins": 40, "reward_item": "", "progress": 1, "claimed": false},
+				{"key": "d_pool", "track": "daily", "event": "", "kind": "play", "game": "pool", "target": 2, "title": "", "reward_coins": 30, "reward_item": "", "progress": 2, "claimed": false},
+				{"key": "d_variety3", "track": "daily", "event": "", "kind": "variety", "game": "", "target": 3, "title": "", "reward_coins": 50, "reward_item": "", "progress": 3, "claimed": true},
+				{"key": "p_veteran", "track": "perm", "event": "", "kind": "play", "game": "", "target": 100, "title": "", "reward_coins": 0, "reward_item": "title_veteran", "progress": 37, "claimed": false},
+				{"key": "p_champion", "track": "perm", "event": "", "kind": "win", "game": "", "target": 50, "title": "", "reward_coins": 0, "reward_item": "title_champion", "progress": 50, "claimed": false},
+				{"key": "p_explorer", "track": "perm", "event": "", "kind": "variety", "game": "", "target": 8, "title": "", "reward_coins": 0, "reward_item": "title_explorer", "progress": 8, "claimed": true},
+				{"key": "e_natal_uno", "track": "event", "event": "natal", "kind": "win", "game": "uno", "target": 5, "title": "Ganhe 5 de Uno na ceia", "reward_coins": 100, "reward_item": "", "progress": 3, "claimed": false},
+			]
+		"18l_presentes", "18m_presentes_aberto", "18n_presentear":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {"ball_galaxy": 400, "ball_flames": 300, "ball_ocean": 250, "ball_melon": 200, "ball_wood": 150}
+			Account.paid = Account.prices.keys()
+			Account.owned = ["ball_wood"]
+			Account.look = {}
+			Account.gifts = [
+				{"id": "g1", "from": {"id": "f1", "name": "Eva"}, "item": "ball_galaxy", "coins": 0, "created": 0},
+				{"id": "g2", "from": {"id": "f2", "name": "Maria Aparecida Jr"}, "item": "", "coins": 10, "created": 0},
+			]
+			Friends.list = [
+				{"id": "f1", "name": "Eva", "avatar": ""},
+				{"id": "f2", "name": "Maria Aparecida Jr", "avatar": ""},
+				{"id": "f3", "name": "Guidon", "avatar": ""},
+			]
 		"18h_voce_capa":
 			# A aba Você com a capa e a moldura da loja.
 			Account.coins = 350
@@ -279,7 +319,7 @@ func _next() -> void:
 				"look": {"frame": "frame_rainbow", "banner": "banner_aurora", "title": "title_boteco", "name_color": "name_rainbow"},
 			}]
 			Friends.online = {"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}}
-		"34_perfil_amigo", "34b_gaveta_amigos":
+		"34_perfil_amigo", "34b_gaveta_amigos", "34d_perfil_presentinho":
 			# Três amigos com visuais diferentes; o perfil é o da Eva.
 			Prefs.set_welcomed()
 			Friends.list = [
@@ -458,6 +498,22 @@ func _next() -> void:
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
 		_scene._open_shop()
+	elif shot == "18l_presentes":
+		_scene._open_gifts()
+	elif shot == "18m_presentes_aberto":
+		_scene._open_gifts()
+		_scene._gifts._revealed["g1"] = Account.gifts[0]
+		_scene._gifts._fill()
+	elif shot == "18n_presentear":
+		_scene._open_shop()
+		_scene._shop._pick_friend("ball_galaxy")
+		var first: Button = _scene._shop._picker.find_children("*", "Button", true, false)[1]
+		first.pressed.emit()
+	elif shot.begins_with("18i") or shot.begins_with("18j") or shot.begins_with("18k"):
+		_scene._open_missions()
+		var tab := 0 if shot.begins_with("18i") else (1 if shot.begins_with("18j") else 2)
+		_scene._missions._tabs.set_current(tab)
+		_scene._missions._tabs.selected.emit(tab)
 	elif shot in ["18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil"]:
 		var tab: int = {"18f_loja_taco": 1, "18e_loja_pecas": 2, "18g_loja_perfil": 3}[shot]
 		_scene._open_shop()
@@ -484,6 +540,11 @@ func _next() -> void:
 				node.time = moment * 2.0
 				node.set_process(false)
 				node.queue_redraw()
+	elif shot == "34d_perfil_presentinho":
+		# Com conta: o botão do presentinho só aparece assim.
+		Account.token = "print"
+		_scene._open_friends()
+		_scene._drawer().open_profile("evaevaevaeva123")
 	elif shot == "34_perfil_amigo" or shot == "34b_gaveta_amigos":
 		_scene._open_friends()
 		if shot == "34_perfil_amigo":

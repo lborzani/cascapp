@@ -3,8 +3,9 @@ extends RefCounted
 
 ## O catálogo visual da loja: o que cada item é e como se desenha.
 ##
-## O preço não mora aqui. Ele é do servidor (`pocketbase/pb_hooks/loja.js`, lido
-## por `Account.fetch_prices`), e item sem preço lá não aparece à venda. O visual
+## O preço não mora aqui. Ele é do servidor (coleção `shop_items`, editada no
+## painel admin e lida por `Account.fetch_prices`), e item sem preço lá não
+## aparece à venda. O visual
 ## de um jogador (`look`) é um dicionário `{encaixe: id}`, o mesmo que a conta
 ## guarda e que viaja aos outros aparelhos no aperto de mão (`Net.look_of`).
 
@@ -67,6 +68,10 @@ const ITEMS := {
 	"title_boteco": {"slot": TITLE, "name": "Lenda do Boteco"},
 	"title_lucky": {"slot": TITLE, "name": "Sortudo"},
 	"title_unbeaten": {"slot": TITLE, "name": "Imbatível"},
+	# Exclusivos: não se compram, saem por missão (`pocketbase/pb_migrations/1764100000_missoes.js`).
+	"title_veteran": {"slot": TITLE, "name": "Veterano"},
+	"title_champion": {"slot": TITLE, "name": "Campeão"},
+	"title_explorer": {"slot": TITLE, "name": "Explorador"},
 	# Cores do nome; `rainbow` pinta cada letra de uma cor.
 	"name_gold": {"slot": NAME_COLOR, "name": "Ouro", "color": Color("ffd25a")},
 	"name_ruby": {"slot": NAME_COLOR, "name": "Rubi", "color": Color("ff5a7a")},

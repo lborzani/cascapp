@@ -37,6 +37,8 @@ var _wobble: Tween = null
 var _given: Array = []
 ## O bloco das moedas pagas por esta partida; vazio até o servidor responder.
 var _reward: Array = []
+## O bloco das missões que esta partida completou, depois do das moedas.
+var _missions_done: Array = []
 ## A partida (`_match_key`) cujo prêmio já foi pedido por este cartão.
 var _reward_key := ""
 
@@ -92,6 +94,7 @@ func show_result(new_mood: Mood, stats: Array) -> void:
 	mood = new_mood
 	if _reward_key != _match_key():
 		_reward = []  # revanche no mesmo cartão: o bloco era da partida de antes
+		_missions_done = []
 	set_stats(stats)
 	_sync_wobble()
 	_claim_reward()
@@ -102,7 +105,7 @@ func set_stats(stats: Array) -> void:
 	for child in _stats.get_children():
 		_stats.remove_child(child)
 		child.queue_free()
-	var shown := stats + ([_reward] if not _reward.is_empty() else [])
+	var shown := stats + ([_reward] if not _reward.is_empty() else []) + ([_missions_done] if not _missions_done.is_empty() else [])
 	for entry: Array in shown:
 		_stats.add_child(_tile(str(entry[0]), str(entry[1]), entry.size() > 2 and bool(entry[2])))
 	_stats.visible = not shown.is_empty()
@@ -118,8 +121,16 @@ func _claim_reward() -> void:
 		return
 	_reward_key = key
 	var granted: int = await Account.reward(Game.game_id, RESULTS[mood], key)
-	if granted > 0 and is_inside_tree() and _reward_key == key:
+	if not is_inside_tree() or _reward_key != key:
+		return
+	if granted > 0:
 		_reward = ["+%d" % granted, "moedas", true]
+	# A missão completa mesmo com as moedas do dia no teto.
+	var done := Account.missions_notice.size()
+	Account.missions_notice.clear()
+	if done > 0:
+		_missions_done = [str(done), "missão pronta" if done == 1 else "missões prontas", true]
+	if granted > 0 or done > 0:
 		set_stats(_given)
 
 

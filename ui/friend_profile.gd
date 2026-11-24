@@ -126,6 +126,17 @@ func _ready() -> void:
 		)
 		actions.add_child(invite)
 
+	# O presentinho do dia: de graça, um por amigo por dia. Linha própria: com
+	# Conversar e Convidar, três botões não cabem num celular em pé.
+	if Account.signed_in():
+		var gift := Button.new()
+		gift.name = "Gift"
+		gift.theme_type_variation = &"GhostButton"
+		gift.custom_minimum_size = Vector2(0, 48)
+		gift.size_flags_horizontal = SIZE_EXPAND_FILL
+		_paint_gift(gift)
+		gift.pressed.connect(_send_gift.bind(gift))
+		column.add_child(gift)
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
 	column.add_child(_rows)
@@ -137,6 +148,28 @@ func _ready() -> void:
 	var data: Variant = await Account.friend_profile(friend_id)
 	if is_inside_tree():
 		show_data(data)
+
+
+func _paint_gift(button: Button) -> void:
+	var sent := friend_id in Account.gifts_sent_today
+	button.text = "Presentinho enviado" if sent else "Presentinho +%d" % Account.gift_daily_coins
+	button.disabled = sent
+
+
+func _send_gift(button: Button) -> void:
+	Sound.play(Sound.Cue.TAP)
+	button.disabled = true
+	var code := await Account.send_daily_gift(friend_id)
+	if not is_inside_tree():
+		return
+	match code:
+		200, 409:
+			_paint_gift(button)
+		429:
+			button.text = "Já ganhou muitos hoje"
+		_:
+			button.text = "Tente de novo"
+			button.disabled = false
 
 
 func close() -> void:

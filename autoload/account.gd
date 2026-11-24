@@ -24,6 +24,10 @@ signal avatar_changed
 signal remote_avatar_loaded
 ## O saldo ou os itens mudaram: entrada, bônus, prêmio ou compra.
 signal wallet_changed
+## A lista de missões mudou (chegou, avançou ou uma foi resgatada).
+signal missions_changed
+## A caixa de presentes mudou (chegou, foi aberto ou mandei um presentinho).
+signal gifts_changed
 
 ## O PocketBase (`/api`) e a busca (`/search`) da Pi, pelo túnel do Cloudflare
 ## (borda em São Paulo). Até a 1.56 era `homeserver.tailb8b7e1.ts.net:8443/cascapp`,
@@ -53,7 +57,7 @@ var friend_code := ""
 var contact_email := ""
 ## O saldo de moedas, como a última resposta disse; -1 antes da primeira.
 var coins := -1
-## Os itens pagos que esta conta comprou (`pocketbase/pb_hooks/loja.js`).
+## Os itens pagos que esta conta comprou (catálogo na coleção `shop_items` do servidor).
 var owned: Array = []
 ## O bônus do dia que entrou e ainda não foi mostrado. Quem mostra zera.
 var daily_notice := 0
@@ -62,6 +66,22 @@ var daily_notice := 0
 var look: Dictionary = Prefs.look()
 ## id → preço, da loja do servidor; vazio até [method fetch_prices] responder.
 var prices := {}
+## Todo item que só se equipa tendo (à venda, fora de venda ou exclusivo), e os
+## exclusivos, que só saem por missão. Vazios até [method fetch_prices].
+var paid: Array = []
+var exclusive: Array = []
+## As missões valendo agora (`GET /api/cascapp/missions`) e os eventos no ar;
+## vazias até [method fetch_missions] responder.
+var missions: Array = []
+var events: Array = []
+## Missões que o prêmio de uma partida acabou de completar e ainda não foram
+## mostradas. Quem mostra esvazia.
+var missions_notice: Array = []
+## Os presentes fechados que chegaram (`GET /api/cascapp/gifts`), os amigos que
+## já ganharam o meu presentinho hoje e quanto ele vale.
+var gifts: Array = []
+var gifts_sent_today: Array = []
+var gift_daily_coins := 10
 ## O nome que a conta tem no servidor, como a última resposta disse.
 var _name := ""
 ## O dia de Brasília do último pedido de bônus, para não pedir a cada volta ao app.
@@ -103,9 +123,12 @@ func _notification(what: int) -> void:
 	# setting up children"). A entrada falhava e só voltava 60 s depois.
 	if not signed_in():
 		sign_in.call_deferred()
-	elif _daily_day != br_day(int(Time.get_unix_time_from_system())):
-		# O app ficou aberto (ou em segundo plano) até virar o dia.
-		claim_daily.call_deferred()
+	else:
+		# Quem volta ao app pela notificação de um presente já o vê na caixa.
+		fetch_gifts.call_deferred()
+		if _daily_day != br_day(int(Time.get_unix_time_from_system())):
+			# O app ficou aberto (ou em segundo plano) até virar o dia.
+			claim_daily.call_deferred()
 
 
 func signed_in() -> bool:
@@ -143,6 +166,8 @@ func sign_in() -> bool:
 		push_matches()
 		push_rewards()
 		claim_daily()
+		fetch_missions()
+		fetch_gifts()
 	if not ok:
 		_retry.start()
 	return ok
@@ -463,6 +488,10 @@ func push_rewards() -> int:
 		if reply["code"] == 200 and reply["data"] is Dictionary:
 			granted += int(reply["data"].get("granted", 0))
 			_take_wallet(reply["data"])
+			var done: Variant = reply["data"].get("missions_done")
+			if done is Array and not done.is_empty():
+				missions_notice.append_array(done)
+				fetch_missions()
 		elif reply["code"] != 400:
 			break
 		Prefs.drop_reward(str(entry["key"]))
@@ -475,16 +504,107 @@ func fetch_prices() -> bool:
 	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/shop", {})
 	if reply["code"] != 200 or not reply["data"] is Dictionary:
 		return false
-	var items: Variant = reply["data"].get("items")
-	prices = items if items is Dictionary else {}
+	var data: Dictionary = reply["data"]
+	prices = data["items"] if data.get("items") is Dictionary else {}
+	paid = data["paid"] if data.get("paid") is Array else prices.keys()
+	exclusive = data["exclusive"] if data.get("exclusive") is Array else []
 	wallet_changed.emit()
 	return true
 
 
-## Se o item pode ser equipado: comprado, ou grátis (fora da tabela de preços).
-## Sem a tabela ainda, só o comprado.
+## Se o item pode ser equipado: comprado, ou grátis (fora do catálogo pago).
+## Sem o catálogo ainda, só o comprado.
 func owns(item: String) -> bool:
-	return item in owned or (not prices.is_empty() and not prices.has(item))
+	return item in owned or (not paid.is_empty() and item not in paid)
+
+
+## As missões valendo agora. Falso sem resposta.
+func fetch_missions() -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/missions", {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return false
+	var data: Dictionary = reply["data"]
+	missions = data["missions"] if data.get("missions") is Array else []
+	events = data["events"] if data.get("events") is Array else []
+	missions_changed.emit()
+	return true
+
+
+## Quantas missões estão completas e esperando o resgate.
+func missions_ready() -> int:
+	return missions.filter(func(m: Dictionary) -> bool:
+		return not m.get("claimed", false) and m.get("progress", 0) >= m.get("target", 1)
+	).size()
+
+
+## A caixa de presentes. Falso sem resposta.
+func fetch_gifts() -> bool:
+	if not signed_in():
+		return false
+	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/gifts", {})
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return false
+	var data: Dictionary = reply["data"]
+	gifts = data["gifts"] if data.get("gifts") is Array else []
+	gifts_sent_today = data["sent_today"] if data.get("sent_today") is Array else []
+	gift_daily_coins = int(data.get("daily_coins", gift_daily_coins))
+	gifts_changed.emit()
+	return true
+
+
+## Manda `item` de presente ao amigo `to`, pago com as minhas moedas. O código
+## HTTP: 200 mandou, 402 sem moedas, 409 o amigo já tem, 404 sem amizade ou item
+## fora de venda; 0 sem conta ou sem resposta.
+func send_gift(to: String, item: String) -> int:
+	if not signed_in():
+		return 0
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/gifts", {"to": to, "item": item})
+	if reply["code"] == 200 and reply["data"] is Dictionary:
+		_take_wallet(reply["data"])
+	return reply["code"]
+
+
+## O presentinho do dia para o amigo `to`. O código HTTP: 200 mandou, 409 já
+## mandei hoje, 429 ele já ganhou demais hoje, 404 sem amizade; 0 sem resposta.
+func send_daily_gift(to: String) -> int:
+	if not signed_in():
+		return 0
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/gifts/daily", {"to": to})
+	if reply["code"] in [200, 409] and to not in gifts_sent_today:
+		gifts_sent_today.append(to)
+		gifts_changed.emit()
+	return reply["code"]
+
+
+## Abre o presente `id`. Devolve `{item, coins}` do que veio, ou `{}` se não deu.
+func open_gift(id: String) -> Dictionary:
+	if not signed_in():
+		return {}
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/gifts/%s/open" % id.uri_encode(), {})
+	if reply["code"] == 404:
+		gifts = gifts.filter(func(gift: Dictionary) -> bool: return gift.get("id") != id)
+		gifts_changed.emit()
+	if reply["code"] != 200 or not reply["data"] is Dictionary:
+		return {}
+	_take_wallet(reply["data"])
+	gifts = gifts.filter(func(gift: Dictionary) -> bool: return gift.get("id") != id)
+	gifts_changed.emit()
+	return {"item": str(reply["data"].get("item", "")), "coins": int(reply["data"].get("coins", 0))}
+
+
+## Resgata a missão `key`. O código HTTP: 200 pagou, 409 incompleta ou já
+## resgatada, 404 fora do ar; 0 sem conta ou sem resposta.
+func claim_mission(key: String) -> int:
+	if not signed_in():
+		return 0
+	var reply := await _call(HTTPClient.METHOD_POST, "/api/cascapp/missions/claim", {"key": key})
+	if reply["code"] == 200 and reply["data"] is Dictionary:
+		_take_wallet(reply["data"])
+	if reply["code"] in [200, 404, 409]:
+		await fetch_missions()
+	return reply["code"]
 
 
 ## Compra um item. O código HTTP: 200 comprou, 402 sem moedas, 409 já tinha,
@@ -707,6 +827,11 @@ func sign_out() -> void:
 	_set_token("", "")
 	coins = -1
 	owned = []
+	missions = []
+	events = []
+	missions_notice = []
+	gifts = []
+	gifts_sent_today = []
 	_daily_day = ""
 	_wallet_at = ""
 

@@ -28,6 +28,10 @@ var _shop: ShopPanel = null
 var _profile_cover: Panel = null
 var _profile_pad: MarginContainer = null
 var _shop_button: Button = null
+var _missions: MissionsPanel = null
+var _missions_button: Button = null
+var _gifts: GiftsPanel = null
+var _gifts_button: Button = null
 var _email: EmailPanel = null
 ## "Proteja sua conta", ou o e-mail que já protege.
 var _protect_button: Button = null
@@ -95,6 +99,23 @@ func _ready() -> void:
 	_shop_button.theme_type_variation = &"IconButton"
 	_shop_button.pressed.connect(_open_shop)
 	%HistoryButton.get_parent().add_sibling(_shop_button)
+	# As missões logo antes da loja: é de lá que vêm as moedas e os exclusivos.
+	_missions_button = Button.new()
+	_missions_button.name = "MissionsButton"
+	_missions_button.custom_minimum_size = Vector2(0, 76)
+	_missions_button.focus_mode = Control.FOCUS_NONE
+	_missions_button.theme_type_variation = &"IconButton"
+	_missions_button.pressed.connect(_open_missions)
+	_shop_button.add_sibling(_missions_button)
+	_shop_button.get_parent().move_child(_missions_button, _shop_button.get_index())
+	# Os presentes logo depois das missões: as duas linhas que acendem sozinhas.
+	_gifts_button = Button.new()
+	_gifts_button.name = "GiftsButton"
+	_gifts_button.custom_minimum_size = Vector2(0, 76)
+	_gifts_button.focus_mode = Control.FOCUS_NONE
+	_gifts_button.theme_type_variation = &"IconButton"
+	_gifts_button.pressed.connect(_open_gifts)
+	_missions_button.add_sibling(_gifts_button)
 	# Logo depois da loja: o que se compra lá é o que a proteção guarda.
 	_protect_button = Button.new()
 	_protect_button.name = "ProtectButton"
@@ -104,7 +125,7 @@ func _ready() -> void:
 	_protect_button.pressed.connect(_open_email)
 	_shop_button.add_sibling(_protect_button)
 	Account.signed_in_changed.connect(_refresh_protect.unbind(1))
-	for shortcut: Button in [%HistoryButton, %TrainingButton, _shop_button, _protect_button]:
+	for shortcut: Button in [%HistoryButton, %TrainingButton, _missions_button, _gifts_button, _shop_button, _protect_button]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
 	var openings := Button.new()
@@ -134,6 +155,8 @@ func _ready() -> void:
 	Account.avatar_changed.connect(_update_preview)
 	_wrap_profile()
 	Account.wallet_changed.connect(_refresh_games)
+	Account.missions_changed.connect(_refresh_games)
+	Account.gifts_changed.connect(_refresh_games)
 	# A moldura comprada ou trocada na loja já aparece na foto daqui.
 	Account.wallet_changed.connect(_update_preview)
 	_update_preview()
@@ -346,6 +369,12 @@ func go_back() -> void:
 	if is_instance_valid(_shop):
 		_shop.close()
 		return
+	if is_instance_valid(_missions):
+		_missions.close()
+		return
+	if is_instance_valid(_gifts):
+		_gifts.close()
+		return
 	if is_instance_valid(_email):
 		_email.close()
 		return
@@ -421,6 +450,18 @@ func _open_shop() -> void:
 	add_child(_shop)
 
 
+func _open_gifts() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_gifts = GiftsPanel.new()
+	add_child(_gifts)
+
+
+func _open_missions() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_missions = MissionsPanel.new()
+	add_child(_missions)
+
+
 ## Os números da tela: os três blocos do topo e a linha de cada atalho. "Treino"
 ## conta o que vence hoje, e não o baralho inteiro: o número é o convite, e um
 ## convite para 40 desafios que só voltam no mês que vem é mentira.
@@ -439,7 +480,41 @@ func _refresh_games() -> void:
 	_shop_button.set_meta(&"detail", "Bolas, tacos, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
 	_shop_button.set_meta(&"lit", true)
 	_shop_button.queue_redraw()
+	var ready := Account.missions_ready()
+	_missions_button.set_meta(&"title", "Missões")
+	_missions_button.set_meta(&"detail", missions_detail(ready, Account.events.size()))
+	_missions_button.set_meta(&"lit", ready > 0)
+	_missions_button.queue_redraw()
+	var closed := Account.gifts.size()
+	_gifts_button.set_meta(&"title", "Presentes")
+	_gifts_button.set_meta(&"detail", gifts_detail(closed))
+	_gifts_button.set_meta(&"lit", closed > 0)
+	_gifts_button.queue_redraw()
 	_refresh_protect()
+
+
+static func gifts_detail(closed: int) -> String:
+	if closed == 1:
+		return "1 presente para abrir"
+	if closed > 1:
+		return "%d presentes para abrir" % closed
+	return "O que os amigos mandaram"
+
+
+## A linha das missões: o que está pronto para resgatar vem antes de tudo.
+static func missions_detail(ready: int, events: int) -> String:
+	var parts := PackedStringArray()
+	if ready == 1:
+		parts.append("1 pronta para resgatar")
+	elif ready > 1:
+		parts.append("%d prontas para resgatar" % ready)
+	else:
+		parts.append("Do dia, conquistas e itens exclusivos")
+	if events == 1:
+		parts.append("1 evento no ar")
+	elif events > 1:
+		parts.append("%d eventos no ar" % events)
+	return " · ".join(parts)
 
 
 ## Protegida, a linha só mostra o e-mail; sem conta, avisa e não abre nada:

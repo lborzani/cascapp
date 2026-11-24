@@ -36,6 +36,8 @@ var _toast: Banner = null
 ## O item à espera do segundo toque para comprar; vazio sem nenhum.
 var _confirming := ""
 var _busy := false
+## A escolha do amigo para presentear, por cima da loja; `null` fechada.
+var _picker: Control = null
 
 
 func _ready() -> void:
@@ -114,8 +116,11 @@ func _ready() -> void:
 		Account.fetch_prices()
 
 
-## O que o voltar do sistema chama.
+## O que o voltar do sistema chama. Com a lista de amigos aberta, fecha só ela.
 func close() -> void:
+	if is_instance_valid(_picker):
+		_close_picker()
+		return
 	closed.emit()
 	queue_free()
 
@@ -145,8 +150,9 @@ func _fill() -> void:
 		grid.add_theme_constant_override("v_separation", 10)
 		_rows.add_child(grid)
 		grid.add_child(_card(slot, ""))
+		# Os exclusivos aparecem trancados: a vitrine do que as missões dão.
 		for id in Cosmetics.of_slot(slot):
-			if Account.prices.has(id) or id in Account.owned:
+			if Account.prices.has(id) or id in Account.owned or id in Account.exclusive:
 				grid.add_child(_card(slot, id))
 
 
@@ -181,6 +187,9 @@ func _card(slot: String, id: String) -> Control:
 		action.disabled = true
 	elif owned:
 		action.text = "Usar"
+	elif id in Account.exclusive:
+		action.text = "Só por missão"
+		action.disabled = true
 	elif _confirming == id:
 		action.text = "Confirmar"
 	else:
@@ -189,7 +198,115 @@ func _card(slot: String, id: String) -> Control:
 	action.disabled = action.disabled or _busy or not Account.signed_in()
 	action.pressed.connect(_on_action.bind(slot, id, owned))
 	column.add_child(action)
+	# Presentear só o que está à venda, e só quem tem amigo.
+	if Account.prices.has(id) and not Friends.list.is_empty():
+		var gift := Button.new()
+		gift.text = "Presentear"
+		gift.theme_type_variation = &"GhostButton"
+		gift.custom_minimum_size = Vector2(0, 36)
+		gift.focus_mode = FOCUS_NONE
+		gift.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+		gift.disabled = _busy or not Account.signed_in()
+		gift.pressed.connect(_pick_friend.bind(id))
+		column.add_child(gift)
 	return card
+
+
+## A lista de amigos para mandar `id`. Como a compra, dois toques: o primeiro
+## troca o nome do amigo por "Confirmar", o segundo manda.
+func _pick_friend(id: String) -> void:
+	Sound.play(Sound.Cue.TAP)
+	_confirming = ""
+	_picker = Control.new()
+	_picker.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_picker.mouse_filter = MOUSE_FILTER_STOP
+	var shade := ColorRect.new()
+	shade.color = AppTheme.BACKGROUND
+	shade.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_picker.add_child(shade)
+	var safe := SafeAreaMargin.new()
+	for side in ["left", "top", "right", "bottom"]:
+		safe.add_theme_constant_override("margin_" + side, 16)
+	safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_picker.add_child(safe)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	safe.add_child(column)
+	var header := HBoxContainer.new()
+	var title := Label.new()
+	title.text = "Presentear"
+	title.theme_type_variation = &"Title"
+	title.size_flags_horizontal = SIZE_EXPAND_FILL
+	header.add_child(title)
+	var cancel := Button.new()
+	cancel.text = "Cancelar"
+	cancel.theme_type_variation = &"GhostButton"
+	cancel.custom_minimum_size = Vector2(0, 44)
+	cancel.pressed.connect(_close_picker)
+	header.add_child(cancel)
+	column.add_child(header)
+	var hint := Label.new()
+	hint.text = "%s por %d moedas. Seu amigo ganha na hora e abre na caixa de presentes." % [GiftsPanel.contents_text({"item": id}), int(Account.prices.get(id, 0))]
+	hint.theme_type_variation = &"Hint"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(hint)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 8)
+	scroll.add_child(list)
+	for friend: Dictionary in Friends.sorted():
+		var who := Button.new()
+		var name := str(friend.get("name", ""))
+		who.text = name if not name.is_empty() else "Amigo"
+		who.custom_minimum_size = Vector2(0, 52)
+		who.focus_mode = FOCUS_NONE
+		who.theme_type_variation = &"GhostButton"
+		who.pressed.connect(_on_friend.bind(who, str(friend.get("id", "")), id))
+		list.add_child(who)
+	add_child(_picker)
+
+
+func _close_picker() -> void:
+	if is_instance_valid(_picker):
+		_picker.queue_free()
+	_picker = null
+	_confirming = ""
+
+
+func _on_friend(button: Button, friend: String, id: String) -> void:
+	Sound.play(Sound.Cue.TAP)
+	if _confirming != friend:
+		# O toque anterior em outro amigo volta ao nome dele.
+		for other: Button in button.get_parent().get_children():
+			if other.has_meta(&"name"):
+				other.text = other.get_meta(&"name")
+				other.theme_type_variation = &"GhostButton"
+		_confirming = friend
+		button.set_meta(&"name", button.text)
+		button.text = "Confirmar para %s" % button.text
+		button.theme_type_variation = &"PrimaryButton"
+		return
+	button.disabled = true
+	var name: String = button.get_meta(&"name", "")
+	var code := await Account.send_gift(friend, id)
+	if not is_inside_tree():
+		return
+	_close_picker()
+	match code:
+		200:
+			_toast.show_message("Presente mandado para %s." % name, Banner.Kind.INFO)
+		402:
+			var missing := int(Account.prices.get(id, 0)) - maxi(Account.coins, 0)
+			_toast.show_message("Faltam %d moedas." % missing, Banner.Kind.ALERT)
+		409:
+			_toast.show_message("%s já tem esse item." % name, Banner.Kind.ALERT)
+		_:
+			_toast.show_message("Não deu para presentear agora. Tente de novo.", Banner.Kind.DANGER)
+	_fill()
 
 
 ## A amostra do item. `id` vazio é o padrão do encaixe.

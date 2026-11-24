@@ -40,6 +40,8 @@ var _leaving := false
 var _sheet: GameSheet = null
 ## A tela de versão nova obrigatória, enquanto está na tela.
 var _gate: UpdateGate = null
+## Os presentes que o menu já avisou nesta sessão (ver `_show_gifts`).
+static var _gifts_seen: Array = []
 var _shop: ShopPanel = null
 var _toast: Banner = null
 
@@ -87,6 +89,8 @@ func _ready() -> void:
 	# O bônus do dia chega pela entrada na conta, antes ou depois do menu abrir.
 	Account.wallet_changed.connect(_show_daily)
 	_show_daily()
+	Account.gifts_changed.connect(_show_gifts)
+	_show_gifts()
 	_check_update()
 	_open_chat_launch()
 	_show_news()
@@ -410,6 +414,22 @@ func _greet() -> void:
 		if is_inside_tree():
 			%AppBar.greet(Prefs.player_name(), Account.local_avatar())
 	)
+
+
+## Presente novo na caixa: avisa uma vez por presente, e não a cada volta ao menu.
+func _show_gifts() -> void:
+	var fresh := Account.gifts.filter(func(gift: Dictionary) -> bool:
+		return str(gift.get("id", "")) not in _gifts_seen
+	)
+	if fresh.is_empty():
+		return
+	for gift: Dictionary in fresh:
+		_gifts_seen.append(str(gift.get("id", "")))
+	if _toast == null:
+		_toast = Banner.new()
+		$Safe.add_child(_toast)
+	var text := "Você ganhou um presente!" if Account.gifts.size() == 1 else "Você tem %d presentes para abrir!" % Account.gifts.size()
+	_toast.show_message(text + " Abra na aba Você.", Banner.Kind.INFO)
 
 
 func _show_daily() -> void:
