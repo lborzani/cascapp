@@ -2453,6 +2453,11 @@ telas: o modo em abas, os ajustes daquele modo, um botão para começar e o link
 papel, o QR, o NFC e a lista de salas abertas — e de criar uma. Você é o nome e a
 bolacha com que o jogador aparece na mesa.
 
+Camada nova que sobe de baixo usa a **`BottomSheet`** (`ui/bottom_sheet.gd`): o
+fundo escurecido, os cantos redondos, a subida animada e o toque fora fechando,
+com o conteúdo em `body`. É o que as missões da tela inicial usam (a pílula de
+alvo na barra de cima). A `GameSheet` tira de lá o raio e o tempo da animação.
+
 A sala de espera de quem abre (`scenes/pairing.tscn`) mostra o
 código numa comanda com "Copiar" e "Mostrar QR" — o QR começa escondido, porque
 ocupa meia tela para servir a um caminho só — e as cadeiras em volta da mesa, com

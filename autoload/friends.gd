@@ -149,12 +149,26 @@ func send_pending_invite(game: StringName, code: String) -> String:
 
 
 ## O que espera o jogador na gaveta: a bolinha da pílula de amigos. Pedidos
-## recebidos e mensagens não lidas.
+## recebidos e mensagens não lidas, menos as de amigo silenciado.
 func alerts() -> int:
 	var total := (requests["incoming"] as Array).size()
-	for count: Variant in unread.values():
-		total += int(count)
+	for id: Variant in unread:
+		if not is_muted(str(id)):
+			total += int(unread[id])
 	return total
+
+
+func is_muted(id: String) -> bool:
+	return bool(profile_of(id).get("muted", false))
+
+
+## Silencia ou reativa no servidor e, dando certo, na lista daqui.
+func set_muted(id: String, muted: bool) -> bool:
+	if not await Account.mute_friend(id, muted):
+		return false
+	profile_of(id)["muted"] = muted
+	changed.emit()
+	return true
 
 
 func unread_of(id: String) -> int:

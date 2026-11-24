@@ -155,6 +155,23 @@ func _app_side() -> void:
 	panel._tabs.selected.emit(1)
 	_equals(panel._rows.get_child_count(), 3, "Conquistas mostra as três")
 	panel.close()
+
+	print("folha da tela inicial")
+	var sheet := MissionsPanel.new()
+	sheet.sheet = true
+	var events := {"closed": 0, "gone": false}
+	sheet.closed.connect(func() -> void: events["closed"] += 1)
+	sheet.tree_exited.connect(func() -> void: events["gone"] = true)
+	add_child(sheet)
+	await get_tree().process_frame
+	_check(sheet._sheet != null and sheet._sheet.is_inside_tree(), "abre numa BottomSheet")
+	_equals(sheet._rows.get_child_count(), 3, "com as três do dia")
+	_check(sheet._toast.get_parent() == sheet, "o aviso fica fora da lista")
+	sheet.close()
+	sheet.close()
+	await get_tree().create_timer(0.6).timeout
+	_check(events["gone"], "fechar desce e sai da árvore")
+	_equals(events["closed"], 1, "avisando uma vez só")
 	Account.missions_notice.clear()
 
 

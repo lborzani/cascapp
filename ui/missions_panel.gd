@@ -11,6 +11,11 @@ extends Control
 
 signal closed
 
+## Como folha (a tela inicial): uma `BottomSheet`, que sobe de baixo e fecha ao
+## tocar fora. Falso, a tela inteira (a aba Você).
+var sheet := false
+var _sheet: BottomSheet = null
+
 const DAILY := "daily"
 const PERM := "perm"
 const EVENT := "event"
@@ -27,19 +32,21 @@ var _busy := false
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	var background := ColorRect.new()
-	background.color = AppTheme.BACKGROUND
-	background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	add_child(background)
-
-	var safe := SafeAreaMargin.new()
-	for side in ["left", "top", "right", "bottom"]:
-		safe.add_theme_constant_override("margin_" + side, 16)
-	safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	add_child(safe)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
-	safe.add_child(column)
+	if sheet:
+		_build_sheet(column)
+	else:
+		var background := ColorRect.new()
+		background.color = AppTheme.BACKGROUND
+		background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+		add_child(background)
+		var safe := SafeAreaMargin.new()
+		for side in ["left", "top", "right", "bottom"]:
+			safe.add_theme_constant_override("margin_" + side, 16)
+		safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+		add_child(safe)
+		safe.add_child(column)
 
 	var header := HBoxContainer.new()
 	var title := Label.new()
@@ -78,7 +85,8 @@ func _ready() -> void:
 	scroll.add_child(_rows)
 
 	_toast = Banner.new()
-	safe.add_child(_toast)
+	# Na folha, o aviso vai na raiz: dentro do corpo ele viraria uma linha da lista.
+	(self if sheet else column.get_parent()).add_child(_toast)
 
 	Account.missions_changed.connect(_fill)
 	_fill()
@@ -90,8 +98,25 @@ func _ready() -> void:
 
 ## O que o voltar do sistema chama.
 func close() -> void:
+	if is_queued_for_deletion():
+		return
+	if _sheet != null:
+		_sheet.close()  # avisa `closed` e sai depois da descida
+		return
 	closed.emit()
 	queue_free()
+
+
+## A folha: o conteúdo numa `BottomSheet`. Fechar por ela (toque fora) fecha
+## o painel junto, depois da descida.
+func _build_sheet(column: VBoxContainer) -> void:
+	mouse_filter = MOUSE_FILTER_IGNORE
+	_sheet = BottomSheet.new()
+	column.size_flags_vertical = SIZE_EXPAND_FILL
+	_sheet.body.add_child(column)
+	_sheet.closed.connect(func() -> void: closed.emit())
+	_sheet.tree_exited.connect(queue_free)
+	add_child(_sheet)
 
 
 ## As abas que existem agora: Hoje e Conquistas sempre, e uma por evento no ar.
@@ -176,7 +201,8 @@ func _ends_text(event_key: String) -> String:
 func _card(mission: Dictionary) -> Control:
 	var card := PanelContainer.new()
 	card.size_flags_horizontal = SIZE_EXPAND_FILL
-	var box := AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE)
+	# Na folha o fundo já é `SURFACE`: o cartão sobe um tom para aparecer.
+	var box := AppTheme.box(AppTheme.SURFACE_HIGH if sheet else AppTheme.SURFACE, AppTheme.RADIUS_LARGE)
 	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
 		box.set_content_margin(side, 14)
 	card.add_theme_stylebox_override("panel", box)
@@ -240,7 +266,7 @@ func _card(mission: Dictionary) -> Control:
 func _bar(ratio: float, complete: bool) -> Control:
 	var track := Panel.new()
 	track.custom_minimum_size = Vector2(0, 10)
-	track.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE_HIGH, 5))
+	track.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE_TOP if sheet else AppTheme.SURFACE_HIGH, 5))
 	var fill := Panel.new()
 	fill.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SUCCESS if complete else AppTheme.ACCENT, 5))
 	fill.anchor_bottom = 1.0

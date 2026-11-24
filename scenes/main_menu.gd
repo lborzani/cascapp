@@ -43,6 +43,7 @@ var _gate: UpdateGate = null
 ## Os presentes que o menu já avisou nesta sessão (ver `_show_gifts`).
 static var _gifts_seen: Array = []
 var _shop: ShopPanel = null
+var _missions: MissionsPanel = null
 var _toast: Banner = null
 
 
@@ -59,6 +60,9 @@ func _ready() -> void:
 	%AppBar.action_pressed.connect(_open_settings)
 	%AppBar.friends_pressed.connect(_open_friends)
 	%AppBar.coins_pressed.connect(_open_shop)
+	%AppBar.missions_pressed.connect(_open_missions)
+	%AppBar.set_missions_ready(Account.missions_ready())
+	Account.missions_changed.connect(func() -> void: %AppBar.set_missions_ready(Account.missions_ready()))
 	%AppBar.set_coins(Account.coins)
 	Account.wallet_changed.connect(func() -> void: %AppBar.set_coins(Account.coins))
 	# Foto trocada na aba Você, ou baixada da conta depois de reinstalar.
@@ -251,6 +255,9 @@ func go_back() -> void:
 	if is_instance_valid(_shop):
 		_shop.close()
 		return
+	if is_instance_valid(_missions):
+		_missions.close()
+		return
 	if _sheet_open():
 		_sheet.close()
 		return
@@ -294,6 +301,14 @@ func open_chat(friend: String) -> void:
 	var drawer := _drawer()
 	if drawer != null:
 		drawer.open_chat(friend)
+
+
+## As missões da aba Você, aqui numa folha que sobe por cima desta tela.
+func _open_missions() -> void:
+	Sound.play(Sound.Cue.TAP)
+	_missions = MissionsPanel.new()
+	_missions.sheet = true
+	add_child(_missions)
 
 
 ## A mesma loja da aba Você, por cima desta tela.
