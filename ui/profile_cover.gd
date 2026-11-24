@@ -10,9 +10,57 @@ extends Control
 ## (`rounded`), e o recorte do `StyleBoxFlat` sai suavizado. O degradê é feito de
 ## cores por vértice e os desenhos com `antialiased`, para nada sair serrilhado.
 ##
-## Três se mexem: as estrelas da noite piscam, as ondas andam e a aurora ondula.
+## Quatro se mexem: as estrelas da noite piscam, as ondas andam, a aurora ondula e
+## o céu dos pioneiros tem nebulosas, constelações com pulsos e estrelas cadentes.
 
-const ANIMATED := ["stars", "waves", "aurora"]
+const ANIMATED := ["stars", "waves", "aurora", "pioneer"]
+## Quantos segundos cada constelação fica na capa deitada do céu dos pioneiros.
+const CYCLE := 6.0
+
+## As constelações da capa dos testadores, com as posições reais do céu (ascensão
+## reta e declinação projetadas em volta do centro de cada uma, vista de baixo:
+## leste à esquerda, sul embaixo). Cada estrela é `[x, y, magnitude, vermelha]`,
+## com x e y de -0,5 a 0,5 na maior medida da constelação; `lines` liga estrelas
+## pelo índice; `place` é onde ela fica na capa em pé (centro em fração do
+## retângulo, tamanho em fração da meia largura). Deitada, uma por vez no meio.
+const CONSTELLATIONS := [
+	{
+		# Cruzeiro do Sul: Acrux, Mimosa, Gacrux, Imai, Ginan.
+		"stars": [[0.101, 0.500, 0.8, false], [-0.342, -0.069, 1.2, false], [0.006, -0.500, 1.6, true], [0.342, -0.226, 2.8, false], [0.211, 0.049, 3.6, false]],
+		"lines": [Vector2i(0, 2), Vector2i(1, 3)],
+		"place": Vector3(0.83, 0.14, 0.5),
+	},
+	{
+		# Sagitário (o bule): Kaus Australis, Kaus Media, Kaus Borealis, φ, Nunki, τ, Ascella, Alnasl.
+		"stars": [[0.200, 0.335, 1.8, false], [0.252, -0.005, 2.7, false], [0.138, -0.335, 2.8, false], [-0.152, -0.217, 3.2, false], [-0.309, -0.269, 2.0, false], [-0.500, -0.167, 3.3, false], [-0.429, -0.001, 2.6, false], [0.500, 0.039, 3.0, false]],
+		"lines": [Vector2i(7, 1), Vector2i(7, 0), Vector2i(1, 0), Vector2i(1, 2), Vector2i(2, 3), Vector2i(1, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(5, 6), Vector2i(6, 3), Vector2i(6, 0)],
+		"place": Vector3(0.26, 0.84, 0.75),
+	},
+	{
+		# Aquário: Sadalmelik, Sadalsuud, Albali, Sadachbia, ζ, η, π, λ, Skat, θ, ι.
+		"stars": [[-0.115, -0.218, 3.0, false], [0.155, -0.052, 2.9, false], [0.500, 0.072, 3.8, false], [-0.240, -0.185, 3.8, false], [-0.297, -0.228, 3.6, false], [-0.348, -0.225, 4.0, false], [-0.268, -0.272, 4.6, false], [-0.484, 0.011, 3.7, false], [-0.500, 0.272, 3.3, false], [-0.202, 0.018, 4.2, false], [-0.120, 0.210, 4.3, false]],
+		"lines": [Vector2i(2, 1), Vector2i(1, 0), Vector2i(0, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(4, 6), Vector2i(0, 9), Vector2i(9, 7), Vector2i(7, 8), Vector2i(1, 10)],
+		"place": Vector3(0.74, 0.52, 0.8),
+	},
+	{
+		# Leão: Regulus, η, Algieba, Adhafera, μ, ε, Zosma, Chertan, Denebola.
+		"stars": [[0.317, 0.241, 1.4, false], [0.326, 0.077, 3.5, false], [0.223, -0.029, 2.0, true], [0.250, -0.152, 3.4, false], [0.444, -0.241, 3.9, false], [0.500, -0.164, 3.0, false], [-0.216, -0.053, 2.6, false], [-0.217, 0.122, 3.3, false], [-0.500, 0.152, 2.1, false]],
+		"lines": [Vector2i(0, 1), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(2, 6), Vector2i(6, 8), Vector2i(8, 7), Vector2i(7, 0)],
+		"place": Vector3(0.27, 0.55, 0.8),
+	},
+	{
+		# Gêmeos: Castor, Pollux, Alhena, Tejat, Propus, Mebsuta, Wasat, ξ, τ, θ, κ, υ, λ, Mekbuda.
+		"stars": [[-0.375, -0.402, 1.6, false], [-0.491, -0.218, 1.1, true], [0.243, 0.334, 1.9, false], [0.403, 0.044, 2.9, true], [0.491, 0.044, 3.3, true], [0.176, -0.081, 3.0, false], [-0.217, 0.069, 3.5, false], [0.161, 0.500, 3.4, false], [-0.120, -0.324, 4.4, false], [0.079, -0.500, 3.6, false], [-0.482, -0.046, 3.6, false], [-0.389, -0.165, 4.1, false], [-0.195, 0.327, 3.6, false], [-0.044, 0.136, 3.9, false]],
+		"lines": [Vector2i(0, 8), Vector2i(8, 9), Vector2i(8, 5), Vector2i(5, 3), Vector2i(3, 4), Vector2i(1, 11), Vector2i(11, 6), Vector2i(6, 13), Vector2i(13, 2), Vector2i(6, 12), Vector2i(12, 7), Vector2i(1, 10), Vector2i(8, 11)],
+		"place": Vector3(0.2, 0.14, 0.55),
+	},
+	{
+		# Órion: Betelgeuse, Bellatrix, Mintaka, Alnilam, Alnitak, Saiph, Rigel, Meissa.
+		"stars": [[-0.259, -0.371, 0.5, true], [0.124, -0.317, 1.6, false], [0.036, 0.022, 2.2, false], [-0.018, 0.068, 1.7, false], [-0.075, 0.106, 1.8, false], [-0.165, 0.500, 2.1, false], [0.259, 0.425, 0.1, false], [-0.003, -0.500, 3.4, false]],
+		"lines": [Vector2i(7, 0), Vector2i(7, 1), Vector2i(0, 1), Vector2i(0, 4), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 4), Vector2i(4, 5), Vector2i(2, 6)],
+		"place": Vector3(0.75, 0.84, 0.7),
+	},
+]
 
 var look := {}:
 	set(value):
@@ -185,3 +233,95 @@ static func _pattern(canvas: CanvasItem, rect: Rect2, pattern: String, time: flo
 					points.append(Vector2(x, y))
 				canvas.draw_polyline(points, Color(colour, 0.13), sky * 0.15, true)
 				canvas.draw_polyline(points, Color(colour, 0.35), sky * 0.03, true)
+		"pioneer":
+			_pioneer(canvas, rect, rng, time)
+
+
+## A capa dos testadores: três nebulosas que respiram e derivam nas cores do
+## conjunto (`ProfileStyle.PIONEER`), poeira de estrelas, seis constelações de
+## verdade (`CONSTELLATIONS`) cujas linhas levam pulsos de luz de estrela em
+## estrela e, de tempos em tempos, duas estrelas cadentes.
+static func _pioneer(canvas: CanvasItem, rect: Rect2, rng: RandomNumberGenerator, time: float) -> void:
+	var sky := minf(rect.size.y, rect.size.x * 1.2)
+	for cloud in 3:
+		var drift := Vector2(sin(time * 0.21 + cloud * 2.0), cos(time * 0.17 + cloud * 1.3)) * sky * 0.08
+		var spot := rect.position + Vector2(rect.size.x * (0.18 + cloud * 0.32), sky * (0.3 + 0.25 * (cloud % 2))) + drift
+		var tint := ProfileStyle.pioneer_color(cloud / 3.0)
+		var breath := 0.5 + 0.5 * sin(time * 0.6 + cloud * 2.4)
+		# Discos empilhados, cada um mais transparente: uma mancha de bordas macias.
+		for ring in 12:
+			canvas.draw_circle(spot, sky * (0.5 - ring * 0.038), Color(tint, 0.014 + 0.01 * breath), true, -1.0, true)
+
+	var dust := clampi(int(rect.get_area() / 1100.0), 20, 200)
+	for i in dust:
+		var at := rect.position + Vector2(rng.randf(), rng.randf()) * rect.size
+		var twinkle := 0.45 + 0.55 * sin(time * rng.randf_range(1.2, 3.2) + i * 0.9)
+		canvas.draw_circle(at, rng.randf_range(0.5, 1.3), Color(1, 1, 1, 0.55 * twinkle), true, -1.0, true)
+
+	# Em pé (tela cheia), as seis no céu, em duas colunas. Deitada (cartão, loja),
+	# seis juntas viram borrão: uma por vez, no meio, trocando a cada `CYCLE`
+	# segundos. Ela acende com as linhas se traçando de estrela em estrela e
+	# apaga antes da próxima.
+	if rect.size.y > rect.size.x * 1.1:
+		for constellation: Dictionary in CONSTELLATIONS:
+			var place: Vector3 = constellation["place"]
+			_constellation(canvas, constellation, rect.position + Vector2(place.x, place.y) * rect.size, rect.size.x * 0.5 * place.z, time, 1.0, 1.0)
+	else:
+		var turn := fposmod(time, CYCLE) / CYCLE
+		var shown: Dictionary = CONSTELLATIONS[int(time / CYCLE) % CONSTELLATIONS.size()]
+		var alpha := smoothstep(0.0, 0.12, turn) * (1.0 - smoothstep(0.85, 1.0, turn))
+		_constellation(canvas, shown, rect.get_center(), minf(rect.size.y, rect.size.x * 0.6) * 0.82, time, alpha, smoothstep(0.0, 0.35, turn))
+
+	# As cadentes: cada uma cruza o céu em 0,9 s, num ciclo de 3,5 s, partindo de
+	# um ponto diferente a cada volta.
+	var heading := Vector2(-1.0, 0.45).normalized()
+	for shot in 2:
+		var clock := time + shot * 1.75
+		var local := fposmod(clock, 3.5) / 0.9
+		if local >= 1.0:
+			continue
+		var lap := floorf(clock / 3.5)
+		var start := rect.position + Vector2(
+			rect.size.x * (0.35 + 0.65 * fposmod(lap * 0.618 + shot * 0.3, 1.0)),
+			sky * 0.5 * fposmod(lap * 0.414 + shot * 0.5, 1.0)
+		)
+		var head := start + heading * local * sky * 0.9
+		var alpha := sin(local * PI)
+		canvas.draw_polyline_colors(
+			PackedVector2Array([head - heading * sky * 0.3, head]),
+			PackedColorArray([Color(1, 1, 1, 0.0), Color(1.0, 0.95, 0.8, alpha)]), 2.0, true
+		)
+		canvas.draw_circle(head, 2.2, Color(1, 1, 1, alpha), true, -1.0, true)
+
+
+## Uma constelação de `CONSTELLATIONS` centrada em `middle`, com `extent` de lado
+## na maior medida. `alpha` apaga tudo junto; `reveal` (0 a 1) é o quanto das
+## linhas já se traçou, de uma estrela à outra.
+static func _constellation(
+	canvas: CanvasItem, constellation: Dictionary, middle: Vector2, extent: float, time: float, alpha: float, reveal: float
+) -> void:
+	if alpha <= 0.0:
+		return
+	var stars := PackedVector2Array()
+	for star: Array in constellation["stars"]:
+		stars.append(middle + Vector2(star[0], star[1]) * extent)
+	var grow := clampf(extent / 120.0, 0.8, 1.6)
+	var spark := ProfileStyle.PIONEER[2]
+	var index := 0
+	for line: Vector2i in constellation["lines"]:
+		var a := stars[line.x]
+		var b := a.lerp(stars[line.y], reveal)
+		canvas.draw_line(a, b, Color(0.82, 0.86, 1.0, 0.22 * alpha), 1.0, true)
+		if reveal >= 1.0:
+			var phase := fposmod(time * 0.35 + index * 0.37, 1.0)
+			canvas.draw_circle(a.lerp(b, phase), 1.4 * grow, Color(spark, sin(phase * PI) * alpha), true, -1.0, true)
+		index += 1
+	for i in stars.size():
+		var star: Array = constellation["stars"][i]
+		# Mais brilhante (magnitude menor), maior. As gigantes laranjas e
+		# vermelhas (Betelgeuse, Pollux, Gacrux...) saem alaranjadas, como no céu.
+		var radius := (1.0 + (4.0 - float(star[2])) * 0.5) * grow
+		var core := Color("ffb27a") if star[3] else Color("e6efff")
+		var glow := 0.6 + 0.4 * sin(time * 1.7 + (index + i) * 1.1)
+		canvas.draw_circle(stars[i], radius * 2.6 * glow, Color(ProfileStyle.pioneer_color(float(i) / stars.size()), 0.16 * alpha), true, -1.0, true)
+		canvas.draw_circle(stars[i], radius * (0.8 + 0.2 * glow), Color(core, alpha), true, -1.0, true)

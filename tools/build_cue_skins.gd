@@ -30,7 +30,7 @@ const METAL := 0.15
 
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
-	for name: String in ["default", "ebony", "carbon", "flames", "neon", "gold"]:
+	for name: String in ["default", "ebony", "carbon", "flames", "neon", "gold", "pioneer"]:
 		var image := Image.create_empty(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8)
 		var paint: Callable = Callable(self, "_" + name)
 		for y in HEIGHT:
@@ -171,3 +171,56 @@ func _gold(u: float, v: float) -> Color:
 	if u < BUTT:
 		return Color("17120c")
 	return Color("17120c") if absf(u - 0.967) < 0.004 else Color(gold, METAL)
+
+
+## Pioneiro (o dos testadores): haste de bordo claro; antebraço índigo com
+## pontas de luz em menta, violeta e ouro (as cores do conjunto,
+## `ProfileStyle.PIONEER`) subindo para a ponta entre estrelinhas douradas;
+## virola e anéis de ouro; cabo com fio dourado trançado; e o fim do cabo de
+## céu, com o Cruzeiro do Sul em volta.
+func _pioneer(u: float, v: float) -> Color:
+	var night := Color("140c38")
+	var gold := Color("ffd25a")
+	if u < JOINT:
+		return _wood(Color("f3e6cc"), u, v, 0.05)
+	if u < FOREARM:
+		return Color(gold, METAL)
+	if u < GRIP:
+		if _rings(u, FOREARM, GRIP, 0.005):
+			return Color(gold, METAL)
+		var f := (u - FOREARM) / (GRIP - FOREARM)
+		# Cinco pontas em volta, nascendo do lado do cabo e afinando para a ponta.
+		var lane := absf(fposmod(v * 5.0, 1.0) - 0.5) * 2.0
+		var reach := 0.3 + 0.6 * pow(lane, 1.3)
+		if f > reach:
+			var t := clampf((f - reach) / (1.0 - reach + 0.001), 0.0, 1.0)
+			return _palette(t * 0.66 + v)
+		return gold if _star(u * 140.0, v * 14.0) else night
+	if u < BUTT:
+		var wrap := fposmod(u * 260.0 + v * 3.0, 1.0)
+		var cross := fposmod(u * 260.0 - v * 3.0, 1.0)
+		return gold.darkened(0.25) if wrap < 0.14 or cross < 0.14 else Color("0f0a28")
+	if _rings(u, BUTT, 1.0, 0.006):
+		return Color(gold, METAL)
+	# O Cruzeiro: quatro estrelas em cruz e a Ginan, repetidas duas vezes em volta.
+	var at := Vector2((u - BUTT) / (1.0 - BUTT), fposmod(v * 2.0, 1.0))
+	for star: Vector2 in [Vector2(0.5, 0.2), Vector2(0.5, 0.8), Vector2(0.3, 0.45), Vector2(0.72, 0.55), Vector2(0.62, 0.62)]:
+		if (at - star).length() < 0.06:
+			return Color("fff1c4")
+	return gold if _star(u * 140.0, v * 14.0) else night
+
+
+## As cores do conjunto dos testadores em ciclo (menta, violeta, ouro).
+static func _palette(t: float) -> Color:
+	var colours := [Color("3dffd0"), Color("a66bff"), Color("ffd25a")]
+	var at := fposmod(t, 1.0) * 3.0
+	var i := int(at)
+	return (colours[i] as Color).lerp(colours[(i + 1) % 3], at - i)
+
+
+## Uma estrelinha numa de cada tantas células da grade (`x`, `y` já escalados):
+## um ponto no meio de uma célula sorteada pelo hash dela.
+static func _star(x: float, y: float) -> bool:
+	var cell := Vector2(floorf(x), floorf(y))
+	var lucky := fposmod(sin(cell.dot(Vector2(12.9898, 78.233))) * 43758.5453, 1.0)
+	return lucky > 0.9 and Vector2(fposmod(x, 1.0) - 0.5, fposmod(y, 1.0) - 0.5).length() < 0.28

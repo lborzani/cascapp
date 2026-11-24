@@ -114,12 +114,26 @@ func _probe_palette() -> void:
 	_equals(painted.get_theme_color("font_color"), Color("ff5a7a"), "o nome em rubi")
 	ProfileStyle.paint_name(painted, {"name_color": "name_rainbow"})
 	_check(painted.material == ProfileStyle.rainbow_material(), "e o arco-íris pelo shader")
+	ProfileStyle.paint_name(painted, {"name_color": "name_pioneer"})
+	_check(painted.material == ProfileStyle.material_of(ProfileStyle.PIONEER_TEXT), "e o dos testadores pelo dele")
 	painted.free()
 	for id in Cosmetics.of_slot(Cosmetics.BANNER):
 		_check((Cosmetics.ITEMS[id]["colors"] as Array).size() >= 2, "%s: a capa tem degradê" % id)
 	# Animados: só as molduras e as capas que se mexem gastam quadro.
 	_check(Coaster.animated("rainbow") and Coaster.animated("neon") and not Coaster.animated("gold"), "o arco-íris e o neon se mexem, o ouro não")
 	_check(ProfileCover.animated(Cosmetics.ITEMS["banner_aurora"]) and not ProfileCover.animated(Cosmetics.ITEMS["banner_sunset"]), "a aurora se mexe, o pôr do sol não")
+	# Os de testador: animados, e o título com brilho.
+	_check(Coaster.animated("pioneer") and ProfileCover.animated(Cosmetics.ITEMS["banner_pioneer"]), "moldura e capa dos testadores se mexem")
+	var shiny := ProfileStyle.title_label({"title": "title_pioneer"})
+	var plain := ProfileStyle.title_label({"title": "title_strike"})
+	_check(shiny.material != null and plain.material == null, "só o título de testador brilha")
+	shiny.free()
+	plain.free()
+	_equals(ProfileStyle.pioneer_color(1.0), ProfileStyle.pioneer_color(0.0), "o ciclo de cores fecha a volta")
+	for constellation: Dictionary in ProfileCover.CONSTELLATIONS:
+		var count: int = constellation["stars"].size()
+		for line: Vector2i in constellation["lines"]:
+			_check(line.x < count and line.y < count, "a linha %s liga estrelas que existem" % line)
 	var moving := Coaster.new()
 	moving.frame = "rainbow"
 	var still := Coaster.new()
@@ -129,6 +143,18 @@ func _probe_palette() -> void:
 	_check(moving.is_processing() and not still.is_processing(), "só a bolacha da moldura animada processa")
 	moving.free()
 	still.free()
+	# O nome dos testadores mexe dentro da partida: a etiqueta se redesenha.
+	var shining_tag := PlayerTag.new()
+	shining_tag.look = {"name_color": "name_pioneer"}
+	var plain_tag := PlayerTag.new()
+	plain_tag.look = {"name_color": "name_gold"}
+	root.add_child(shining_tag)
+	root.add_child(plain_tag)
+	_check(shining_tag.is_processing() and not plain_tag.is_processing(), "só a etiqueta do nome dos testadores processa")
+	shining_tag.look = {}
+	_check(not shining_tag.is_processing(), "e para quando o nome deixa de ser o dele")
+	shining_tag.free()
+	plain_tag.free()
 	# Tacos: cada um carrega a textura inteira do taco desenrolado.
 	_equals(Cosmetics.cue_skin({"cue": "cue_nada"}), {}, "taco desconhecido é o de sempre")
 	for id in Cosmetics.of_slot(Cosmetics.CUE):

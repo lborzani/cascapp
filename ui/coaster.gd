@@ -47,8 +47,9 @@ var frame := "":
 		frame = value
 		set_process(is_inside_tree() and animated(value))
 		queue_redraw()
-## As molduras que se mexem: o neon pulsa, as chamas tremulam e o arco-íris gira.
-const ANIMATED_FRAMES := ["neon", "flames", "rainbow"]
+## As molduras que se mexem: o neon pulsa, as chamas tremulam, o arco-íris gira
+## e a do pioneiro gira com cometas em órbita.
+const ANIMATED_FRAMES := ["neon", "flames", "rainbow", "pioneer"]
 ## O relógio da moldura animada, em segundos. Anda no `_process`, que só roda
 ## com uma delas na tela; a folha de conferência o escreve à mão.
 var frame_time := 0.0
@@ -188,6 +189,30 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 					draw_colored_polygon(PackedVector2Array([
 						base - across * half, base + across * half, base + out * reach + across * half * 0.6,
 					]), layer[1])
+		"pioneer":
+			# A dos testadores: uma faixa de luz em menta, violeta e ouro girando,
+			# três cometas em órbita (um na contramão) deixando rastro, e brilhos de
+			# quatro pontas que acendem e apagam na borda.
+			draw_arc(center, middle, 0.0, TAU, 64, Color("120a2e"), band, true)
+			var segments := 60
+			for i in segments:
+				var from := TAU * i / segments
+				var colour := ProfileStyle.pioneer_color(float(i) / segments - frame_time * 0.18)
+				draw_arc(center, middle, from, from + TAU / segments + 0.02, 4, colour, band * 0.62, true)
+			for edge: float in [radius - 0.75, radius - band + 0.75]:
+				draw_arc(center, edge, 0.0, TAU, 64, Color("ffe7a3"), 1.5, true)
+			for comet in 3:
+				var way := -1.0 if comet == 1 else 1.0
+				var head := way * frame_time * (1.1 + comet * 0.35) + comet * TAU / 3.0
+				for step in 10:
+					var fade := 1.0 - step / 10.0
+					var spot := center + Vector2.from_angle(head - way * step * 0.07) * middle
+					draw_circle(spot, band * 0.32 * fade, Color(1.0, 0.97, 0.88, 0.95 * fade), true, -1.0, true)
+			for i in 6:
+				var twinkle := maxf(0.0, sin(frame_time * 2.2 + i * 2.1))
+				if twinkle > 0.05:
+					var spot := center + Vector2.from_angle(TAU * i / 6.0 + 0.3) * (radius - band * 0.2)
+					_sparkle(spot, band * 0.75 * twinkle, Color(1.0, 0.95, 0.75, twinkle))
 		"laurel":
 			var green := Color("a8d46f")
 			var dark := Color("3d6b25")
@@ -200,6 +225,14 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 					var leaf := _leaf(spot, tangent.rotated(side * 0.5), band * 0.9, band * 0.45)
 					draw_colored_polygon(leaf, green)
 					draw_polyline(leaf + PackedVector2Array([leaf[0]]), dark, 1.0, true)
+
+
+## Um brilho de quatro pontas, com `reach` do centro à ponta.
+func _sparkle(at: Vector2, reach: float, colour: Color) -> void:
+	var points := PackedVector2Array()
+	for k in 8:
+		points.append(at + Vector2.from_angle(TAU * k / 8.0 - PI * 0.5) * (reach if k % 2 == 0 else reach * 0.22))
+	draw_colored_polygon(points, colour)
 
 
 static func animated(style: String) -> bool:

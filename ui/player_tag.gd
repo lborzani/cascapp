@@ -94,7 +94,10 @@ var look := {}:
 		if _coaster != null:
 			_coaster.frame = Cosmetics.frame_of(value)
 		_sync_cover()
+		set_process(is_inside_tree() and ProfileStyle.animated_name(value))
 		queue_redraw()
+## O relógio do nome que se mexe (`ProfileStyle.animated_name`), em segundos.
+var name_time := 0.0
 ## A capa da loja atrás da etiqueta (`ProfileCover`); `null` sem capa no visual.
 var _cover: Panel = null
 
@@ -227,6 +230,17 @@ func _init() -> void:
 	_apply_shape()
 
 
+## Ter `_process` liga o processamento de toda etiqueta; só a do nome que se
+## mexe precisa dele.
+func _ready() -> void:
+	set_process(ProfileStyle.animated_name(look))
+
+
+func _process(delta: float) -> void:
+	name_time += delta
+	queue_redraw()
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_ENTER_TREE and clock_urgent:
 		_sync_beat.call_deferred()
@@ -314,7 +328,7 @@ func _draw() -> void:
 	var room := maxf(0.0, size.x - text_x - _right_room())
 	ProfileStyle.draw_name(
 		self, AppTheme.display(600), Vector2(text_x, name_y), title, room, name_size,
-		AppTheme.TEXT if awake else AppTheme.TEXT_DIM, look
+		AppTheme.TEXT if awake else AppTheme.TEXT_DIM, look, name_time
 	)
 
 	var detail := subtitle

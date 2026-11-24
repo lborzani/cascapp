@@ -14,7 +14,8 @@ const CELL := Vector2(150, 110)
 
 func _ready() -> void:
 	var viewport := SubViewport.new()
-	viewport.size = Vector2i(CELL.x * 3 + 160, CELL.y * 13)
+	var rows := Cosmetics.of_slot(Cosmetics.FRAME).size() + Cosmetics.of_slot(Cosmetics.BANNER).size() + 1
+	viewport.size = Vector2i(CELL.x * 3 + 160, CELL.y * rows)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
 	var canvas := Control.new()
@@ -51,6 +52,19 @@ func _ready() -> void:
 			canvas.add_child(cover)
 			cover.set_process(false)
 		row += 1
+	# O título com brilho, sobre a capa dos testadores (o reflexo é shader: anda sozinho).
+	_caption(canvas, "Nome e título", row)
+	var name := Label.new()
+	name.text = "Eva Pioneira"
+	name.position = Vector2(160 + 10, row * CELL.y + 10)
+	name.add_theme_font_override("font", AppTheme.display(700))
+	name.add_theme_font_size_override("font_size", 30)
+	ProfileStyle.paint_name(name, {"name_color": "name_pioneer"})
+	canvas.add_child(name)
+	var title := ProfileStyle.title_label({"title": "title_pioneer"})
+	title.position = Vector2(160 + 10, row * CELL.y + CELL.y * 0.5)
+	title.add_theme_font_size_override("font_size", 26)
+	canvas.add_child(title)
 	for frame in 6:
 		await RenderingServer.frame_post_draw
 	viewport.get_texture().get_image().save_png("user://profile_sheet.png")

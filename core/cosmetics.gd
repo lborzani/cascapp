@@ -44,6 +44,9 @@ const ITEMS := {
 		"alpha": 0.5, "roughness": 0.02,
 	},
 	"ball_lava": {"slot": BALL, "name": "Lava", "art": "res://assets/bowling/skins/ball_lava.png", "glow": 1.6},
+	"ball_pioneer": {
+		"slot": BALL, "name": "Pioneira", "art": "res://assets/bowling/skins/ball_pioneer.png", "glow": 1.3, "testers": true,
+	},
 	# Molduras da foto: `style` é o desenho em `Coaster._draw_frame`.
 	"frame_gold": {"slot": FRAME, "name": "Ouro", "style": "gold"},
 	"frame_silver": {"slot": FRAME, "name": "Prata", "style": "silver"},
@@ -51,6 +54,10 @@ const ITEMS := {
 	"frame_flames": {"slot": FRAME, "name": "Chamas", "style": "flames"},
 	"frame_laurel": {"slot": FRAME, "name": "Louros", "style": "laurel"},
 	"frame_rainbow": {"slot": FRAME, "name": "Arco-íris", "style": "rainbow"},
+	# Os de testador (`testers`): o agradecimento a quem testou o app desde o
+	# começo, mandados num kit de presente pelo admin. Não se compram nem saem por
+	# missão, e a loja só os mostra a quem já tem.
+	"frame_pioneer": {"slot": FRAME, "name": "Pioneiro", "style": "pioneer", "testers": true},
 	# Capas do perfil: um degradê de cima para baixo (`colors`) e um desenho por
 	# cima (`pattern`), em `ProfileCover.paint`.
 	"banner_sunset": {"slot": BANNER, "name": "Pôr do sol", "colors": [Color("ff9a5a"), Color("ff5f8f"), Color("6b3fa0")], "pattern": "sun"},
@@ -59,6 +66,10 @@ const ITEMS := {
 	"banner_checker": {"slot": BANNER, "name": "Tabuleiro", "colors": [Color("3b3478"), Color("272250")], "pattern": "checker"},
 	"banner_waves": {"slot": BANNER, "name": "Ondas", "colors": [Color("2f9bd6"), Color("124a7a")], "pattern": "waves"},
 	"banner_aurora": {"slot": BANNER, "name": "Aurora", "colors": [Color("0a1d33"), Color("120f38")], "pattern": "aurora"},
+	"banner_pioneer": {
+		"slot": BANNER, "name": "Céu dos Pioneiros", "colors": [Color("070a1f"), Color("1b1046"), Color("2a0d3b")],
+		"pattern": "pioneer", "testers": true,
+	},
 	# Títulos: o nome é o texto que aparece. Nunca texto livre.
 	"title_pool": {"slot": TITLE, "name": "Rei da Sinuca"},
 	"title_chess": {"slot": TITLE, "name": "Mestre do Xadrez"},
@@ -72,12 +83,16 @@ const ITEMS := {
 	"title_veteran": {"slot": TITLE, "name": "Veterano"},
 	"title_champion": {"slot": TITLE, "name": "Campeão"},
 	"title_explorer": {"slot": TITLE, "name": "Explorador"},
+	# `shine` passa um brilho dourado pelas letras (`ProfileStyle.dress_title`).
+	"title_pioneer": {"slot": TITLE, "name": "Testador Fundador", "shine": true, "testers": true},
 	# Cores do nome; `rainbow` pinta cada letra de uma cor.
 	"name_gold": {"slot": NAME_COLOR, "name": "Ouro", "color": Color("ffd25a")},
 	"name_ruby": {"slot": NAME_COLOR, "name": "Rubi", "color": Color("ff5a7a")},
 	"name_emerald": {"slot": NAME_COLOR, "name": "Esmeralda", "color": Color("3ee08f")},
 	"name_neon": {"slot": NAME_COLOR, "name": "Neon", "color": Color("39e6ff")},
 	"name_rainbow": {"slot": NAME_COLOR, "name": "Arco-íris", "rainbow": true},
+	# `pioneer`: menta, violeta e ouro correndo pelas letras (`ui/pioneer_text.gdshader`).
+	"name_pioneer": {"slot": NAME_COLOR, "name": "Pioneiro", "pioneer": true, "testers": true},
 	# Tacos da sinuca (`tools/build_cue_skins.gd`, desenhados por `ui/cue_skin.gdshader`).
 	# `glow` é o quanto a cor brilha sozinha.
 	"cue_ebony": {"slot": CUE, "name": "Ébano e marfim", "art": "res://assets/pool/cues/cue_ebony.png"},
@@ -85,6 +100,7 @@ const ITEMS := {
 	"cue_flames": {"slot": CUE, "name": "Chamas", "art": "res://assets/pool/cues/cue_flames.png"},
 	"cue_neon": {"slot": CUE, "name": "Neon", "art": "res://assets/pool/cues/cue_neon.png", "glow": 1.6},
 	"cue_gold": {"slot": CUE, "name": "Ouro", "art": "res://assets/pool/cues/cue_gold.png"},
+	"cue_pioneer": {"slot": CUE, "name": "Pioneiro", "art": "res://assets/pool/cues/cue_pioneer.png", "testers": true},
 	# Conjuntos de peças do xadrez (`tools/build_piece_sets.gd`): o mesmo nome de
 	# arquivo das peças de sempre, noutra pasta. As damas não mudam de formato.
 	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
@@ -113,6 +129,13 @@ const ITEMS := {
 		"slot": FINISH, "name": "Neon",
 		"white": {"body": "#e9fdff", "line": "#00c8ff"},
 		"black": {"body": "#1b0f35", "line": "#ff4fd8"},
+	},
+	# O dos testadores: brancas de pérola mentolada com traço de ouro velho,
+	# pretas de céu índigo e violeta com traço dourado.
+	"finish_pioneer": {
+		"slot": FINISH, "name": "Pioneiro", "testers": true,
+		"white": {"body": ["#f2fffb", "#bdf3e4", "#e6fff8", "#a3e6d5", "#d8faf0"], "line": "#6b4c0e"},
+		"black": {"body": ["#4a3699", "#1b1046", "#5a43b0", "#140c38", "#33266e"], "line": "#ffd25a"},
 	},
 	"finish_gems": {
 		"slot": FINISH, "name": "Rubi e safira",
