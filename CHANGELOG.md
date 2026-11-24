@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.72
+
+- Presentes agora podem trazer vários itens de uma vez, com um bilhete. Ao abrir, o "Usar tudo" já veste tudo.
+
 ## 1.71
 
 - Ainda não protegeu sua conta? Um lembrete na tela inicial, no máximo uma vez por dia, explica por que ligar um e-mail e leva direto para isso.
