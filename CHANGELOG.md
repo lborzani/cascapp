@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.67
+
+- Listas que rolam (histórico, amigos, regras e outras): arrastar o dedo começando em cima de um cartão agora rola a lista. Antes, dependendo de onde se encostava, ela não mexia.
+
 ## 1.66
 
 - Loja e moedas: ganhe moedas terminando partidas contra o bot ou online e com o bônus de todo dia, e troque na loja da aba Você.
