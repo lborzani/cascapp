@@ -4,6 +4,25 @@
 // em `presentes.js`; o catálogo e a carteira, em `loja.js`; a amizade, em
 // `amizade.js`; a notificação, em `conversa.js`. Tudo por `require` no handler.
 
+// O admin salva um kit (`items`, ver `pb_migrations/1764500000_presente_kit.js`):
+// só ids que estão em `shop_items`. Pelas rotas de pedido, e não no `save`, para
+// um item tirado do catálogo depois não impedir quem recebeu de abrir o kit. O
+// handler não enxerga nada de fora dele (cada um roda isolado), daí os dois iguais.
+onRecordCreateRequest((e) => {
+  const problem = require(`${__hooks}/presentes.js`).recordKitProblem(e.app, e.record)
+  if (problem !== "") {
+    throw new BadRequestError(problem)
+  }
+  e.next()
+}, "gifts")
+onRecordUpdateRequest((e) => {
+  const problem = require(`${__hooks}/presentes.js`).recordKitProblem(e.app, e.record)
+  if (problem !== "") {
+    throw new BadRequestError(problem)
+  }
+  e.next()
+}, "gifts")
+
 // A caixa: os presentes fechados que chegaram, os amigos que já ganharam o meu
 // presentinho de hoje e quanto ele vale.
 routerAdd("GET", "/api/cascapp/gifts", (e) => {
@@ -14,8 +33,13 @@ routerAdd("GET", "/api/cascapp/gifts", (e) => {
   const rows = e.app.findRecordsByFilter("gifts", "to = {:me} && opened = false", "-created", presentes.INBOX, 0, { me })
   const gifts = []
   for (const row of rows) {
+    const from = row.getString("from")
+    if (from === "") {
+      gifts.push(presentes.toJson(row, null))
+      continue
+    }
     try {
-      gifts.push(presentes.toJson(row, e.app.findRecordById("users", row.getString("from"))))
+      gifts.push(presentes.toJson(row, e.app.findRecordById("users", from)))
     } catch (_) {
       // Quem mandou apagou a conta no meio: o `cascadeDelete` leva o presente já já.
     }
@@ -115,10 +139,13 @@ routerAdd("POST", "/api/cascapp/gifts/daily", (e) => {
   return e.json(200, { sent: true })
 }, $apis.requireAuth("users"))
 
-// Abrir: marca aberto e, se forem moedas, elas entram agora. 404 para presente
-// que não é meu ou já foi aberto. Devolve a carteira, mais `item` e `coins`.
+// Abrir: marca aberto e entrega o que só entra agora: as moedas do presentinho
+// e os itens do kit (que vão para o `owned`, sem repetir). 404 para presente que
+// não é meu ou já foi aberto. Devolve a carteira, mais `item`, `coins`, `items`
+// e `message`.
 routerAdd("POST", "/api/cascapp/gifts/{id}/open", (e) => {
   const loja = require(`${__hooks}/loja.js`)
+  const presentes = require(`${__hooks}/presentes.js`)
   const me = e.auth.id
   const id = String(e.request.pathValue("id") || "")
   let reply = null
@@ -133,11 +160,15 @@ routerAdd("POST", "/api/cascapp/gifts/{id}/open", (e) => {
     tx.save(gift)
     const user = tx.findRecordById("users", me)
     const coins = gift.getInt("coins")
-    if (coins > 0) {
+    const items = presentes.kitItems(presentes.parseItems(gift.getString("items")))
+    if (coins > 0 || items.length > 0) {
       user.set("coins", user.getInt("coins") + coins)
+      user.set("owned", presentes.withItems(loja.jsonOf(user, "owned", []), items))
       tx.saveNoValidate(user)
     }
-    reply = Object.assign(loja.wallet(user), { item: gift.getString("item"), coins: coins })
+    reply = Object.assign(loja.wallet(user), {
+      item: gift.getString("item"), coins: coins, items: items, message: gift.getString("message"),
+    })
   })
   if (reply === null) {
     return e.json(404, { message: "Presente não encontrado." })

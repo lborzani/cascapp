@@ -6,7 +6,8 @@ extends Control
 ## Por cima da tela "Você", como a loja e as missões. Abrir é um toque: a caixa
 ## balança, o confete cai e o cartão mostra o que veio. Item já é da conta desde o
 ## envio (`pocketbase/pb_hooks/presentes.pb.js`); abrir só marca aberto e, no
-## presentinho, paga as moedas.
+## presentinho, paga as moedas. O kit do admin (`items`, com um bilhete) entrega
+## os itens ao abrir, e o cartão aberto lista todos com um "Usar tudo".
 
 signal closed
 
@@ -83,17 +84,54 @@ func close() -> void:
 	queue_free()
 
 
-## O que veio, em palavras: "Bola Madeira" ou "10 moedas".
+## O que veio, em palavras: "Bola Madeira", "10 moedas" ou "Kit com 7 itens".
 static func contents_text(gift: Dictionary) -> String:
+	var kit: Array = gift.get("items", [])
+	if not kit.is_empty():
+		return "Kit com %d itens" % kit.size() if kit.size() > 1 else item_text(str(kit[0]))
 	var item := str(gift.get("item", ""))
 	if item.is_empty():
 		return "%d moedas" % int(gift.get("coins", 0))
+	return item_text(item)
+
+
+## Um item em palavras, com o tipo na frente: "Moldura Pioneiro".
+static func item_text(item: String) -> String:
 	var slot := str(Cosmetics.ITEMS.get(item, {}).get("slot", ""))
 	var kinds := {
 		Cosmetics.BALL: "Bola", Cosmetics.CUE: "Taco", Cosmetics.PIECES: "Peças", Cosmetics.FINISH: "Acabamento",
 		Cosmetics.FRAME: "Moldura", Cosmetics.BANNER: "Capa", Cosmetics.TITLE: "Título", Cosmetics.NAME_COLOR: "Cor do nome",
 	}
 	return ("%s %s" % [kinds[slot], Cosmetics.name_of(item)]) if kinds.has(slot) else Cosmetics.name_of(item)
+
+
+## O que um presente aberto dá para usar e ainda não está em uso: `{encaixe: item}`.
+## Item que este app não conhece fica de fora; de dois no mesmo encaixe, vale o último.
+static func wearable(gift: Dictionary) -> Dictionary:
+	var items: Array = gift.get("items", [])
+	if items.is_empty():
+		items = [gift.get("item", "")]
+	var changes := {}
+	for item: Variant in items:
+		var slot := str(Cosmetics.ITEMS.get(str(item), {}).get("slot", ""))
+		if not slot.is_empty() and str(Account.look.get(slot, "")) != str(item):
+			changes[slot] = str(item)
+	return changes
+
+
+## Quem mandou: "De Ana", ou "Do cascapp" no kit de testador, que sai sem
+## remetente (`from.id` vazio).
+static func sender_text(gift: Dictionary) -> String:
+	var from: Variant = gift.get("from")
+	if not from is Dictionary or str(from.get("id", "")).is_empty():
+		return "Do cascapp"
+	var name := str(from.get("name", ""))
+	return "De %s" % (name if not name.is_empty() else "um amigo")
+
+
+## Presente que é de item (um só ou kit), e não de moedas.
+static func has_items(gift: Dictionary) -> bool:
+	return not str(gift.get("item", "")).is_empty() or not (gift.get("items", []) as Array).is_empty()
 
 
 func _fill() -> void:
@@ -136,13 +174,12 @@ func _card(gift: Dictionary, open: bool) -> Control:
 	words.size_flags_vertical = SIZE_SHRINK_CENTER
 	words.add_theme_constant_override("separation", 2)
 	row.add_child(words)
-	var sender := str(gift.get("from", {}).get("name", ""))
 	var from := Label.new()
-	from.text = "De %s" % (sender if not sender.is_empty() else "um amigo")
+	from.text = sender_text(gift)
 	from.theme_type_variation = &"Hint"
 	words.add_child(from)
 	var what := Label.new()
-	what.text = contents_text(gift) if open else ("Presentinho" if str(gift.get("item", "")).is_empty() else "Presente")
+	what.text = contents_text(gift) if open else ("Presente" if has_items(gift) else "Presentinho")
 	what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	what.add_theme_font_override("font", AppTheme.display(600))
 	what.add_theme_font_size_override("font_size", AppTheme.SIZE_DISPLAY_M)
@@ -151,17 +188,29 @@ func _card(gift: Dictionary, open: bool) -> Control:
 	words.add_child(what)
 
 	if open:
-		var item := str(gift.get("item", ""))
-		var slot := str(Cosmetics.ITEMS.get(item, {}).get("slot", ""))
-		if not slot.is_empty() and str(Account.look.get(slot, "")) != item:
+		var message := str(gift.get("message", ""))
+		if not message.is_empty():
+			var note := Label.new()
+			note.text = "“%s”" % message
+			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			words.add_child(note)
+		var kit: Array = gift.get("items", [])
+		if kit.size() > 1:
+			for item: Variant in kit:
+				var line := Label.new()
+				line.text = "· " + item_text(str(item))
+				line.theme_type_variation = &"Hint"
+				words.add_child(line)
+		var changes := wearable(gift)
+		if not changes.is_empty():
 			var use := Button.new()
-			use.text = "Usar"
+			use.text = "Usar tudo" if changes.size() > 1 else "Usar"
 			use.theme_type_variation = &"GhostButton"
 			use.custom_minimum_size = Vector2(96, 44)
 			use.focus_mode = FOCUS_NONE
 			use.size_flags_vertical = SIZE_SHRINK_CENTER
 			use.disabled = _busy
-			use.pressed.connect(_use.bind(slot, item))
+			use.pressed.connect(_use.bind(changes))
 			row.add_child(use)
 		return card
 	var action := Button.new()
@@ -196,16 +245,16 @@ func _open(gift: Dictionary, art: GiftBox) -> void:
 		_fill()
 		return
 	_revealed[str(gift.get("id", ""))] = gift.merged(got, true)
-	Sound.play(Sound.Cue.CASH if str(got.get("item", "")).is_empty() else Sound.Cue.WIN)
+	Sound.play(Sound.Cue.WIN if has_items(got) else Sound.Cue.CASH)
 	_confetti.burst()
 	_fill()
 
 
-func _use(slot: String, item: String) -> void:
+func _use(changes: Dictionary) -> void:
 	Sound.play(Sound.Cue.TAP)
 	_busy = true
 	_fill()
-	var ok := await Account.equip(slot, item)
+	var ok := await Account.equip_all(changes)
 	_busy = false
 	if not is_inside_tree():
 		return

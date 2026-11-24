@@ -94,9 +94,98 @@ func _ready() -> void:
 	_check((await Account._call(HTTPClient.METHOD_GET, "/api/collections/gifts/records", {}))["code"] != 200, "nem lê a coleção")
 	_check((await _post("/api/collections/gifts/records", {"from": b, "to": _ids["s4"], "coins": 999, "day": "2026-01-01"}))["code"] != 200, "nem cria presente")
 
+	await _kit(a, b)
+	_kit_card()
 	await _app_side(a, b)
 	print("%s — %d falha(s)" % ["OK" if _failures == 0 else "FALHOU", _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+## O kit criado no painel admin (`items` e `message`): vários itens de uma vez,
+## entregues ao abrir. Precisa de `CASCAPP_PB_SUPERUSER=email:senha`; sem ele,
+## pula com aviso. Usa os exclusivos de missão, que estão em `shop_items`.
+func _kit(a: String, b: String) -> void:
+	print("kit do admin")
+	var admin: RefCounted = preload("res://tests/pb_admin.gd").new(self)
+	if not await admin.sign_in():
+		print("  (pulado: sem CASCAPP_PB_SUPERUSER)")
+		return
+	var rows := "/api/collections/gifts/records"
+	var kit := {"from": a, "to": b, "day": "2026-11-24", "items": ["title_veteran", "title_champion"], "message": "Valeu por testar!"}
+	_equals((await admin.call_api(HTTPClient.METHOD_POST, rows, kit.merged({"items": ["title_veteran", "title_nada"]}, true)))["code"], 400, "item fora do catálogo: 400")
+	_equals((await admin.call_api(HTTPClient.METHOD_POST, rows, kit.merged({"items": "title_veteran"}, true)))["code"], 400, "items que não é lista: 400")
+	_equals((await admin.call_api(HTTPClient.METHOD_POST, rows, kit))["code"], 200, "o admin cria o kit")
+
+	await _as("b")
+	_check("title_veteran" not in (await _record(b)).get("owned", []), "o kit não entrega nada antes de abrir")
+	var boxes: Array = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return not (g.get("items", []) as Array).is_empty())
+	_equals(boxes.size(), 1, "o kit chega fechado na caixa")
+	var box: Dictionary = boxes[0] if not boxes.is_empty() else {}
+	_equals(box.get("items"), ["title_veteran", "title_champion"], "com os itens")
+	_equals(box.get("message"), "Valeu por testar!", "e o bilhete")
+	var opened := await _open(str(box.get("id", "")))
+	_equals(opened["code"], 200, "abre")
+	var data: Dictionary = opened["data"] if opened["data"] is Dictionary else {}
+	_equals(data.get("items"), ["title_veteran", "title_champion"], "e vê os itens")
+	_equals(data.get("message"), "Valeu por testar!", "e o bilhete")
+	var owned: Array = (await _record(b)).get("owned", [])
+	_check("title_veteran" in owned and "title_champion" in owned, "os dois entram na conta")
+	_equals((await _open(str(box.get("id", ""))))["code"], 404, "abrir de novo: 404")
+
+	await admin.call_api(HTTPClient.METHOD_POST, rows, kit.merged({"items": ["title_veteran", "title_explorer"], "message": ""}, true))
+	var again: Array = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return not (g.get("items", []) as Array).is_empty())
+	await _open(str(again[0].get("id", "")) if not again.is_empty() else "")
+	owned = (await _record(b)).get("owned", [])
+	_equals(owned.count("title_veteran"), 1, "item repetido num segundo kit não duplica")
+	_check("title_explorer" in owned, "e o novo entra")
+	_equals((await Account._call(HTTPClient.METHOD_PATCH, USERS + b, {"look": {"title": "title_champion"}}))["code"], 200, "e o exclusivo do kit se usa")
+	Account.look = {}
+	_check(await Account.equip_all({"title": "title_explorer", "ball": "ball_wood"}), "usar tudo grava vários encaixes de uma vez")
+	_equals((await _record(b)).get("look"), {"title": "title_explorer", "ball": "ball_wood"}, "e a conta guarda os dois")
+
+	print("testador")
+	_check((await Account._call(HTTPClient.METHOD_PATCH, USERS + b, {"tester": true}))["code"] != 200, "a conta não se marca testadora sozinha")
+	_equals((await _record(b)).get("tester"), false, "e continua sem a marca")
+	_equals((await admin.call_api(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + b, {"tester": true}))["code"], 200, "o admin marca testador")
+	var testers: Array = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return (g.get("items", []) as Array).has("frame_pioneer"))
+	_equals(testers.size(), 1, "o kit de testador chega sozinho")
+	var tester_gift: Dictionary = testers[0] if not testers.is_empty() else {}
+	_equals((tester_gift.get("items", []) as Array).size(), 7, "com os sete itens")
+	_equals(GiftsPanel.sender_text(tester_gift), "Do cascapp", "do cascapp, sem remetente")
+	_check(not str(tester_gift.get("message", "")).is_empty(), "e com o bilhete")
+	await admin.call_api(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + b, {"tester": false})
+	await admin.call_api(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + b, {"tester": true})
+	testers = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return (g.get("items", []) as Array).has("frame_pioneer"))
+	_equals(testers.size(), 1, "desligar e ligar de novo não manda outro")
+	_equals((await _open(str(tester_gift.get("id", ""))))["code"], 200, "abre")
+	_check("cue_pioneer" in (await _record(b)).get("owned", []), "e os itens de testador entram na conta")
+
+
+## O kit no painel, sem servidor: o texto, o que dá para usar e o cartão aberto.
+func _kit_card() -> void:
+	print("kit no painel")
+	var saved_look := Account.look
+	Account.look = {"title": "title_pioneer"}
+	var kit := {"from": {"name": "Borzani"}, "item": "", "coins": 0, "items": ["frame_pioneer", "title_pioneer", "item_nada"], "message": "Valeu!"}
+	_equals(GiftsPanel.contents_text(kit), "Kit com 3 itens", "o kit em palavras")
+	_equals(GiftsPanel.sender_text({"from": {"id": "x", "name": "Ana"}}), "De Ana", "presente de amigo diz quem mandou")
+	_equals(GiftsPanel.contents_text({"items": ["frame_pioneer"]}), "Moldura Pioneiro", "kit de um item diz qual")
+	_equals(GiftsPanel.wearable(kit), {"frame": "frame_pioneer"}, "usar tudo leva o que não está em uso e o app conhece")
+	_equals(GiftsPanel.wearable({"item": "ball_wood"}), {"ball": "ball_wood"}, "e o presente de um item, como antes")
+	_check(GiftsPanel.has_items(kit) and GiftsPanel.has_items({"item": "ball_wood"}) and not GiftsPanel.has_items({"coins": 10}), "kit e item são presente; moedas, presentinho")
+	var gifts_panel := GiftsPanel.new()
+	var kit_card := gifts_panel._card(kit, true)
+	var kit_texts := kit_card.find_children("*", "Label", true, false).map(func(l: Label) -> String: return l.text)
+	_check("“Valeu!”" in kit_texts and "· Moldura Pioneiro" in kit_texts and "· Título Testador Fundador" in kit_texts, "o cartão aberto mostra o bilhete e os itens")
+	var kit_buttons := kit_card.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text)
+	_equals(kit_buttons, ["Usar"], "um só por usar: o botão diz Usar")
+	Account.look = {}
+	kit_card.free()
+	kit_card = gifts_panel._card(kit, true)
+	_equals(kit_card.find_children("*", "Button", true, false).map(func(b: Button) -> String: return b.text), ["Usar tudo"], "vários por usar: Usar tudo")
+	kit_card.free()
+	gifts_panel.free()
+	Account.look = saved_look
 
 
 ## O lado do app: `Account` e o `GiftsPanel`. A já mandou o presentinho de hoje

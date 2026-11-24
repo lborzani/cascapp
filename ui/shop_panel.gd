@@ -150,9 +150,11 @@ func _fill() -> void:
 		grid.add_theme_constant_override("v_separation", 10)
 		_rows.add_child(grid)
 		grid.add_child(_card(slot, ""))
-		# Os exclusivos aparecem trancados: a vitrine do que as missões dão.
+		# Os exclusivos aparecem trancados: a vitrine do que as missões dão. Os de
+		# testador (`testers`) não: só quem ganhou vê.
 		for id in Cosmetics.of_slot(slot):
-			if Account.prices.has(id) or id in Account.owned or id in Account.exclusive:
+			var showcase := not Cosmetics.ITEMS[id].get("testers", false) and (Account.prices.has(id) or id in Account.exclusive)
+			if showcase or id in Account.owned:
 				grid.add_child(_card(slot, id))
 
 
@@ -420,6 +422,7 @@ func _profile_swatch(slot: String, look: Dictionary) -> Control:
 				var title := Cosmetics.title_of(look)
 				text.text = title if not title.is_empty() else "Sem título"
 				text.add_theme_color_override("font_color", AppTheme.ACCENT if not title.is_empty() else AppTheme.TEXT_DIM)
+				ProfileStyle.dress_title(text, look)
 			else:
 				text.text = Prefs.player_name() if Prefs.has_name() else "Você"
 				ProfileStyle.paint_name(text, look)

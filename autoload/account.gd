@@ -616,7 +616,8 @@ func send_daily_gift(to: String) -> int:
 	return reply["code"]
 
 
-## Abre o presente `id`. Devolve `{item, coins}` do que veio, ou `{}` se não deu.
+## Abre o presente `id`. Devolve `{item, coins, items, message}` do que veio
+## (`items` e `message` só no kit do admin), ou `{}` se não deu.
 func open_gift(id: String) -> Dictionary:
 	if not signed_in():
 		return {}
@@ -629,7 +630,11 @@ func open_gift(id: String) -> Dictionary:
 	_take_wallet(reply["data"])
 	gifts = gifts.filter(func(gift: Dictionary) -> bool: return gift.get("id") != id)
 	gifts_changed.emit()
-	return {"item": str(reply["data"].get("item", "")), "coins": int(reply["data"].get("coins", 0))}
+	var data: Dictionary = reply["data"]
+	return {
+		"item": str(data.get("item", "")), "coins": int(data.get("coins", 0)),
+		"items": data["items"] if data.get("items") is Array else [], "message": str(data.get("message", "")),
+	}
 
 
 ## Resgata a missão `key`. O código HTTP: 200 pagou, 409 incompleta ou já
@@ -660,13 +665,20 @@ func buy(item: String) -> int:
 ## guardou. Sem conta não equipa: o visual é da conta, e o servidor confere que
 ## o item foi comprado.
 func equip(slot: String, item: String) -> bool:
+	return await equip_all({slot: item})
+
+
+## Como `equip`, vários encaixes numa gravação só (`{encaixe: item}`): o "Usar
+## tudo" do kit de presente.
+func equip_all(changes: Dictionary) -> bool:
 	if not signed_in():
 		return false
 	var next := look.duplicate()
-	if item.is_empty():
-		next.erase(slot)
-	else:
-		next[slot] = item
+	for slot: String in changes:
+		if str(changes[slot]).is_empty():
+			next.erase(slot)
+		else:
+			next[slot] = changes[slot]
 	var reply := await _call(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + user_id, {"look": next})
 	if reply["code"] != 200:
 		return false
