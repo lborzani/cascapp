@@ -127,6 +127,8 @@ func _let_scroll_through(node: Node) -> void:
 		return
 	var button := node as BaseButton
 	if button == null:
+		if node is Control:
+			_pass_drag_to_scroll(node)
 		return
 	# Todo botão afunda no toque. Aqui pelo mesmo motivo do arrasto: botão novo
 	# já nasce com isso. Quem desenha o próprio aperto marca `no_press`.
@@ -135,9 +137,18 @@ func _let_scroll_through(node: Node) -> void:
 		button.set_meta(&"press_bound", true)
 		button.button_down.connect(Motion.press.bind(button, true))
 		button.button_up.connect(Motion.press.bind(button, false))
-	if button.mouse_filter != Control.MOUSE_FILTER_STOP:
+	_pass_drag_to_scroll(button)
+
+
+## Não é só botão: `Panel`, `PanelContainer`, `ColorRect` e `Control` puro também
+## nascem em `STOP`. Um cartão desses dentro da lista (o do histórico, o do amigo)
+## virava zona morta: arrastar começando nele não rolava. Quem consome o toque de
+## propósito chama `accept_event()`, e isso para o evento mesmo em `PASS`.
+## A barra de rolagem fica de fora: o arrasto nela é dela.
+func _pass_drag_to_scroll(control: Control) -> void:
+	if control.mouse_filter != Control.MOUSE_FILTER_STOP or control is ScrollBar:
 		return
-	var parent := button.get_parent()
+	var parent := control.get_parent()
 	while parent != null:
 		# Botão dentro de botão (a estrela no bloco do jogo) fica com o toque. O de
 		# fora já deixa o arrasto chegar à lista; deixando passar também o de dentro,
@@ -146,7 +157,7 @@ func _let_scroll_through(node: Node) -> void:
 		if parent is BaseButton:
 			return
 		if parent is ScrollContainer:
-			button.mouse_filter = Control.MOUSE_FILTER_PASS
+			control.mouse_filter = Control.MOUSE_FILTER_PASS
 			return
 		parent = parent.get_parent()
 
