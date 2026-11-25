@@ -7,6 +7,14 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.78
+
+- Seu visual (moldura, cor do nome, título e capa) agora aparece em todos os jogos: Ludo, Uno, Sinuca, Batalha Naval, Boliche e Metrópole.
+- Peças novas para o Metrópole na loja: coroa, foguete, gato, dinossauro, violão e dado.
+- Baralhos novos para o Uno na aba Cartas da loja: Retrô, Ouro, Neon, Noite e Doces. As cores do jogo continuam as mesmas.
+- Testadores fundadores: chegaram a Estrela Pioneira no Metrópole e o baralho Pioneiro no Uno. Estão na sua caixa de Presentes.
+- O perfil de um amigo mostra só o total de partidas por jogo.
+
 ## 1.77
 
 - Na sala de espera, cada um aparece como é: nome, foto, moldura, cor do nome, título e capa.
