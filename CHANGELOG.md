@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.74
+
+- Os tabuleiros voltaram à loja: madeira, mármore, torneio, oceano, neon e doces, no xadrez e nas damas. Online, cada metade do tabuleiro tem a skin de quem joga daquele lado.
+- Não quer ver o tabuleiro do outro? Desligue "Tabuleiro do oponente" nos Ajustes, e as duas metades ficam com o seu.
+
 ## 1.73
 
 - Ícone e tela de abertura novos, no visual do app: um dado limão sobre o violeta.
