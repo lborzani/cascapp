@@ -477,7 +477,7 @@ func _refresh_games() -> void:
 	%HistoryButton.queue_redraw()
 	%TrainingButton.queue_redraw()
 	_shop_button.set_meta(&"title", "Loja")
-	_shop_button.set_meta(&"detail", "Bolas, tacos, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
+	_shop_button.set_meta(&"detail", "Bolas, tacos, tabuleiros, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
 	_shop_button.set_meta(&"lit", true)
 	_shop_button.queue_redraw()
 	var ready := Account.missions_ready()

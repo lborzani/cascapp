@@ -1246,12 +1246,17 @@ func _test_spectator() -> void:
 	Net.connected = true
 	Net.white_seat = 1
 	Net.player_names = {0: "Ana", 1: "Bia"}
-	Net.looks = {0: {"finish": "finish_neon"}, 1: {"finish": "finish_gems", "frame": "frame_neon", "name_color": "name_gold"}}
+	Net.looks = {0: {"board": "board_wood", "finish": "finish_neon"}, 1: {"board": "board_neon", "finish": "finish_gems", "frame": "frame_neon", "name_color": "name_gold"}}
 	var scene := preload("res://scenes/match.tscn").instantiate()
 	add_child(scene)
 	await get_tree().process_frame
 
 	_equals(scene._board.flipped, false, "brancas embaixo")
+	var wood := Cosmetics.board_skin({"board": "board_wood"})
+	var neon := Cosmetics.board_skin({"board": "board_neon"})
+	_equals(scene._board.skins, [neon, wood], "cada metade do tabuleiro tem a skin de quem joga com aquela cor")
+	_equals(scene._board.skin_of(_square("e2")), neon, "a metade das brancas é a de quem joga de brancas")
+	_equals(scene._board.skin_of(_square("e7")), wood, "e a das pretas, a do outro")
 	_equals(scene._board.looks.map(Cosmetics.finish_of), ["finish_gems", "finish_neon"], "as peças de cada cor têm o acabamento de quem joga com ela")
 	_equals(_node(scene, "%BottomTag")._coaster.frame, "neon", "a etiqueta de quem joga de brancas tem a moldura dele")
 	_equals(_node(scene, "%TopTag")._coaster.frame, "", "e a do outro, sem moldura")
@@ -1298,6 +1303,7 @@ func _test_spectator() -> void:
 	)
 	scene._on_rematch_accepted()
 	_equals(Net.white_seat, 0, "a revanche dos jogadores troca as cores de quem assiste")
+	_equals(scene._board.skins, [wood, neon], "e as metades do tabuleiro trocam junto")
 	_equals(scene._board.looks.map(Cosmetics.finish_of), ["finish_neon", "finish_gems"], "e os acabamentos das peças também")
 	_equals(scene._state.ply, 0, "e começa a partida nova")
 	_equals(_node(scene, "%BottomTag").title, "Ana", "com os nomes no lado certo")

@@ -104,6 +104,20 @@ func _probe_palette() -> void:
 	# As duas casas têm de se distinguir entre si, e a marca do último lance da casa.
 	_check(AppTheme.contrast(AppTheme.BOARD_LIGHT, AppTheme.BOARD_DARK) >= 3.0, "casa clara e escura se distinguem")
 	_check(AppTheme.LAST_MOVE != AppTheme.ACCENT, "o último lance não é a cor de ação")
+	# As skins da loja (`Cosmetics`, encaixe `board`). O limiar das casas é mais
+	# baixo que o do padrão: madeira e doces vivem de cor, não de claro e escuro.
+	_equals(Cosmetics.board_skin({}), Cosmetics.DEFAULT_BOARD, "sem skin, o tabuleiro do tema")
+	_equals(Cosmetics.board_skin({Cosmetics.BOARD: "board_nada"}), Cosmetics.DEFAULT_BOARD, "skin desconhecida cai no padrão")
+	for id in Cosmetics.of_slot(Cosmetics.BOARD):
+		var skin := Cosmetics.board_skin({Cosmetics.BOARD: id})
+		var squares := AppTheme.contrast(skin["light"], skin["dark"])
+		_check(squares >= 1.8, "%s: casas se distinguem (%.1f:1)" % [id, squares])
+		var gap := minf(_rgb_gap(skin["last"], skin["light"]), _rgb_gap(skin["last_dark"], skin["dark"]))
+		_check(gap >= 0.15, "%s: o último lance aparece nas duas casas (%.2f)" % [id, gap])
+		var frame: Color = skin["frame"]
+		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
+		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
+		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
 	# Perfil: moldura, título e cor do nome.
 	_equals(Cosmetics.frame_of({"frame": "frame_laurel"}), "laurel", "a moldura dos louros")
 	_equals(Cosmetics.frame_of({"frame": "frame_nada"}), "", "moldura desconhecida, nenhuma")

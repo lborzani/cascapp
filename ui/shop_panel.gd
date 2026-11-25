@@ -16,6 +16,7 @@ const SWATCH := 92.0
 const TABS := [
 	[[Cosmetics.BALL], "Bola"],
 	[[Cosmetics.CUE], "Taco"],
+	[[Cosmetics.BOARD], "Tabuleiro"],
 	[[Cosmetics.PIECES, Cosmetics.FINISH], "Peças"],
 	[[Cosmetics.FRAME, Cosmetics.BANNER, Cosmetics.TITLE, Cosmetics.NAME_COLOR], "Perfil"],
 ]
@@ -330,8 +331,8 @@ func _swatch(slot: String, id: String) -> Control:
 		return cue
 	if slot != Cosmetics.BALL:
 		var sample := BoardSample.new()
-		# As peças com o resto do visual de quem compra: a amostra mostra o item
-		# como ele vai aparecer na partida.
+		# As peças aparecem no tabuleiro de quem compra, e o tabuleiro com as peças
+		# de quem compra: a amostra mostra o item como ele vai aparecer na partida.
 		sample.look = Account.look.merged(look, true)
 		sample.custom_minimum_size = Vector2(SWATCH, SWATCH)
 		sample.size_flags_horizontal = SIZE_SHRINK_CENTER
@@ -470,29 +471,29 @@ func _equip(slot: String, id: String) -> void:
 	_fill()
 
 
-## A amostra das peças: o miolo do tabuleiro (d4, e4, d5, e5) na moldura, com a
-## casa do último lance acesa e um cavalo de cada cor, no conjunto e no
-## acabamento do visual.
+## A amostra de um tabuleiro: o miolo dele (d4, e4, d5, e5) na moldura, com a casa
+## do último lance acesa e um cavalo de cada cor, para ver o contraste das peças.
 class BoardSample:
 	extends Control
 
-	## O visual que a amostra mostra: o conjunto e o acabamento das peças.
+	## O visual que a amostra mostra: o tabuleiro e as peças dele.
 	var look := {}
 
 	func _draw() -> void:
+		var skin := Cosmetics.board_skin(look)
 		var side := minf(size.x, size.y)
 		var outer := Rect2((size - Vector2.ONE * side) * 0.5, Vector2.ONE * side)
-		draw_style_box(AppTheme.box(AppTheme.BOARD_FRAME, int(side * 0.12)), outer)
+		draw_style_box(AppTheme.box(skin["frame"], int(side * 0.12)), outer)
 		var inner := outer.grow(-side * 0.09)
 		var cell := inner.size.x / 2.0
 		for row in 2:
 			for col in 2:
 				var square := Board.square(3 + col, 4 - row)
 				var dark := (Board.file_of(square) + Board.rank_of(square)) % 2 == 0
-				var color := AppTheme.BOARD_DARK if dark else AppTheme.BOARD_LIGHT
+				var color: Color = skin["dark"] if dark else skin["light"]
 				if row == 1 and col == 1:
-					color = AppTheme.LAST_MOVE_DARK if dark else AppTheme.LAST_MOVE
-				draw_rect(Rect2(inner.position + Vector2(col, row) * cell, Vector2.ONE * cell), color)
+					color = skin["last_dark"] if dark else skin["last"]
+				BoardView.paint_square(self, skin, Rect2(inner.position + Vector2(col, row) * cell, Vector2.ONE * cell), square, color)
 		PieceRenderer.draw_piece(
 			self, Board.piece(Board.Side.BLACK, Board.Kind.KNIGHT), inner.position + Vector2(0.5, 0.5) * cell, cell,
 			1.0, 1.0, false, Color.WHITE, 0.0, look
