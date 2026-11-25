@@ -18,6 +18,7 @@ const TABS := [
 	[[Cosmetics.CUE], "Taco"],
 	[[Cosmetics.BOARD], "Tabuleiro"],
 	[[Cosmetics.PIECES, Cosmetics.FINISH, Cosmetics.TOKEN], "Peças"],
+	[[Cosmetics.DECK], "Cartas"],
 	[[Cosmetics.FRAME, Cosmetics.BANNER, Cosmetics.TITLE, Cosmetics.NAME_COLOR], "Perfil"],
 ]
 const SECTIONS := {
@@ -86,11 +87,13 @@ func _ready() -> void:
 	for tab: Array in TABS:
 		labels.append(tab[1])
 	_tabs.setup(labels)
-	# Cinco abas num celular em pé: com larguras iguais, "Tabuleiro" cortava e
-	# "Bola" sobrava. Cada aba ganha largura pelo tamanho do rótulo.
+	# Seis abas num celular em pé: com larguras iguais, "Tabuleiro" cortava e
+	# "Bola" sobrava. Cada aba ganha largura pelo rótulo mais a folga do botão, que
+	# é a mesma em todas (por isso o "+ 3": sem ela, as curtas ficavam sem a folga
+	# e cortavam, "Bol" e "Tac").
 	for button in _tabs._buttons:
-		button.size_flags_stretch_ratio = maxf(1.0, button.text.length() / 4.5)
-		button.add_theme_font_size_override("font_size", 14)
+		button.size_flags_stretch_ratio = button.text.length() + 3.0
+		button.add_theme_font_size_override("font_size", 12)
 	_tabs.selected.connect(func(index: int) -> void:
 		Sound.play(Sound.Cue.TAP)
 		_slots = TABS[index][0]
@@ -329,6 +332,12 @@ func _swatch(slot: String, id: String) -> Control:
 		cue.custom_minimum_size = Vector2(SWATCH, SWATCH)
 		cue.size_flags_horizontal = SIZE_SHRINK_CENTER
 		return cue
+	if slot == Cosmetics.DECK:
+		var cards := CardSample.new()
+		cards.skin = Cosmetics.deck_of(look)
+		cards.custom_minimum_size = Vector2(SWATCH * 1.3, SWATCH)
+		cards.size_flags_horizontal = SIZE_SHRINK_CENTER
+		return cards
 	if slot == Cosmetics.TOKEN:
 		var token := TokenSample.new(Cosmetics.token_of(look))
 		token.custom_minimum_size = Vector2(SWATCH, SWATCH)
@@ -478,6 +487,20 @@ func _equip(slot: String, id: String) -> void:
 
 ## A amostra de um tabuleiro: o miolo dele (d4, e4, d5, e5) na moldura, com a casa
 ## do último lance acesa e um cavalo de cada cor, para ver o contraste das peças.
+## A amostra de um baralho do Uno: o verso e um 7 vermelho, um sobre o outro.
+class CardSample:
+	extends Control
+
+	var skin := {}
+
+	func _draw() -> void:
+		var height := size.y * 0.86
+		var width := UnoCardArt.width_for(height)
+		var middle := size * 0.5
+		UnoCardArt.draw_back(self, middle - Vector2(width * 0.32, 0.0), height, -0.12, 1.0, Color(0, 0, 0, 0), skin)
+		UnoCardArt.draw_card(self, UnoRules.card(UnoRules.CardColor.RED, 7), middle + Vector2(width * 0.32, 0.0), height, 0.12, false, 1.0, Color(0, 0, 0, 0), skin)
+
+
 ## A amostra de uma peça do Metrópole: a peça em 3D, na cor do primeiro assento,
 ## vista de cima e de lado como na partida. Desenha uma vez só: a peça é parada.
 class TokenSample:

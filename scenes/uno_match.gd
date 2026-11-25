@@ -181,6 +181,8 @@ func _ready() -> void:
 ## por onde toda saída passa — este é a rede de segurança de quem for liberado por
 ## outro caminho, que é o que a folha de prints faz a cada foto.
 func _exit_tree() -> void:
+	# O baralho é de quem olha esta mesa; fora dela (a amostra da loja) vale o de sempre.
+	UnoCardArt.deck = {}
 	# Desligados **antes** de desgirar: trocar a base também avisa `size_changed`, e
 	# ainda ligado o aviso caía em `fit`, que lia a janela deitada e deitava de novo.
 	# E a cena inteira muda de tamanho junto — refazer o rodapé de uma cena que já
@@ -1054,6 +1056,8 @@ func _place_tags() -> void:
 
 func _refresh_tags() -> void:
 	var turn := UnoRules.turn_of(_state)
+	# A sua mão, o descarte e o monte saem no seu baralho.
+	UnoCardArt.deck = Cosmetics.deck_of(Net.seat_look(Game.local_seat))
 	for seat in _tags.size():
 		var tag: PlayerTag = _tags[seat]
 		var held := UnoRules.hand_size(_state, seat)
@@ -1064,6 +1068,8 @@ func _refresh_tags() -> void:
 		# cadeira que vira máquina precisar passar a dizer "(bot)".
 		tag.title = _seat_name(seat)
 		tag.look = {} if _is_bot(seat) else Net.seat_look(seat)
+		var theirs := Cosmetics.deck_of(tag.look)
+		_table.seat_decks[seat] = theirs if not theirs.is_empty() else UnoCardArt.STANDARD
 		tag.active = seat == turn
 		if seat == Game.local_seat:
 			tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held

@@ -48,6 +48,7 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18e_loja_pecas"],
 	["res://scenes/settings.tscn", "18f_loja_taco"],
 	["res://scenes/settings.tscn", "18g_loja_perfil"],
+	["res://scenes/settings.tscn", "18q_loja_cartas"],
 	["res://scenes/settings.tscn", "18h_voce_capa"],
 	["res://scenes/settings.tscn", "18i_missoes"],
 	["res://scenes/settings.tscn", "18j_missoes_conquistas"],
@@ -286,6 +287,13 @@ func _next() -> void:
 			}
 			Account.owned = ["board_wood"]
 			Account.look = {"board": "board_wood"}
+		"18q_loja_cartas":
+			Account.token = "print"
+			Account.coins = 350
+			Account.prices = {"deck_retro": 200, "deck_gold": 350, "deck_neon": 300, "deck_night": 250, "deck_candy": 250}
+			Account.paid = Account.prices.keys() + ["deck_pioneer"]
+			Account.owned = ["deck_night", "deck_pioneer"]
+			Account.look = {"deck": "deck_pioneer"}
 		"18e_loja_pecas":
 			Account.token = "print"
 			Account.coins = 350
@@ -571,8 +579,8 @@ func _next() -> void:
 		var tab := 0 if shot.begins_with("18i") else (1 if shot.begins_with("18j") else 2)
 		_scene._missions._tabs.set_current(tab)
 		_scene._missions._tabs.selected.emit(tab)
-	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil"]:
-		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18g_loja_perfil": 4}[shot]
+	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil", "18q_loja_cartas"]:
+		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18q_loja_cartas": 4, "18g_loja_perfil": 5}[shot]
 		_scene._open_shop()
 		_scene._shop._tabs.set_current(tab)
 		_scene._shop._tabs.selected.emit(tab)

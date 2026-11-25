@@ -118,6 +118,16 @@ func _probe_palette() -> void:
 		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
 		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
 		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
+	# Baralhos do Uno: a moldura separa a carta de qualquer cor de jogo, e a mancha
+	# do verso aparece no corpo dele.
+	for id in Cosmetics.of_slot(Cosmetics.DECK):
+		var deck := Cosmetics.deck_of({Cosmetics.DECK: id})
+		var weakest := 99.0
+		for body: Color in UnoCardArt.COLORS + [UnoCardArt.WILD_BODY]:
+			weakest = minf(weakest, AppTheme.contrast(deck["paper"], body))
+		_check(weakest >= 1.25, "%s: a moldura se separa de toda cor (%.2f:1)" % [id, weakest])
+		var spot := AppTheme.contrast(deck["spot"], deck["back"])
+		_check(spot >= 2.0, "%s: a mancha do verso aparece (%.1f:1)" % [id, spot])
 	# Peças do Metrópole: toda forma da loja monta e cabe na casa, como as seis de
 	# sempre (largura do pedestal com folga; altura de um brinquedo de mesa).
 	for id in Cosmetics.of_slot(Cosmetics.TOKEN):

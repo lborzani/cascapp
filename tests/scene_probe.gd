@@ -2386,13 +2386,16 @@ func _test_looks_in_games() -> void:
 		Net.is_spectator = false
 		Net.connected = true
 		Net.local_seat = 0
-		Net.looks = {0: {"frame": "frame_gold"}, 1: theirs}
+		Net.looks = {0: {"frame": "frame_gold", "deck": "deck_gold"}, 1: theirs}
 		var scene: Node = load("res://scenes/%s_match.tscn" % id).instantiate()
 		add_child(scene)
 		await get_tree().process_frame
 		if scene.has_method("_refresh"):
 			scene.call("_refresh")
 		_equals(readers[id].call(scene), theirs, "%s mostra o visual do outro jogador" % id)
+		if id == Game.UNO:
+			# O verso da mão do outro é o baralho dele (aqui, nenhum), nunca o meu.
+			_equals(scene._table.seat_decks[1], UnoCardArt.STANDARD, "uno: a mão do outro sem baralho sai no padrão")
 		scene.queue_free()
 		await get_tree().process_frame
 	Net.looks = {}

@@ -109,6 +109,8 @@ var local_seat := 0:
 		queue_redraw()
 
 ## Como cada assento se chama, na ordem dos assentos. Vazio cai em "Jogador N".
+## O baralho da loja de cada assento (`Cosmetics.deck_of`): o verso da mão dele.
+var seat_decks := {}
 var names := PackedStringArray():
 	set(value):
 		names = value
@@ -418,7 +420,8 @@ func _draw_seat(seat: int, center: Vector2, _is_turn: bool) -> void:
 	for index in shown:
 		var offset := index - (shown - 1) * 0.5
 		UnoCardArt.draw_back(
-			self, center + along * (offset * step), back_height, facing + offset * 0.06
+			self, center + along * (offset * step), back_height, facing + offset * 0.06,
+			1.0, Color(0, 0, 0, 0), seat_decks.get(seat, UnoCardArt.STANDARD)
 		)
 
 

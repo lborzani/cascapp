@@ -16,6 +16,8 @@ const PIECES := "pieces"
 const CUE := "cue"
 ## A peça do Metrópole (`MonopolyToken.SHAPES`).
 const TOKEN := "token"
+## O baralho do Uno (`UnoCardArt.deck`).
+const DECK := "deck"
 ## O perfil: a moldura da foto (`Coaster`), a capa do perfil (`ProfileCover`), um
 ## título abaixo do nome e a cor do nome (`ProfileStyle`).
 const FRAME := "frame"
@@ -157,6 +159,20 @@ const ITEMS := {
 	"token_guitar": {"slot": TOKEN, "name": "Violão", "shape": "guitar"},
 	"token_die": {"slot": TOKEN, "name": "Dado", "shape": "die"},
 	"token_pioneer": {"slot": TOKEN, "name": "Estrela Pioneira", "shape": "star", "testers": true},
+	# Baralhos do Uno: a moldura (`paper`), o verso (`back`, `spot`,
+	# `back_pattern`) e um desenho discreto na face (`face`). As cores de jogo
+	# não mudam (`UnoCardArt`).
+	"deck_retro": {"slot": DECK, "name": "Retrô", "paper": Color("fff4dc"), "back": Color("b3122e"), "spot": Color("ffd23f")},
+	"deck_gold": {"slot": DECK, "name": "Ouro", "paper": Color("ffd25a"), "back": Color("15122b"), "spot": Color("ffd25a"), "back_pattern": "rays"},
+	"deck_neon": {"slot": DECK, "name": "Neon", "paper": Color("3fe6ff"), "back": Color("1b0f35"), "spot": Color("ff4fd8"), "back_pattern": "stripes", "face": "dots"},
+	"deck_night": {"slot": DECK, "name": "Noite", "paper": Color("c9d4ff"), "back": Color("0e1433"), "spot": Color("c9d4ff"), "back_pattern": "stars", "face": "stars"},
+	"deck_candy": {"slot": DECK, "name": "Doces", "paper": Color("ffe1ef"), "back": Color("ff86b4"), "spot": Color("fff4e6"), "back_pattern": "stripes", "face": "stripes"},
+	# O dos testadores: moldura de pérola mentolada, verso do céu dos pioneiros com
+	# a constelação e a mancha violeta, estrelas na face.
+	"deck_pioneer": {
+		"slot": DECK, "name": "Pioneiro", "paper": Color("d8faf0"), "back": Color("070a1f"), "spot": Color("a66bff"),
+		"back_pattern": "constellation", "face": "stars", "accent": Color("ffd25a"), "testers": true,
+	},
 	# Conjuntos de peças do xadrez (`tools/build_piece_sets.gd`): o mesmo nome de
 	# arquivo das peças de sempre, noutra pasta. As damas não mudam de formato.
 	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
@@ -257,6 +273,11 @@ static func cue_skin(look: Dictionary) -> Dictionary:
 static func item_of(look: Dictionary, slot: String) -> Dictionary:
 	var id := str(look.get(slot, ""))
 	return ITEMS[id] if ITEMS.has(id) and ITEMS[id]["slot"] == slot else {}
+
+
+## O baralho do Uno de um visual (as chaves de `UnoCardArt`), ou vazio para o de sempre.
+static func deck_of(look: Dictionary) -> Dictionary:
+	return item_of(look, DECK)
 
 
 ## A forma da peça do Metrópole (`MonopolyToken.SHAPES`), ou vazio para a do assento.

@@ -68,6 +68,16 @@ const BACK_SPOT := AppTheme.DANGER
 
 const SHADOW := Color(0, 0, 0, 0.45)
 
+## O baralho da loja de quem olha (`Cosmetics.deck_of`): a sua mão, o descarte e o
+## monte saem nele. Vazio é o de sempre. As quatro cores de jogo nunca mudam: o
+## baralho troca a moldura (`paper`), o verso (`back`, `spot`, `back_pattern`) e
+## um desenho discreto na face (`face`), nada que pese na leitura da carta. Com
+## `accent`, os desenhos saem nessa cor (o ouro dos testadores).
+static var deck := {}
+## O baralho de sempre, dito às claras: `skin` vazio cai no `deck` de quem olha,
+## e a mão de quem não tem baralho da loja tem de sair no padrão, não no meu.
+const STANDARD := {"paper": PAPER}
+
 ## As formas cheias da carta são **textura**, e não polígono.
 ##
 ## Polígono na Godot não tem antialiasing, e o MSAA 2D do projeto não chega a
@@ -142,12 +152,14 @@ const CORNER_INSET := Vector2(0.20, 0.125)
 ## jogada. Transparente é a moldura de sempre.
 static func draw_card(
 	canvas: CanvasItem, card_code: int, center: Vector2, height: float,
-	rotation := 0.0, dim := false, opacity := 1.0, rim := Color(0, 0, 0, 0)
+	rotation := 0.0, dim := false, opacity := 1.0, rim := Color(0, 0, 0, 0), skin := {}
 ) -> void:
 	if height <= 0.0 or opacity <= 0.0:
 		return
 	var alpha := opacity
 	var color := _body_color(card_code)
+	var chosen := skin if not skin.is_empty() else deck
+	var paper: Color = chosen.get("paper", PAPER)
 
 	canvas.draw_set_transform(center + SHADOW_OFFSET * height, rotation, Vector2.ONE)
 	_rounded(canvas, height, 1.0, _fade(SHADOW, alpha))
@@ -156,8 +168,10 @@ static func draw_card(
 	# Moldura clara por fora, corpo colorido por dentro. Dois retângulos e não um
 	# contorno traçado: o traço da Godot não acompanha canto arredondado, e a
 	# emenda aparece justamente nos quatro cantos.
-	_rounded(canvas, height, 1.0, _fade(PAPER if rim.a <= 0.0 else rim, alpha))
+	_rounded(canvas, height, 1.0, _fade(paper if rim.a <= 0.0 else rim, alpha))
 	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(color, alpha))
+	var accent: Color = chosen.get("accent", PAPER)
+	_pattern(canvas, str(chosen.get("face", "")), height, _fade(Color(accent, 0.3 if chosen.has("accent") else 0.22), alpha), card_code)
 	# Corpo chapado e o símbolo claro com sombra de tinta, como no protótipo. A
 	# oval só no curinga: ali ela é o desenho que diz "qualquer cor".
 	if UnoRules.is_wild(card_code):
@@ -182,19 +196,23 @@ static func draw_card(
 ## relance parece uma mão de cartas vermelhas.
 static func draw_back(
 	canvas: CanvasItem, center: Vector2, height: float, rotation := 0.0, opacity := 1.0,
-	rim := Color(0, 0, 0, 0)
+	rim := Color(0, 0, 0, 0), skin := {}
 ) -> void:
 	if height <= 0.0 or opacity <= 0.0:
 		return
+	var chosen := skin if not skin.is_empty() else deck
 	canvas.draw_set_transform(center + SHADOW_OFFSET * height, rotation, Vector2.ONE)
 	_rounded(canvas, height, 1.0, _fade(SHADOW, opacity))
 	canvas.draw_set_transform(center, rotation, Vector2.ONE)
 
-	_rounded(canvas, height, 1.0, _fade(PAPER if rim.a <= 0.0 else rim, opacity))
-	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(BACK_BODY, opacity))
+	_rounded(canvas, height, 1.0, _fade(chosen.get("paper", PAPER) if rim.a <= 0.0 else rim, opacity))
+	_rounded(canvas, height, 1.0 - FRAME * 2.0, _fade(chosen.get("back", BACK_BODY), opacity))
+	var spot: Color = chosen.get("spot", BACK_SPOT)
+	var accent: Color = chosen.get("accent", Color(spot, 0.55))
+	_pattern(canvas, str(chosen.get("back_pattern", "")), height, _fade(accent, opacity), 0)
 	# Escuro com a mancha coral no meio: nenhuma carta de frente é assim, então
 	# a mão de um adversário não parece uma mão de cartas vermelhas.
-	_disc(canvas, OVAL_TEX, Vector2(height * ASPECT * 0.30, height * 0.27), _fade(BACK_SPOT, opacity))
+	_disc(canvas, OVAL_TEX, Vector2(height * ASPECT * 0.30, height * 0.27), _fade(spot, opacity))
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -223,6 +241,50 @@ static func color_of(card_code: int) -> Color:
 
 
 # --- partes -------------------------------------------------------------------
+
+
+## O desenho discreto de um baralho por cima do corpo, dentro da moldura. O sorteio
+## é fixo por carta (`seed`), para a mesma carta não piscar entre um quadro e outro.
+static func _pattern(canvas: CanvasItem, kind: String, height: float, ink: Color, seed: int) -> void:
+	if kind.is_empty():
+		return
+	var half := Vector2(height * ASPECT, height) * 0.5 * (1.0 - FRAME * 2.0) - Vector2.ONE * height * 0.04
+	match kind:
+		"stars", "constellation":
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 7919 + seed
+			var points := PackedVector2Array()
+			for i in 9:
+				var at := Vector2(rng.randf_range(-half.x, half.x), rng.randf_range(-half.y, half.y))
+				points.append(at)
+				canvas.draw_circle(at, height * rng.randf_range(0.008, 0.016), ink, true, -1.0, true)
+			if kind == "constellation":
+				for i in 5:
+					canvas.draw_line(points[i], points[i + 1], Color(ink, ink.a * 0.7), maxf(1.0, height * 0.006), true)
+		"dots":
+			var step := height * 0.11
+			var y := -half.y + step * 0.5
+			while y < half.y:
+				var x := -half.x + step * 0.5
+				while x < half.x:
+					canvas.draw_circle(Vector2(x, y), height * 0.012, ink, true, -1.0, true)
+					x += step
+				y += step
+		"stripes":
+			var gap := height * 0.09
+			var d := -half.x - half.y
+			# A reta y = x - d, recortada pelo retângulo de dentro.
+			while d < half.x + half.y:
+				var from := maxf(-half.x, d - half.y)
+				var to := minf(half.x, d + half.y)
+				if from < to:
+					canvas.draw_line(Vector2(from, from - d), Vector2(to, to - d), ink, maxf(1.0, height * 0.02), true)
+				d += gap
+		"rays":
+			for i in 12:
+				var angle := TAU * i / 12.0
+				var reach := minf(half.x / maxf(absf(cos(angle)), 0.01), half.y / maxf(absf(sin(angle)), 0.01))
+				canvas.draw_line(Vector2.ZERO, Vector2(cos(angle), sin(angle)) * reach, ink, maxf(1.0, height * 0.018), true)
 
 
 static func _body_color(card_code: int) -> Color:
