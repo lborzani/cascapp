@@ -40,6 +40,7 @@ func _ready() -> void:
 	await _test_training_panel()
 	_test_verified_names()
 	await _test_spectator()
+	await _test_opponent_board()
 	_check(await _test_next_up() == true, "fila de quem joga a próxima rodou até o fim")
 	_check(await _test_live_review() == true, "avaliação ao vivo rodou até o fim")
 	await _test_rated_result()
@@ -1233,6 +1234,46 @@ func _settle(panel: Object, field: String) -> void:
 		await get_tree().process_frame
 		OS.delay_msec(20)
 	_check(false, "a thread %s terminou" % field)
+
+
+## "Tabuleiro do oponente" desligado: quem joga vê o próprio tabuleiro nas duas
+## metades, e as peças do outro continuam as dele. Quem assiste não muda.
+func _test_opponent_board() -> void:
+	print("tabuleiro do oponente")
+	Game.mode = Game.Mode.ONLINE
+	Game.game_id = Game.CHESS
+	Game.local_side = Board.Side.WHITE
+	Net.local_side = Board.Side.WHITE
+	Net.local_seat = 0
+	Net.white_seat = 0
+	Net.connected = true
+	Net.player_names = {0: "Ana", 1: "Bia"}
+	Net.looks = {0: {"board": "board_wood"}, 1: {"board": "board_neon", "finish": "finish_gems"}}
+	var scene := preload("res://scenes/match.tscn").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	var wood := Cosmetics.board_skin({"board": "board_wood"})
+	var neon := Cosmetics.board_skin({"board": "board_neon"})
+	_equals(scene._board.skins, [wood, neon], "ligado: cada metade com a skin de quem joga")
+	Prefs.set_opponent_board(false)
+	scene._refresh()
+	_equals(scene._board.skins, [wood, wood], "desligado: o meu tabuleiro nas duas metades")
+	_equals(Cosmetics.finish_of(scene._board.looks[Board.Side.BLACK]), "finish_gems", "e as peças do outro continuam as dele")
+	Net.looks = {0: {}, 1: {"board": "board_neon"}}
+	scene._refresh()
+	_equals(scene._board.skins, [Cosmetics.DEFAULT_BOARD, Cosmetics.DEFAULT_BOARD], "sem skin minha, o padrão nas duas")
+	Net.looks = {0: {"board": "board_wood"}, 1: {"board": "board_neon"}}
+	Net.is_spectator = true
+	scene._refresh()
+	_equals(scene._board.skins, [wood, neon], "quem assiste vê as duas metades")
+	Net.is_spectator = false
+	Prefs.set_opponent_board(true)
+	scene.queue_free()
+	await get_tree().process_frame
+	Net.connected = false
+	Net.player_names = {}
+	Net.looks = {}
+	Game.mode = Game.Mode.HOTSEAT
 
 
 ## Quem assiste: o tabuleiro não responde ao toque, os cartões têm o nome de

@@ -40,6 +40,7 @@ const SHOTS := [
 	["res://scenes/ludo_match.tscn", "17c_ludo_andando"],
 	["res://scenes/ludo_match.tscn", "17d_ludo_pilha"],
 	["res://scenes/settings.tscn", "18_ajustes"],
+	["res://scenes/settings.tscn", "18o_ajustes_fim"],
 	["res://scenes/settings.tscn", "18b_historico"],
 	["res://scenes/settings.tscn", "18c_loja"],
 	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
@@ -532,6 +533,11 @@ func _next() -> void:
 		_scene._open_shop()
 	elif shot == "01i_missoes_folha":
 		_scene._open_missions()
+	elif shot == "18o_ajustes_fim":
+		# Os interruptores, no fim da aba Você.
+		var scroll: ScrollContainer = _scene.get_node("Safe/VBox/Scroll")
+		# Depois do primeiro layout, quando a barra já sabe o tamanho da lista.
+		get_tree().create_timer(0.1).timeout.connect(func() -> void: scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value))
 	elif shot == "18l_presentes":
 		_scene._open_gifts()
 	elif shot == "18m_presentes_aberto":

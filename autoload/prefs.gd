@@ -91,6 +91,18 @@ const TARGETS_KEY := "show_targets"
 ## Planejar o lance na vez do outro (premove), no xadrez online. **Ligado** por
 ## padrão, como sempre foi; o interruptor é para quem toca sem querer.
 const PREMOVE_KEY := "premove"
+## Online, a metade do tabuleiro do outro com a skin dele. **Ligado** por padrão;
+## desligado, quem joga vê o próprio tabuleiro nas duas metades.
+const OPPONENT_BOARD_KEY := "opponent_board"
+
+
+static func opponent_board_on() -> bool:
+	return bool(_file().get_value(SECTION, OPPONENT_BOARD_KEY, true))
+
+
+static func set_opponent_board(value: bool) -> void:
+	_file().set_value(SECTION, OPPONENT_BOARD_KEY, value)
+	_file().save(PATH)
 
 
 static func show_targets() -> bool:

@@ -1421,8 +1421,19 @@ func _seat_of(side: int) -> int:
 ## Online, cada cor tem o visual de quem joga com ela (o `look` do aperto de
 ## mão): a metade dele do tabuleiro e o acabamento das peças dele. Segue o
 ## `_seat_of`, então troca junto na revanche e vale para quem assiste.
+## Com "Mostrar tabuleiro do oponente" desligado, quem joga vê o próprio
+## tabuleiro nas duas metades; as peças do outro continuam as dele.
 func _board_looks() -> Array:
-	return [Net.look_of(_seat_of(Board.Side.WHITE)), Net.look_of(_seat_of(Board.Side.BLACK))]
+	var looks := [Net.look_of(_seat_of(Board.Side.WHITE)), Net.look_of(_seat_of(Board.Side.BLACK))]
+	if Prefs.opponent_board_on() or Net.is_spectator:
+		return looks
+	var mine: Dictionary = looks[Game.local_side]
+	var theirs: Dictionary = looks[Board.opponent(Game.local_side)].duplicate()
+	theirs.erase(Cosmetics.BOARD)
+	if mine.has(Cosmetics.BOARD):
+		theirs[Cosmetics.BOARD] = mine[Cosmetics.BOARD]
+	looks[Board.opponent(Game.local_side)] = theirs
+	return looks
 
 
 ## O transporte caiu mas a sessão ainda pode voltar. `Net.connected` já é falso,

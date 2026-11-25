@@ -85,6 +85,10 @@ func _ready() -> void:
 		Prefs.show_targets(), Prefs.set_show_targets
 	)
 	_switch("Planejar lance (premove)", "Só no xadrez online", Prefs.premove_on(), Prefs.set_premove)
+	_switch(
+		"Tabuleiro do oponente", "Online, a metade dele com a skin dele",
+		Prefs.opponent_board_on(), Prefs.set_opponent_board
+	)
 
 	%Avatar.ring = AppTheme.ACCENT
 	_add_edit_badge()
