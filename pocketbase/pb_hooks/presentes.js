@@ -12,7 +12,7 @@ const INBOX = 50
 const MAX_KIT = 20
 // O kit de agradecimento aos testadores (`1764600000_testador.js`), que sai
 // sozinho quando o admin liga `tester` na conta.
-const TESTER_KIT = ["frame_pioneer", "banner_pioneer", "title_pioneer", "name_pioneer", "ball_pioneer", "cue_pioneer", "finish_pioneer"]
+const TESTER_KIT = ["frame_pioneer", "banner_pioneer", "title_pioneer", "name_pioneer", "ball_pioneer", "cue_pioneer", "finish_pioneer", "board_pioneer"]
 const TESTER_MESSAGE = "Valeu por construir o cascapp comigo! Isto aqui é só de quem esteve desde o começo."
 
 // `{status, message}` quando o presente de item não pode sair, ou `null`.

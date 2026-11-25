@@ -150,7 +150,7 @@ func _kit(a: String, b: String) -> void:
 	var testers: Array = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return (g.get("items", []) as Array).has("frame_pioneer"))
 	_equals(testers.size(), 1, "o kit de testador chega sozinho")
 	var tester_gift: Dictionary = testers[0] if not testers.is_empty() else {}
-	_equals((tester_gift.get("items", []) as Array).size(), 7, "com os sete itens")
+	_equals((tester_gift.get("items", []) as Array).size(), 8, "com os oito itens")
 	_equals(GiftsPanel.sender_text(tester_gift), "Do cascapp", "do cascapp, sem remetente")
 	_check(not str(tester_gift.get("message", "")).is_empty(), "e com o bilhete")
 	await admin.call_api(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + b, {"tester": false})
@@ -158,7 +158,9 @@ func _kit(a: String, b: String) -> void:
 	testers = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return (g.get("items", []) as Array).has("frame_pioneer"))
 	_equals(testers.size(), 1, "desligar e ligar de novo não manda outro")
 	_equals((await _open(str(tester_gift.get("id", ""))))["code"], 200, "abre")
-	_check("cue_pioneer" in (await _record(b)).get("owned", []), "e os itens de testador entram na conta")
+	var tester_owned: Array = (await _record(b)).get("owned", [])
+	_check("cue_pioneer" in tester_owned, "e os itens de testador entram na conta")
+	_check("board_pioneer" in tester_owned, "inclusive o tabuleiro Pioneiro")
 
 
 ## O kit no painel, sem servidor: o texto, o que dá para usar e o cartão aberto.
