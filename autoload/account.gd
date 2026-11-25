@@ -288,14 +288,15 @@ func drop_request(id: String) -> bool:
 
 ## O perfil de um amigo: `{"profile", "stats", "recent"}` (ver a rota em
 ## `pocketbase/pb_hooks/amigos.pb.js`). `stats` é jogo → `{played, won, lost,
-## draw}`; `recent`, as 20 últimas partidas no formato do histórico. `null`
-## quando não deu para perguntar ou a conta não é mais amiga.
+## draw}`. As partidas uma a uma não vêm mais (`recent` chega vazio, só para os
+## apps até a 1.77). `null` quando não deu para perguntar ou a conta não é mais
+## amiga.
 func friend_profile(id: String) -> Variant:
 	if not signed_in():
 		return null
 	var reply := await _call(HTTPClient.METHOD_GET, "/api/cascapp/friends/%s/profile" % id.uri_encode(), {})
 	var data: Variant = reply["data"]
-	if reply["code"] != 200 or not data is Dictionary or not data.get("stats") is Dictionary or not data.get("recent") is Array:
+	if reply["code"] != 200 or not data is Dictionary or not data.get("stats") is Dictionary:
 		return null
 	return data
 

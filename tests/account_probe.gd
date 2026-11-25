@@ -209,8 +209,7 @@ func _ready() -> void:
 	var stats: Dictionary = friend_view.get("stats", {}) if friend_view is Dictionary else {}
 	_equals(stats.get("uno"), {"played": 2.0, "won": 1.0, "lost": 1.0, "draw": 0.0}, "o amigo vê os números do Uno")
 	_equals(stats.get("pool"), {"played": 1.0, "won": 0.0, "lost": 0.0, "draw": 1.0}, "e os da sinuca")
-	var recent: Array = friend_view.get("recent", []) if friend_view is Dictionary else []
-	_equals(recent.map(func(g: Dictionary) -> String: return g["game"]), ["pool", "uno", "uno"], "e as recentes, mais nova primeiro")
+	_equals(friend_view.get("recent") if friend_view is Dictionary else null, [], "e só os totais: as partidas uma a uma não saem (lista vazia para os apps antigos)")
 	_check(friend_view is Dictionary and not (friend_view["profile"] as Dictionary).has("email"), "sem e-mail no perfil")
 	await _as(device + "-terceiro")
 	_equals(await Account.friend_profile(second), null, "nem uma terceira conta")

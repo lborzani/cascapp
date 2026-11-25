@@ -2,8 +2,8 @@ class_name FriendProfile
 extends Control
 
 ## O perfil de um amigo, aberto pelo toque no card dele na gaveta: foto, nome,
-## o que está fazendo agora, o Elo do xadrez, uma linha por jogo (partidas,
-## vitórias, derrotas) e as partidas mais recentes.
+## o que está fazendo agora, o Elo do xadrez e uma linha por jogo (partidas,
+## vitórias, derrotas). As partidas uma a uma ficam só no histórico de cada um.
 ##
 ## O topo sai na hora, do que a gaveta já sabe (`Friends.profile_of`); os
 ## números chegam depois, da rota do perfil (`Account.friend_profile`), que só
@@ -252,8 +252,7 @@ func show_data(data: Variant) -> void:
 		_rows.add_child(_text("Não deu para carregar as partidas agora.", &"Subtitle"))
 		return
 	var stats: Dictionary = data.get("stats", {})
-	var recent: Array = data.get("recent", [])
-	if stats.is_empty() and recent.is_empty():
+	if stats.is_empty():
 		_rows.add_child(_text("Nenhuma partida ainda. As contra o bot e online aparecem aqui.", &"Subtitle"))
 		return
 
@@ -263,10 +262,6 @@ func show_data(data: Variant) -> void:
 	for game_id: StringName in Game.games_in():
 		if stats.has(String(game_id)):
 			_rows.add_child(_stat_row(game_id, stats[String(game_id)]))
-	if not recent.is_empty():
-		_rows.add_child(_text("Partidas recentes", &"Hint"))
-	for game: Dictionary in recent:
-		_rows.add_child(_recent_row(game))
 
 
 ## "12 partidas · 7 vitórias · 4 derrotas · 1 empate".
@@ -288,21 +283,6 @@ func _stat_row(game_id: StringName, numbers: Dictionary) -> Control:
 	name.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
 	words.add_child(name)
 	words.add_child(_text(stat_line(numbers), &"Caption"))
-	card.add_child(words)
-	return card
-
-
-func _recent_row(game: Dictionary) -> Control:
-	var card := _card()
-	var words := VBoxContainer.new()
-	var name := _text(HistoryPanel.headline(game), &"")
-	name.add_theme_font_override("font", AppTheme.font(800))
-	name.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
-	words.add_child(name)
-	words.add_child(_text(str(game.get("against", "")), &"Hint"))
-	var foot := _text(HistoryPanel.footnote(game), &"Caption")
-	foot.add_theme_color_override("font_color", AppTheme.TEXT_DIM)
-	words.add_child(foot)
 	card.add_child(words)
 	return card
 

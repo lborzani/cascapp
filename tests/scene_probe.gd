@@ -3201,7 +3201,7 @@ func _test_friend_requests() -> void:
 		var games := profile._rows.get_children().filter(func(n: Node) -> bool: return n.has_meta(&"game")).map(func(n: Node) -> StringName: return n.get_meta(&"game"))
 		_equals(games, [Game.CHESS, &"uno"], "uma linha por jogo jogado, na ordem do catálogo")
 		words = profile._rows.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
-		_check(words.has("Uno · Vitória"), "e as partidas recentes")
+		_check(not words.has("Uno · Vitória") and not words.has("Partidas recentes"), "e sem as partidas uma a uma, mesmo se vierem")
 		(profile.find_child("Invite", true, false) as Button).pressed.emit()
 		await get_tree().process_frame
 		_check(not is_instance_valid(profile) or profile.is_queued_for_deletion(), "Convidar fecha o perfil")
