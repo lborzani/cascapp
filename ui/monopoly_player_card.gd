@@ -29,6 +29,9 @@ const SIZES := {
 ## Quanto o selo de diferença fica na tela.
 const DELTA_HOLD := 1.6
 
+## O visual da loja de quem joga com esta cor: a moldura da bolacha e a cor do
+## nome. Vazio para máquina.
+var look := {}
 var _coaster: Coaster = null
 var _name: Label = null
 var _cash: Label = null
@@ -145,6 +148,7 @@ func show_player(
 	_coaster.fill = Color(color, 0.4 if out else 1.0)
 	_coaster.ring = Color(color, 0.0)
 	_coaster.turn = is_turn and not out
+	_coaster.frame = Cosmetics.frame_of(look)
 
 	# O que é especial do jogador vai no nome, como no protótipo ("Ana · na
 	# cadeia"). A carta de saída livre também: é a única coisa que se guarda neste
@@ -159,6 +163,10 @@ func show_player(
 	_name.add_theme_color_override(
 		"font_color", AppTheme.ACCENT if is_turn and not out else AppTheme.TEXT_DIM
 	)
+	# A cor do nome da loja vence a da vez: a vez já está na borda limão.
+	_name.material = null
+	if not out:
+		ProfileStyle.paint_name(_name, look)
 
 	if out:
 		_cash.text = "quebrou"

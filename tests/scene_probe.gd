@@ -58,6 +58,7 @@ func _ready() -> void:
 	await _test_manual_update()
 	await _test_match_bar()
 	_check(await _test_chat() == true, "conversa da partida rodou até o fim")
+	await _test_looks_in_games()
 	await _test_match_status()
 	await _test_welcome()
 	await _test_update_notice()
@@ -2363,6 +2364,40 @@ func _test_match_bar() -> void:
 
 	scene.queue_free()
 	await get_tree().process_frame
+
+
+## O visual da loja de quem joga aparece em todos os jogos, e não só no xadrez:
+## online, a etiqueta (ou o cartão, ou a cartela) do outro tem o visual dele.
+func _test_looks_in_games() -> void:
+	print("visual do perfil em todos os jogos")
+	var theirs := {"frame": "frame_neon", "name_color": "name_gold", "title": "title_pool"}
+	var readers := {
+		Game.LUDO: func(scene: Node) -> Dictionary: return scene._tags[1].look,
+		Game.UNO: func(scene: Node) -> Dictionary: return scene._tags[1].look,
+		Game.POOL: func(scene: Node) -> Dictionary: return scene._tags[1].look,
+		Game.BATTLESHIP: func(scene: Node) -> Dictionary: return scene.get_node("%TopTag").look,
+		Game.BOWLING: func(scene: Node) -> Dictionary: return scene._card.looks[1],
+		Game.MONOPOLY: func(scene: Node) -> Dictionary: return scene._cards[1].look,
+	}
+	for id: StringName in readers:
+		Game.start_hotseat(id)
+		Game.mode = Game.Mode.ONLINE
+		Game.local_seat = 0
+		Net.is_spectator = false
+		Net.connected = true
+		Net.local_seat = 0
+		Net.looks = {0: {"frame": "frame_gold"}, 1: theirs}
+		var scene: Node = load("res://scenes/%s_match.tscn" % id).instantiate()
+		add_child(scene)
+		await get_tree().process_frame
+		if scene.has_method("_refresh"):
+			scene.call("_refresh")
+		_equals(readers[id].call(scene), theirs, "%s mostra o visual do outro jogador" % id)
+		scene.queue_free()
+		await get_tree().process_frame
+	Net.looks = {}
+	Net.connected = false
+	Game.mode = Game.Mode.HOTSEAT
 
 
 ## O balão da conversa: só em rede, em toda tela de partida, e a gaveta manda,

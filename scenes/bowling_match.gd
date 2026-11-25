@@ -558,11 +558,14 @@ func _refresh() -> void:
 	_view.enabled = _can_act()
 	var names := PackedStringArray()
 	var colors: Array[Color] = []
+	var looks: Array = []
 	for seat in BowlingRules.seats_of(_state):
 		names.append(_seat_name(seat))
 		colors.append(_seat_color(seat))
+		looks.append({} if _is_bot(seat) else seat_look(seat))
 	_card.names = names
 	_card.colors = colors
+	_card.looks = looks
 	_card.state = _state
 
 	var lit := _can_act()
@@ -603,9 +606,7 @@ func _dress_ball(seat: int) -> void:
 ## aperto de mão; aqui, o do dono do aparelho no assento 0 (no mesmo aparelho ele
 ## é o dono, contra o bot é quem joga). Máquinas e convidados ficam no padrão.
 func seat_look(seat: int) -> Dictionary:
-	if Game.mode == Game.Mode.ONLINE:
-		return Net.look_of(seat)
-	return Account.look if seat == 0 else {}
+	return Net.seat_look(seat)
 
 
 func _seat_name(seat: int) -> String:

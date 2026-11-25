@@ -719,6 +719,7 @@ func _update_tags() -> void:
 		tag.subtitle = _seat_detail(player)
 		tag.active = player == turn
 		tag.pips_filled = LudoRules.finished(_state, player)
+		tag.look = {} if _is_bot(player) else Net.seat_look(player)
 	_place_tags()
 
 

@@ -536,6 +536,11 @@ func _refresh_cards() -> void:
 			else (theirs if not theirs.is_empty() else "Oponente")
 		)
 		view.active = playing and not over and _state.side_to_move == side
+		# O do outro lado, online, é o que ele mandou no aperto de mão; contra o bot,
+		# só o meu.
+		view.look = Account.look if side == me else (
+			Net.look_of(0 if them == Net.HOST_SIDE else 1) if Game.mode == Game.Mode.ONLINE else {}
+		)
 		# O cartão de baixo divide a largura com o mapa: lá as bolinhas bastam, e o
 		# texto cortaria ("Sua vez · 4 na…").
 		view.subtitle = _fleet_status(side) if side != me else ""

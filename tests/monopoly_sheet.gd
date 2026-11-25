@@ -62,6 +62,8 @@ var _board: MonopolyBoard3D = null
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute("user://shots")
+	# O dono do aparelho com o visual dos testadores, no cartão da coluna.
+	Account.look = {"frame": "frame_pioneer", "name_color": "name_pioneer"}
 	_stage = Stage.make(self, Vector2i(1280, 720))
 	_next()
 

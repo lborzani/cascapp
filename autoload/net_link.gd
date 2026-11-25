@@ -810,6 +810,15 @@ func look_of(seat: int) -> Dictionary:
 	return looks.get(seat, {})
 
 
+## O visual de quem está num assento, em qualquer modo: online, o que cada
+## aparelho disse no aperto de mão; fora de rede, o do dono do aparelho no assento
+## dele. Máquinas e o segundo jogador do mesmo aparelho ficam no padrão.
+func seat_look(seat: int) -> Dictionary:
+	if Game.mode == Game.Mode.ONLINE:
+		return look_of(seat)
+	return Account.look if seat == Game.local_seat else {}
+
+
 func _look_list() -> Array:
 	var pairs := []
 	for seat in looks:

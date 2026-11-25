@@ -1221,6 +1221,7 @@ func _refresh() -> void:
 	_panel.refresh()
 
 	for player in _cards.size():
+		_cards[player].look = {} if _is_bot(player) else Net.seat_look(player)
 		_cards[player].show_player(_state, player, player == turn, _player_label(player))
 	if _buttons != null:
 		_update_bar()

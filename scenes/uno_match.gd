@@ -1063,6 +1063,7 @@ func _refresh_tags() -> void:
 		# o nome certo conforme quem ganhava a corrida. É o mesmo motivo de a
 		# cadeira que vira máquina precisar passar a dizer "(bot)".
 		tag.title = _seat_name(seat)
+		tag.look = {} if _is_bot(seat) else Net.seat_look(seat)
 		tag.active = seat == turn
 		if seat == Game.local_seat:
 			tag.subtitle = "1 carta" if held == 1 else "%d cartas" % held

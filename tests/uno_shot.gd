@@ -13,6 +13,8 @@ const Stage := preload("res://tests/shot_stage.gd")
 
 func _ready() -> void:
 	Game.start_solo(Game.UNO)
+	# O dono do aparelho com o visual dos testadores: a faixa de baixo o mostra.
+	Account.look = {"frame": "frame_pioneer", "title": "title_pioneer", "name_color": "name_pioneer", "banner": "banner_pioneer"}
 	# `-- --seats=N` troca a mesa, para julgar o anel de dois a seis.
 	Game.table_size = 6
 	# `-- --size=LxA` troca o palco: deitado (padrão) ou em pé.

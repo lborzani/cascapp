@@ -20,6 +20,11 @@ var names := PackedStringArray():
 	set(value):
 		names = value
 		queue_redraw()
+## O visual da loja de cada assento: o nome sai na cor dele.
+var looks: Array = []:
+	set(value):
+		looks = value
+		queue_redraw()
 var colors: Array[Color] = []:
 	set(value):
 		colors = value
@@ -49,8 +54,9 @@ func _draw() -> void:
 		var tint: Color = colors[seat] if seat < colors.size() else AppTheme.TEXT
 		draw_circle(Vector2(10.0, top + ROW * 0.5), 5.0, tint)
 		var label := names[seat] if seat < names.size() else "Jogador %d" % (seat + 1)
-		draw_string(bold, Vector2(19.0, top + ROW * 0.5 + 5.0), label, HORIZONTAL_ALIGNMENT_LEFT,
-			NAME_WIDTH - 22.0, 12, AppTheme.ACCENT if active else AppTheme.TEXT)
+		ProfileStyle.draw_name(self, bold, Vector2(19.0, top + ROW * 0.5 + 5.0), label,
+			NAME_WIDTH - 22.0, 12, AppTheme.ACCENT if active else AppTheme.TEXT,
+			looks[seat] if seat < looks.size() else {})
 
 		var rolls := BowlingRules.rolls_of(state, seat)
 		var marks := BowlingRules.marks(rolls)

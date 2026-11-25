@@ -257,9 +257,7 @@ func _build_overlay() -> void:
 ## que cada aparelho disse no aperto de mão; aqui, o do dono do aparelho no
 ## assento 0. Máquinas e o segundo jogador do mesmo aparelho ficam no padrão.
 func seat_look(seat: int) -> Dictionary:
-	if Game.mode == Game.Mode.ONLINE:
-		return Net.look_of(seat)
-	return Account.look if seat == 0 else {}
+	return Net.seat_look(seat)
 
 
 func _my_turn() -> bool:
@@ -473,6 +471,7 @@ func _refresh_cards() -> void:
 		tag.active = seat == turn
 		tag.title = _seat_name(seat)
 		tag.subtitle = _seat_detail(seat)
+		tag.look = {} if _is_bot(seat) else seat_look(seat)
 		# Mata-mata: cinco casas, que é o que cada um tem de tirar. Brasileira: a
 		# fileira cresce com o que entrou.
 		var slots := maxi(

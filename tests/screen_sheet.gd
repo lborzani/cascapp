@@ -196,6 +196,9 @@ func _next() -> void:
 	Account.look = {}
 	Net.looks = {}
 	Net.verified_seats = {}
+	# O visual dos testadores no dono do aparelho, nos jogos que antes não o mostravam.
+	if shot in ["16_naval", "17b_ludo_bots", "22_sinuca", "25_boliche"]:
+		Account.look = {"frame": "frame_pioneer", "title": "title_pioneer", "name_color": "name_pioneer", "banner": "banner_pioneer"}
 	# Os amigos de mentira valem só nos prints deles.
 	Friends.list = []
 	Friends.online = {}
