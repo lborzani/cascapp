@@ -305,9 +305,7 @@ func _dress_band() -> void:
 ## Chama um amigo que está online para esta sala. Sem ninguém online (ou sem
 ## conta), o caminho é o código por mensagem — e o aviso diz isso.
 func _invite() -> void:
-	var online: Array = Friends.sorted().filter(
-		func(friend: Dictionary) -> bool: return Friends.online.has(str(friend.get("id", "")))
-	)
+	var online := _invitable()
 	if online.is_empty():
 		%Toast.show_message("Nenhum amigo online agora. Copie o código e mande por mensagem.", Banner.Kind.INFO)
 		return
@@ -335,6 +333,21 @@ func _invite() -> void:
 		)
 		list.add_child(call)
 	%HostHint.add_sibling(_invite_card)
+
+
+## Os amigos online que dá para chamar: fora quem já está sentado nesta sala, pela
+## conta confirmada do assento ou pela presença dele apontando para este código.
+func _invitable() -> Array:
+	var seated := {}
+	for seat: int in Net.verified_seats:
+		seated[str(Net.profile_of(seat).get("user", ""))] = true
+	return Friends.sorted().filter(func(friend: Dictionary) -> bool:
+		var id := str(friend.get("id", ""))
+		var status: Variant = Friends.online.get(id)
+		if status == null or seated.has(id):
+			return false
+		return not (status is Dictionary and str(status.get("room", "")) == _code)
+	)
 
 
 ## As cadeiras vazias viram máquina, e a partida começa. Quem as joga é este

@@ -607,6 +607,26 @@ func _probe_host() -> void:
 	_equals(screen.get_node("%Seats").capacity, maxi(Game.players_of(), 2), "a mesa tem a lotação do jogo")
 	_check(screen.get_node("%Seats").present.has(0), "com o anfitrião sentado")
 
+	# Chamar para esta sala: quem já está sentado (pela conta ou pela presença)
+	# não aparece; quem está online fora daqui, sim.
+	Friends.list = [
+		{"id": "sentadosentado1", "name": "Sentada"},
+		{"id": "nasalanasalana1", "name": "Na sala"},
+		{"id": "livrelivrelivr1", "name": "Livre"},
+		{"id": "offlineoffline1", "name": "Offline"},
+	]
+	Friends.online = {
+		"sentadosentado1": {"id": "sentadosentado1", "game": "", "room": "", "playing": false},
+		"nasalanasalana1": {"id": "nasalanasalana1", "game": "chess", "room": code, "playing": false},
+		"livrelivrelivr1": {"id": "livrelivrelivr1", "game": "", "room": "", "playing": false},
+	}
+	Net.verified_seats = {1: {"user": "sentadosentado1", "avatar": "", "elo": 0}}
+	var callable: Array = screen._invitable().map(func(friend: Dictionary) -> String: return str(friend["id"]))
+	_equals(callable, ["livrelivrelivr1"], "chamar lista só quem está online e fora da sala")
+	Friends.list = []
+	Friends.online = {}
+	Net.verified_seats = {}
+
 	screen.queue_free()
 	await get_tree().process_frame
 	Game.reset_to_menu()
