@@ -20,6 +20,7 @@ func _init() -> void:
 	_save("marble", _marble)
 	_save("candy", _candy)
 	_save("neon", _neon)
+	_save("pioneer", _pioneer)
 	quit()
 
 
@@ -78,3 +79,21 @@ func _neon(u: float, v: float) -> float:
 	var cell := Vector2(fposmod(u * 8.0, 1.0), fposmod(v * 8.0, 1.0))
 	var edge := minf(minf(cell.x, 1.0 - cell.x), minf(cell.y, 1.0 - cell.y))
 	return 0.24 + 0.76 * exp(-edge * 22.0)
+
+
+## Pioneiro: nebulosa suave e estrelas espalhadas, que acendem acima da cor da
+## casa. As estrelas caem por casa (uma grade fina com sorteio fixo), então o
+## céu continua de uma casa para a vizinha.
+var _nebula := _noise(41, 1.0)
+func _pioneer(u: float, v: float) -> float:
+	var cloud := 0.5 + 0.5 * _nebula.get_noise_2d(u * 3.0, v * 3.0)
+	var grid := Vector2(u, v) * 48.0
+	var cell := grid.floor()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(cell)
+	var star := 0.0
+	if rng.randf() < 0.22:
+		var at := cell + Vector2(rng.randf_range(0.2, 0.8), rng.randf_range(0.2, 0.8))
+		var radius := rng.randf_range(0.07, 0.16)
+		star = exp(-grid.distance_squared_to(at) / (radius * radius))
+	return clampf(0.84 + 0.08 * cloud + 0.4 * star, 0.0, 1.0)

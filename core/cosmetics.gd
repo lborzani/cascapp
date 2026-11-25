@@ -81,6 +81,13 @@ const ITEMS := {
 		"frame": Color("8a3a5c"), "last": Color("fff08a"), "last_dark": Color("ffc95a"),
 		"texture": "res://assets/boards/candy.png",
 	},
+	# O dos testadores: pérola mentolada e violeta índigo sob um céu de nebulosa e
+	# estrelas, moldura da noite e último lance em ouro, como o resto do conjunto.
+	"board_pioneer": {
+		"slot": BOARD, "name": "Pioneiro", "light": Color("d8faf0"), "dark": Color("5a43b0"),
+		"frame": Color("070a1f"), "last": Color("ffd25a"), "last_dark": Color("ffc23a"),
+		"texture": "res://assets/boards/pioneer.png", "testers": true,
+	},
 	# Acabamentos das peças do xadrez e das damas (`PieceRenderer`): o desenho de
 	# sempre com outras tintas. Por lado (`white`, `black`), `body` é o corpo,
 	# numa cor ou num degradê (lista de cores, de cima para baixo), e `line` o
