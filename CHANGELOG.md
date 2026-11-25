@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.76
+
+- A lista de amigos não corta mais o botão Convidar quando um amigo tem um título longo. As mensagens não lidas agora aparecem no canto da foto.
+
 ## 1.75
 
 - Testadores fundadores: chegou o tabuleiro Pioneiro, em menta, violeta e ouro sob um céu de estrelas. Ele está na sua caixa de Presentes.
