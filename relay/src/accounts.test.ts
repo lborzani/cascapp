@@ -46,6 +46,18 @@ describe('verificador de token', () => {
     });
   });
 
+  it('o visual da loja vem junto, só com pares de texto de forma conhecida', async () => {
+    const { fetchImpl } = fakeFetch({
+      bom: ok('Ana', { look: { board: 'board_wood', frame: 'frame_pioneer', 'Bad Key': 'x', ball: '../x', cue: 3 } }),
+      vazio: ok('Bia', { look: {} }),
+      lista: ok('Caio', { look: ['board_wood'] }),
+    });
+    const verify = createVerifier('http://pb', { fetchImpl });
+    assert.deepEqual((await verify('bom'))?.look, { board: 'board_wood', frame: 'frame_pioneer' });
+    assert.equal((await verify('vazio'))?.look, undefined, 'sem visual, sem o campo');
+    assert.equal((await verify('lista'))?.look, undefined, 'visual fora de forma não passa');
+  });
+
   it('conta de antes do perfil vem sem foto e com Elo 0; campo estranho não passa', async () => {
     const { fetchImpl } = fakeFetch({
       velha: ok('Velha'),
@@ -106,10 +118,12 @@ let release: () => void = () => {};
 
 const ANA: Account = { id: 'anaanaanaana123', name: 'Ana', avatar: 'avatar_x1y2z3.webp', elo: 1350 };
 const LENTO: Account = { id: 'lentolentolent0', name: 'Lento', avatar: '', elo: 1200 };
+const DUDA: Account = { id: 'dudadudadudadu1', name: 'Duda', avatar: '', elo: 0, look: { board: 'board_pioneer' } };
 
 /** `lento` só responde quando o teste chamar `release()`. */
 const verifyToken: TokenVerifier = async (token) => {
   if (token === 'ana') return ANA;
+  if (token === 'duda') return DUDA;
   if (token === 'lento') {
     await new Promise<void>((resolve) => {
       release = resolve;
@@ -130,6 +144,14 @@ after(async () => {
 });
 
 describe('nome confirmado na sala', () => {
+  it('o identity leva o visual da conta, para a sala de espera', async () => {
+    const host = await Client.open(url);
+    host.send({ t: 'host', room: 'VISUAL', game: 'bowling', token: 'duda' });
+    assert.equal((await host.next()).t, 'joined');
+    assert.deepEqual(await host.next(), { t: 'identity', seat: 0, name: 'Duda', user: DUDA.id, avatar: '', elo: 0, look: { board: 'board_pioneer' } });
+    host.close();
+  });
+
   it('quem tem conta tem o nome confirmado para todos, inclusive quem chega depois', async () => {
     const host = await Client.open(url);
     host.send({ t: 'host', room: 'CONTA1', game: 'chess', token: 'ana' });

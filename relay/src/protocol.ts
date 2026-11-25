@@ -233,7 +233,7 @@ export type ServerMessage =
    * foto; o app monta o endereço) e `elo` o Elo do xadrez (0 sem Elo). App de
    * antes do perfil lê só o nome e ignora o resto.
    */
-  | { t: 'identity'; seat: Seat; name: string; user: string; avatar: string; elo: number }
+  | { t: 'identity'; seat: Seat; name: string; user: string; avatar: string; elo: number; look?: Record<string, string> }
   /**
    * A partida contou para o Elo: o Elo novo e a mudança de cada assento. Vai
    * para os dois jogadores e para quem assiste.

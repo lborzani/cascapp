@@ -23,6 +23,11 @@ export interface Account {
   avatar: string;
   /** O Elo do xadrez. 0 numa conta de antes do perfil público. */
   elo: number;
+  /**
+   * O visual da loja (encaixe → id do item), para a sala de espera mostrar cada
+   * um como ele é antes do aperto de mão. Ausente quando a conta não tem nenhum.
+   */
+  look?: Record<string, string>;
 }
 
 /**
@@ -54,7 +59,24 @@ export function toAccount(record: unknown): Account | null {
   if (name === '' || !ID_PATTERN.test(id)) return null;
   const avatar = typeof fields.avatar === 'string' && FILE_PATTERN.test(fields.avatar) ? fields.avatar : '';
   const elo = Number.isInteger(fields.elo_chess) ? Math.max(0, Math.min(4000, fields.elo_chess as number)) : 0;
-  return { id, name, avatar, elo };
+  const look = toLook(fields.look);
+  return Object.keys(look).length > 0 ? { id, name, avatar, elo, look } : { id, name, avatar, elo };
+}
+
+/** Encaixe e item como o app os escreve (`ball`, `board_wood`); o resto não passa. */
+const LOOK_KEY = /^[a-z_]{1,20}$/;
+const LOOK_ITEM = /^[a-z0-9_]{1,40}$/;
+const LOOK_LIMIT = 16;
+
+/** O `look` da conta, só com pares de texto de forma conhecida. */
+export function toLook(raw: unknown): Record<string, string> {
+  const look: Record<string, string> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return look;
+  for (const [slot, item] of Object.entries(raw as Record<string, unknown>)) {
+    if (Object.keys(look).length >= LOOK_LIMIT) break;
+    if (LOOK_KEY.test(slot) && typeof item === 'string' && LOOK_ITEM.test(item)) look[slot] = item;
+  }
+  return look;
 }
 
 export function createVerifier(baseUrl: string, options: VerifierOptions = {}): TokenVerifier {

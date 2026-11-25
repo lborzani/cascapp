@@ -23,6 +23,7 @@ const SHOTS := [
 	["res://scenes/match.tscn", "02_xadrez"],
 	["res://scenes/match.tscn", "03_damas"],
 	["res://scenes/pairing.tscn", "04_criar"],
+	["res://scenes/pairing.tscn", "04b_sala_visual"],
 	["res://scenes/join.tscn", "05_entrar"],
 	["res://scenes/match.tscn", "06_capturas"],
 	["res://scenes/match.tscn", "07_material"],
@@ -194,6 +195,7 @@ func _next() -> void:
 	Account.token = ""
 	Account.look = {}
 	Net.looks = {}
+	Net.verified_seats = {}
 	# Os amigos de mentira valem só nos prints deles.
 	Friends.list = []
 	Friends.online = {}
@@ -388,6 +390,12 @@ func _next() -> void:
 			Game.pool_format = PoolRules.Format.BRAZILIAN
 		"03_damas":
 			Game.start_hotseat(Game.CHECKERS)
+		"04b_sala_visual":
+			# Sala de boliche com três contas, cada uma com o seu visual da loja.
+			Game.mode = Game.Mode.ONLINE
+			Game.role = Game.Role.HOST
+			Game.game_id = Game.BOWLING
+			Account.look = {"frame": "frame_gold", "title": "title_strike", "name_color": "name_gold", "banner": "banner_sunset"}
 		"04_criar":
 			Game.mode = Game.Mode.ONLINE
 			Game.role = Game.Role.HOST
@@ -837,6 +845,21 @@ func _setup_check(scene: Node) -> void:
 	scene._recompute()
 	scene._on_square_tapped(Board.square(2, 7))
 
+## Sala de boliche com mais duas contas, como o relay as confirmaria. Tarde, e
+## não no `_next`: abrir a sala limpa os nomes e visuais da mesa anterior.
+func _stage_lobby_looks(scene: Node) -> void:
+	Net.player_names = {1: "Siks", 2: "Bertoldo"}
+	Net.verified_seats = {1: {"user": "siks", "avatar": "", "elo": 0}, 2: {"user": "bert", "avatar": "", "elo": 0}}
+	Net.looks = {
+		1: {"frame": "frame_pioneer", "title": "title_pioneer", "name_color": "name_pioneer", "banner": "banner_pioneer"},
+		2: {"frame": "frame_neon", "name_color": "name_neon"},
+	}
+	var seats: SeatList = scene.get_node("%Seats")
+	seats.capacity = 4
+	seats.present = PackedInt32Array([0, 1, 2])
+	seats.refresh()
+
+
 func _process(_delta: float) -> void:
 	_frames += 1
 	if _frames == 30 and _shots[_index][1] == "11_arrasto":
@@ -846,6 +869,8 @@ func _process(_delta: float) -> void:
 	# O aviso da partida mora na barra: uma frase de duas linhas, em pé, é o caso
 	# apertado. Mostrado tarde, e não no `_ready`: o primeiro quadro de uma cena
 	# leva segundos de verdade, e um aviso que nasce ali já sumiu na hora do print.
+	if _frames == 20 and _shots[_index][1] == "04b_sala_visual":
+		_stage_lobby_looks(_scene)
 	if _frames == 20 and _shots[_index][1] == "27_aviso_xadrez":
 		_scene._banner.show_message("Conexão instável. Tentando reconectar…", Banner.Kind.ALERT, true)
 	# As cenas entram com um fade de 0,16s, e `modulate` no nó raiz é aplicado a

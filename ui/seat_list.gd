@@ -43,7 +43,10 @@ func title_of(seat: int) -> String:
 	if seat == local_seat:
 		return "Você"
 	if is_taken(seat):
-		return "Jogador %d" % (seat + 1)
+		# O nome da conta, quando o relay já confirmou quem sentou.
+		var net := _autoload(^"/root/Net")
+		var known := str(net.player_names.get(seat, "")) if net != null else ""
+		return known if not known.is_empty() else "Jogador %d" % (seat + 1)
 	return _with_color("Esperando alguém", seat)
 
 
@@ -51,6 +54,33 @@ func detail_of(seat: int) -> String:
 	if not is_taken(seat):
 		return ""
 	return _with_color("Abriu a sala" if seat == host_seat else "Chegou", seat)
+
+
+## O visual da loja de quem está no lugar: o seu, ou o da conta que o relay
+## confirmou. Vazio para quem não tem conta.
+func look_of(seat: int) -> Dictionary:
+	if seat == local_seat:
+		var account := _autoload(^"/root/Account")
+		return account.look if account != null else {}
+	var net := _autoload(^"/root/Net")
+	return Cosmetics.clean(net.looks.get(seat, {})) if net != null else {}
+
+
+func photo_of(seat: int) -> Texture2D:
+	var account := _autoload(^"/root/Account")
+	var net := _autoload(^"/root/Net")
+	if account == null or net == null:
+		return null
+	if seat == local_seat:
+		return account.local_avatar()
+	var profile: Dictionary = net.profile_of(seat)
+	return account.avatar_of(str(profile.get("user", "")), str(profile.get("avatar", "")))
+
+
+## Pela árvore e não pelo nome: o kit de interface monta a lista sem os autoloads,
+## e lá o nome `Net` nem compila.
+func _autoload(path: NodePath) -> Node:
+	return get_node_or_null(path) if is_inside_tree() else null
 
 
 func color_of(seat: int) -> Color:
@@ -73,6 +103,9 @@ func refresh() -> void:
 		remove_child(child)
 		child.queue_free()
 	for seat in capacity:
+		if is_taken(seat):
+			add_child(_taken_row(seat))
+			continue
 		var row := Row.new()
 		row.color = color_of(seat)
 		row.taken = is_taken(seat)
@@ -81,6 +114,60 @@ func refresh() -> void:
 		row.title = title_of(seat)
 		row.detail = detail_of(seat)
 		add_child(row)
+
+
+## Quem já sentou, como na lista de amigos: a foto com a moldura, o nome na cor
+## da loja, o título e a capa no fundo. Sem foto, a bolacha leva a inicial e o
+## anel na cor do lugar, que distingue as linhas como antes fazia o número.
+func _taken_row(seat: int) -> Control:
+	var look := look_of(seat)
+	var card := PanelContainer.new()
+	card.name = "Seat%d" % seat
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.custom_minimum_size.y = ROW_HEIGHT
+	card.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE))
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	ProfileCover.dress_card(card, line, look, AppTheme.RADIUS_LARGE)
+
+	var coaster := Coaster.new()
+	coaster.name = "Coaster"
+	coaster.custom_minimum_size = Vector2(40, 40)
+	coaster.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coaster.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	coaster.player_name = Prefs.player_name() if seat == local_seat else title_of(seat)
+	coaster.ring = color_of(seat)
+	coaster.photo = photo_of(seat)
+	coaster.frame = Cosmetics.frame_of(look)
+	line.add_child(coaster)
+
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	words.add_theme_constant_override("separation", 0)
+	var name_label := Label.new()
+	name_label.name = "Name"
+	name_label.text = title_of(seat)
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.add_theme_font_override("font", AppTheme.display(600))
+	name_label.add_theme_font_size_override("font_size", 17)
+	name_label.add_theme_color_override("font_color", AppTheme.TEXT)
+	ProfileStyle.paint_name(name_label, look)
+	words.add_child(name_label)
+	var title_label := ProfileStyle.title_label(look)
+	if title_label != null:
+		title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		words.add_child(title_label)
+	var detail := Label.new()
+	detail.name = "Detail"
+	detail.text = detail_of(seat)
+	detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	detail.add_theme_font_override("font", AppTheme.font(700))
+	detail.add_theme_font_size_override("font_size", 12)
+	detail.add_theme_color_override("font_color", AppTheme.ACCENT if seat == local_seat else AppTheme.TEXT_DIM)
+	words.add_child(detail)
+	line.add_child(words)
+	return card
 
 
 class Row:

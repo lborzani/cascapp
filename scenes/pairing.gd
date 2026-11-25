@@ -43,6 +43,8 @@ func _ready() -> void:
 	# `WAITING` —, então quem atualiza o contador é a chegada de cada um.
 	Pairing.relay.peer_present.connect(func(_seat: int): _on_relay_state_changed(Pairing.relay.state()))
 	Pairing.relay.peer_gone.connect(func(_seat: int): _on_relay_state_changed(Pairing.relay.state()))
+	# O nome e o visual da conta de quem sentou chegam depois da chegada.
+	Net.names_changed.connect(_refresh_seats)
 	Pairing.nfc.failed.connect(_show_error)
 	%BotsButton.pressed.connect(_start_with_bots)
 	%InviteButton.pressed.connect(_invite)

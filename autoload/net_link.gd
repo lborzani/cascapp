@@ -1244,6 +1244,11 @@ func _on_relay_identity(seat: int, raw_name: String, profile := {}) -> void:
 	var changed: bool = verified_seats.get(seat) != profile or str(player_names.get(seat, "")) != clean
 	verified_seats[seat] = profile
 	player_names[seat] = clean
+	# O visual da conta chega aqui já na sala de espera; o `ready` da partida
+	# manda o do aparelho por cima, como sempre.
+	var look: Variant = profile.get("look", {})
+	if look is Dictionary and not (look as Dictionary).is_empty() and not looks.has(seat):
+		_remember_look(seat, look)
 	if changed:
 		names_changed.emit()
 

@@ -638,6 +638,7 @@ func _handle(message: Dictionary) -> void:
 				"user": str(message.get("user", "")),
 				"avatar": str(message.get("avatar", "")),
 				"elo": int(message.get("elo", 0)),
+				"look": message.get("look", {}) if message.get("look", {}) is Dictionary else {},
 			})
 		"peer":
 			var arriving := int(message.get("seat", -1))

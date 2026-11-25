@@ -582,7 +582,8 @@ export function createRelay(options: RelayOptions = {}): Relay {
   }
 
   function identityMessage(seat: Seat, account: Account): ServerMessage {
-    return { t: 'identity', seat, name: account.name, user: account.id, avatar: account.avatar, elo: account.elo };
+    const message = { t: 'identity', seat, name: account.name, user: account.id, avatar: account.avatar, elo: account.elo } as const;
+    return account.look === undefined ? message : { ...message, look: account.look };
   }
 
   /** Quem chega fica sabendo dos nomes já confirmados na sala. */
