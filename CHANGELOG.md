@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.77
+
+- Na sala de espera, cada um aparece como é: nome, foto, moldura, cor do nome, título e capa.
+- "Chamar para esta sala" não oferece mais quem já está na sala.
+
 ## 1.76
 
 - A lista de amigos não corta mais o botão Convidar quando um amigo tem um título longo. As mensagens não lidas agora aparecem no canto da foto.
