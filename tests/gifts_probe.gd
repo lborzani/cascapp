@@ -150,7 +150,7 @@ func _kit(a: String, b: String) -> void:
 	var testers: Array = (await _inbox())["gifts"].filter(func(g: Dictionary) -> bool: return (g.get("items", []) as Array).has("frame_pioneer"))
 	_equals(testers.size(), 1, "o kit de testador chega sozinho")
 	var tester_gift: Dictionary = testers[0] if not testers.is_empty() else {}
-	_equals((tester_gift.get("items", []) as Array).size(), 8, "com os oito itens")
+	_equals((tester_gift.get("items", []) as Array).size(), 10, "com os dez itens")
 	_equals(GiftsPanel.sender_text(tester_gift), "Do cascapp", "do cascapp, sem remetente")
 	_check(not str(tester_gift.get("message", "")).is_empty(), "e com o bilhete")
 	await admin.call_api(HTTPClient.METHOD_PATCH, "/api/collections/users/records/" + b, {"tester": false})
