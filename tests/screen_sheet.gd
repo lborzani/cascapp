@@ -197,6 +197,7 @@ func _next() -> void:
 	# Os amigos de mentira valem só nos prints deles.
 	Friends.list = []
 	Friends.online = {}
+	Friends.unread = {}
 	if shot.begins_with("28"):
 		# Um tabuleiro da loja: o nome do print termina no id sem o "board_".
 		Game.start_hotseat(Game.CHECKERS if shot.begins_with("28b") else Game.CHESS)
@@ -359,11 +360,16 @@ func _next() -> void:
 				{"id": "evaevaevaeva123", "name": "Eva", "avatar": "", "elo_chess": 1350,
 					"look": {"frame": "frame_gold", "title": "title_pool", "name_color": "name_rainbow", "banner": "banner_night"}},
 				{"id": "brunobrunobru12", "name": "Bruno", "avatar": "", "elo_chess": 0,
-					"look": {"frame": "frame_flames", "title": "title_strike", "name_color": "name_neon", "banner": "banner_sunset"}},
+					"look": {"frame": "frame_pioneer", "title": "title_pioneer", "name_color": "name_pioneer", "banner": "banner_pioneer"}},
 				{"id": "carlacarlacarl1", "name": "Carla", "avatar": "", "elo_chess": 1100,
 					"look": {"frame": "frame_laurel", "name_color": "name_emerald"}},
 			]
-			Friends.online = {"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false}}
+			Friends.online = {
+				"evaevaevaeva123": {"id": "evaevaevaeva123", "game": "", "room": "", "playing": false},
+				"brunobrunobru12": {"id": "brunobrunobru12", "game": "", "room": "", "playing": false},
+			}
+			# Testador fundador online, com mensagem: o cartão mais largo da gaveta.
+			Friends.unread = {"brunobrunobru12": 2}
 		"25c_boliche_bola":
 			# Dois na mesa: depois das três bolas da preparação, a vez é do dono.
 			Game.start_hotseat(Game.BOWLING)

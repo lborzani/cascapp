@@ -292,31 +292,44 @@ func _row(friend: Dictionary) -> Control:
 	words.add_child(name_label)
 	var title_label := ProfileStyle.title_label(look)
 	if title_label != null:
+		# Como o nome: corta com reticências. Inteiro, um título longo ("Testador
+		# Fundador") com a pílula e o botão alargava a gaveta além da tela.
+		title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		words.add_child(title_label)
 	var status_label := _text(Friends.status_text(status), &"Caption")
 	status_label.name = "Status"
+	status_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	if status != null:
 		status_label.add_theme_color_override("font_color", AppTheme.SUCCESS)
 	words.add_child(status_label)
 	line.add_child(words)
 
-	# Mensagens não lidas: a contagem numa pílula vermelha, antes do botão.
+	# Mensagens não lidas: a contagem numa pílula vermelha no canto de cima da foto,
+	# como a bolinha de online embaixo. Na linha, antes do botão, ela espremia o
+	# nome e o status do amigo de título longo.
 	var unread := Friends.unread_of(id)
 	if unread > 0:
 		var badge := Label.new()
 		badge.name = "Unread"
 		badge.text = str(unread) if unread < 100 else "99+"
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		badge.size_flags_vertical = SIZE_SHRINK_CENTER
-		badge.custom_minimum_size = Vector2(24, 24)
+		badge.custom_minimum_size = Vector2(20, 20)
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.mouse_filter = MOUSE_FILTER_IGNORE
 		badge.add_theme_font_override("font", AppTheme.font(800))
 		badge.add_theme_font_size_override("font_size", AppTheme.SIZE_CAPTION)
 		badge.add_theme_color_override("font_color", AppTheme.TEXT)
-		var pill := AppTheme.box(AppTheme.DANGER, 12)
-		pill.content_margin_left = 6
-		pill.content_margin_right = 6
+		var pill := AppTheme.box(AppTheme.DANGER, 10, AppTheme.SURFACE_HIGH, 2)
+		pill.content_margin_left = 5
+		pill.content_margin_right = 5
+		pill.content_margin_top = 0
+		pill.content_margin_bottom = 0
 		badge.add_theme_stylebox_override("normal", pill)
-		line.add_child(badge)
+		photo_box.add_child(badge)
+		badge.size = Vector2(maxf(20.0, badge.get_combined_minimum_size().x), 20.0)
+		badge.position = Vector2(PHOTO - badge.size.x * 0.6, -badge.size.y * 0.3)
 
 	var action := _action(id, status)
 	if action != null:
