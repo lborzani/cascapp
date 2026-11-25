@@ -14,6 +14,8 @@ const BOARD := "board"
 const FINISH := "finish"
 const PIECES := "pieces"
 const CUE := "cue"
+## A peça do Metrópole (`MonopolyToken.SHAPES`).
+const TOKEN := "token"
 ## O perfil: a moldura da foto (`Coaster`), a capa do perfil (`ProfileCover`), um
 ## título abaixo do nome e a cor do nome (`ProfileStyle`).
 const FRAME := "frame"
@@ -146,6 +148,15 @@ const ITEMS := {
 	"cue_neon": {"slot": CUE, "name": "Neon", "art": "res://assets/pool/cues/cue_neon.png", "glow": 1.6},
 	"cue_gold": {"slot": CUE, "name": "Ouro", "art": "res://assets/pool/cues/cue_gold.png"},
 	"cue_pioneer": {"slot": CUE, "name": "Pioneiro", "art": "res://assets/pool/cues/cue_pioneer.png", "testers": true},
+	# Peças do Metrópole: `shape` é a forma em `MonopolyToken.SHAPES`. A cor é a do
+	# assento, menos na Pioneira, que tem as cores dos testadores.
+	"token_crown": {"slot": TOKEN, "name": "Coroa", "shape": "crown"},
+	"token_rocket": {"slot": TOKEN, "name": "Foguete", "shape": "rocket"},
+	"token_cat": {"slot": TOKEN, "name": "Gato", "shape": "cat"},
+	"token_dino": {"slot": TOKEN, "name": "Dinossauro", "shape": "dino"},
+	"token_guitar": {"slot": TOKEN, "name": "Violão", "shape": "guitar"},
+	"token_die": {"slot": TOKEN, "name": "Dado", "shape": "die"},
+	"token_pioneer": {"slot": TOKEN, "name": "Estrela Pioneira", "shape": "star", "testers": true},
 	# Conjuntos de peças do xadrez (`tools/build_piece_sets.gd`): o mesmo nome de
 	# arquivo das peças de sempre, noutra pasta. As damas não mudam de formato.
 	"pieces_staunton": {"slot": PIECES, "name": "Clássico", "dir": "res://assets/pieces/sets/staunton"},
@@ -246,6 +257,11 @@ static func cue_skin(look: Dictionary) -> Dictionary:
 static func item_of(look: Dictionary, slot: String) -> Dictionary:
 	var id := str(look.get(slot, ""))
 	return ITEMS[id] if ITEMS.has(id) and ITEMS[id]["slot"] == slot else {}
+
+
+## A forma da peça do Metrópole (`MonopolyToken.SHAPES`), ou vazio para a do assento.
+static func token_of(look: Dictionary) -> String:
+	return str(item_of(look, TOKEN).get("shape", ""))
 
 
 ## O estilo da moldura da foto (`Coaster.frame`), ou vazio.

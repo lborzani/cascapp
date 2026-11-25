@@ -39,7 +39,19 @@ class_name MonopolyToken
 ## dicionário estático é o que permite ao renderizador agrupar as instâncias, e
 ## o que sobra vivo entre partidas são algumas dezenas de recursos minúsculos.
 
-enum Kind { HAT, CAR, PLANE, BALL, BOAT, BOOT }
+enum Kind { HAT, CAR, PLANE, BALL, BOAT, BOOT, CROWN, ROCKET, CAT, DINO, GUITAR, DIE, STAR }
+
+## As formas da loja (`Cosmetics`, encaixe `token`), pelo `shape` do item. Quem
+## escolhe uma joga com ela em vez da forma do assento; a cor continua a dele.
+const SHAPES := {
+	"crown": Kind.CROWN, "rocket": Kind.ROCKET, "cat": Kind.CAT, "dino": Kind.DINO,
+	"guitar": Kind.GUITAR, "die": Kind.DIE, "star": Kind.STAR,
+}
+## A Pioneira tem cores próprias, as do conjunto dos testadores; só a base fica na
+## cor do assento, que é o que liga a peça a quem joga.
+const PIONEER_GOLD := Color("ffd25a")
+const PIONEER_MINT := Color("3dffd0")
+const PIONEER_VIOLET := Color("a66bff")
 
 ## Ordem de distribuição pelos assentos. Chapéu e carro primeiro porque são as
 ## duas mais reconhecíveis, e mesa de dois é o caso mais comum depois do de
@@ -83,12 +95,27 @@ static func kind_for(player: int) -> int:
 
 
 ## A peça deste assento, montada e tingida, apoiada em y = 0 e apontando para -Z.
-static func build(player: int, tint: Color) -> Node3D:
+## `shape` é a forma da loja (`SHAPES`); vazia ou desconhecida, a do assento.
+static func build(player: int, tint: Color, shape := "") -> Node3D:
 	var node := Node3D.new()
 	node.scale = Vector3.ONE * SCALE
 	node.add_child(_disc("base", BASE_RADIUS, BASE_RADIUS * 1.02, BASE_HEIGHT, tint.darkened(0.30)))
 
-	match kind_for(player):
+	match SHAPES.get(shape, kind_for(player)):
+		Kind.CROWN:
+			_build_crown(node, tint)
+		Kind.ROCKET:
+			_build_rocket(node, tint)
+		Kind.CAT:
+			_build_cat(node, tint)
+		Kind.DINO:
+			_build_dino(node, tint)
+		Kind.GUITAR:
+			_build_guitar(node, tint)
+		Kind.DIE:
+			_build_die(node, tint)
+		Kind.STAR:
+			_build_star(node)
 		Kind.HAT:
 			_build_hat(node, tint)
 		Kind.CAR:
@@ -168,6 +195,116 @@ static func _build_boot(node: Node3D, tint: Color) -> void:
 	node.add_child(_box("boot_leg", Vector3(0.105, 0.24, 0.105), tint, Vector3(0.0, 0.148, 0.075)))
 	node.add_child(_box("boot_foot", Vector3(0.105, 0.075, 0.215), tint, Vector3(0.0, 0.065, -0.02)))
 	node.add_child(_box("boot_sole", Vector3(0.115, 0.028, 0.225), tint.darkened(0.45), Vector3(0.0, 0.042, -0.022)))
+
+
+# --- as da loja ---------------------------------------------------------------
+
+
+## Aro e cinco pontas com bolinha. De cima é um anel com contas; de lado, a coroa.
+static func _build_crown(node: Node3D, tint: Color) -> void:
+	node.add_child(_disc("crown_band", 0.118, 0.11, 0.11, tint, 0.09))
+	node.add_child(_disc("crown_rim", 0.124, 0.124, 0.022, tint.darkened(0.35), 0.05))
+	for i in 5:
+		var angle := TAU * i / 5.0
+		var at := Vector3(sin(angle) * 0.1, 0.175, cos(angle) * 0.1)
+		var spike := _prism("crown_spike", Vector3(0.05, 0.07, 0.03), tint, at)
+		spike.rotation.y = angle
+		node.add_child(spike)
+		node.add_child(_ball("crown_pearl", 0.02, tint.lightened(0.45), 0.0))
+		node.get_child(-1).position = at + Vector3(0.0, 0.045, 0.0)
+
+
+## Corpo de pé, ponta cônica e três aletas. A silhueta alta é o que separa o
+## foguete do chapéu de cima.
+static func _build_rocket(node: Node3D, tint: Color) -> void:
+	node.add_child(_disc("rocket_body", 0.062, 0.07, 0.2, tint, 0.15))
+	node.add_child(_disc("rocket_nose", 0.0, 0.062, 0.1, tint.lightened(0.3), 0.3))
+	node.add_child(_ball("rocket_window", 0.028, tint.darkened(0.55), 0.0))
+	node.get_child(-1).position = Vector3(0.0, 0.19, -0.06)
+	for i in 3:
+		var angle := TAU * i / 3.0
+		var fin := _prism("rocket_fin", Vector3(0.012, 0.1, 0.09), tint.darkened(0.3), Vector3(sin(angle) * 0.075, 0.09, cos(angle) * 0.075))
+		fin.rotation.y = angle
+		node.add_child(fin)
+
+
+## Corpo, cabeça e duas orelhas, sentado. As orelhas são o que diz "gato".
+static func _build_cat(node: Node3D, tint: Color) -> void:
+	node.add_child(_ball("cat_body", 0.1, tint, 0.12))
+	node.add_child(_ball("cat_head", 0.072, tint, 0.0))
+	node.get_child(-1).position = Vector3(0.0, 0.25, -0.03)
+	for side in [-1.0, 1.0]:
+		var ear := _prism("cat_ear", Vector3(0.05, 0.06, 0.025), tint.darkened(0.2), Vector3(side * 0.04, 0.33, -0.03))
+		node.add_child(ear)
+	var tail := _capsule("cat_tail", 0.018, 0.2, tint.darkened(0.2), Vector3(0.0, 0.13, 0.11))
+	tail.rotation_degrees = Vector3(-35.0, 0.0, 0.0)
+	node.add_child(tail)
+
+
+## Pescoçudo: corpo deitado, pescoço alto para a frente, cabeça, cauda e quatro
+## patas. O pescoço erguido é a silhueta que se lê de longe; de cima, é um traço.
+static func _build_dino(node: Node3D, tint: Color) -> void:
+	var body := _capsule("dino_body", 0.075, 0.22, tint, Vector3(0.0, 0.13, 0.03))
+	body.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	node.add_child(body)
+	var neck := _capsule("dino_neck", 0.032, 0.22, tint, Vector3(0.0, 0.26, -0.08))
+	neck.rotation_degrees = Vector3(-25.0, 0.0, 0.0)
+	node.add_child(neck)
+	node.add_child(_ball("dino_head", 0.047, tint.lightened(0.15), 0.0))
+	node.get_child(-1).position = Vector3(0.0, 0.37, -0.14)
+	var tail := _disc("dino_tail", 0.0, 0.04, 0.1, tint, 0.0)
+	tail.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	tail.position = Vector3(0.0, 0.12, 0.15)
+	node.add_child(tail)
+	for side in [-1.0, 1.0]:
+		for end in [-1.0, 1.0]:
+			node.add_child(_disc("dino_leg", 0.024, 0.028, 0.09, tint.darkened(0.25), 0.0))
+			node.get_child(-1).position = Vector3(side * 0.045, 0.06, 0.03 + end * 0.07)
+
+
+## De pé: dois bojos, braço e mão. Os bojos de tamanhos diferentes são o violão.
+static func _build_guitar(node: Node3D, tint: Color) -> void:
+	for part in [["guitar_low", 0.095, 0.11], ["guitar_up", 0.07, 0.24]]:
+		var bout := _disc(part[0], part[1], part[1], 0.05, tint, 0.0)
+		bout.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+		bout.position = Vector3(0.0, part[2], 0.0)
+		node.add_child(bout)
+	var hole := _disc("guitar_hole", 0.03, 0.03, 0.052, tint.darkened(0.6), 0.0)
+	hole.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	hole.position = Vector3(0.0, 0.17, 0.0)
+	node.add_child(hole)
+	node.add_child(_box("guitar_neck", Vector3(0.03, 0.16, 0.02), tint.darkened(0.35), Vector3(0.0, 0.37, 0.0)))
+	node.add_child(_box("guitar_head", Vector3(0.05, 0.05, 0.022), tint.darkened(0.45), Vector3(0.0, 0.47, 0.0)))
+
+
+## Um dado inclinado sobre um canto, com as faces de cima furadas de pontos claros.
+static func _build_die(node: Node3D, tint: Color) -> void:
+	var cube := Node3D.new()
+	cube.position = Vector3(0.0, 0.13, 0.0)
+	cube.rotation_degrees = Vector3(0.0, 45.0, 0.0)
+	node.add_child(cube)
+	cube.add_child(_box("die_cube", Vector3(0.17, 0.17, 0.17), tint, Vector3.ZERO))
+	var pips := [Vector3(0.0, 0.086, 0.0), Vector3(-0.045, 0.086, -0.045), Vector3(0.045, 0.086, 0.045)]
+	pips.append_array([Vector3(-0.04, 0.04, -0.086), Vector3(0.04, -0.04, -0.086)])
+	for at: Vector3 in pips:
+		cube.add_child(_ball("die_pip", 0.017, Color.WHITE, 0.0))
+		cube.get_child(-1).position = at
+
+
+## A Pioneira: uma estrela de quatro pontas em ouro, de pé, com o miolo menta e o
+## aro violeta. As cores são as do conjunto dos testadores, não as do assento.
+static func _build_star(node: Node3D) -> void:
+	node.add_child(_disc("star_ring", 0.13, 0.13, 0.02, PIONEER_VIOLET, 0.045))
+	node.add_child(_disc("star_pole", 0.014, 0.014, 0.1, PIONEER_VIOLET.darkened(0.3), 0.08))
+	var star := Node3D.new()
+	star.position = Vector3(0.0, 0.25, 0.0)
+	node.add_child(star)
+	for i in 4:
+		var point := _prism("star_point", Vector3(0.07, 0.12, 0.035), PIONEER_GOLD, Vector3.ZERO)
+		point.rotation.z = TAU * i / 4.0
+		point.position = Vector3(0.0, 0.06, 0.0).rotated(Vector3.BACK, TAU * i / 4.0)
+		star.add_child(point)
+	star.add_child(_ball("star_core", 0.04, PIONEER_MINT, 0.0))
 
 
 # --- primitivas ---------------------------------------------------------------

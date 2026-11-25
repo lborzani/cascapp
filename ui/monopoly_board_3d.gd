@@ -248,6 +248,9 @@ const FREE_PITCH_MAX := 74.0
 const FREE_DISTANCE_MIN := 5.5
 const FREE_DISTANCE_MAX := 26.0
 
+## A forma da loja de cada jogador (`Cosmetics.token_of`), por assento; quem não
+## está aqui joga com a forma do assento.
+var token_shapes := {}
 var state: MatchState = null:
 	set(value):
 		state = value
@@ -985,7 +988,7 @@ func _make_building(width: float, color: Color) -> Node3D:
 ## porque o arquivo das peças não conhece regra nenhuma.
 func _spawn_pawn(player: int) -> Node3D:
 	var color: Color = Face.PLAYER_COLORS[player % Face.PLAYER_COLORS.size()]
-	var node := MonopolyToken.build(player, color)
+	var node := MonopolyToken.build(player, color, str(token_shapes.get(player, "")))
 
 	if MonopolyRules.in_jail(state, player):
 		# Preso é uma condição, não um lugar: a peça fica na mesma casa 10 de quem

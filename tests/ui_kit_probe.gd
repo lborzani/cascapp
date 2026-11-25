@@ -118,6 +118,20 @@ func _probe_palette() -> void:
 		var coordinates := AppTheme.contrast(frame.blend(Color(AppTheme.TEXT, 0.55)), frame)
 		_check(coordinates >= 3.0, "%s: coordenadas leem na moldura (%.1f:1)" % [id, coordinates])
 		_check(not Cosmetics.ITEMS[id].has("texture") or skin["texture"] is Texture2D, "%s: a textura carrega" % id)
+	# Peças do Metrópole: toda forma da loja monta e cabe na casa, como as seis de
+	# sempre (largura do pedestal com folga; altura de um brinquedo de mesa).
+	for id in Cosmetics.of_slot(Cosmetics.TOKEN):
+		var shape := Cosmetics.token_of({Cosmetics.TOKEN: id})
+		_check(MonopolyToken.SHAPES.has(shape), "%s: a forma existe" % id)
+		var token := MonopolyToken.build(0, Color.RED, shape)
+		var bounds := _bounds_of(token, Transform3D.IDENTITY)
+		var reach := MonopolyToken.BASE_RADIUS * 1.25
+		_check(
+			bounds.position.x >= -reach and bounds.end.x <= reach and bounds.position.z >= -reach and bounds.end.z <= reach,
+			"%s: cabe na base (%s)" % [id, bounds]
+		)
+		_check(bounds.end.y <= 0.55, "%s: altura de peça (%.2f)" % [id, bounds.end.y])
+		token.free()
 	# Perfil: moldura, título e cor do nome.
 	_equals(Cosmetics.frame_of({"frame": "frame_laurel"}), "laurel", "a moldura dos louros")
 	_equals(Cosmetics.frame_of({"frame": "frame_nada"}), "", "moldura desconhecida, nenhuma")
@@ -636,3 +650,20 @@ static func _mean_paint(body: Variant) -> Color:
 		sum += Vector3(color.r, color.g, color.b)
 	sum /= stops.size()
 	return Color(sum.x, sum.y, sum.z)
+
+
+## A caixa de todas as malhas de uma peça, no espaço da raiz e sem a escala dela:
+## `here` é onde o nó está (identidade para a raiz).
+func _bounds_of(node: Node3D, here: Transform3D) -> AABB:
+	var box := AABB()
+	var first := true
+	if node is MeshInstance3D:
+		box = here * (node as MeshInstance3D).mesh.get_aabb()
+		first = false
+	for child in node.get_children():
+		if child is Node3D:
+			var inner := _bounds_of(child, here * (child as Node3D).transform)
+			if inner.size != Vector3.ZERO:
+				box = inner if first else box.merge(inner)
+				first = false
+	return box

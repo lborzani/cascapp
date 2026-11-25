@@ -1202,6 +1202,9 @@ func _refresh() -> void:
 	var actor := MonopolyRules.actor_of(_state)
 	var champion := _rules.winner(_state)
 	var live := champion < 0 and not _abandoned
+	# Antes do estado: é ele que manda remontar as peças.
+	for player in _cards.size():
+		_board.token_shapes[player] = "" if _is_bot(player) else Cosmetics.token_of(Net.seat_look(player))
 	_board.state = _state
 	# A câmera segue o peão **da vez**, e não o de quem decide: numa proposta de
 	# troca quem responde é o outro, e a câmera saltando para o peão dele contaria

@@ -46,6 +46,8 @@ const SHOTS := [
 	["20g_metropole_fim", 0, 19, 0.6],
 	["20h_metropole_tampo", 0, 19, 0.9],
 	["20i_metropole_seis", 0, 24, 0.9],
+	# As peças da loja, uma por assento, lado a lado perto da casa da vez.
+	["20l_metropole_pecas_loja", 0, 24, 0.9],
 	["20j_metropole_cadeia", 2, 10, 0.9],
 	["20k_metropole_camera", 0, 19, 0.9],
 ]
@@ -97,7 +99,7 @@ func _next() -> void:
 	# O tamanho da mesa é lido pelo `_ready` da cena, então ele tem de estar
 	# escolhido **antes** de instanciar. Seis é a mesa cheia, que é onde a coluna
 	# da esquerda aperta os cartões para caber.
-	var seats := 6 if SHOTS[_index][0] == "20i_metropole_seis" else 4
+	var seats := 6 if SHOTS[_index][0] in ["20i_metropole_seis", "20l_metropole_pecas_loja"] else 4
 	Game.table_size = seats
 
 	_root = load(MATCH_SCENE).instantiate()
@@ -143,6 +145,13 @@ func _next() -> void:
 			_board._orbit(Vector2(-150.0, 40.0))
 			_board._zoom(6.0)
 			_root._update_recenter()
+		"20l_metropole_pecas_loja":
+			var shapes := ["crown", "rocket", "cat", "dino", "guitar", "star"]
+			for seat in 6:
+				state.meta[MonopolyRules.POS][seat] = 21 + seat
+			for seat in 6:
+				_board.token_shapes[seat] = shapes[seat]
+			_board.state = state
 		"20h_metropole_tampo":
 			# O tabuleiro inteiro, que a partida nunca mostra: a câmera segue o peão
 			# da vez de perto, e o miolo — nome do jogo e os dois baralhos — só

@@ -17,11 +17,11 @@ const TABS := [
 	[[Cosmetics.BALL], "Bola"],
 	[[Cosmetics.CUE], "Taco"],
 	[[Cosmetics.BOARD], "Tabuleiro"],
-	[[Cosmetics.PIECES, Cosmetics.FINISH], "Peças"],
+	[[Cosmetics.PIECES, Cosmetics.FINISH, Cosmetics.TOKEN], "Peças"],
 	[[Cosmetics.FRAME, Cosmetics.BANNER, Cosmetics.TITLE, Cosmetics.NAME_COLOR], "Perfil"],
 ]
 const SECTIONS := {
-	Cosmetics.PIECES: "Formato", Cosmetics.FINISH: "Acabamento",
+	Cosmetics.PIECES: "Formato", Cosmetics.FINISH: "Acabamento", Cosmetics.TOKEN: "Peça do Metrópole",
 	Cosmetics.FRAME: "Moldura", Cosmetics.BANNER: "Capa", Cosmetics.TITLE: "Título", Cosmetics.NAME_COLOR: "Cor do nome",
 }
 ## Os encaixes do perfil: a aba deles abre com o meu cartão como os amigos o veem.
@@ -329,6 +329,11 @@ func _swatch(slot: String, id: String) -> Control:
 		cue.custom_minimum_size = Vector2(SWATCH, SWATCH)
 		cue.size_flags_horizontal = SIZE_SHRINK_CENTER
 		return cue
+	if slot == Cosmetics.TOKEN:
+		var token := TokenSample.new(Cosmetics.token_of(look))
+		token.custom_minimum_size = Vector2(SWATCH, SWATCH)
+		token.size_flags_horizontal = SIZE_SHRINK_CENTER
+		return token
 	if slot != Cosmetics.BALL:
 		var sample := BoardSample.new()
 		# As peças aparecem no tabuleiro de quem compra, e o tabuleiro com as peças
@@ -473,6 +478,42 @@ func _equip(slot: String, id: String) -> void:
 
 ## A amostra de um tabuleiro: o miolo dele (d4, e4, d5, e5) na moldura, com a casa
 ## do último lance acesa e um cavalo de cada cor, para ver o contraste das peças.
+## A amostra de uma peça do Metrópole: a peça em 3D, na cor do primeiro assento,
+## vista de cima e de lado como na partida. Desenha uma vez só: a peça é parada.
+class TokenSample:
+	extends SubViewportContainer
+
+	func _init(shape: String) -> void:
+		stretch = true
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var viewport := SubViewport.new()
+		viewport.own_world_3d = true
+		viewport.transparent_bg = true
+		viewport.msaa_3d = Viewport.MSAA_4X
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		add_child(viewport)
+		var token := MonopolyToken.build(0, MonopolyFace.PLAYER_COLORS[0], shape)
+		# Meio de lado: de frente o pescoço esconde o corpo do dinossauro, e de lado o
+		# violão e a estrela, que são planos, viram uma linha.
+		token.rotation_degrees.y = 215.0
+		viewport.add_child(token)
+		var camera := Camera3D.new()
+		camera.fov = 30.0
+		# Fora da árvore ainda: o `look_at` precisaria da transformação global.
+		var eye := Vector3(0.0, 0.62, 0.95)
+		camera.transform = Transform3D(Basis.looking_at(Vector3(0.0, 0.2, 0.0) - eye), eye)
+		viewport.add_child(camera)
+		var sun := DirectionalLight3D.new()
+		sun.rotation_degrees = Vector3(-55.0, 35.0, 0.0)
+		viewport.add_child(sun)
+		var fill := WorldEnvironment.new()
+		fill.environment = Environment.new()
+		fill.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		fill.environment.ambient_light_color = Color(0.75, 0.72, 0.9)
+		fill.environment.ambient_light_energy = 0.7
+		viewport.add_child(fill)
+
+
 class BoardSample:
 	extends Control
 
