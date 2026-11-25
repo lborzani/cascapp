@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.75
+
+- Testadores fundadores: chegou o tabuleiro Pioneiro, em menta, violeta e ouro sob um céu de estrelas. Ele está na sua caixa de Presentes.
+
 ## 1.74
 
 - Os tabuleiros voltaram à loja: madeira, mármore, torneio, oceano, neon e doces, no xadrez e nas damas. Online, cada metade do tabuleiro tem a skin de quem joga daquele lado.
