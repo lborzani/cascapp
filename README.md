@@ -34,6 +34,14 @@ cd relay && npm ci && npm test
 
 As outras sondas estão em `.github/workflows/ci.yml`.
 
+As folhas de print (`tests/*_sheet.tscn`) precisam de janela. Para ela não
+roubar o foco: no Windows, rode a cena pelo `tests/sem_janela.gd`; no Linux com
+niri, use a regra `window-rule { match app-id="^cascapp$"; open-focused false }`.
+
+```sh
+SHOT=34 godot --headless --path . --script res://tests/sem_janela.gd -- res://tests/screen_sheet.tscn
+```
+
 ## Release
 
 ```sh

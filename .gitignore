@@ -37,3 +37,6 @@ relay/dist/
 # Renders de aprovação dos modelos (`art/*/build_*.py` refaz todos): megabytes de
 # PNG que só servem para olhar uma vez.
 /art/*/renders/
+
+# Escrito pelo tests/sem_janela.gd só enquanto a cena roda.
+override.cfg
