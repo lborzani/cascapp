@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.82
+
+- A loja virou uma aba própria, e tocar nas suas moedas leva direto até ela.
+- As abas e os atalhos da aba Você ganharam ícones.
+- Corrigido: no xadrez e nas damas online, a revanche ou a vez de quem estava na fila podiam deixar os dois jogadores com a mesma cor, e a partida travava.
+
 ## 1.81
 
 - Boliche mais leve: a partida voltou a rodar lisa no celular.
