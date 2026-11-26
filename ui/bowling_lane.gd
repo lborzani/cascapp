@@ -108,12 +108,17 @@ const VARNISH_ROUGHNESS := 0.12
 ## escurecer com o fundo da cena.
 const UNDERCOAT := Color(0.42, 0.32, 0.2)
 const UNDERCOAT_DEPTH := 0.5
+const UNDERCOAT_PAST := 6.0
 ## As placas com o número de cada pista, na fachada da máquina: a do meio é a de
 ## quem joga, e as vizinhas do salão (`build_bowling.py`) seguem a conta.
 const LANE_NUMBER := 7
 const NEIGHBOURS := [-2, -1, 1, 2]
 const PITCH := LANE_W + 2.0 * (GUTTER_W + CAP_W)
 const PLATE_AT := Vector3(0.0, 0.935, -(HEAD_PIN - 0.5) + 0.02)
+## A camada do cenário (pista, salão, máquina). A luz do deck fica fora dela: na
+## Compatibility cada luz é mais uma passada por objeto, e somada sobre a madeira
+## transparente lavava o deck e riscava uma faixa cinza na pista.
+const SCENERY_LAYER := 2
 ## Espelha em y = 0, o tampo.
 const MIRROR := Transform3D(Basis(Vector3.RIGHT, Vector3.DOWN, Vector3.BACK), Vector3.ZERO)
 
@@ -150,7 +155,14 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	add_child(LANE_SCENE.instantiate())
+	var scenery := LANE_SCENE.instantiate()
+	add_child(scenery)
+	for node in scenery.find_children("*", "GeometryInstance3D", true, false):
+		var geometry := node as GeometryInstance3D
+		geometry.layers = SCENERY_LAYER
+		# O salão é enfeite de longe: sem sombra, que dobrava o passe de sombra.
+		if geometry.name.begins_with("hall_"):
+			geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_varnish()
 	_number_plates()
 	_build_colliders()
@@ -405,6 +417,11 @@ static func is_down(pose: Transform3D) -> bool:
 	return off_deck(pose.origin) or pose.basis.y.normalized().dot(Vector3.UP) < cos(deg_to_rad(FALL_TILT))
 
 
+## Embaixo do tampo da pista ou do deck (no vão do poço), onde nada deve ser visto.
+static func under_deck(at: Vector3) -> bool:
+	return at.y < -0.1 and at.z > -DECK_END and absf(at.x) < LANE_W * 0.5
+
+
 ## Caiu na canaleta ou no poço: já conta, e o que ele faz lá não importa mais.
 static func off_deck(at: Vector3) -> bool:
 	return at.y < -0.02 or absf(at.x) > LANE_W * 0.5 + 0.02 or at.z < -DECK_END
@@ -455,7 +472,14 @@ static func reflection(visual: Node3D) -> Node3D:
 
 func _place(entry: Array, pose: Transform3D) -> void:
 	(entry[0] as Node3D).global_transform = pose
-	(entry[3] as Node3D).global_transform = MIRROR * pose
+	# O poço fica embaixo do deck, aberto para a frente: pino que cai lá rola para
+	# baixo da madeira. Com o verniz transparente ele aparecia através dela.
+	(entry[0] as Node3D).visible = not under_deck(pose.origin)
+	var echo := entry[3] as Node3D
+	# Fora do tampo (canaleta, poço) o espelho poria o gêmeo flutuando acima da
+	# pista: bola e pinos que caíram no poço apareciam no ar depois do impacto.
+	echo.visible = not off_deck(pose.origin)
+	echo.global_transform = MIRROR * pose
 
 
 func _number_plates() -> void:
@@ -486,7 +510,9 @@ func _varnish() -> void:
 		mi.set_surface_override_material(0, material)
 	var under := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	var length := APPROACH + DECK_END
+	# Vai bem além do deck: olhando rasante da câmera dos pinos, o raio que
+	# atravessa o fim da pista só chega a 0,5 m de fundo metros depois.
+	var length := APPROACH + DECK_END + UNDERCOAT_PAST
 	plane.size = Vector2(LANE_W + 2.0 * (GUTTER_W + CAP_W), length)
 	var paint := StandardMaterial3D.new()
 	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

@@ -287,11 +287,14 @@ def build_hall(col, mats, lane_objs, pin):
         if source == "lane_wood":
             lane_uv(o)
         objs.append(o)
+    # Pinos das vizinhas com 6 lados em vez de 20: de longe não se nota, e 40
+    # pinos cheios eram 4/5 dos triângulos da cena.
+    far_pin = build_pin(col, mats, segments=6)
     spots = [(dx + x, y) for dx in offsets for x, y in pin_spots()]
     bm = bmesh.new()
     for x, y in spots:
         part = bmesh.new()
-        part.from_mesh(pin.data)
+        part.from_mesh(far_pin.data)
         bmesh.ops.translate(part, verts=part.verts, vec=(x, y, 0))
         tmp = bpy.data.meshes.new("tmp")
         part.to_mesh(tmp)
@@ -299,6 +302,7 @@ def build_hall(col, mats, lane_objs, pin):
         bm.from_mesh(tmp)
         bpy.data.meshes.remove(tmp)
     objs.append(kit.mesh_object("hall_pins", bm, col, list(pin.data.materials), recalc=False))
+    bpy.data.objects.remove(far_pin)
 
     back = DECK_END + PIT_LEN + 0.05
     bm = bmesh.new()

@@ -48,11 +48,6 @@ const TRAIL_WIDTH := 0.16
 ## com a bola na força cheia, e quão rápido ela some.
 const SHAKE := 0.035
 const SHAKE_DECAY := 9.0
-## As luminárias do teto (ver `_build_world`).
-const LAMP_ROWS := [-1.0, -4.5, -8.0, -11.5, -15.0]
-const LAMP_HEIGHT := 2.4
-const LAMP_RANGE := 6.0
-const LAMP_ENERGY := 1.6
 const AIM_CAMERA := Vector3(0.0, 1.5, 3.4)
 const AIM_LOOK := Vector3(0.0, 0.0, -2.36)
 ## Perto dos pinos: a câmera para aqui e olha o deck.
@@ -207,16 +202,8 @@ func _build_world() -> void:
 	deck.omni_range = 3.0
 	deck.light_energy = 3.0
 	deck.light_color = Color(1.0, 0.95, 0.85)
+	deck.light_cull_mask = ~Lane.SCENERY_LAYER
 	_viewport.add_child(deck)
-	# Luminárias em fila sobre a pista: sem sombra, só para o verniz pegar uma
-	# faixa de brilho de cada uma enquanto a câmera anda.
-	for z in LAMP_ROWS:
-		var lamp := OmniLight3D.new()
-		lamp.position = Vector3(0.0, LAMP_HEIGHT, z)
-		lamp.omni_range = LAMP_RANGE
-		lamp.light_energy = LAMP_ENERGY
-		lamp.light_color = Color(1.0, 0.95, 0.85)
-		_viewport.add_child(lamp)
 
 	lane = BowlingLane.new()
 	lane.ball_color = ball_color
