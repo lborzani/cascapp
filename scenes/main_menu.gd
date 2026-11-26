@@ -28,6 +28,7 @@ extends Control
 
 const JOIN_SCENE := "res://scenes/join.tscn"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
+const SHOP_SCENE := "res://scenes/shop.tscn"
 ## Quanto a conversa aberta pela notificação espera a conta entrar.
 const CHAT_WAIT_SECONDS := 10.0
 
@@ -42,7 +43,6 @@ var _sheet: GameSheet = null
 var _gate: UpdateGate = null
 ## Os presentes que o menu já avisou nesta sessão (ver `_show_gifts`).
 static var _gifts_seen: Array = []
-var _shop: ShopPanel = null
 var _missions: MissionsPanel = null
 var _toast: Banner = null
 ## O convite para proteger a conta, e o `EmailPanel` que ele abre.
@@ -238,6 +238,10 @@ func _go_tab(route: StringName) -> void:
 	match route:
 		AppTabs.ONLINE:
 			_open_join()
+		AppTabs.SHOP:
+			if not _leaving:
+				_leaving = true
+				get_tree().change_scene_to_file(SHOP_SCENE)
 		AppTabs.YOU:
 			_open_settings()
 
@@ -266,9 +270,6 @@ func go_back() -> void:
 	var drawer := _drawer()
 	if drawer != null:
 		drawer.close()
-		return
-	if is_instance_valid(_shop):
-		_shop.close()
 		return
 	if is_instance_valid(_missions):
 		_missions.close()
@@ -326,11 +327,13 @@ func _open_missions() -> void:
 	add_child(_missions)
 
 
-## A mesma loja da aba Você, por cima desta tela.
+## As moedas do topo levam à aba Loja: a loja mora num lugar só.
 func _open_shop() -> void:
+	if _leaving:
+		return
 	Sound.play(Sound.Cue.TAP)
-	_shop = ShopPanel.new()
-	add_child(_shop)
+	_leaving = true
+	get_tree().change_scene_to_file(SHOP_SCENE)
 
 
 func _open_friends() -> void:

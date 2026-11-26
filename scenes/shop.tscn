@@ -1,0 +1,49 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/shop.gd" id="1_shop"]
+[ext_resource type="Script" path="res://ui/safe_area_margin.gd" id="2_safe"]
+[ext_resource type="Script" path="res://ui/shop_panel.gd" id="3_panel"]
+[ext_resource type="Script" path="res://ui/app_tabs.gd" id="4_tabs"]
+
+[node name="Shop" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_shop")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0823529, 0.0705882, 0.168627, 1)
+
+[node name="Safe" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_safe")
+
+[node name="VBox" type="VBoxContainer" parent="Safe"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Shop" type="Control" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("3_panel")
+embedded = true
+
+[node name="Tabs" type="Control" parent="Safe/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("4_tabs")

@@ -14,6 +14,7 @@ extends Control
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
+const SHOP_SCENE := "res://scenes/shop.tscn"
 
 var _waiting: WaitingPanel = null
 var _leaving := false
@@ -118,6 +119,11 @@ func _go_tab(route: StringName) -> void:
 	match route:
 		AppTabs.GAMES:
 			_back_to_menu()
+		AppTabs.SHOP:
+			if not _leaving:
+				_leaving = true
+				Game.reset_to_menu()
+				get_tree().change_scene_to_file(SHOP_SCENE)
 		AppTabs.YOU:
 			_open_settings()
 

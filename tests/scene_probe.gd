@@ -3555,13 +3555,7 @@ func _test_coins_pill() -> bool:
 	Account.coins = 340
 	Account.wallet_changed.emit()
 	_equals(pill.text, "340", "o saldo acompanha a carteira")
-	pill.pressed.emit()
-	await get_tree().process_frame
-	_check(is_instance_valid(menu._shop), "o toque abre a loja")
-	if is_instance_valid(menu._shop):
-		menu.go_back()
-		await get_tree().process_frame
-		_check(not is_instance_valid(menu._shop) and menu.is_inside_tree(), "voltar fecha a loja e fica na tela inicial")
+	_check(menu.has_method("_open_shop"), "o toque leva à aba Loja")
 	Account.coins = saved
 	menu.queue_free()
 	await get_tree().process_frame

@@ -38,18 +38,21 @@ var _toast: Banner = null
 ## O item à espera do segundo toque para comprar; vazio sem nenhum.
 var _confirming := ""
 var _busy := false
+## Dentro da aba Loja (`scenes/shop.tscn`): a cena já dá o fundo e a área segura,
+## e não há "Fechar" — sai-se pelas abas. Escrito antes de entrar na árvore.
+var embedded := false
 ## A escolha do amigo para presentear, por cima da loja; `null` fechada.
 var _picker: Control = null
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	var background := ColorRect.new()
-	background.color = AppTheme.BACKGROUND
-	background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	add_child(background)
-
-	var safe := SafeAreaMargin.new()
+	var safe: MarginContainer = MarginContainer.new() if embedded else SafeAreaMargin.new()
+	if not embedded:
+		var background := ColorRect.new()
+		background.color = AppTheme.BACKGROUND
+		background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+		add_child(background)
 	for side in ["left", "top", "right", "bottom"]:
 		safe.add_theme_constant_override("margin_" + side, 16)
 	safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
@@ -69,6 +72,7 @@ func _ready() -> void:
 	close_button.theme_type_variation = &"GhostButton"
 	close_button.custom_minimum_size = Vector2(0, 44)
 	close_button.pressed.connect(close)
+	close_button.visible = not embedded
 	header.add_child(close_button)
 	column.add_child(header)
 
@@ -118,6 +122,11 @@ func _ready() -> void:
 	_fill()
 	if Account.prices.is_empty():
 		Account.fetch_prices()
+
+
+## A lista de amigos para presentear está aberta por cima da loja.
+func picking() -> bool:
+	return is_instance_valid(_picker)
 
 
 ## O que o voltar do sistema chama. Com a lista de amigos aberta, fecha só ela.

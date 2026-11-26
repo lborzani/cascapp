@@ -43,12 +43,12 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18_ajustes"],
 	["res://scenes/settings.tscn", "18o_ajustes_fim"],
 	["res://scenes/settings.tscn", "18b_historico"],
-	["res://scenes/settings.tscn", "18c_loja"],
-	["res://scenes/settings.tscn", "18d_loja_tabuleiro"],
-	["res://scenes/settings.tscn", "18e_loja_pecas"],
-	["res://scenes/settings.tscn", "18f_loja_taco"],
-	["res://scenes/settings.tscn", "18g_loja_perfil"],
-	["res://scenes/settings.tscn", "18q_loja_cartas"],
+	["res://scenes/shop.tscn", "18c_loja"],
+	["res://scenes/shop.tscn", "18d_loja_tabuleiro"],
+	["res://scenes/shop.tscn", "18e_loja_pecas"],
+	["res://scenes/shop.tscn", "18f_loja_taco"],
+	["res://scenes/shop.tscn", "18g_loja_perfil"],
+	["res://scenes/shop.tscn", "18q_loja_cartas"],
 	["res://scenes/settings.tscn", "18h_voce_capa"],
 	["res://scenes/settings.tscn", "18i_missoes"],
 	["res://scenes/settings.tscn", "18j_missoes_conquistas"],
@@ -57,7 +57,7 @@ const SHOTS := [
 	["res://scenes/main_menu.tscn", "01i_missoes_folha"],
 	["res://scenes/settings.tscn", "18l_presentes"],
 	["res://scenes/settings.tscn", "18m_presentes_aberto"],
-	["res://scenes/settings.tscn", "18n_presentear"],
+	["res://scenes/shop.tscn", "18n_presentear"],
 	["res://scenes/main_menu.tscn", "34_perfil_amigo"],
 	["res://scenes/main_menu.tscn", "34b_gaveta_amigos"],
 	# O perfil com a moldura e a capa animadas, em três instantes (0, 0,4 e 0,8 s).
@@ -555,7 +555,7 @@ func _next() -> void:
 		if shot == "07_material":
 			_stuff_captures(_scene)
 	elif shot == "18c_loja":
-		_scene._open_shop()
+		pass
 	elif shot == "01i_missoes_folha":
 		_scene._open_missions()
 	elif shot == "18o_ajustes_fim":
@@ -570,9 +570,9 @@ func _next() -> void:
 		_scene._gifts._revealed["g1"] = Account.gifts[0]
 		_scene._gifts._fill()
 	elif shot == "18n_presentear":
-		_scene._open_shop()
-		_scene._shop._pick_friend("ball_galaxy")
-		var first: Button = _scene._shop._picker.find_children("*", "Button", true, false)[1]
+		var shop: ShopPanel = _scene.get_node("%Shop")
+		shop._pick_friend("ball_galaxy")
+		var first: Button = shop._picker.find_children("*", "Button", true, false)[1]
 		first.pressed.emit()
 	elif shot.begins_with("18i") or shot.begins_with("18j") or shot.begins_with("18k"):
 		_scene._open_missions()
@@ -581,9 +581,9 @@ func _next() -> void:
 		_scene._missions._tabs.selected.emit(tab)
 	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil", "18q_loja_cartas"]:
 		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18q_loja_cartas": 4, "18g_loja_perfil": 5}[shot]
-		_scene._open_shop()
-		_scene._shop._tabs.set_current(tab)
-		_scene._shop._tabs.selected.emit(tab)
+		var shop: ShopPanel = _scene.get_node("%Shop")
+		shop._tabs.set_current(tab)
+		shop._tabs.selected.emit(tab)
 	if (shot.begins_with("29") or shot.begins_with("31") or shot.begins_with("33") or shot.begins_with("35")) and is_instance_valid(_scene._coin_toss):
 		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
 		_scene._coin_toss.free()

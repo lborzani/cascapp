@@ -1,19 +1,19 @@
 class_name AppTabs
 extends Control
 
-## As abas da base da tela: Jogos · Online · Você.
+## As abas da base da tela: Jogos · Online · Loja · Você.
 ##
 ## Substituem a gaveta e a engrenagem do topo. Os dois ficavam no canto de cima —
 ## o lugar mais longe do polegar num celular — e "Multiplayer" só existia dentro da
 ## gaveta, que é onde uma função se esconde de quem não sabe que ela existe. Na
-## base, os três lugares do app estão sempre à vista e ao alcance.
+## base, os lugares do app estão sempre à vista e ao alcance.
 ##
 ## Uma pílula solta do chão, com a aba aberta preenchida de limão. Desenhada
-## inteira aqui, com as três áreas de toque calculadas da largura, em vez de três
+## inteira aqui, com as áreas de toque calculadas da largura, em vez de três
 ## botões: a pílula é um desenho só, e o toque vale na faixa toda, margem incluída.
 ##
 ## Quem navega é a tela. A barra só diz qual aba foi tocada — é o que permite a
-## mesma barra servir às três cenas sem saber para onde cada uma leva. O som do
+## mesma barra servir às cenas todas sem saber para onde cada uma leva. O som do
 ## toque também é da tela: o componente não conhece autoload, e é isso que deixa
 ## testá-lo sem eles.
 
@@ -21,9 +21,11 @@ signal picked(route: StringName)
 
 const GAMES := &"games"
 const ONLINE := &"online"
+const SHOP := &"shop"
 const YOU := &"you"
-const ROUTES: Array[StringName] = [GAMES, ONLINE, YOU]
-const LABELS := {GAMES: "Jogos", ONLINE: "Online", YOU: "Você"}
+const ROUTES: Array[StringName] = [GAMES, ONLINE, SHOP, YOU]
+const LABELS := {GAMES: "Jogos", ONLINE: "Online", SHOP: "Loja", YOU: "Você"}
+const ICONS := {GAMES: LineIcon.DICE, ONLINE: LineIcon.GLOBE, SHOP: LineIcon.BAG, YOU: LineIcon.PERSON}
 
 const HEIGHT := 80.0
 ## A pílula dentro da faixa: recuada dos lados e do chão.
@@ -32,7 +34,10 @@ const PILL_SIDE := 20.0
 const PILL_BOTTOM := 12.0
 ## Folga entre a pílula e o preenchimento da aba aberta.
 const INSET := 6.0
-const LABEL_SIZE := 16
+const LABEL_SIZE := 15
+## O ícone à esquerda do rótulo (`LineIcon`): lado do quadrado e folga até o texto.
+const ICON := 16.0
+const ICON_GAP := 5.0
 ## Opacidade de uma aba que não pode ser aberta neste build — Online sem servidor.
 ## Apagada e não escondida: uma aba que some parece uma aba que foi removida.
 const DISABLED_ALPHA := 0.35
@@ -98,7 +103,11 @@ func _draw() -> void:
 			draw_style_box(AppTheme.box(AppTheme.ACCENT, int(chosen.size.y * 0.5)), chosen)
 		if route in disabled:
 			ink = Color(ink, DISABLED_ALPHA)
+		var label := String(LABELS[route])
+		var text_width := face.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_SIZE).x
+		var left := slot.get_center().x - (ICON + ICON_GAP + text_width) * 0.5
+		LineIcon.draw(self, ICONS[route], Vector2(left + ICON * 0.5, slot.get_center().y), ICON, ink)
 		draw_string(
-			face, Vector2(slot.position.x, slot.get_center().y + LABEL_SIZE * 0.36),
-			String(LABELS[route]), HORIZONTAL_ALIGNMENT_CENTER, width, LABEL_SIZE, ink
+			face, Vector2(left + ICON + ICON_GAP, slot.get_center().y + LABEL_SIZE * 0.36),
+			label, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_SIZE, ink
 		)

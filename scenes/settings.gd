@@ -4,7 +4,7 @@ extends Control
 ##
 ## A aba Você: a foto (que se troca tocando nela), o nome com o Elo e o código
 ## de amigo embaixo, a grade de atalhos (histórico, treino, missões, presentes,
-## loja, aberturas) e os interruptores. Cada número aparece uma vez só, no
+## aberturas) e os interruptores. Cada número aparece uma vez só, no
 ## atalho que ele conta: nada de fileira de números repetindo os atalhos.
 ##
 ## O **nome** salva sozinho, ao sair do campo ou ao confirmar no teclado, e não a
@@ -17,6 +17,15 @@ extends Control
 
 const MENU_SCENE := "res://scenes/main_menu.tscn"
 const JOIN_SCENE := "res://scenes/join.tscn"
+const SHOP_SCENE := "res://scenes/shop.tscn"
+
+## Diâmetro da bolacha do ícone num atalho, e o ícone de cada um pelo nome do nó.
+const SHORTCUT_BADGE := 34.0
+const SHORTCUT_ICONS := {
+	"HistoryButton": LineIcon.CLOCK, "TrainingButton": LineIcon.TARGET,
+	"MissionsButton": LineIcon.FLAG, "GiftsButton": LineIcon.GIFT,
+	"OpeningsButton": LineIcon.BOOK, "ProtectButton": LineIcon.SHIELD,
+}
 
 var _sound_switch: SwitchRow = null
 var _haptics_switch: SwitchRow = null
@@ -24,12 +33,10 @@ var _history: HistoryPanel = null
 var _news: ChangelogPanel = null
 var _training: TrainingPanel = null
 var _openings: OpeningsPanel = null
-var _shop: ShopPanel = null
 ## A capa da loja atrás da foto e do nome (`_wrap_profile`), e a margem em volta
 ## deles, que só existe com capa.
 var _profile_cover: Panel = null
 var _profile_pad: MarginContainer = null
-var _shop_button: Button = null
 var _missions: MissionsPanel = null
 var _missions_button: Button = null
 var _gifts: GiftsPanel = null
@@ -103,10 +110,9 @@ func _ready() -> void:
 	# numa linha inteira logo abaixo; protegida, some.
 	_missions_button = _shortcut("MissionsButton", _open_missions)
 	_gifts_button = _shortcut("GiftsButton", _open_gifts)
-	_shop_button = _shortcut("ShopButton", _open_shop)
 	var openings := _shortcut("OpeningsButton", _open_openings)
 	openings.set_meta(&"title", "Aberturas")
-	openings.set_meta(&"detail", "%d linhas para treinar" % Openings.LINES.size())
+	openings.set_meta(&"detail", "%d linhas" % Openings.LINES.size())
 	_protect_button = Button.new()
 	_protect_button.name = "ProtectButton"
 	_protect_button.custom_minimum_size = Vector2(0, 76)
@@ -152,6 +158,8 @@ func _go_tab(route: StringName) -> void:
 			get_tree().change_scene_to_file(MENU_SCENE)
 		AppTabs.ONLINE:
 			get_tree().change_scene_to_file(JOIN_SCENE)
+		AppTabs.SHOP:
+			get_tree().change_scene_to_file(SHOP_SCENE)
 
 
 ## Os dois interruptores gravam **na hora**, e não no "Salvar".
@@ -280,17 +288,25 @@ func _draw_shortcut(button: Button) -> void:
 		AppTheme.box(AppTheme.SURFACE, AppTheme.RADIUS_LARGE), Rect2(Vector2.ZERO, button.size)
 	)
 	var lit: bool = button.get_meta(&"lit", false)
+	# O ícone numa bolacha à esquerda: é ele que o olho acha antes de ler.
+	var badge := Vector2(12.0 + SHORTCUT_BADGE * 0.5, button.size.y * 0.5)
+	button.draw_circle(badge, SHORTCUT_BADGE * 0.5, AppTheme.ACCENT_SOFT if lit else AppTheme.SURFACE_HIGH)
+	LineIcon.draw(
+		button, SHORTCUT_ICONS.get(String(button.name), LineIcon.FLAG), badge, 16.0,
+		AppTheme.ACCENT if lit else AppTheme.TEXT
+	)
+	var left := 12.0 + SHORTCUT_BADGE + 8.0
+	var room := button.size.x - left - 10.0
 	button.draw_string(
-		AppTheme.display(600), Vector2(14.0, button.size.y * 0.5 - 2.0), str(button.get_meta(&"title", "")),
-		HORIZONTAL_ALIGNMENT_LEFT, button.size.x - 28.0, 18, AppTheme.TEXT
+		AppTheme.display(600), Vector2(left, button.size.y * 0.5 - 2.0), str(button.get_meta(&"title", "")),
+		HORIZONTAL_ALIGNMENT_LEFT, room, 18, AppTheme.TEXT
 	)
 	var font := AppTheme.font(700)
-	var room := button.size.x - 28.0
 	var detail := str(button.get_meta(&"detail", ""))
 	while detail.length() > 1 and font.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > room:
 		detail = detail.left(-2) + "…"
 	button.draw_string(
-		font, Vector2(14.0, button.size.y * 0.5 + 17.0), detail,
+		font, Vector2(left, button.size.y * 0.5 + 17.0), detail,
 		HORIZONTAL_ALIGNMENT_LEFT, room, 13, AppTheme.ACCENT if lit else AppTheme.TEXT_DIM
 	)
 
@@ -332,9 +348,6 @@ func go_back() -> void:
 		return
 	if is_instance_valid(_training):
 		_training.close()
-		return
-	if is_instance_valid(_shop):
-		_shop.close()
 		return
 	if is_instance_valid(_missions):
 		_missions.close()
@@ -411,12 +424,6 @@ func _open_training() -> void:
 	add_child(_training)
 
 
-func _open_shop() -> void:
-	Sound.play(Sound.Cue.TAP)
-	_shop = ShopPanel.new()
-	add_child(_shop)
-
-
 func _open_gifts() -> void:
 	Sound.play(Sound.Cue.TAP)
 	_gifts = GiftsPanel.new()
@@ -443,10 +450,6 @@ func _refresh_games() -> void:
 	%TrainingButton.set_meta(&"lit", due > 0)
 	%HistoryButton.queue_redraw()
 	%TrainingButton.queue_redraw()
-	_shop_button.set_meta(&"title", "Loja")
-	_shop_button.set_meta(&"detail", "%s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
-	_shop_button.set_meta(&"lit", true)
-	_shop_button.queue_redraw()
 	var ready := Account.missions_ready()
 	_missions_button.set_meta(&"title", "Missões")
 	_missions_button.set_meta(&"detail", missions_detail(ready, Account.events.size()))
