@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.83
+
+- A aba Loja não tem mais o botão Fechar, que deixava a aba vazia.
+
 ## 1.82
 
 - A loja virou uma aba própria, e tocar nas suas moedas leva direto até ela.
