@@ -608,7 +608,7 @@ func _dress_ball(seat: int) -> void:
 ## aperto de mão; aqui, o do dono do aparelho no assento 0 (no mesmo aparelho ele
 ## é o dono, contra o bot é quem joga). Máquinas e convidados ficam no padrão.
 func seat_look(seat: int) -> Dictionary:
-	return Net.seat_look(seat)
+	return Game.seat_look(seat)
 
 
 func _seat_name(seat: int) -> String:

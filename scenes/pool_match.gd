@@ -257,7 +257,7 @@ func _build_overlay() -> void:
 ## que cada aparelho disse no aperto de mão; aqui, o do dono do aparelho no
 ## assento 0. Máquinas e o segundo jogador do mesmo aparelho ficam no padrão.
 func seat_look(seat: int) -> Dictionary:
-	return Net.seat_look(seat)
+	return Game.seat_look(seat)
 
 
 func _my_turn() -> bool:

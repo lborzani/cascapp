@@ -1204,7 +1204,7 @@ func _refresh() -> void:
 	var live := champion < 0 and not _abandoned
 	# Antes do estado: é ele que manda remontar as peças.
 	for player in _cards.size():
-		_board.token_shapes[player] = "" if _is_bot(player) else Cosmetics.token_of(Net.seat_look(player))
+		_board.token_shapes[player] = "" if _is_bot(player) else Cosmetics.token_of(Game.seat_look(player))
 	_board.state = _state
 	# A câmera segue o peão **da vez**, e não o de quem decide: numa proposta de
 	# troca quem responde é o outro, e a câmera saltando para o peão dele contaria
@@ -1224,7 +1224,7 @@ func _refresh() -> void:
 	_panel.refresh()
 
 	for player in _cards.size():
-		_cards[player].look = {} if _is_bot(player) else Net.seat_look(player)
+		_cards[player].look = {} if _is_bot(player) else Game.seat_look(player)
 		_cards[player].show_player(_state, player, player == turn, _player_label(player))
 	if _buttons != null:
 		_update_bar()

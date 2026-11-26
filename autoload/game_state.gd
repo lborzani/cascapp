@@ -577,6 +577,20 @@ var local_side := Board.Side.WHITE
 ## assento 0 é o vermelho. Nos jogos de dois `local_side` continua respondendo, e
 ## isto fica em zero sem significar nada.
 var local_seat := 0
+
+
+## O visual de quem está num assento, em qualquer modo: online, o que cada
+## aparelho disse no aperto de mão; fora de rede, o do dono do aparelho no assento
+## dele. Máquinas e o segundo jogador do mesmo aparelho ficam no padrão.
+##
+## Mora aqui, e não no `Net`: quem sabe o modo e o assento local é este arquivo,
+## e o `Net` é transporte. Lá, ler `Game` e `Account` fazia o `net_link.gd` não
+## compilar sem autoloads, e os testes de rede (`--script`) paravam na fase 0.
+func seat_look(seat: int) -> Dictionary:
+	if mode == Mode.ONLINE:
+		return Net.look_of(seat)
+	return Account.look if seat == local_seat else {}
+
 ## Índice em `TIME_CONTROLS`. Em rede quem hospeda decide, e o convidado recebe
 ## o índice no handshake — dois relógios diferentes não seriam uma partida.
 var time_control := 0

@@ -1057,7 +1057,7 @@ func _place_tags() -> void:
 func _refresh_tags() -> void:
 	var turn := UnoRules.turn_of(_state)
 	# A sua mão, o descarte e o monte saem no seu baralho.
-	UnoCardArt.deck = Cosmetics.deck_of(Net.seat_look(Game.local_seat))
+	UnoCardArt.deck = Cosmetics.deck_of(Game.seat_look(Game.local_seat))
 	for seat in _tags.size():
 		var tag: PlayerTag = _tags[seat]
 		var held := UnoRules.hand_size(_state, seat)
@@ -1067,7 +1067,7 @@ func _refresh_tags() -> void:
 		# o nome certo conforme quem ganhava a corrida. É o mesmo motivo de a
 		# cadeira que vira máquina precisar passar a dizer "(bot)".
 		tag.title = _seat_name(seat)
-		tag.look = {} if _is_bot(seat) else Net.seat_look(seat)
+		tag.look = {} if _is_bot(seat) else Game.seat_look(seat)
 		var theirs := Cosmetics.deck_of(tag.look)
 		_table.seat_decks[seat] = theirs if not theirs.is_empty() else UnoCardArt.STANDARD
 		tag.active = seat == turn
