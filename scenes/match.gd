@@ -1371,7 +1371,7 @@ func _on_remote_move(data: Dictionary) -> void:
 		return
 	if index > _state.history.size():
 		# Falta lance no meio. Pedir o histórico é mais barato que adivinhar.
-		Net.send_sync(_state.history, _clock_pair())
+		_send_sync()
 		return
 	# Quem mandou tem de ser quem tinha a vez.
 	#
@@ -1456,7 +1456,7 @@ func _on_link_lost() -> void:
 ## a lista de lances é a única coisa que precisa atravessar.
 func _on_link_restored() -> void:
 	_banner.show_message("Reconectado.", Banner.Kind.INFO)
-	Net.send_sync(_state.history, _clock_pair())
+	_send_sync()
 	_refresh()
 	# Plano que esperava o link: a vez é nossa e nada mudou. Se mudou, o histórico
 	# do outro lado chega pelo resync e a reconstrução descarta a corrente. Na vez
@@ -1469,11 +1469,13 @@ func _on_link_restored() -> void:
 ## que o jogo já faz a cada lance, e recomeçar do estado inicial não depende de
 ## a posição local estar correta — que é justamente o que está em dúvida aqui.
 func _apply_sync(moves: Array, clocks: Array = []) -> void:
+	if Net.sync_white >= 0 and Net.sync_white != _seat_of(Board.Side.WHITE) and not _catch_up(Net.sync_white):
+		return
 	# Para quem assiste, quem manda é o histórico que chega, mesmo mais curto: é a
 	# revanche que ele não viu acontecer (caiu bem na hora), e não um jogador atrás.
 	if moves.size() < _state.history.size() and not Net.is_spectator:
 		# O outro lado está atrás. Um histórico mais curto é o pedido.
-		Net.send_sync(_state.history, _clock_pair())
+		_send_sync()
 		return
 	if moves.size() == _state.history.size():
 		return
@@ -1484,6 +1486,33 @@ func _apply_sync(moves: Array, clocks: Array = []) -> void:
 	else:
 		_adopt_clocks(clocks)
 		_recompute()
+
+
+## O histórico, com a cor e se a partida acabou: é o que diz ao outro lado de
+## qual partida ele é (ver [member NetLink.sync_white]).
+func _send_sync() -> void:
+	Net.send_sync(_state.history, _clock_pair(), _seat_of(Board.Side.WHITE), _game_over())
+
+
+func _game_over() -> bool:
+	return _outcome != Ruleset.Outcome.ONGOING or _flagged >= 0 or _abandoned
+
+
+## O `sync` é de outra partida, com outra cor. Quem ficou na partida acabada
+## enquanto o outro já joga é quem perdeu o aceite da revanche: entra nela com a
+## cor que veio e segue o replay. Quem já está na revanche responde com a dele,
+## para o outro se acertar. Os dois na mesma situação não se resolvem por aqui, e
+## ninguém responde — senão os dois se mandariam o histórico para sempre.
+func _catch_up(white: int) -> bool:
+	if Net.is_spectator:
+		_follow_rematch(white)
+		return true
+	if _game_over() and not Net.sync_done:
+		_start_rematch(white)
+		return true
+	if not _game_over() and Net.sync_done:
+		_send_sync()
+	return false
 
 
 ## Refaz a partida do zero com `moves` (formato de `Move.to_dict`) e põe o
@@ -1626,9 +1655,12 @@ func _on_rematch_requested() -> void:
 	_refresh_rematch()
 
 
+## Quem aceita decide a cor da revanche e a diz no aceite: o assento que joga de
+## pretas agora joga de brancas.
 func _accept_rematch() -> void:
-	Net.send_rematch_accept()
-	_start_rematch()
+	var white := _seat_of(Board.Side.BLACK)
+	Net.send_rematch_accept(white)
+	_start_rematch(white)
 
 
 func _decline_rematch() -> void:
@@ -1637,25 +1669,34 @@ func _decline_rematch() -> void:
 	_refresh_rematch()
 
 
-func _on_rematch_accepted() -> void:
+func _on_rematch_accepted(white := -1) -> void:
 	if Net.is_spectator:
-		_follow_rematch()
+		_follow_rematch(white)
 		return
 	if _rematch != Rematch.ASKED:
 		return
-	_start_rematch()
+	_start_rematch(white)
 
 
 ## Os jogadores combinaram revanche: quem assiste vai junto, com as cores
 ## trocadas como as deles.
 ##
-## Só com a partida encerrada. Num pedido cruzado os **dois** mandam o aceite, e o
-## segundo chega com a revanche já começada — sem esta guarda o espectador
-## trocaria as cores duas vezes e veria os nomes do lado errado.
-func _follow_rematch() -> void:
-	if _outcome == Ruleset.Outcome.ONGOING and _flagged < 0 and not _abandoned:
+## Num pedido cruzado os **dois** mandam o aceite, e o segundo chega com a
+## revanche já começada. Com a cor no aceite, o segundo diz a mesma que já temos e
+## não recomeça nada. Sem ela (versão antiga), só com a partida encerrada — senão
+## o espectador trocaria as cores duas vezes e veria os nomes do lado errado.
+##
+## Com a cor, recomeça mesmo sem ter visto o fim: o relógio de quem assiste anda
+## atrasado e pode não ter caído ainda, e os jogadores já estão na outra partida.
+func _follow_rematch(white := -1) -> void:
+	if white >= 0:
+		if white == Net.white_seat:
+			return
+		Net.white_seat = white
+	elif _outcome == Ruleset.Outcome.ONGOING and _flagged < 0 and not _abandoned:
 		return
-	Net.white_seat = 1 - Net.white_seat
+	else:
+		Net.white_seat = 1 - Net.white_seat
 	Game.restart_match()
 	_match_status.started_at = Game.match_started_at
 	_new_game()
@@ -1669,11 +1710,16 @@ func _on_rematch_declined() -> void:
 	_banner.show_message("O oponente não quis revanche.", Banner.Kind.ALERT)
 
 
-func _start_rematch() -> void:
+## `white`: o assento das brancas da revanche, quando quem aceitou o disse. Sem
+## ele (fila, versão antiga) inverte a própria cor.
+func _start_rematch(white := -1) -> void:
 	if Game.mode == Game.Mode.ONLINE:
 		# Quem jogou de brancas joga de pretas. `Net.local_side` acompanha porque
 		# é dele que a próxima reconexão lê o lado.
-		Game.local_side = Board.opponent(Game.local_side)
+		if white >= 0:
+			Game.local_side = Board.Side.WHITE if Net.local_seat == white else Board.Side.BLACK
+		else:
+			Game.local_side = Board.opponent(Game.local_side)
 		Net.local_side = Game.local_side
 		_board.flipped = Game.local_side == Board.Side.BLACK
 	elif Game.mode == Game.Mode.SOLO:

@@ -90,7 +90,7 @@ func _ready() -> void:
 	# Sem isto o cartão só se corrigia no lance seguinte.
 	Net.names_changed.connect(_refresh)
 	Net.rematch_requested.connect(_on_rematch_requested)
-	Net.rematch_accepted.connect(_start_rematch)
+	Net.rematch_accepted.connect(func(_white: int) -> void: _start_rematch())
 	Net.rematch_declined.connect(_on_rematch_declined)
 
 	%OverlayLayer.visible = false

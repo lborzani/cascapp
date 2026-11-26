@@ -761,6 +761,36 @@ func _test_rematch() -> void:
 	_equals(scene._rematch, scene.Rematch.IDLE, "pedidos cruzados viram acordo")
 	_equals(Game.local_side, Board.Side.WHITE, "e a cor troca uma vez só")
 
+	# A cor vem no aceite: quem recebe adota, não inverte por conta própria.
+	scene._show_overlay("Fim", "", true)
+	scene._request_rematch()
+	scene._on_rematch_accepted(0)
+	_equals(Game.local_side, Board.Side.WHITE, "a cor da revanche é a que o aceite diz")
+	scene._show_overlay("Fim", "", true)
+	scene._on_rematch_requested()
+	scene._request_rematch()
+	_equals(Game.local_side, Board.Side.BLACK, "quem aceita passa as brancas ao outro assento")
+
+	# Caímos bem na hora do aceite: o outro já está na revanche, e o `sync` dele é
+	# o que avisa. Entramos nela com a cor que veio, e não com a antiga.
+	scene._resign()
+	scene._request_rematch()
+	Net.sync_white = 0
+	Net.sync_done = false
+	scene._apply_sync([{"p": [_square("e2"), _square("e4")], "pr": 0}])
+	_equals(Game.local_side, Board.Side.WHITE, "quem perdeu o aceite entra na revanche com a cor dela")
+	_equals(scene._state.ply, 1, "e com os lances que já houve")
+	_equals(scene._rematch, scene.Rematch.IDLE, "e o pedido se resolve")
+	# O contrário: o `sync` atrasado é da partida que acabou. Quem já está na
+	# revanche não volta a ela.
+	Net.sync_white = 1
+	Net.sync_done = true
+	scene._apply_sync([{"p": [_square("d2"), _square("d4")], "pr": 0}, {"p": [_square("d7"), _square("d5")], "pr": 0}])
+	_equals(scene._state.ply, 1, "o histórico da partida de antes não substitui a revanche")
+	_equals(Game.local_side, Board.Side.WHITE, "nem a cor dela")
+	Net.sync_white = -1
+	Net.sync_done = false
+
 	scene.queue_free()
 	await get_tree().process_frame
 	Game.mode = Game.Mode.HOTSEAT
@@ -1351,6 +1381,16 @@ func _test_spectator() -> void:
 	_equals(_node(scene, "%BottomTag").title, "Ana", "com os nomes no lado certo")
 	scene._on_rematch_accepted()
 	_equals(Net.white_seat, 0, "o segundo aceite de um pedido cruzado não troca de novo")
+	scene._on_rematch_accepted(0)
+	_equals(Net.white_seat, 0, "o aceite que diz a cor que já temos não troca nada")
+	scene._on_remote_move(e4.merged({"seat": 0}))
+	_equals(scene._state.ply, 1, "nem recomeça a partida")
+	# O relógio de quem assiste atrasou e não viu a queda: com a cor no aceite ele
+	# segue os jogadores mesmo assim, e quem sentar depois pela fila sabe a cor.
+	scene._on_rematch_accepted(1)
+	_equals(Net.white_seat, 1, "quem assiste segue a revanche sem ter visto o fim")
+	_equals(scene._state.ply, 0, "e começa a partida nova")
+	scene._on_rematch_accepted(0)
 
 	# A revanche que ele não viu (caiu bem na hora): o histórico mais curto manda.
 	scene._apply_sync([{"p": [12, 28], "pr": 0}, {"p": [52, 36], "pr": 0}])

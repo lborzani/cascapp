@@ -95,7 +95,12 @@ signal join_failed(reason: String)
 ## um toque em "Revanche" reiniciava a partida dos dois lados na hora, e o outro
 ## jogador era arrastado para um tabuleiro novo sem ter sido consultado.
 signal rematch_requested
-signal rematch_accepted
+## `white` é o assento que joga de brancas na revanche, dito por quem aceitou.
+## Quem recebe adota em vez de inverter a própria: inverter em cada aparelho
+## dependia de todos terem visto o mesmo fim (quem assiste com o relógio atrasado
+## não via a queda no tempo), e um que ficasse para trás sentava pela fila com a
+## mesma cor do outro. -1 é aparelho de versão sem o campo.
+signal rematch_accepted(white: int)
 signal rematch_declined
 ## Um jogador desistiu da partida em `ply`, sem sair da sala.
 signal resigned(seat: int, ply: int)
@@ -108,6 +113,13 @@ signal link_lost
 ## De volta na mesma sessão. Os dois lados trocam a lista de lances em seguida.
 signal link_restored
 signal sync_received(moves: Array, clocks: Array)
+## De qual partida é o último `sync` que chegou, lido por quem trata
+## `sync_received`: o assento das brancas (-1 = não disse) e se ela já acabou.
+## Só o histórico não diz se é a partida de antes ou a revanche, e quem perdeu o
+## aceite da revanche numa queda voltava jogando com a cor antiga. Campo, e não
+## argumento do sinal, porque os outros jogos não usam e ficam como estão.
+var sync_white := -1
+var sync_done := false
 ## A frota do oponente, na batalha naval. Chega uma vez por partida, antes do
 ## primeiro tiro — e de novo depois de uma reconexão, porque ela não está na
 ## lista de lances e portanto o replay do `sync` não a reconstrói.
@@ -381,8 +393,8 @@ func send_rematch() -> void:
 	_send({"t": "rematch"})
 
 
-func send_rematch_accept() -> void:
-	_send({"t": "rematch_ok"})
+func send_rematch_accept(white := -1) -> void:
+	_send({"t": "rematch_ok", "w": white})
 
 
 func send_rematch_decline() -> void:
@@ -408,8 +420,8 @@ func send_result(winner_seat: int, white_seat: int, plies: int, moves_hash: Stri
 ## A lista de lances inteira, mandada pelos dois lados depois de uma reconexão.
 ## Quem estiver atrás replaya a diferença; os dois rodam o mesmo ruleset
 ## determinístico, então a posição é reconstruída em vez de transferida.
-func send_sync(moves: Array, clocks: Array = []) -> void:
-	_send({"t": "sync", "m": moves, "c": clocks})
+func send_sync(moves: Array, clocks: Array = [], white := -1, done := false) -> void:
+	_send({"t": "sync", "m": moves, "c": clocks, "w": white, "d": done})
 
 
 ## Puxa o histórico que chegou cedo demais, se houver.
@@ -531,6 +543,8 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 				push_warning("Histórico recebido grande demais (%d); ignorado." % history.size())
 				return
 			var clocks := _list(message.get("c"))
+			sync_white = int(message.get("w", -1))
+			sync_done = bool(message.get("d", false))
 			# Guardado quando ainda não há tela para receber.
 			#
 			# Quem entra numa partida em curso responde o `resume` na hora, e o
@@ -547,7 +561,7 @@ func _handle_message(message: Dictionary, from_seat: int) -> void:
 		"rematch":
 			rematch_requested.emit()
 		"rematch_ok":
-			rematch_accepted.emit()
+			rematch_accepted.emit(int(message.get("w", -1)))
 		"rematch_no":
 			rematch_declined.emit()
 		"resign":
@@ -600,6 +614,7 @@ func _handle_as_spectator(message: Dictionary, from_seat: int) -> bool:
 func _begin_watch(message: Dictionary, white: int, history: Array, clocks: Array) -> void:
 	_adopt_table(message)
 	white_seat = white
+	sync_white = -1
 	_mark_connected()
 	if sync_received.get_connections().is_empty():
 		_pending_sync = {"m": history, "c": clocks}
