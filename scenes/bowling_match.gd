@@ -328,7 +328,9 @@ func _announce(seat: int, before: int, mask: int) -> void:
 	if mask == before and before == BowlingRules.ALL_PINS:
 		Sound.play(Sound.Cue.WIN)
 		_banner.show_message("Strike! %s derrubou todos." % who, Banner.Kind.INFO)
+		_view.celebrate("STRIKE!")
 	elif mask == before:
+		_view.celebrate("SPARE!")
 		_banner.show_message("Spare! %s limpou a pista." % who, Banner.Kind.INFO)
 	elif knocked == 0:
 		_banner.show_message("Nenhum pino.", Banner.Kind.ALERT)

@@ -97,6 +97,26 @@ const POSE_QUAT := 10000.0
 ## fora do ritmo, sem a bola parar no meio.
 const FOLLOW_DELAY := 0.2
 
+# --- desenho: o verniz ----------------------------------------------------------
+
+## O reflexo no verniz é um truque barato (a Compatibility do celular não tem
+## SSR): cada desenho ganha um gêmeo espelhado embaixo do tampo, e a madeira fica
+## um pouco transparente por cima dele. Quanto da madeira cobre o gêmeo.
+const VARNISH_ALPHA := 0.6
+const VARNISH_ROUGHNESS := 0.12
+## O fundo embaixo do reflexo: madeira escura, para a pista transparente não
+## escurecer com o fundo da cena.
+const UNDERCOAT := Color(0.42, 0.32, 0.2)
+const UNDERCOAT_DEPTH := 0.5
+## As placas com o número de cada pista, na fachada da máquina: a do meio é a de
+## quem joga, e as vizinhas do salão (`build_bowling.py`) seguem a conta.
+const LANE_NUMBER := 7
+const NEIGHBOURS := [-2, -1, 1, 2]
+const PITCH := LANE_W + 2.0 * (GUTTER_W + CAP_W)
+const PLATE_AT := Vector3(0.0, 0.935, -(HEAD_PIN - 0.5) + 0.02)
+## Espelha em y = 0, o tampo.
+const MIRROR := Transform3D(Basis(Vector3.RIGHT, Vector3.DOWN, Vector3.BACK), Vector3.ZERO)
+
 ## A jogada em curso. Falso antes do primeiro arremesso e depois de `settled`.
 var rolling := false
 ## Mostrando a jogada de outro aparelho pelos quadros (`follow`), sem física.
@@ -117,7 +137,7 @@ var _pin_shape: Shape3D = null
 ## ou 120: desenhada no corpo, a bola só andava nos quadros de física e "travava"
 ## nos outros (o stuttering da 1.48). O desenho de cada corpo é um filho
 ## `top_level`, posto entre os dois últimos quadros de física na fração em que o
-## quadro da tela cai. Corpo -> [desenho, transformada anterior, atual].
+## quadro da tela cai. Corpo -> [desenho, transformada anterior, atual, reflexo].
 var _smooth := {}
 ## Os quadros seguidos, `[segundos, poses]` em ordem, e o ponto da jogada que a
 ## tela mostra agora.
@@ -131,6 +151,8 @@ func _init() -> void:
 
 func _ready() -> void:
 	add_child(LANE_SCENE.instantiate())
+	_varnish()
+	_number_plates()
 	_build_colliders()
 
 
@@ -415,8 +437,65 @@ func _make_pin(pin: int) -> RigidBody3D:
 
 func _track(body: RigidBody3D, visual: Node3D) -> void:
 	visual.top_level = true
-	visual.global_transform = body.global_transform
-	_smooth[body] = [visual, body.global_transform, body.global_transform]
+	var echo := reflection(visual)
+	body.add_child(echo)
+	_smooth[body] = [visual, body.global_transform, body.global_transform, echo]
+	_place(_smooth[body], body.global_transform)
+
+
+## O gêmeo espelhado de um desenho, para o reflexo no verniz (ver `MIRROR`). Quem
+## chama põe na árvore e o move com `MIRROR * pose`.
+static func reflection(visual: Node3D) -> Node3D:
+	var echo := visual.duplicate() as Node3D
+	echo.top_level = true
+	for found in echo.find_children("*", "GeometryInstance3D", true, false):
+		(found as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return echo
+
+
+func _place(entry: Array, pose: Transform3D) -> void:
+	(entry[0] as Node3D).global_transform = pose
+	(entry[3] as Node3D).global_transform = MIRROR * pose
+
+
+func _number_plates() -> void:
+	for offset in [0] + NEIGHBOURS:
+		var plate := Label3D.new()
+		plate.text = str(LANE_NUMBER + offset)
+		plate.font = AppTheme.font(700, AppTheme.Role.DISPLAY)
+		plate.font_size = 96
+		plate.pixel_size = 0.0032
+		plate.outline_size = 0
+		plate.shaded = false
+		plate.modulate = Color.WHITE if offset == 0 else Color(1, 1, 1, 0.75)
+		plate.position = PLATE_AT + Vector3(offset * PITCH, 0.0, 0.0)
+		add_child(plate)
+
+
+## A madeira deixa ver o reflexo por baixo e brilha mais. Fica por cima do
+## material do modelo, para o verniz se ajustar aqui sem regerar o glb.
+func _varnish() -> void:
+	for node in find_children("lane_wood", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		var material := mi.mesh.surface_get_material(0).duplicate() as StandardMaterial3D
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.albedo_color.a = VARNISH_ALPHA
+		material.roughness = VARNISH_ROUGHNESS
+		# O glb vem com as duas faces: o fundo da caixa cobria o reflexo outra vez.
+		material.cull_mode = BaseMaterial3D.CULL_BACK
+		mi.set_surface_override_material(0, material)
+	var under := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	var length := APPROACH + DECK_END
+	plane.size = Vector2(LANE_W + 2.0 * (GUTTER_W + CAP_W), length)
+	var paint := StandardMaterial3D.new()
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	paint.albedo_color = UNDERCOAT
+	plane.material = paint
+	under.mesh = plane
+	under.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	under.position = Vector3(0.0, -UNDERCOAT_DEPTH, APPROACH - length * 0.5)
+	add_child(under)
 
 
 func _drop(body: RigidBody3D) -> void:
@@ -445,7 +524,7 @@ func _process(delta: float) -> void:
 	for body: RigidBody3D in _smooth:
 		var entry: Array = _smooth[body]
 		var before: Transform3D = entry[1]
-		(entry[0] as Node3D).global_transform = before.interpolate_with(entry[2], fraction)
+		_place(entry, before.interpolate_with(entry[2], fraction))
 
 
 ## Anda o ponto mostrado e põe cada corpo entre os dois quadros em volta dele.
@@ -477,7 +556,7 @@ func _follow_frames(delta: float) -> void:
 		var entry: Array = _smooth[body]
 		entry[1] = pose
 		entry[2] = pose
-		(entry[0] as Node3D).global_transform = pose
+		_place(entry, pose)
 
 
 func _build_colliders() -> void:

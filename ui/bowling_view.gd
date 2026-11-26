@@ -39,6 +39,20 @@ const Lane := preload("res://ui/bowling_lane.gd")
 ## Campo de visão vertical. Em retrato, uns 54° de altura dão uns 32° de largura:
 ## a pista cabe inteira com os pinos visíveis no fundo.
 const FOV := 33.0
+## O rastro da bola: quanto tempo um ponto dele vive, a distância mínima entre
+## pontos e a largura no ponto mais novo.
+const TRAIL_LIFE := 0.5
+const TRAIL_STEP := 0.08
+const TRAIL_WIDTH := 0.16
+## A tremida quando a bola chega aos pinos, em metros de deslocamento da imagem
+## com a bola na força cheia, e quão rápido ela some.
+const SHAKE := 0.035
+const SHAKE_DECAY := 9.0
+## As luminárias do teto (ver `_build_world`).
+const LAMP_ROWS := [-1.0, -4.5, -8.0, -11.5, -15.0]
+const LAMP_HEIGHT := 2.4
+const LAMP_RANGE := 6.0
+const LAMP_ENERGY := 1.6
 const AIM_CAMERA := Vector3(0.0, 1.5, 3.4)
 const AIM_LOOK := Vector3(0.0, 0.0, -2.36)
 ## Perto dos pinos: a câmera para aqui e olha o deck.
@@ -128,10 +142,20 @@ var _top := 0.0
 var _viewport: SubViewport = null
 var _camera: Camera3D = null
 var _preview: Node3D = null
+## O reflexo da bola da mira no verniz (ver `BowlingLane.reflection`). Filho da
+## bola, para a pintura e o `visible` dela valerem para ele também.
+var _preview_echo: Node3D = null
 var _button: Button = null
 var _look := AIM_LOOK
 var _camera_moving := false
 var _density := 1.0
+var _trail: MeshInstance3D = null
+## Os pontos do rastro, `[posição, idade]`, do mais velho ao mais novo.
+var _trail_points: Array = []
+var _shake := 0.0
+## A bola já chegou aos pinos nesta jogada (a tremida é uma vez só).
+var _impacted := false
+var _last_point := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -181,8 +205,18 @@ func _build_world() -> void:
 	var deck := OmniLight3D.new()
 	deck.position = Vector3(0.0, 0.55, -(Lane.HEAD_PIN + 0.2))
 	deck.omni_range = 3.0
-	deck.light_energy = 2.2
+	deck.light_energy = 3.0
+	deck.light_color = Color(1.0, 0.95, 0.85)
 	_viewport.add_child(deck)
+	# Luminárias em fila sobre a pista: sem sombra, só para o verniz pegar uma
+	# faixa de brilho de cada uma enquanto a câmera anda.
+	for z in LAMP_ROWS:
+		var lamp := OmniLight3D.new()
+		lamp.position = Vector3(0.0, LAMP_HEIGHT, z)
+		lamp.omni_range = LAMP_RANGE
+		lamp.light_energy = LAMP_ENERGY
+		lamp.light_color = Color(1.0, 0.95, 0.85)
+		_viewport.add_child(lamp)
 
 	lane = BowlingLane.new()
 	lane.ball_color = ball_color
@@ -192,7 +226,21 @@ func _build_world() -> void:
 
 	_preview = Lane.BALL_SCENE.instantiate()
 	_viewport.add_child(_preview)
+	_preview_echo = Lane.reflection(_preview)
+	_preview.add_child(_preview_echo)
 	Lane.tint_ball(_preview, ball_color, ball_skin)
+
+	_trail = MeshInstance3D.new()
+	_trail.mesh = ImmediateMesh.new()
+	_trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.vertex_color_use_as_albedo = true
+	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	glow.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_trail.material_override = glow
+	_viewport.add_child(_trail)
 
 	_camera = Camera3D.new()
 	_camera.fov = FOV
@@ -219,6 +267,9 @@ func _on_resized() -> void:
 ## Arma os pinos de `mask`, devolve a bola à linha de falta e a câmera à mira.
 func rack(mask: int) -> void:
 	lane.rack(mask)
+	_trail_points.clear()
+	_draw_trail()
+	_impacted = false
 	_phase = Phase.AIM if enabled else Phase.IDLE
 	_angle = 0.0
 	_power = 0.0
@@ -328,6 +379,7 @@ func _process(delta: float) -> void:
 			_angle = _top * (4.0 * absf(fposmod(_swing / SWING_PERIOD, 1.0) - 0.5) - 1.0)
 	_place_preview()
 	_follow(delta)
+	_juice(delta)
 	queue_redraw()
 	if _live():
 		_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -343,6 +395,7 @@ func _place_preview() -> void:
 	# Pêndulo pendurado acima da linha de falta: no fundo, a bola encosta na pista.
 	_preview.position = start + Vector3(0.0, ARM * (1.0 - cos(swing)), ARM * sin(swing))
 	_preview.visible = _phase != Phase.ROLLING and lane.ball == null
+	_preview_echo.global_transform = Lane.MIRROR * _preview.global_transform
 
 
 func _aim_camera() -> Vector3:
@@ -366,6 +419,87 @@ func _follow(delta: float) -> void:
 	_look = _look.lerp(look, weight)
 	_camera.look_at(_look)
 	_camera_moving = _camera.position.distance_to(target) > 0.005 or _look.distance_to(look) > 0.005
+
+
+## O rastro atrás da bola e a tremida no impacto. Vale também seguindo a jogada
+## de outro aparelho: os dois só olham para onde a bola está desenhada.
+func _juice(delta: float) -> void:
+	for point in _trail_points:
+		point[1] += delta
+	while not _trail_points.is_empty() and _trail_points[0][1] > TRAIL_LIFE:
+		_trail_points.pop_front()
+	if lane.ball != null and (lane.rolling or lane.following):
+		var at := lane.ball_point()
+		var speed := at.distance_to(_last_point) / maxf(delta, 0.001)
+		_last_point = at
+		# No deck e na canaleta o rastro some: ele é só da corrida na madeira.
+		var on_lane := at.y > Lane.BALL_R * 0.5 and at.z > -Lane.HEAD_PIN
+		if on_lane and (_trail_points.is_empty() or _trail_points[-1][0].distance_to(at) > TRAIL_STEP):
+			_trail_points.append([Vector3(at.x, 0.004, at.z), 0.0])
+		if not _impacted and at.z < -(Lane.HEAD_PIN - 0.15):
+			_impacted = true
+			_shake = SHAKE * clampf(speed / Lane.FULL_SPEED, 0.3, 1.0)
+	_draw_trail()
+	_shake = 0.0 if _shake < 0.001 else _shake * exp(-SHAKE_DECAY * delta)
+	_camera.h_offset = randf_range(-1.0, 1.0) * _shake
+	_camera.v_offset = randf_range(-1.0, 1.0) * _shake
+
+
+func _draw_trail() -> void:
+	var mesh := _trail.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	if _trail_points.size() < 2:
+		return
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var count := _trail_points.size()
+	for index in count:
+		var at: Vector3 = _trail_points[index][0]
+		var other: Vector3 = _trail_points[mini(index + 1, count - 1)][0]
+		if index == count - 1:
+			other = at + (at - _trail_points[index - 1][0])
+		var side := (other - at).cross(Vector3.UP).normalized()
+		# Fino e apagado na ponta velha, largo e aceso perto da bola.
+		var life := 1.0 - float(_trail_points[index][1]) / TRAIL_LIFE
+		var fresh := float(index + 1) / count
+		var colour := Color(ball_color.lerp(AppTheme.ACCENT, 0.5), 0.55 * life * fresh)
+		var half := side * TRAIL_WIDTH * 0.5 * fresh
+		mesh.surface_set_color(colour)
+		mesh.surface_add_vertex(at - half)
+		mesh.surface_set_color(colour)
+		mesh.surface_add_vertex(at + half)
+	mesh.surface_end()
+
+
+## O strike e o spare em letreiro grande, com um clarão rápido na pista.
+func celebrate(word: String) -> void:
+	var flash := ColorRect.new()
+	flash.color = Color(1.0, 1.0, 1.0, 0.45)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(flash)
+	var label := Label.new()
+	label.text = word
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_override("font", AppTheme.font(700, AppTheme.Role.DISPLAY))
+	label.add_theme_font_size_override("font_size", 72)
+	label.add_theme_color_override("font_color", AppTheme.ACCENT)
+	label.add_theme_color_override("font_outline_color", AppTheme.ACCENT_INK)
+	label.add_theme_constant_override("outline_size", 18)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.offset_bottom = -size.y * 0.3
+	add_child(label)
+	label.pivot_offset = Vector2(size.x * 0.5, size.y * 0.35)
+	label.scale = Vector2(0.4, 0.4)
+	label.rotation_degrees = -6.0
+	var tween := create_tween().set_parallel()
+	tween.tween_property(flash, "color:a", 0.0, 0.35)
+	tween.tween_property(label, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(1.1)
+	tween.chain().tween_callback(func() -> void:
+		flash.queue_free()
+		label.queue_free())
 
 
 # --- gesto --------------------------------------------------------------------
@@ -483,6 +617,7 @@ func _live() -> bool:
 	return (
 		_phase in [Phase.HOLD, Phase.SWING, Phase.ROLLING] or _drag != Drag.NONE
 		or lane.rolling or lane.following or _camera_moving
+		or _shake > 0.0 or not _trail_points.is_empty()
 	)
 
 

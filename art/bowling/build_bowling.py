@@ -58,6 +58,15 @@ KICKBACK_H = 0.75
 MASK_FRONT = HEAD_PIN - 0.5
 MASK_BOTTOM = 0.62
 MASK_TOP = 1.25
+# O salão: duas pistas vizinhas de cada lado, paredes com neon e a parede do
+# fundo acima da máquina. Só desenho: a Godot não faz colisor disto (ver
+# `_build_colliders`, que escolhe as malhas pelo nome).
+PITCH = LANE_W + 2 * (GUTTER_W + CAP_W)   # de um centro de pista ao vizinho
+NEIGHBOURS = (-2, -1, 1, 2)
+HALL_W = (max(NEIGHBOURS) + 0.5) * PITCH  # do centro à parede de cada lado
+HALL_H = 3.0
+HALL_FRONT = -APPROACH - 1.0
+NEON = "e040fb"
 WOOD_TILE = 3.0          # metros de pista que a textura cobre antes de repetir
 MAPLE = (0.88, 0.72, 0.50)
 
@@ -226,9 +235,88 @@ def build_lane(col, mats):
     bm = bmesh.new()
     box(bm, -cap_out, MASK_FRONT, cap_out, DECK_END + PIT_LEN, MASK_BOTTOM, MASK_TOP)
     objs.append(kit.mesh_object("masking", bm, col, [mats["surface"]]))
+    # Detalhes lima: faixas embaixo e em cima da fachada, a moldura da placa do
+    # número (o número vem da Godot) e um filete no topo de cada kickback.
     bm = bmesh.new()
-    box(bm, -cap_out, MASK_FRONT - 0.01, cap_out, MASK_FRONT, MASK_BOTTOM + 0.05, MASK_BOTTOM + 0.08)
+    front = MASK_FRONT - 0.01
+    for z in (MASK_BOTTOM + 0.05, MASK_TOP - 0.06):
+        box(bm, -cap_out, front, cap_out, MASK_FRONT, z, z + 0.03)
+    for x0, x1, z0, z1 in [(-0.22, 0.22, 0.74, 0.76), (-0.22, 0.22, 1.11, 1.13),
+                           (-0.22, -0.20, 0.74, 1.13), (0.20, 0.22, 0.74, 1.13)]:
+        box(bm, x0, front - 0.005, x1, front, z0, z1)
+    for side in (-1, 1):
+        k0, k1 = sorted((side * outer, side * (outer + KICKBACK_T)))
+        box(bm, k0, HEAD_PIN - 0.35, k1, MASK_FRONT, KICKBACK_H, KICKBACK_H + 0.02)
     objs.append(kit.mesh_object("accent", bm, col, [mats["accent"]]))
+
+    # A régua de luz embaixo da fachada, que ilumina o deck.
+    bm = bmesh.new()
+    box(bm, -outer, MASK_FRONT + 0.02, outer, MASK_FRONT + 0.12, MASK_BOTTOM - 0.015, MASK_BOTTOM)
+    objs.append(kit.mesh_object("deck_light", bm, col, [mats["deck_light"]]))
+    return objs
+
+
+def copies(objs, offsets, name, mats):
+    """Junta cópias das malhas de `objs`, deslocadas em x por cada offset, num objeto só."""
+    bm = bmesh.new()
+    for dx in offsets:
+        for obj in objs:
+            part = bmesh.new()
+            part.from_mesh(obj.data)
+            bmesh.ops.translate(part, verts=part.verts, vec=(dx, 0, 0))
+            tmp = bpy.data.meshes.new("tmp")
+            part.to_mesh(tmp)
+            part.free()
+            bm.from_mesh(tmp)
+            bpy.data.meshes.remove(tmp)
+    obj = kit.mesh_object(name, bm, objs[0].users_collection[0], mats, recalc=False)
+    for poly in obj.data.polygons:
+        poly.use_smooth = objs[0].data.polygons[0].use_smooth
+    return obj
+
+
+def build_hall(col, mats, lane_objs, pin):
+    """As vizinhas (cópias da pista, com pinos armados), as paredes e o neon."""
+    by_name = {o.name: o for o in lane_objs}
+    offsets = [n * PITCH for n in NEIGHBOURS]
+    objs = []
+    for source, name in [("lane_wood", "hall_wood"), ("marks", "hall_marks"), ("gutters", "hall_gutters"),
+                         ("walls", "hall_trim"), ("masking", "hall_masking"), ("pit", "hall_pit"),
+                         ("accent", "hall_accent"), ("deck_light", "hall_deck_light")]:
+        o = copies([by_name[source]], offsets, name, list(by_name[source].data.materials))
+        if source == "lane_wood":
+            lane_uv(o)
+        objs.append(o)
+    spots = [(dx + x, y) for dx in offsets for x, y in pin_spots()]
+    bm = bmesh.new()
+    for x, y in spots:
+        part = bmesh.new()
+        part.from_mesh(pin.data)
+        bmesh.ops.translate(part, verts=part.verts, vec=(x, y, 0))
+        tmp = bpy.data.meshes.new("tmp")
+        part.to_mesh(tmp)
+        part.free()
+        bm.from_mesh(tmp)
+        bpy.data.meshes.remove(tmp)
+    objs.append(kit.mesh_object("hall_pins", bm, col, list(pin.data.materials), recalc=False))
+
+    back = DECK_END + PIT_LEN + 0.05
+    bm = bmesh.new()
+    for side in (-1, 1):
+        x0, x1 = sorted((side * HALL_W, side * (HALL_W + 0.1)))
+        box(bm, x0, HALL_FRONT, x1, back, -0.06, HALL_H)
+    box(bm, -HALL_W, back, HALL_W, back + 0.1, MASK_TOP, HALL_H)
+    objs.append(kit.mesh_object("hall_walls", bm, col, [mats["hall"]]))
+
+    # Neon: duas faixas correndo por cada parede e uma no fundo, acima da máquina.
+    bm = bmesh.new()
+    for side in (-1, 1):
+        x0, x1 = sorted((side * (HALL_W - 0.02), side * HALL_W))
+        for z in (0.9, 2.2):
+            box(bm, x0, HALL_FRONT, x1, back, z, z + 0.04)
+    for z in (MASK_TOP + 0.25, MASK_TOP + 0.55):
+        box(bm, -HALL_W, back - 0.02, HALL_W, back, z, z + 0.04)
+    objs.append(kit.mesh_object("hall_neon", bm, col, [mats["neon"]]))
     return objs
 
 
@@ -378,7 +466,16 @@ def main():
         "stripe": kit.material("stripe", kit.hex_rgb("c62f2f"), roughness=0.2, coat=0.6),
         "ball": kit.material("ball", image=marble_img, roughness=0.15, coat=1.0),
         "hole": kit.material("hole", kit.hex_rgb("15121a"), roughness=0.8),
+        "hall": kit.material("hall", kit.hex_rgb("120e26"), roughness=0.7),
+        "neon": kit.material("neon", kit.hex_rgb(NEON), roughness=0.4),
+        "deck_light": kit.material("deck_light", kit.hex_rgb("fff4dc"), roughness=0.4),
     }
+    neon = mats["neon"].node_tree.nodes["Principled BSDF"]
+    neon.inputs["Emission Color"].default_value = (*[kit.srgb_to_linear(c) for c in kit.hex_rgb(NEON)], 1)
+    neon.inputs["Emission Strength"].default_value = 3.0
+    bar = mats["deck_light"].node_tree.nodes["Principled BSDF"]
+    bar.inputs["Emission Color"].default_value = (1, 0.95, 0.85, 1)
+    bar.inputs["Emission Strength"].default_value = 4.0
     accent = mats["accent"].node_tree.nodes["Principled BSDF"]
     accent.inputs["Emission Color"].default_value = (*[kit.srgb_to_linear(c) for c in kit.hex_rgb(ACCENT)], 1)
     accent.inputs["Emission Strength"].default_value = 2.0
@@ -390,7 +487,10 @@ def main():
     ball_col = kit.new_collection("ball")
     ball = build_ball(ball_col, mats)
 
-    kit.export(lane_objs, os.path.join(OUT, "lane.glb"))
+    hall_col = kit.new_collection("hall")
+    hall_objs = build_hall(hall_col, mats, lane_objs, pin)
+
+    kit.export(lane_objs + hall_objs, os.path.join(OUT, "lane.glb"))
     kit.export([pin], os.path.join(OUT, "pin.glb"))
     kit.export([ball], os.path.join(OUT, "ball.glb"))
 
