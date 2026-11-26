@@ -487,7 +487,8 @@ func _probe_game_sheet() -> void:
 	_equals(page.doc.title, Game.game_title(Game.CHESS), "que abre as regras do jogo da folha")
 	Nav.go_back()
 	await get_tree().process_frame
-	_check(not is_instance_valid(page), "o gesto de voltar fecha a página")
+	# Fecha descendo, e só sai da árvore no fim da animação.
+	_check(not page.is_open(), "o gesto de voltar fecha a página")
 	_check(sheet.is_open(), "e deixa a folha aberta")
 
 	sheet.close()
