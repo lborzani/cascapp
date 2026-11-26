@@ -375,7 +375,8 @@ func _probe_tabs() -> void:
 	var heard: Array[StringName] = []
 	tabs.picked.connect(func(route: StringName) -> void: heard.append(route))
 	_equals(tabs.route_at(Vector2(30, 30)), AppTabs.GAMES, "a esquerda é Jogos")
-	_equals(tabs.route_at(Vector2(216, 30)), AppTabs.ONLINE, "o meio é Online")
+	_equals(tabs.route_at(Vector2(150, 30)), AppTabs.ONLINE, "a segunda é Online")
+	_equals(tabs.route_at(Vector2(250, 30)), AppTabs.SHOP, "a terceira é Loja")
 	_equals(tabs.route_at(Vector2(400, 30)), AppTabs.YOU, "a direita é Você")
 	tabs.pick(AppTabs.GAMES)
 	_equals(heard.size(), 0, "tocar na aba em que se está não navega")
@@ -595,8 +596,8 @@ func _probe_rules_page() -> void:
 	_equals(knockout_goal, page.doc.formats[0].objective, "trocar de formato mostra o objetivo do outro")
 	_check(knockout_goal != brazilian_goal, "e os dois formatos não dizem a mesma coisa")
 	page.dismiss()
-	await process_frame
-	_check(not is_instance_valid(page), "fechar tira a página da árvore")
+	await create_timer(BottomSheet.SLIDE).timeout
+	_check(not is_instance_valid(page), "fechar tira a página da árvore depois da descida")
 
 	var chess := RulesPage.open(stage, &"chess")
 	await process_frame

@@ -1,5 +1,5 @@
 class_name GameSheet
-extends Control
+extends BottomSheet
 
 ## A folha do jogo: como jogar este jogo, numa camada só.
 ##
@@ -21,11 +21,7 @@ extends Control
 ## que a mostram — o cardápio de Jogos e a fileira de Online.
 
 signal confirmed(mode: int)
-signal closed
 
-## Os mesmos números de toda folha do app (`BottomSheet`).
-const SLIDE := BottomSheet.SLIDE
-const SHEET_RADIUS := BottomSheet.RADIUS
 const ICON := 60.0
 const PAIRING_SCENE := "res://scenes/pairing.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -33,10 +29,6 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 var mode := Game.Mode.HOTSEAT
 var game_id: StringName = &""
 
-var _panel: PanelContainer = null
-## O suporte que desliza. Ver [method _init].
-var _slider: Control = null
-var _scrim: ColorRect = null
 var _title: Label = null
 var _meta: Label = null
 var _icon: Control = null
@@ -89,59 +81,29 @@ static func launch(tree: SceneTree, chosen_mode: int) -> void:
 	tree.change_scene_to_file(Game.match_scene())
 
 
+## Reaberta a cada jogo, e não criada: fechar só esconde ([member keep]). A
+## altura é a do conteúdo, que muda com o modo escolhido.
 func _init() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	visible = false
-
-	_scrim = ColorRect.new()
-	_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_scrim.color = AppTheme.SCRIM
-	_scrim.gui_input.connect(_on_scrim_input)
-	add_child(_scrim)
-
-	# A folha sobe animada, e quem se move é este suporte de tela cheia, não o
-	# painel. O painel é ancorado embaixo e cresce para cima; escrever `position`
-	# num `Control` ancorado reescreve os offsets dele, e a animação terminava
-	# em `position.y = 0` — a folha ficava presa no topo da tela, com a lista
-	# aparecendo embaixo dela. O suporte descansa em zero, que é o lugar certo
-	# dele, e o painel nunca tem a posição escrita.
-	_slider = Control.new()
-	_slider.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_slider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_slider)
-
-	_panel = PanelContainer.new()
-	_panel.anchor_left = 0.0
-	_panel.anchor_right = 1.0
-	_panel.anchor_top = 1.0
-	_panel.anchor_bottom = 1.0
-	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var style := AppTheme.box(AppTheme.SURFACE, 0)
-	style.corner_radius_top_left = SHEET_RADIUS
-	style.corner_radius_top_right = SHEET_RADIUS
-	style.content_margin_left = AppTheme.SCREEN_PAD
-	style.content_margin_right = AppTheme.SCREEN_PAD
-	style.content_margin_top = AppTheme.SPACE_M
-	style.content_margin_bottom = AppTheme.SPACE_XL
-	_panel.add_theme_stylebox_override("panel", style)
-	_slider.add_child(_panel)
-	_panel.add_child(_build_body())
+	# O `_init` da `BottomSheet` monta a folha; o de quem herda não o chama sozinho.
+	super()
+	keep = true
+	top = -1.0
+	body.add_child(_build_body())
 
 
 func _build_body() -> VBoxContainer:
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", AppTheme.SPACE_M)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
 
 	var grab := ColorRect.new()
 	grab.color = Color(AppTheme.TEXT_DIM, 0.45)
 	grab.custom_minimum_size = Vector2(40, 4)
 	grab.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	body.add_child(grab)
+	column.add_child(grab)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", AppTheme.SPACE_M)
-	body.add_child(header)
+	column.add_child(header)
 	# O ladrilho na cor do jogo, com o mesmo ícone do bloco que abriu a folha.
 	_icon = Control.new()
 	_icon.custom_minimum_size = Vector2(ICON, ICON + AppTheme.PLATE_EDGE)
@@ -174,44 +136,44 @@ func _build_body() -> VBoxContainer:
 
 	_mode_box = VBoxContainer.new()
 	_mode_box.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_mode_box)
+	column.add_child(_mode_box)
 
 	_players = HBoxContainer.new()
 	_players.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("players", "Jogadores", _players))
+	column.add_child(_wrap("players", "Jogadores", _players))
 
 	_clock = VBoxContainer.new()
 	_clock.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("clock", "Ritmo", _clock))
+	column.add_child(_wrap("clock", "Ritmo", _clock))
 
 	_formats = GridContainer.new()
 	_formats.columns = 2
 	_formats.add_theme_constant_override("h_separation", AppTheme.SPACE_S)
 	_formats.add_theme_constant_override("v_separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("format", "Formato", _formats))
+	column.add_child(_wrap("format", "Formato", _formats))
 
 	_opponent = HBoxContainer.new()
 	_opponent.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("opponent", "Do outro lado", _opponent))
+	column.add_child(_wrap("opponent", "Do outro lado", _opponent))
 
 	_levels = HBoxContainer.new()
 	_levels.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("level", "Nível do bot", _levels))
+	column.add_child(_wrap("level", "Nível do bot", _levels))
 
 	_sides = HBoxContainer.new()
 	_sides.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("side", "Você joga de", _sides))
+	column.add_child(_wrap("side", "Você joga de", _sides))
 
 	_visibility = HBoxContainer.new()
 	_visibility.add_theme_constant_override("separation", AppTheme.SPACE_S)
-	body.add_child(_wrap("visibility", "Quem pode entrar", _visibility))
+	column.add_child(_wrap("visibility", "Quem pode entrar", _visibility))
 
 	_unavailable = Label.new()
 	_unavailable.theme_type_variation = &"Hint"
 	_unavailable.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_unavailable.text = "Este jogo não tem nenhum modo disponível neste build."
 	_unavailable.visible = false
-	body.add_child(_unavailable)
+	column.add_child(_unavailable)
 
 	_start = Button.new()
 	_start.theme_type_variation = &"PrimaryButton"
@@ -221,8 +183,8 @@ func _build_body() -> VBoxContainer:
 		Prefs.remember_mode(game_id, mode)
 		confirmed.emit(mode)
 	)
-	body.add_child(_start)
-	return body
+	column.add_child(_start)
+	return column
 
 
 ## Legenda mais grupo, guardados juntos: esconder a escolha sem esconder o rótulo
@@ -248,10 +210,6 @@ func _section(key: String) -> Control:
 func open_rules() -> RulesPage:
 	var host: Node = get_parent() if get_parent() != null else self
 	return RulesPage.open(host, game_id)
-
-
-func is_open() -> bool:
-	return visible
 
 
 func open(id: StringName, preferred_mode := -1) -> void:
@@ -297,21 +255,7 @@ func open(id: StringName, preferred_mode := -1) -> void:
 		wanted = _modes[0]
 	select_mode(wanted)
 
-	if visible:
-		return
-	visible = true
-	modulate.a = 0.0
-	_slider.position.y = 40.0
-	var rise := create_tween().set_parallel()
-	rise.tween_property(self, "modulate:a", 1.0, SLIDE * 0.6)
-	rise.tween_property(_slider, "position:y", 0.0, SLIDE).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-
-
-func close() -> void:
-	if not visible:
-		return
-	visible = false
-	closed.emit()
+	present()
 
 
 func select_mode(chosen: int) -> void:
@@ -571,14 +515,3 @@ func _build_visibility() -> void:
 func _select_visibility(listed: bool) -> void:
 	Game.listed_room = listed
 	_mark(_visibility, 1 if listed else 0)
-
-
-## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a folha.
-var _scrim_press := Tap.Press.new()
-
-
-func _on_scrim_input(event: InputEvent) -> void:
-	# Tocar fora fecha, como toda folha do Android. Por [Tap]: um clique chega duas
-	# vezes, e a mesma porta de toque do resto do app é uma porta só.
-	if _scrim_press.feed(event):
-		close()

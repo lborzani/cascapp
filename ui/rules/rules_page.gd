@@ -1,5 +1,5 @@
 class_name RulesPage
-extends Control
+extends BottomSheet
 
 ## "Como jogar": a página inteira das regras de um jogo.
 ##
@@ -15,7 +15,6 @@ extends Control
 ## Sem autoload: tudo o que a página precisa vem do recurso, e é o que deixa ela
 ## ser provada sem cena.
 
-signal closed
 
 ## Largura máxima do texto. Deitada, a tela tem o dobro disso, e uma linha de
 ## regra da largura da tela é uma linha que ninguém acompanha até o fim.
@@ -24,8 +23,6 @@ const MAX_WIDTH := 620.0
 var doc: GameRulesDoc = null
 var format := 0
 
-var _scrim: ColorRect = null
-var _panel: PanelContainer = null
 var _title: Label = null
 var _segments: SegmentedControl = null
 var _content: VBoxContainer = null
@@ -54,8 +51,11 @@ static func host_of(node: Node) -> Node:
 
 
 func _init() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# O `_init` da `BottomSheet` monta a folha; o de quem herda não o chama sozinho.
+	super()
+	# A folha sobe até perto do topo e fica centrada, com a largura de leitura.
+	top = 0.08
+	max_width = MAX_WIDTH
 	# Acima do painel de fim de partida e da escolha de cor do curinga: a página é
 	# uma consulta, e uma consulta que aparece atrás do que se queria consultar
 	# não foi aberta.
@@ -64,28 +64,10 @@ func _init() -> void:
 	# `nav.gd`.
 	add_to_group(&"back_layer")
 
-	_scrim = ColorRect.new()
-	_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_scrim.color = AppTheme.SCRIM
-	_scrim.gui_input.connect(_on_scrim_input)
-	add_child(_scrim)
-
-	_panel = PanelContainer.new()
-	var style := AppTheme.box(AppTheme.SURFACE, 0)
-	style.corner_radius_top_left = AppTheme.RADIUS_LARGE
-	style.corner_radius_top_right = AppTheme.RADIUS_LARGE
-	style.border_width_top = 2
-	style.border_color = AppTheme.LINE_SOFT
-	style.content_margin_left = AppTheme.SCREEN_PAD
-	style.content_margin_right = AppTheme.SCREEN_PAD
-	style.content_margin_top = AppTheme.SPACE_M
-	style.content_margin_bottom = AppTheme.SPACE_L
-	_panel.add_theme_stylebox_override("panel", style)
-	add_child(_panel)
-
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", AppTheme.SPACE_M)
-	_panel.add_child(column)
+	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(column)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", AppTheme.SPACE_M)
@@ -121,20 +103,6 @@ func _init() -> void:
 	scroll.add_child(_content)
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_RESIZED:
-		_place_panel()
-
-
-## A folha sobe até perto do topo e fica centrada, com a largura de leitura.
-func _place_panel() -> void:
-	if _panel == null:
-		return
-	var width := minf(size.x, MAX_WIDTH)
-	_panel.position = Vector2((size.x - width) * 0.5, size.y * 0.08)
-	_panel.size = Vector2(width, size.y * 0.92)
-
-
 func show_rules(rules: GameRulesDoc, chosen_format := 0) -> void:
 	doc = rules
 	if doc == null:
@@ -151,7 +119,6 @@ func show_rules(rules: GameRulesDoc, chosen_format := 0) -> void:
 	if _segments.visible:
 		_segments.setup(labels, format)
 	_refresh()
-	_place_panel()
 
 
 func _on_format(index: int) -> void:
@@ -229,18 +196,5 @@ func _numbered(number: int, text: String) -> HBoxContainer:
 
 ## Fecha a página. Público porque o gesto de voltar chega aqui por `nav.gd`.
 func dismiss() -> void:
-	if is_queued_for_deletion():
-		return
 	remove_from_group(&"back_layer")
-	closed.emit()
-	queue_free()
-
-
-## Tocar fora fecha ao soltar: arrastar pelo fundo não fecha a folha.
-var _scrim_press := Tap.Press.new()
-
-
-func _on_scrim_input(event: InputEvent) -> void:
-	# Tocar fora fecha, como a folha do jogo. Por [Tap]: um clique chega duas vezes.
-	if _scrim_press.feed(event):
-		dismiss()
+	close()
