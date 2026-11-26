@@ -7,6 +7,13 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.79
+
+- Amigos: tocar num amigo abre a conversa direto. O perfil dele abre pelo banner no topo da conversa.
+- O perfil do amigo ficou mais limpo: Convidar e o presentinho lado a lado, e Silenciar, Remover e Bloquear lá embaixo.
+- A aba Você ficou mais enxuta: os atalhos em duas colunas, e o Elo e o código de amigo embaixo do seu nome.
+- Molduras e capas animadas mais leves: menos travadas nas partidas e no perfil dos amigos.
+
 ## 1.78
 
 - Seu visual (moldura, cor do nome, título e capa) agora aparece em todos os jogos: Ludo, Uno, Sinuca, Batalha Naval, Boliche e Metrópole.
