@@ -162,6 +162,7 @@ func _test_screen(stamp: int) -> bool:
 	_equals(Account.contact_email, email, "a conta sabe o e-mail")
 	_equals(row.get_meta(&"title"), "Conta protegida", "a linha mostra a proteção")
 	_equals(row.get_meta(&"detail"), "t***@example.com", "com o e-mail mascarado")
+	_check(not row.visible, "protegida, a linha sai da tela")
 	row.pressed.emit()
 	_check(not is_instance_valid(settings._email), "protegida, o toque não abre nada")
 	Account.sign_out()

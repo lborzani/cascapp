@@ -2,8 +2,10 @@ extends Control
 
 ## Ajustes: o que vale para o app inteiro, e não para uma partida.
 ##
-## A aba Você: a foto (que se troca tocando nela), o nome, três números, os
-## atalhos para o histórico e o treino, e os interruptores.
+## A aba Você: a foto (que se troca tocando nela), o nome com o Elo e o código
+## de amigo embaixo, a grade de atalhos (histórico, treino, missões, presentes,
+## loja, aberturas) e os interruptores. Cada número aparece uma vez só, no
+## atalho que ele conta: nada de fileira de números repetindo os atalhos.
 ##
 ## O **nome** salva sozinho, ao sair do campo ou ao confirmar no teclado, e não a
 ## cada tecla: gravar em disco a cada letra digitada é dez escritas para uma
@@ -93,54 +95,30 @@ func _ready() -> void:
 	%Avatar.ring = AppTheme.ACCENT
 	_add_edit_badge()
 	%Version.text = "Versão %s" % AppVersion.text()
-	for state: String in ["font_color", "font_hover_color"]:
-		%NewsButton.add_theme_color_override(state, AppTheme.ACCENT)
-	%NewsButton.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
-	# A loja é um atalho numa linha inteira, embaixo dos outros.
-	_shop_button = Button.new()
-	_shop_button.custom_minimum_size = Vector2(0, 76)
-	_shop_button.focus_mode = Control.FOCUS_NONE
-	_shop_button.theme_type_variation = &"IconButton"
-	_shop_button.pressed.connect(_open_shop)
-	%HistoryButton.get_parent().add_sibling(_shop_button)
-	# As missões logo antes da loja: é de lá que vêm as moedas e os exclusivos.
-	_missions_button = Button.new()
-	_missions_button.name = "MissionsButton"
-	_missions_button.custom_minimum_size = Vector2(0, 76)
-	_missions_button.focus_mode = Control.FOCUS_NONE
-	_missions_button.theme_type_variation = &"IconButton"
-	_missions_button.pressed.connect(_open_missions)
-	_shop_button.add_sibling(_missions_button)
-	_shop_button.get_parent().move_child(_missions_button, _shop_button.get_index())
-	# Os presentes logo depois das missões: as duas linhas que acendem sozinhas.
-	_gifts_button = Button.new()
-	_gifts_button.name = "GiftsButton"
-	_gifts_button.custom_minimum_size = Vector2(0, 76)
-	_gifts_button.focus_mode = Control.FOCUS_NONE
-	_gifts_button.theme_type_variation = &"IconButton"
-	_gifts_button.pressed.connect(_open_gifts)
-	_missions_button.add_sibling(_gifts_button)
-	# Logo depois da loja: o que se compra lá é o que a proteção guarda.
+	for link: Button in [%NewsButton, %UpdateButton]:
+		for state: String in ["font_color", "font_hover_color"]:
+			link.add_theme_color_override(state, AppTheme.ACCENT)
+		link.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY_S)
+	# A grade de atalhos, dois por linha. A proteção, enquanto falta, é um convite
+	# numa linha inteira logo abaixo; protegida, some.
+	_missions_button = _shortcut("MissionsButton", _open_missions)
+	_gifts_button = _shortcut("GiftsButton", _open_gifts)
+	_shop_button = _shortcut("ShopButton", _open_shop)
+	var openings := _shortcut("OpeningsButton", _open_openings)
+	openings.set_meta(&"title", "Aberturas")
+	openings.set_meta(&"detail", "%d linhas para treinar" % Openings.LINES.size())
 	_protect_button = Button.new()
 	_protect_button.name = "ProtectButton"
 	_protect_button.custom_minimum_size = Vector2(0, 76)
 	_protect_button.focus_mode = Control.FOCUS_NONE
 	_protect_button.theme_type_variation = &"IconButton"
 	_protect_button.pressed.connect(_open_email)
-	_shop_button.add_sibling(_protect_button)
+	_protect_button.draw.connect(_draw_shortcut.bind(_protect_button))
+	%Shortcuts.add_sibling(_protect_button)
 	Account.signed_in_changed.connect(_refresh_protect.unbind(1))
-	for shortcut: Button in [%HistoryButton, %TrainingButton, _missions_button, _gifts_button, _shop_button, _protect_button]:
+	for shortcut: Button in [%HistoryButton, %TrainingButton]:
 		shortcut.draw.connect(_draw_shortcut.bind(shortcut))
 	%StatusLabel.text = _status_text()
-	var openings := Button.new()
-	openings.custom_minimum_size = Vector2(0, 76)
-	openings.focus_mode = Control.FOCUS_NONE
-	openings.theme_type_variation = &"IconButton"
-	openings.set_meta(&"title", "Aberturas")
-	openings.set_meta(&"detail", "%d linhas para treinar, de ataque e de defesa" % Openings.LINES.size())
-	openings.draw.connect(_draw_shortcut.bind(openings))
-	openings.pressed.connect(_open_openings)
-	%HistoryButton.get_parent().add_sibling(openings)
 	_refresh_games()
 	%HistoryButton.pressed.connect(_open_history)
 	%TrainingButton.pressed.connect(_open_training)
@@ -220,6 +198,20 @@ func _save() -> void:
 	Account.push_name(Prefs.player_name())
 
 
+## Um atalho da grade: cartão de duas linhas (`_draw_shortcut`).
+func _shortcut(node_name: String, open: Callable) -> Button:
+	var button := Button.new()
+	button.name = node_name
+	button.custom_minimum_size = Vector2(0, 76)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+	button.theme_type_variation = &"IconButton"
+	button.pressed.connect(open)
+	button.draw.connect(_draw_shortcut.bind(button))
+	%Shortcuts.add_child(button)
+	return button
+
+
 ## Põe a fileira da foto e do nome dentro de um cartão que pode ter a capa da
 ## loja atrás (`ProfileCover`). A fileira vem da cena; o cartão nasce aqui.
 func _wrap_profile() -> void:
@@ -244,12 +236,10 @@ func _wrap_profile() -> void:
 		node.owner = self
 
 
-## A linha sob o nome diz que ele salva sozinho e, com conta, o código de amigo —
-## que é o que se dita para alguém adicionar você.
+## A linha sob o nome: o Elo e o código de amigo (o que se dita para alguém
+## adicionar você). Sem nenhum dos dois, que o nome salva sozinho.
 func _update_preview() -> void:
-	%Preview.text = "Salva sozinho"
-	if not Account.friend_code.is_empty():
-		%Preview.text += " · código de amigo %s" % Account.friend_code
+	%Preview.text = preview_text(Account.elo, Account.friend_code)
 	# A bolacha é a mesma que os outros vão ver na mesa.
 	%Avatar.player_name = Prefs.player_name()
 	%Avatar.photo = Account.local_avatar()
@@ -272,49 +262,17 @@ func _switch(label: String, about: String, start: bool, save: Callable) -> Switc
 	return row
 
 
-## Os três números do topo. O Elo só existe com conta; sem ela o bloco diz isso
-## em vez de mostrar um zero que parece nota.
-func _fill_stats(games: int, due: int) -> void:
-	for child in %Stats.get_children():
-		%Stats.remove_child(child)
-		child.queue_free()
-	var chess: Color = AppTheme.GAME_COLORS["chess"]
-	_stat(str(Account.elo) if Account.elo > 0 else "—", "Elo no xadrez", chess, AppTheme.ACCENT_INK)
-	_stat(str(games), "partidas" if games != 1 else "partida", AppTheme.SURFACE, AppTheme.TEXT)
-	_stat(str(due), "para treinar hoje", AppTheme.SURFACE, AppTheme.TEXT)
-	_stat(str(Account.coins) if Account.coins >= 0 else "—", "moedas", AppTheme.SURFACE, AppTheme.TEXT)
+static func preview_text(elo: int, code: String) -> String:
+	var parts := PackedStringArray()
+	if elo > 0:
+		parts.append("Elo %d" % elo)
+	if not code.is_empty():
+		parts.append("código de amigo %s" % code)
+	return " · ".join(parts) if not parts.is_empty() else "Salva sozinho"
 
 
-func _stat(value: String, caption: String, fill: Color, ink: Color) -> void:
-	var tile := PanelContainer.new()
-	tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tile.custom_minimum_size.y = 80.0
-	var box := AppTheme.box(fill, AppTheme.RADIUS_LARGE)
-	box.content_margin_left = 6
-	box.content_margin_right = 6
-	tile.add_theme_stylebox_override("panel", box)
-	var column := VBoxContainer.new()
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_theme_constant_override("separation", -2)
-	tile.add_child(column)
-	var number := Label.new()
-	number.text = value
-	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	number.add_theme_font_override("font", AppTheme.display(700))
-	number.add_theme_font_size_override("font_size", 28)
-	number.add_theme_color_override("font_color", ink)
-	column.add_child(number)
-	var label := Label.new()
-	label.text = caption
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_override("font", AppTheme.font(700))
-	label.add_theme_font_size_override("font_size", AppTheme.SIZE_CAPTION)
-	label.add_theme_color_override("font_color", ink if fill != AppTheme.SURFACE else AppTheme.TEXT_DIM)
-	column.add_child(label)
-	%Stats.add_child(tile)
-
-
-## Histórico e Treino: um cartão com o nome e uma linha que conta. O texto mora
+## Um atalho: um cartão com o nome e uma linha que conta. Na meia largura a
+## linha pode não caber: corta com reticências. O texto mora
 ## em `meta` e não no `text` do botão, que não sabe ter duas linhas de pesos
 ## diferentes.
 func _draw_shortcut(button: Button) -> void:
@@ -326,9 +284,14 @@ func _draw_shortcut(button: Button) -> void:
 		AppTheme.display(600), Vector2(14.0, button.size.y * 0.5 - 2.0), str(button.get_meta(&"title", "")),
 		HORIZONTAL_ALIGNMENT_LEFT, button.size.x - 28.0, 18, AppTheme.TEXT
 	)
+	var font := AppTheme.font(700)
+	var room := button.size.x - 28.0
+	var detail := str(button.get_meta(&"detail", ""))
+	while detail.length() > 1 and font.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x > room:
+		detail = detail.left(-2) + "…"
 	button.draw_string(
-		AppTheme.font(700), Vector2(14.0, button.size.y * 0.5 + 17.0), str(button.get_meta(&"detail", "")),
-		HORIZONTAL_ALIGNMENT_LEFT, button.size.x - 28.0, 13, AppTheme.ACCENT if lit else AppTheme.TEXT_DIM
+		font, Vector2(14.0, button.size.y * 0.5 + 17.0), detail,
+		HORIZONTAL_ALIGNMENT_LEFT, room, 13, AppTheme.ACCENT if lit else AppTheme.TEXT_DIM
 	)
 
 
@@ -402,7 +365,7 @@ func _check_updates() -> void:
 
 func _show_update(releases: Variant) -> void:
 	%UpdateButton.disabled = false
-	%UpdateButton.text = "Procurar atualização"
+	%UpdateButton.text = "Atualizar"
 	%UpdateResult.visible = true
 	if not releases is Array:
 		%UpdateResult.text = "Não deu para consultar agora. Confira a internet e tente de novo."
@@ -472,7 +435,7 @@ func _open_missions() -> void:
 func _refresh_games() -> void:
 	var games := Prefs.history().size()
 	var due := Training.due(Prefs.training(), int(Time.get_unix_time_from_system())).size()
-	_fill_stats(games, due)
+	_update_preview()
 	%HistoryButton.set_meta(&"title", "Histórico")
 	%HistoryButton.set_meta(&"detail", history_detail(games))
 	%TrainingButton.set_meta(&"title", "Treino")
@@ -481,7 +444,7 @@ func _refresh_games() -> void:
 	%HistoryButton.queue_redraw()
 	%TrainingButton.queue_redraw()
 	_shop_button.set_meta(&"title", "Loja")
-	_shop_button.set_meta(&"detail", "Bolas, tacos, tabuleiros, peças e perfil · %s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
+	_shop_button.set_meta(&"detail", "%s moedas" % (str(Account.coins) if Account.coins >= 0 else "—"))
 	_shop_button.set_meta(&"lit", true)
 	_shop_button.queue_redraw()
 	var ready := Account.missions_ready()
@@ -502,22 +465,22 @@ static func gifts_detail(closed: int) -> String:
 		return "1 presente para abrir"
 	if closed > 1:
 		return "%d presentes para abrir" % closed
-	return "O que os amigos mandaram"
+	return "Dos amigos"
 
 
 ## A linha das missões: o que está pronto para resgatar vem antes de tudo.
 static func missions_detail(ready: int, events: int) -> String:
 	var parts := PackedStringArray()
 	if ready == 1:
-		parts.append("1 pronta para resgatar")
+		parts.append("1 pronta")
 	elif ready > 1:
-		parts.append("%d prontas para resgatar" % ready)
+		parts.append("%d prontas" % ready)
 	else:
-		parts.append("Do dia, conquistas e itens exclusivos")
+		parts.append("Do dia e conquistas")
 	if events == 1:
-		parts.append("1 evento no ar")
+		parts.append("1 evento")
 	elif events > 1:
-		parts.append("%d eventos no ar" % events)
+		parts.append("%d eventos" % events)
 	return " · ".join(parts)
 
 
@@ -528,7 +491,10 @@ func _refresh_protect() -> void:
 		_protect_button.set_meta(&"title", "Conta protegida")
 		_protect_button.set_meta(&"detail", Account.masked_email(Account.contact_email))
 		_protect_button.set_meta(&"lit", false)
-	elif not Account.signed_in():
+		_protect_button.visible = false
+		return
+	_protect_button.visible = true
+	if not Account.signed_in():
 		_protect_button.set_meta(&"title", "Proteja sua conta")
 		_protect_button.set_meta(&"detail", "Precisa de internet")
 		_protect_button.set_meta(&"lit", false)
