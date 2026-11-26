@@ -3,12 +3,11 @@ extends Control
 
 ## A loja: o saldo, os itens à venda e os já comprados para usar.
 ##
-## Por cima da tela "Você", como o histórico: fechar devolve a tela como estava.
+## Mora na aba Loja (`scenes/shop.tscn`), que dá o fundo e a área segura; sai-se
+## pelas abas, e por isso não há "Fechar".
 ## Tudo passa pela conta (`Account.buy`, `Account.equip`): o preço e o saldo são
 ## do servidor, e sem conta a loja só mostra. Comprar pede dois toques — o
 ## primeiro troca o preço por "Confirmar" — e o item comprado já entra em uso.
-
-signal closed
 
 const SWATCH := 92.0
 ## As abas: `[encaixes, rótulo]`, na ordem da tela. Aba de mais de um encaixe
@@ -38,21 +37,13 @@ var _toast: Banner = null
 ## O item à espera do segundo toque para comprar; vazio sem nenhum.
 var _confirming := ""
 var _busy := false
-## Dentro da aba Loja (`scenes/shop.tscn`): a cena já dá o fundo e a área segura,
-## e não há "Fechar" — sai-se pelas abas. Escrito antes de entrar na árvore.
-var embedded := false
 ## A escolha do amigo para presentear, por cima da loja; `null` fechada.
 var _picker: Control = null
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-	var safe: MarginContainer = MarginContainer.new() if embedded else SafeAreaMargin.new()
-	if not embedded:
-		var background := ColorRect.new()
-		background.color = AppTheme.BACKGROUND
-		background.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
-		add_child(background)
+	var safe := MarginContainer.new()
 	for side in ["left", "top", "right", "bottom"]:
 		safe.add_theme_constant_override("margin_" + side, 16)
 	safe.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
@@ -67,13 +58,6 @@ func _ready() -> void:
 	title.theme_type_variation = &"Title"
 	title.size_flags_horizontal = SIZE_EXPAND_FILL
 	header.add_child(title)
-	var close_button := Button.new()
-	close_button.text = "Fechar"
-	close_button.theme_type_variation = &"GhostButton"
-	close_button.custom_minimum_size = Vector2(0, 44)
-	close_button.pressed.connect(close)
-	close_button.visible = not embedded
-	header.add_child(close_button)
 	column.add_child(header)
 
 	_balance = Label.new()
@@ -129,13 +113,9 @@ func picking() -> bool:
 	return is_instance_valid(_picker)
 
 
-## O que o voltar do sistema chama. Com a lista de amigos aberta, fecha só ela.
+## O que o voltar do sistema chama com a lista de amigos aberta: fecha só ela.
 func close() -> void:
-	if is_instance_valid(_picker):
-		_close_picker()
-		return
-	closed.emit()
-	queue_free()
+	_close_picker()
 
 
 func _fill() -> void:
