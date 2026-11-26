@@ -10,9 +10,14 @@ extends Control
 ## conversa.pb.js`), então o amigo offline lê depois. Aberta, a tela pergunta a
 ## cada [constant POLL_SECONDS]; ler marca as recebidas como lidas.
 ##
-## Por cima da gaveta, como o perfil: fechar devolve a gaveta.
+## O topo é o banner do amigo (capa, moldura, nome e status): tocar nele abre o
+## perfil por cima.
+##
+## Por cima da gaveta: fechar devolve a gaveta.
 
 signal closed
+## Tocaram no banner: abrir o perfil deste amigo.
+signal profile_requested(friend_id: String)
 
 const POLL_SECONDS := 3.0
 
@@ -49,25 +54,50 @@ func _ready() -> void:
 	safe.add_child(column)
 
 	var profile := Friends.profile_of(friend_id)
+	var look := Cosmetics.clean(profile.get("look", {}))
+	var banner := PanelContainer.new()
+	banner.name = "Banner"
+	banner.add_theme_stylebox_override("panel", AppTheme.box(AppTheme.SURFACE_HIGH, AppTheme.RADIUS))
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
+	ProfileCover.dress_card(banner, header, look, AppTheme.RADIUS)
 	var coaster := Coaster.new()
-	coaster.custom_minimum_size = Vector2(40, 40)
+	coaster.custom_minimum_size = Vector2(44, 44)
+	coaster.size_flags_vertical = SIZE_SHRINK_CENTER
+	coaster.mouse_filter = MOUSE_FILTER_IGNORE
 	coaster.player_name = str(profile.get("name", ""))
 	coaster.photo = Account.avatar_of(friend_id, str(profile.get("avatar", "")))
+	coaster.frame = Cosmetics.frame_of(look)
 	header.add_child(coaster)
-	var title := _text(str(profile.get("name", "Conversa")), &"Title")
-	title.size_flags_horizontal = SIZE_EXPAND_FILL
+	var words := VBoxContainer.new()
+	words.size_flags_horizontal = SIZE_EXPAND_FILL
+	words.size_flags_vertical = SIZE_SHRINK_CENTER
+	words.add_theme_constant_override("separation", 0)
+	var title := _text(str(profile.get("name", "Conversa")), &"")
 	title.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	header.add_child(title)
-	var close_button := Button.new()
-	close_button.text = "Fechar"
-	close_button.theme_type_variation = &"GhostButton"
-	close_button.custom_minimum_size = Vector2(0, 44)
+	title.add_theme_font_override("font", AppTheme.font(800))
+	title.add_theme_font_size_override("font_size", AppTheme.SIZE_BODY)
+	ProfileStyle.paint_name(title, look)
+	words.add_child(title)
+	var status: Variant = Friends.status_of(friend_id)
+	var status_label := _text(Friends.status_text(status), &"Caption")
+	if status != null:
+		status_label.add_theme_color_override("font_color", AppTheme.SUCCESS)
+	words.add_child(status_label)
+	header.add_child(words)
+	var close_button := IconButton.new()
+	close_button.kind = IconButton.Kind.CLOSE
+	close_button.size_flags_vertical = SIZE_SHRINK_CENTER
 	close_button.pressed.connect(close)
 	header.add_child(close_button)
-	column.add_child(header)
+	# Tocar no banner (fora do fechar) abre o perfil. Ao soltar, como na gaveta.
+	var press := Tap.Press.new()
+	banner.gui_input.connect(func(event: InputEvent) -> void:
+		if press.feed(event):
+			profile_requested.emit(friend_id)
+	)
+	column.add_child(banner)
 
 	_note = _text("", &"Caption")
 	_note.visible = false

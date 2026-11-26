@@ -12,8 +12,8 @@ extends Control
 ## "Convidar", que pergunta o jogo aqui mesmo. A gaveta só pede: quem troca de
 ## tela é a tela que a abriu (`watch_requested`, `invite_requested`).
 ##
-## Tocar no card abre o perfil do amigo (`FriendProfile`), com os números e as
-## partidas dele. Pedido de amizade recebido aparece no topo, com Aceitar e
+## Tocar no card abre a conversa (`FriendChat`); o banner no topo dela abre o
+## perfil (`FriendProfile`), com os números e as partidas dele. Pedido de amizade recebido aparece no topo, com Aceitar e
 ## Recusar.
 ##
 ## Gerenciar amigos (código, QR, remover) continua no painel da aba Você: o
@@ -134,7 +134,9 @@ func _exit_tree() -> void:
 ## Fecha o painel de amigos, se aberto por cima, e depois a gaveta: é o que o
 ## gesto de voltar faz, uma camada por vez.
 func close() -> void:
-	for child in get_children():
+	var children := get_children()
+	children.reverse()
+	for child in children:
 		if (child is FriendsPanel or child is FriendProfile or child is FriendChat) and not child.is_queued_for_deletion():
 			child.close()
 			return
@@ -334,12 +336,13 @@ func _row(friend: Dictionary) -> Control:
 	var action := _action(id, status)
 	if action != null:
 		line.add_child(action)
-	# Tocar no card (fora do botão) abre o perfil. Ao soltar: arrastar a lista
+	# Tocar no card (fora do botão) abre a conversa. Ao soltar: arrastar a lista
 	# não abre nada.
 	var press := Tap.Press.new()
 	card.gui_input.connect(func(event: InputEvent) -> void:
 		if press.feed(event):
-			open_profile(id)
+			Sound.play(Sound.Cue.TAP)
+			open_chat(id)
 	)
 	return card
 
@@ -348,14 +351,14 @@ func open_profile(id: String) -> FriendProfile:
 	Sound.play(Sound.Cue.TAP)
 	var profile := FriendProfile.new()
 	profile.friend_id = id
+	# Convidar volta para a lista (a escolha do jogo): fecha o perfil e a conversa
+	# embaixo dele.
 	profile.invite_requested.connect(func(friend: String) -> void:
-		profile.close()
+		for child in get_children():
+			if child is FriendProfile or child is FriendChat:
+				child.close()
 		_inviting = friend
 		_fill()
-	)
-	profile.chat_requested.connect(func(friend: String) -> void:
-		profile.close()
-		open_chat(friend)
 	)
 	add_child(profile)
 	return profile
@@ -364,6 +367,7 @@ func open_profile(id: String) -> FriendProfile:
 func open_chat(id: String) -> FriendChat:
 	var chat := FriendChat.new()
 	chat.friend_id = id
+	chat.profile_requested.connect(open_profile)
 	add_child(chat)
 	return chat
 

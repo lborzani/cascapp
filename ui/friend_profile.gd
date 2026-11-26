@@ -1,25 +1,24 @@
 class_name FriendProfile
 extends Control
 
-## O perfil de um amigo, aberto pelo toque no card dele na gaveta: foto, nome,
-## o que está fazendo agora, o Elo do xadrez e uma linha por jogo (partidas,
-## vitórias, derrotas). As partidas uma a uma ficam só no histórico de cada um.
+## O perfil de um amigo, aberto pelo banner da conversa: foto, nome, o que está
+## fazendo agora, o Elo do xadrez e uma linha por jogo (partidas, vitórias,
+## derrotas). As partidas uma a uma ficam só no histórico de cada um.
 ##
 ## O topo sai na hora, do que a gaveta já sabe (`Friends.profile_of`); os
 ## números chegam depois, da rota do perfil (`Account.friend_profile`), que só
 ## responde a amigo. As partidas são as que o amigo subiu do aparelho dele
 ## (`Account.push_matches`): contra o bot e online, de todos os jogos.
 ##
-## Embaixo dos botões de conversar, convidar e presentear: Silenciar (sem
-## notificação das mensagens dele), Remover e Bloquear (`Account.block`).
+## Uma linha de ações (Convidar, presentinho). Silenciar (sem notificação das
+## mensagens dele), Remover e Bloquear (`Account.block`) ficam no fim da página,
+## longe do dedo.
 ##
-## Por cima da gaveta, como o painel de amigos: fechar devolve a gaveta.
+## Por cima da conversa: fechar devolve a conversa.
 
 signal closed
 ## Convidar este amigo: a gaveta pergunta o jogo.
 signal invite_requested(friend_id: String)
-## Abrir a conversa com este amigo.
-signal chat_requested(friend_id: String)
 
 const PHOTO := 72.0
 
@@ -103,18 +102,6 @@ func _ready() -> void:
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 8)
 	column.add_child(actions)
-	var unread := Friends.unread_of(friend_id)
-	var chat := Button.new()
-	chat.name = "Chat"
-	chat.text = "Conversar (%d nova%s)" % [unread, "" if unread == 1 else "s"] if unread > 0 else "Conversar"
-	chat.theme_type_variation = &"GhostButton"
-	chat.custom_minimum_size = Vector2(0, 48)
-	chat.size_flags_horizontal = SIZE_EXPAND_FILL
-	chat.pressed.connect(func() -> void:
-		Sound.play(Sound.Cue.TAP)
-		chat_requested.emit(friend_id)
-	)
-	actions.add_child(chat)
 	# Convidar só quem está online e fora de sala, como na gaveta.
 	if status is Dictionary and str(status.get("room", "")).is_empty() and Net.relay_available():
 		var invite := Button.new()
@@ -128,9 +115,7 @@ func _ready() -> void:
 			invite_requested.emit(friend_id)
 		)
 		actions.add_child(invite)
-
-	# O presentinho do dia: de graça, um por amigo por dia. Linha própria: com
-	# Conversar e Convidar, três botões não cabem num celular em pé.
+	# O presentinho do dia: de graça, um por amigo por dia.
 	if Account.signed_in():
 		var gift := Button.new()
 		gift.name = "Gift"
@@ -139,11 +124,15 @@ func _ready() -> void:
 		gift.size_flags_horizontal = SIZE_EXPAND_FILL
 		_paint_gift(gift)
 		gift.pressed.connect(_send_gift.bind(gift))
-		column.add_child(gift)
-		column.add_child(_manage_row())
+		actions.add_child(gift)
+	actions.visible = actions.get_child_count() > 0
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
 	column.add_child(_rows)
+	if Account.signed_in():
+		var manage := _manage_row()
+		manage.name = "Manage"
+		column.add_child(manage)
 
 	if not Account.signed_in():
 		_rows.add_child(_text("Sem conexão com a sua conta agora. As partidas aparecem quando ela voltar.", &"Subtitle"))

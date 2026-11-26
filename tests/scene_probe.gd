@@ -3184,8 +3184,16 @@ func _test_friend_requests() -> void:
 	release.pressed = false
 	card.gui_input.emit(release)
 	await get_tree().process_frame
+	var tapped := drawer2.find_children("", "FriendChat", false, false)
+	_check(tapped.size() == 1, "tocar no card do amigo abre a conversa")
+	var banner: Control = tapped[0].find_child("Banner", true, false) if tapped.size() == 1 else null
+	_check(banner != null and banner.find_child("Cover", true, false) != null, "com o banner do amigo no topo")
+	if banner != null:
+		banner.gui_input.emit(touch)
+		banner.gui_input.emit(release)
+	await get_tree().process_frame
 	var profile: FriendProfile = drawer2.find_children("", "FriendProfile", false, false).front() if not drawer2.find_children("", "FriendProfile", false, false).is_empty() else null
-	_check(profile != null, "tocar no card do amigo abre o perfil")
+	_check(profile != null, "tocar no banner abre o perfil")
 	if profile != null:
 		var words := profile.find_children("", "Label", true, false).map(func(l: Label) -> String: return l.text)
 		_check(words.has("Eva") and words.has("Elo 1350 no xadrez"), "com o nome e o Elo")
@@ -3205,6 +3213,7 @@ func _test_friend_requests() -> void:
 		(profile.find_child("Invite", true, false) as Button).pressed.emit()
 		await get_tree().process_frame
 		_check(not is_instance_valid(profile) or profile.is_queued_for_deletion(), "Convidar fecha o perfil")
+		_check(not is_instance_valid(tapped[0]) or tapped[0].is_queued_for_deletion(), "e a conversa embaixo dele")
 		_equals(drawer2._inviting, "evaevaevaeva123", "e a gaveta pergunta o jogo")
 		drawer2._inviting = ""
 		var again := drawer2.open_profile("evaevaevaeva123")
@@ -3217,13 +3226,12 @@ func _test_friend_requests() -> void:
 		_equals(menu2.get_node("%AppBar").alerts(), 3, "mensagens não lidas acendem a pílula")
 		var badge := drawer2._rows.get_child(0).find_child("Unread", true, false) as Label
 		_equals(badge.text if badge != null else "", "3", "e o card do amigo mostra quantas")
-		var with_chat := drawer2.open_profile("evaevaevaeva123")
-		var chat_button := with_chat.find_child("Chat", true, false) as Button
-		_equals(chat_button.text if chat_button != null else "", "Conversar (3 novas)", "o perfil diz que há mensagens")
-		chat_button.pressed.emit()
+		drawer2.open_chat("evaevaevaeva123")
+		var on_top := drawer2.open_profile("evaevaevaeva123")
+		drawer2.close()
 		await get_tree().process_frame
 		var chats := drawer2.find_children("", "FriendChat", false, false)
-		_check(chats.size() == 1 and not is_instance_valid(with_chat), "Conversar troca o perfil pela conversa")
+		_check(chats.size() == 1 and not is_instance_valid(on_top), "voltar fecha o perfil e devolve a conversa")
 		if chats.size() == 1:
 			var chat: FriendChat = chats[0]
 			var now := 10000
