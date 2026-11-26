@@ -68,11 +68,14 @@ jobs:
           godot --headless --path . res://tests/ludo_probe.tscn
           godot --headless --path . --script res://tests/monopoly_probe.gd
 
+  # Monta em paralelo com os testes: montar não depende deles, publicar sim — e
+  # quem publica é o `publicar`, que espera os dois. Nada sai sem testes verdes.
   apk:
     name: APK assinado
-    needs: testes
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.versao.outputs.version }}
     steps:
       # Histórico inteiro, com as tags: a base do .pck sai da comparação entre
       # elas (`tools/ota_base.sh`).
@@ -104,6 +107,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          # Wrapper e dependências do Gradle: o plugin e o export do Godot
+          # baixavam tudo do zero a cada release.
+          cache: gradle
 
       - uses: android-actions/setup-android@v3
         with:
@@ -114,11 +120,25 @@ jobs:
         with:
           version: ${{ env.GODOT_VERSION }}
 
+      # O `.aar` só muda quando muda `android_plugin/` (o Stockfish e a versão
+      # do NDK moram em `build_stockfish.sh`, lá dentro): a chave é o hash da pasta.
+      - name: Cache do plugin Android
+        id: plugin
+        uses: actions/cache@v5
+        with:
+          path: android_plugin/plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar
+          key: plugin-aar-${{ hashFiles('android_plugin/**') }}
+
       - name: Construir o plugin Android
+        if: steps.plugin.outputs.cache-hit != 'true'
         run: |
           chmod +x ./gradlew
           ./build_stockfish.sh
           ./gradlew :plugin:assembleRelease --no-daemon
+        working-directory: android_plugin
+
+      - name: Pôr o plugin no projeto
+        run: |
           cp plugin/build/outputs/aar/ChessAndCheckersPlugins.release.aar ../android/plugins/
         working-directory: android_plugin
 
@@ -223,25 +243,57 @@ jobs:
           fi
           ls -l "$pck"
 
-      # Só por tag. Disparado à mão, `github.ref_name` é o nome da **branch**, e
-      # uma release chamada "develop" é lixo que alguém precisa apagar depois —
-      # o APK sai como artefato do trabalho, logo abaixo, que é o que quem
-      # disparou à mão queria.
+      # Um artefato só, por tag e à mão: o `publicar` busca daqui, e quem
+      # disparou à mão leva o APK por aqui.
+      - name: Guardar o APK como artefato
+        uses: actions/upload-artifact@v5
+        with:
+          name: cascapp-release-apk
+          path: build/android/cascapp-*
+          retention-days: 7
+
+      # `always()` para apagar o keystore mesmo quando o export falha: o caminho
+      # de erro é justamente aquele em que ninguém lembra do arquivo.
+      - name: Apagar o keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+  # Só por tag. Disparado à mão, `github.ref_name` é o nome da **branch**, e uma
+  # release chamada "develop" é lixo que alguém precisa apagar depois — o APK
+  # sai como artefato do `apk`, que é o que quem disparou à mão queria.
+  publicar:
+    name: Publicar
+    needs: [testes, apk]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.apk.outputs.version }}
+    steps:
+      # O CHANGELOG.md e o `push.mjs` vêm do commit da tag.
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: cascapp-release-apk
+          path: build/android
+
       - name: Publicar a release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          apk="build/android/cascapp-$VERSION.apk"
+          pck=$(ls build/android/cascapp-"$VERSION"-base*.pck)
           # As notas são a seção da versão no CHANGELOG.md: é o que o app mostra na
           # tela de atualizar. A origem do build vai abaixo do `---`, que o app
           # não lê (`Changelog.items`).
-          secao=$(awk -v v="## ${{ steps.versao.outputs.version }}" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md)
+          secao=$(awk -v v="## $VERSION" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md)
           if ! printf '%s\n' "$secao" | grep -q '^- '; then
-            echo "::error::o CHANGELOG.md não tem novidades para ${{ steps.versao.outputs.version }}"
+            echo "::error::o CHANGELOG.md não tem novidades para $VERSION"
             exit 1
           fi
           notas=$(printf '%s\n\n---\n\nAPK assinado da versão %s, gerado por `%s` a partir de `%s`.' \
-            "$secao" "${{ steps.versao.outputs.version }}" "${{ github.workflow }}" "${{ github.sha }}")
+            "$secao" "$VERSION" "${{ github.workflow }}" "${{ github.sha }}")
           if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
             gh release upload "${{ github.ref_name }}" "$apk" "$pck" --clobber
           else
@@ -258,7 +310,6 @@ jobs:
       # `FIREBASE_SA_JSON` (o JSON inteiro), vira um arquivo só durante o passo e
       # some. Sem o segredo, a release sai igual, só sem o aviso na hora.
       - name: Avisar os celulares
-        if: github.event_name == 'push'
         env:
           FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SA_JSON }}
         run: |
@@ -268,19 +319,5 @@ jobs:
           fi
           sa="$RUNNER_TEMP/firebase-sa.json"
           ( umask 077; printf '%s' "$FIREBASE_SA_JSON" > "$sa" )
-          FIREBASE_SA="$sa" node pocketbase/worker/push.mjs topic updates type=update "version=${{ steps.versao.outputs.version }}" || echo "::warning::o aviso pelo Firebase falhou"
+          FIREBASE_SA="$sa" node pocketbase/worker/push.mjs topic updates type=update "version=$VERSION" || echo "::warning::o aviso pelo Firebase falhou"
           rm -f "$sa"
-
-      - name: Guardar o APK como artefato
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v5
-        with:
-          name: cascapp-release-apk
-          path: build/android/*.apk
-          retention-days: 7
-
-      # `always()` para apagar o keystore mesmo quando o export falha: o caminho
-      # de erro é justamente aquele em que ninguém lembra do arquivo.
-      - name: Apagar o keystore
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks"
