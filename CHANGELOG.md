@@ -7,6 +7,11 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.81
+
+- Boliche mais leve: a partida voltou a rodar lisa no celular.
+- Corrigido: depois da bola bater nos pinos, a bola e os pinos caídos apareciam flutuando sobre a pista.
+
 ## 1.80
 
 - Boliche de cara nova: a pista envernizada reflete os pinos e a bola, e agora você joga num salão com pistas vizinhas e luz neon.
