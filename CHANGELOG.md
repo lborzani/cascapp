@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.80
+
+- Boliche de cara nova: a pista envernizada reflete os pinos e a bola, e agora você joga num salão com pistas vizinhas e luz neon.
+- A máquina ganhou placa com o número da pista e uma luz forte em cima dos pinos.
+- A bola deixa um rastro de luz, a câmera treme quando ela chega aos pinos, e strike e spare aparecem num letreiro grande.
+
 ## 1.79
 
 - Amigos: tocar num amigo abre a conversa direto. O perfil dele abre pelo banner no topo da conversa.
