@@ -50,6 +50,10 @@ var frame := "":
 ## As molduras que se mexem: o neon pulsa, as chamas tremulam, o arco-íris gira
 ## e a do pioneiro gira com cometas em órbita.
 const ANIMATED_FRAMES := ["neon", "flames", "rainbow", "pioneer"]
+## De quanto em quanto tempo uma moldura ou capa animada se redesenha: 30 vezes
+## por segundo, e não a cada quadro (ver `ProfileCover._process`).
+const REDRAW_STEP := 1.0 / 30.0
+var _since := 0.0
 ## O relógio da moldura animada, em segundos. Anda no `_process`, que só roda
 ## com uma delas na tela; a folha de conferência o escreve à mão.
 var frame_time := 0.0
@@ -194,11 +198,15 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 			# três cometas em órbita (um na contramão) deixando rastro, e brilhos de
 			# quatro pontas que acendem e apagam na borda.
 			draw_arc(center, middle, 0.0, TAU, 64, Color("120a2e"), band, true)
+			# A faixa colorida numa linha só, com uma cor por ponto: sessenta arcos
+			# separados eram sessenta desenhos por quadro.
 			var segments := 60
-			for i in segments:
-				var from := TAU * i / segments
-				var colour := ProfileStyle.pioneer_color(float(i) / segments - frame_time * 0.18)
-				draw_arc(center, middle, from, from + TAU / segments + 0.02, 4, colour, band * 0.62, true)
+			var ring := PackedVector2Array()
+			var colours := PackedColorArray()
+			for i in segments + 1:
+				ring.append(center + Vector2.from_angle(TAU * i / segments) * middle)
+				colours.append(ProfileStyle.pioneer_color(float(i) / segments - frame_time * 0.18))
+			draw_polyline_colors(ring, colours, band * 0.62, true)
 			for edge: float in [radius - 0.75, radius - band + 0.75]:
 				draw_arc(center, edge, 0.0, TAU, 64, Color("ffe7a3"), 1.5, true)
 			for comet in 3:
@@ -207,7 +215,8 @@ func _draw_frame(center: Vector2, radius: float, band: float) -> void:
 				for step in 10:
 					var fade := 1.0 - step / 10.0
 					var spot := center + Vector2.from_angle(head - way * step * 0.07) * middle
-					draw_circle(spot, band * 0.32 * fade, Color(1.0, 0.97, 0.88, 0.95 * fade), true, -1.0, true)
+					# Sem antialias: são dez discos por cometa, e o rastro esconde a borda.
+					draw_circle(spot, band * 0.32 * fade, Color(1.0, 0.97, 0.88, 0.95 * fade))
 			for i in 6:
 				var twinkle := maxf(0.0, sin(frame_time * 2.2 + i * 2.1))
 				if twinkle > 0.05:
@@ -241,7 +250,10 @@ static func animated(style: String) -> bool:
 
 func _process(delta: float) -> void:
 	frame_time += delta
-	queue_redraw()
+	_since += delta
+	if _since >= REDRAW_STEP:
+		_since = 0.0
+		queue_redraw()
 
 
 static func _leaf(at: Vector2, along: Vector2, length: float, width: float) -> PackedVector2Array:

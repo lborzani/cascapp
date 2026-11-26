@@ -69,6 +69,7 @@ var look := {}:
 		queue_redraw()
 ## O relógio da capa animada, em segundos.
 var time := 0.0
+var _since := 0.0
 ## Escurece a parte de baixo, para o texto em cima dela continuar legível quando
 ## a capa é o fundo da tela inteira (o perfil do amigo).
 var fade := false:
@@ -93,7 +94,12 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	time += delta
-	queue_redraw()
+	_since += delta
+	# Redesenhar custa o desenho inteiro de novo; 30 vezes por segundo basta para
+	# o movimento, e o celular de 90 ou 120 Hz não paga três ou quatro por quadro.
+	if _since >= Coaster.REDRAW_STEP:
+		_since = 0.0
+		queue_redraw()
 
 
 func _draw() -> void:
@@ -237,6 +243,25 @@ static func _pattern(canvas: CanvasItem, rect: Rect2, pattern: String, time: flo
 			_pioneer(canvas, rect, rng, time)
 
 
+## O degradê redondo das nebulosas: branco no meio, transparente na borda.
+static var _glow_texture: GradientTexture2D = null
+
+
+static func _glow() -> GradientTexture2D:
+	if _glow_texture == null:
+		var gradient := Gradient.new()
+		gradient.set_color(0, Color.WHITE)
+		gradient.set_color(1, Color(1, 1, 1, 0))
+		_glow_texture = GradientTexture2D.new()
+		_glow_texture.gradient = gradient
+		_glow_texture.fill = GradientTexture2D.FILL_RADIAL
+		_glow_texture.fill_from = Vector2(0.5, 0.5)
+		_glow_texture.fill_to = Vector2(0.5, 0.0)
+		_glow_texture.width = 128
+		_glow_texture.height = 128
+	return _glow_texture
+
+
 ## A capa dos testadores: três nebulosas que respiram e derivam nas cores do
 ## conjunto (`ProfileStyle.PIONEER`), poeira de estrelas, seis constelações de
 ## verdade (`CONSTELLATIONS`) cujas linhas levam pulsos de luz de estrela em
@@ -248,15 +273,17 @@ static func _pioneer(canvas: CanvasItem, rect: Rect2, rng: RandomNumberGenerator
 		var spot := rect.position + Vector2(rect.size.x * (0.18 + cloud * 0.32), sky * (0.3 + 0.25 * (cloud % 2))) + drift
 		var tint := ProfileStyle.pioneer_color(cloud / 3.0)
 		var breath := 0.5 + 0.5 * sin(time * 0.6 + cloud * 2.4)
-		# Discos empilhados, cada um mais transparente: uma mancha de bordas macias.
-		for ring in 12:
-			canvas.draw_circle(spot, sky * (0.5 - ring * 0.038), Color(tint, 0.014 + 0.01 * breath), true, -1.0, true)
+		# Uma mancha de bordas macias: um quadrado com o degradê redondo. Eram doze
+		# discos empilhados, e na tela inteira do celular isso derrubava os quadros.
+		var reach := sky * 0.5
+		canvas.draw_texture_rect(_glow(), Rect2(spot - Vector2.ONE * reach, Vector2.ONE * reach * 2.0), false, Color(tint, 0.22 + 0.14 * breath))
 
 	var dust := clampi(int(rect.get_area() / 1100.0), 20, 200)
 	for i in dust:
 		var at := rect.position + Vector2(rng.randf(), rng.randf()) * rect.size
 		var twinkle := 0.45 + 0.55 * sin(time * rng.randf_range(1.2, 3.2) + i * 0.9)
-		canvas.draw_circle(at, rng.randf_range(0.5, 1.3), Color(1, 1, 1, 0.55 * twinkle), true, -1.0, true)
+		# Sem antialias: num ponto de um pixel ele só custa vértices.
+		canvas.draw_circle(at, rng.randf_range(0.5, 1.3), Color(1, 1, 1, 0.55 * twinkle))
 
 	# Em pé (tela cheia), as seis no céu, em duas colunas. Deitada (cartão, loja),
 	# seis juntas viram borrão: uma por vez, no meio, trocando a cada `CYCLE`
@@ -314,7 +341,7 @@ static func _constellation(
 		canvas.draw_line(a, b, Color(0.82, 0.86, 1.0, 0.22 * alpha), 1.0, true)
 		if reveal >= 1.0:
 			var phase := fposmod(time * 0.35 + index * 0.37, 1.0)
-			canvas.draw_circle(a.lerp(b, phase), 1.4 * grow, Color(spark, sin(phase * PI) * alpha), true, -1.0, true)
+			canvas.draw_circle(a.lerp(b, phase), 1.4 * grow, Color(spark, sin(phase * PI) * alpha))
 		index += 1
 	for i in stars.size():
 		var star: Array = constellation["stars"][i]
@@ -323,5 +350,6 @@ static func _constellation(
 		var radius := (1.0 + (4.0 - float(star[2])) * 0.5) * grow
 		var core := Color("ffb27a") if star[3] else Color("e6efff")
 		var glow := 0.6 + 0.4 * sin(time * 1.7 + (index + i) * 1.1)
-		canvas.draw_circle(stars[i], radius * 2.6 * glow, Color(ProfileStyle.pioneer_color(float(i) / stars.size()), 0.16 * alpha), true, -1.0, true)
+		var halo := radius * 2.6 * glow
+		canvas.draw_texture_rect(_glow(), Rect2(stars[i] - Vector2.ONE * halo, Vector2.ONE * halo * 2.0), false, Color(ProfileStyle.pioneer_color(float(i) / stars.size()), 0.3 * alpha))
 		canvas.draw_circle(stars[i], radius * (0.8 + 0.2 * glow), Color(core, alpha), true, -1.0, true)
