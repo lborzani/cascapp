@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.87
+
+- Quem atualizou pelo app desde a 1.83 recebe agora a instalação completa, com o ícone novo da galera em roda.
+
 ## 1.86
 
 - Ícone novo: a galera em roda, nas cores dos jogos, no ícone e na tela de abertura.
