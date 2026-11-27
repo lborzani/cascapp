@@ -7,6 +7,13 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.84
+
+- O app ganhou som: os botões fazem um clique suave, e as folhas fazem um sopro ao subir.
+- Música de fundo na tela inicial. Ela some quando você abre um jogo e volta quando você sai. Dá para desligar em Você, no interruptor "Música".
+- Boliche com som de salão: o murmúrio do pessoal, a bola rolando, a canaleta e os pinos batendo mais forte quanto mais rápido caem.
+- Corrigido: no boliche, a câmera tremia mesmo com a bola na canaleta. Agora ela só treme quando a bola encosta num pino.
+
 ## 1.83
 
 - A aba Loja não tem mais o botão Fechar, que deixava a aba vazia.
