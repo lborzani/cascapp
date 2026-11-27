@@ -46,6 +46,7 @@ const SHOTS := [
 	["res://scenes/shop.tscn", "18c_loja"],
 	["res://scenes/shop.tscn", "18d_loja_tabuleiro"],
 	["res://scenes/shop.tscn", "18e_loja_pecas"],
+	["res://scenes/shop.tscn", "18e2_loja_acabamento"],
 	["res://scenes/shop.tscn", "18f_loja_taco"],
 	["res://scenes/shop.tscn", "18g_loja_perfil"],
 	["res://scenes/shop.tscn", "18q_loja_cartas"],
@@ -58,6 +59,8 @@ const SHOTS := [
 	["res://scenes/settings.tscn", "18l_presentes"],
 	["res://scenes/settings.tscn", "18m_presentes_aberto"],
 	["res://scenes/shop.tscn", "18n_presentear"],
+	["res://scenes/shop.tscn", "18r_loja_item"],
+	["res://scenes/shop.tscn", "18s_loja_item_faltam"],
 	["res://scenes/main_menu.tscn", "34_perfil_amigo"],
 	["res://scenes/main_menu.tscn", "34b_gaveta_amigos"],
 	# O perfil com a moldura e a capa animadas, em três instantes (0, 0,4 e 0,8 s).
@@ -294,7 +297,7 @@ func _next() -> void:
 			Account.paid = Account.prices.keys() + ["deck_pioneer"]
 			Account.owned = ["deck_night", "deck_pioneer"]
 			Account.look = {"deck": "deck_pioneer"}
-		"18e_loja_pecas":
+		"18e_loja_pecas", "18e2_loja_acabamento":
 			Account.token = "print"
 			Account.coins = 350
 			Account.prices = {
@@ -339,7 +342,7 @@ func _next() -> void:
 				{"key": "p_explorer", "track": "perm", "event": "", "kind": "variety", "game": "", "target": 8, "title": "", "reward_coins": 0, "reward_item": "title_explorer", "progress": 8, "claimed": true},
 				{"key": "e_natal_uno", "track": "event", "event": "natal", "kind": "win", "game": "uno", "target": 5, "title": "Ganhe 5 de Uno na ceia", "reward_coins": 100, "reward_item": "", "progress": 3, "claimed": false},
 			]
-		"18l_presentes", "18m_presentes_aberto", "18n_presentear":
+		"18l_presentes", "18m_presentes_aberto", "18n_presentear", "18r_loja_item", "18s_loja_item_faltam":
 			Account.token = "print"
 			Account.coins = 350
 			Account.prices = {"ball_galaxy": 400, "ball_flames": 300, "ball_ocean": 250, "ball_melon": 200, "ball_wood": 150}
@@ -569,6 +572,10 @@ func _next() -> void:
 		_scene._open_gifts()
 		_scene._gifts._revealed["g1"] = Account.gifts[0]
 		_scene._gifts._fill()
+	elif shot in ["18r_loja_item", "18s_loja_item_faltam"]:
+		# A folha do item: um que dá para comprar e um que custa mais que o saldo.
+		var shop: ShopPanel = _scene.get_node("%Shop")
+		shop._open_item(Cosmetics.BALL, "ball_flames" if shot == "18r_loja_item" else "ball_galaxy")
 	elif shot == "18n_presentear":
 		var shop: ShopPanel = _scene.get_node("%Shop")
 		shop._pick_friend("ball_galaxy")
@@ -579,11 +586,14 @@ func _next() -> void:
 		var tab := 0 if shot.begins_with("18i") else (1 if shot.begins_with("18j") else 2)
 		_scene._missions._tabs.set_current(tab)
 		_scene._missions._tabs.selected.emit(tab)
-	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18f_loja_taco", "18g_loja_perfil", "18q_loja_cartas"]:
-		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18q_loja_cartas": 4, "18g_loja_perfil": 5}[shot]
+	elif shot in ["18d_loja_tabuleiro", "18e_loja_pecas", "18e2_loja_acabamento", "18f_loja_taco", "18g_loja_perfil", "18q_loja_cartas"]:
+		var tab: int = {"18f_loja_taco": 1, "18d_loja_tabuleiro": 2, "18e_loja_pecas": 3, "18e2_loja_acabamento": 3, "18q_loja_cartas": 4, "18g_loja_perfil": 5}[shot]
 		var shop: ShopPanel = _scene.get_node("%Shop")
 		shop._tabs.set_current(tab)
 		shop._tabs.selected.emit(tab)
+		if shot == "18e2_loja_acabamento":
+			shop._kinds.set_current(1)
+			shop._kinds.selected.emit(1)
 	if (shot.begins_with("29") or shot.begins_with("31") or shot.begins_with("33") or shot.begins_with("35")) and is_instance_valid(_scene._coin_toss):
 		# A moeda do sorteio cobriria o tabuleiro que o print quer mostrar.
 		_scene._coin_toss.free()
