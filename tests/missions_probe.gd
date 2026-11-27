@@ -166,7 +166,8 @@ func _app_side() -> void:
 	await get_tree().process_frame
 	_check(sheet._sheet != null and sheet._sheet.is_inside_tree(), "abre numa BottomSheet")
 	_equals(sheet._rows.get_child_count(), 3, "com as três do dia")
-	_check(sheet._toast.get_parent() == sheet, "o aviso fica fora da lista")
+	_check(sheet._toast.get_parent().get_parent() == sheet, "o aviso fica fora da lista")
+	_check(sheet._toast.size.x > 0.0, "e com largura, não torto na borda")
 	sheet.close()
 	sheet.close()
 	await get_tree().create_timer(0.6).timeout
