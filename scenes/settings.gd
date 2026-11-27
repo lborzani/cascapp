@@ -88,6 +88,7 @@ func _ready() -> void:
 	%Tabs.picked.connect(_go_tab)
 
 	_sound_switch = _switch("Som", "Peça, dado, carta e vitória", Prefs.sound_on(), _toggle_sound)
+	_switch("Música", "Só na tela inicial", Prefs.music_on(), _toggle_music)
 	_haptics_switch = _switch("Vibração", "Um toque curto na sua vez", Prefs.haptics_on(), _toggle_haptics)
 	_switch(
 		"Mostrar lances possíveis", "Bolinhas nas casas de destino",
@@ -172,8 +173,14 @@ func _go_tab(route: StringName) -> void:
 ## sem mandar o jogador abrir uma partida para descobrir.
 func _toggle_sound(value: bool) -> void:
 	Prefs.set_sound(value)
+	Sound.refresh()
 	if value:
 		Sound.play(Sound.Cue.CASH)
+
+
+func _toggle_music(value: bool) -> void:
+	Prefs.set_music(value)
+	Sound.refresh()
 
 
 func _toggle_haptics(value: bool) -> void:

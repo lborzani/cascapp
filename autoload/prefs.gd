@@ -30,6 +30,7 @@ const DEFAULT_NAME := "Guidon"
 
 const SOUND_KEY := "sound"
 const HAPTICS_KEY := "haptics"
+const MUSIC_KEY := "music"
 const WELCOMED_KEY := "welcomed"
 const SEVENS_KEY := "uno_sevens"
 const FAVORITES_KEY := "favorites"
@@ -125,6 +126,17 @@ static func set_premove(value: bool) -> void:
 
 static func set_haptics(value: bool) -> void:
 	_file().set_value(SECTION, HAPTICS_KEY, value)
+	_file().save(PATH)
+
+
+## A música da tela inicial, **ligada** por padrão. Separada do som porque quem
+## quer o clique sem a música é o caso comum; o "Som" desligado cala as duas.
+static func music_on() -> bool:
+	return bool(_file().get_value(SECTION, MUSIC_KEY, true))
+
+
+static func set_music(value: bool) -> void:
+	_file().set_value(SECTION, MUSIC_KEY, value)
 	_file().save(PATH)
 
 

@@ -142,6 +142,10 @@ func _rise() -> void:
 	if not is_inside_tree():
 		return
 	_stop()
+	# Pelo caminho e não pelo nome: as sondas de `--script` não têm autoload.
+	var sound := get_node_or_null(^"/root/Sound")
+	if sound != null:
+		sound.play(sound.Cue.SHEET)
 	modulate.a = 0.0
 	_slider.position.y = TRAVEL
 	_motion = create_tween().set_parallel()

@@ -137,6 +137,11 @@ func _let_scroll_through(node: Node) -> void:
 		button.set_meta(&"press_bound", true)
 		button.button_down.connect(Motion.press.bind(button, true))
 		button.button_up.connect(Motion.press.bind(button, false))
+	# Todo botão também faz o clique, pelo mesmo motivo. Quem já toca um som
+	# próprio no aperto marca `no_click`.
+	if not button.has_meta(&"no_click") and not button.has_meta(&"click_bound"):
+		button.set_meta(&"click_bound", true)
+		button.pressed.connect(Sound.play.bind(Sound.Cue.TAP))
 	_pass_drag_to_scroll(button)
 
 
