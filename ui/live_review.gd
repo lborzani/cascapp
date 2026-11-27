@@ -4,9 +4,12 @@ extends Node
 ## Avaliação ao vivo para quem assiste xadrez: a cada lance que chega, o
 ## veredito dele e a nota da posição, pelo mesmo Stockfish da revisão.
 ##
-## Só o último lance é julgado. É o único que a tela mostra, e é o que deixa
-## quem entra no meio da partida ver a nota em menos de um segundo, em vez de
-## esperar o motor passar pelo histórico inteiro. Uma busca por vez, numa
+## Julga do lance que estava na tela quando a avaliação ligou em diante, um por
+## um e em ordem: quem entra no meio da partida vê a nota em menos de um segundo,
+## em vez de esperar o motor passar pelo histórico inteiro, e nenhum lance novo
+## fica sem veredito. Antes só o último era julgado, e a busca que terminava
+## depois de outro lance era jogada fora: contra o bot, que responde rápido, o
+## lance de quem treina quase nunca ganhava nota. Uma busca por vez, numa
 ## thread: a partida não espera o motor. Com internet a nota vem do servidor
 ## (`ServerSearch`); sem, do aparelho.
 
@@ -32,9 +35,13 @@ var _engine: Stockfish = null
 var _no_engine := false
 ## Histórico mais novo que a partida mostrou.
 var _history: Array = []
-## O que a busca em andamento julga, e o histórico a que `entry` pertence. Um
-## resultado de histórico que mudou no meio da busca é jogado fora.
+## O que a busca em andamento julga (o histórico até o lance julgado), e o
+## histórico a que `entry` pertence. Um resultado só é jogado fora quando o lance
+## dele saiu do histórico (desfazer) no meio da busca.
 var _asked: Array = []
+## O primeiro lance a julgar: o último que já estava na tela quando a avaliação
+## começou a seguir a partida. -1 até a primeira chamada de `follow`.
+var _from := -1
 var _judged: Array = []
 ## Nota da última posição vista, e o FEN dela. Lance a lance, a posição de
 ## antes do lance novo é a de depois do anterior, e a busca dela é poupada.
@@ -51,6 +58,9 @@ func follow(history: Array) -> void:
 	if history == _history:
 		return
 	_history = history.duplicate()
+	if _from < 0:
+		_from = maxi(_history.size() - 1, 0)
+	_from = mini(_from, maxi(_history.size() - 1, 0))
 	entry = {}
 	# O último lance é novo (ou o desfazer o expôs de novo): o que valia para essa
 	# casa do histórico já não vale, e a busca dele vem a seguir.
@@ -83,9 +93,16 @@ func _paint() -> void:
 
 
 func _kick() -> void:
-	if _thread != null or _no_engine or _history.is_empty() or _history == _judged:
+	if _thread != null or _no_engine:
 		return
-	_asked = _history
+	var next := -1
+	for index in range(_from, _history.size()):
+		if not verdicts.has(index):
+			next = index
+			break
+	if next < 0:
+		return
+	_asked = _history.slice(0, next + 1)
 	_thread = Thread.new()
 	_thread.start(_work.bind(_asked))
 
@@ -98,15 +115,20 @@ func _process(_delta: float) -> void:
 	if result.is_empty() and (_engine == null or not _engine.running()):
 		_no_engine = true
 		return
-	if _asked == _history:
-		entry = result
-		_judged = _asked
+	if result.is_empty():
+		# O motor está vivo mas não julgou este lance: segue para o próximo em vez
+		# de pedir o mesmo para sempre.
+		_from = maxi(_from, _asked.size())
+	elif _history.slice(0, _asked.size()) == _asked:
 		# Mate perdido é sempre erro grave, como na revisão.
-		var verdict: int = entry["verdict"]
-		if entry["missed_mate"]:
+		var verdict: int = result["verdict"]
+		if result["missed_mate"]:
 			verdict = maxi(verdict, GameReview.Verdict.BLUNDER)
-		verdicts[_judged.size() - 1] = verdict
-		_paint()
+		verdicts[_asked.size() - 1] = verdict
+		if _asked.size() == _history.size():
+			entry = result
+			_judged = _asked
+			_paint()
 		judged.emit()
 	_kick()
 

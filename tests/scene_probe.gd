@@ -2133,6 +2133,7 @@ func _test_training_undo() -> void:
 		_check(live.entry.is_empty(), "sem motor, nenhum veredito")
 	else:
 		_equals(live.entry.get("uci"), "g2g4", "o veredito é o do lance que ficou")
+		_check(range(3).all(func(i: int) -> bool: return live.verdicts.has(i)), "todo lance ganha veredito, não só o último")
 		_check(live.entry.get("verdict", -1) >= GameReview.Verdict.MISTAKE, "2.g4 é erro")
 		_equals(scene._board.badge_square, _square("g4"), "com o selo na casa dele")
 		_equals(scene._moves_strip.verdicts.get(2), live.verdicts[2], "e o símbolo na faixa de lances")
