@@ -7,6 +7,14 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.86
+
+- Ícone novo: a galera em roda, nas cores dos jogos, no ícone e na tela de abertura.
+- No treino de xadrez, a faixa de lances mostra a qualidade de cada lance (!, ?!, ?, ??).
+- No treino, o xeque-mate agora abre o cartão de fim de partida. Dá para desfazer o lance e continuar.
+- O cartão de fim do xadrez e das damas ganhou "Ver tabuleiro", para olhar a posição final. "Ver resultado" traz o cartão de volta.
+- Corrigido: o aviso de missão resgatada aparecia torto, cortado na borda da tela.
+
 ## 1.85
 
 - Corrigido: o app fechava sozinho cerca de um minuto depois de abrir.
