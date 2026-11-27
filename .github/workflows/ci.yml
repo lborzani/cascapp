@@ -160,7 +160,7 @@ jobs:
           godot --headless --fixed-fps 60 --path . --script res://tests/bowling_physics_probe.gd
           godot --headless --fixed-fps 60 --path . res://tests/bowling_scene_probe.tscn
 
-      # Som: barramentos, música só no cardápio e as batidas do boliche.
+      # Som: barramentos e música só no cardápio.
       - name: Som
         run: godot --headless --fixed-fps 60 --path . res://tests/sound_probe.tscn
 

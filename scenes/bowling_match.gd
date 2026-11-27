@@ -172,7 +172,6 @@ func _build() -> void:
 	_view.released.connect(_on_released)
 	_view.settled.connect(_on_settled)
 	stage.add_child(_view)
-	add_child(BowlingAudio.new(_view.lane))
 
 	# Na barra, e não sobre a pista: no alto da pista ficam os pinos.
 	_banner = _bar.notice

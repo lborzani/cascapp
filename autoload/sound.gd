@@ -59,11 +59,6 @@ enum Cue {
 	ALERT,
 	## Uma folha subiu: um sopro curto e abafado.
 	SHEET,
-	## Madeira contra madeira: um pino batendo (boliche). Quem toca dá o peso
-	## pela velocidade (`gain_db`) e varia a altura (`pitch`).
-	PIN,
-	## A bola chegando aos pinos: o baque grave que abre o estrondo.
-	KNOCK,
 }
 
 ## Os sons que ficam tocando em laço, gerados numa thread na abertura (ver
@@ -71,12 +66,6 @@ enum Cue {
 enum Loop {
 	## A música da tela inicial.
 	MUSIC,
-	## O salão do boliche: murmúrio de gente e pinos caindo em pistas distantes.
-	HALL,
-	## A bola rolando na madeira.
-	ROLL,
-	## A bola na canaleta: mais oco e mais grave.
-	GUTTER,
 }
 
 ## Os barramentos. Criados aqui em código, como o resto do som: o `Master` é do
@@ -120,8 +109,6 @@ const LEVELS := {
 	Cue.WIN: -7.0,
 	Cue.ALERT: -9.0,
 	Cue.SHEET: -17.0,
-	Cue.PIN: -6.0,
-	Cue.KNOCK: -4.0,
 }
 
 ## Duração da vibração, em milissegundos, nos sinais que a têm. Curtíssimas de
@@ -165,7 +152,7 @@ func _ready() -> void:
 	add_child(_music)
 	get_tree().scene_changed.connect(_follow_scene)
 	refresh()
-	# Os laços somam ~30 s de áudio: amostra a amostra em GDScript, isso é
+	# A música tem 32 s de áudio: amostra a amostra em GDScript, isso é
 	# perceptível na abertura. Na thread o app abre na hora, e a música entra
 	# quando fica pronta.
 	_baker = Thread.new()
@@ -205,23 +192,20 @@ func music_allowed() -> bool:
 ## O mesmo sinal duas vezes no mesmo quadro toca uma vez: todo botão já faz o
 ## clique sozinho (`Nav`), e as telas que chamavam `play(TAP)` no próprio botão
 ## não precisam saber disso.
-func play(cue: int, gain_db := 0.0, pitch := 1.0) -> void:
+func play(cue: int) -> void:
 	if not Prefs.sound_on():
 		return
-	# Só o toque puro: as batidas dos pinos (com peso e altura) soam juntas.
 	var frame := Engine.get_process_frames()
-	if gain_db == 0.0 and pitch == 1.0:
-		if _played.get(cue, -1) == frame:
-			return
-		_played[cue] = frame
+	if _played.get(cue, -1) == frame:
+		return
+	_played[cue] = frame
 	var stream: AudioStream = _streams.get(cue, null)
 	if stream == null:
 		return
 	var voice := _voices[_next]
 	_next = (_next + 1) % _voices.size()
 	voice.stream = stream
-	voice.volume_db = float(LEVELS.get(cue, -12.0)) + gain_db
-	voice.pitch_scale = pitch
+	voice.volume_db = float(LEVELS.get(cue, -12.0))
 	voice.play()
 	_buzz(cue)
 
@@ -359,39 +343,16 @@ func _bake(cue: int) -> AudioStreamWAV:
 				var swell := sin(PI * clampf(t / 0.16, 0.0, 1.0))
 				return low[0] * 3.0 * swell * swell
 			)
-		Cue.PIN:
-			# Madeira dura e oca: duas parciais altas que somem rápido, mais um
-			# estalo. A altura alta é o que separa o pino da bola.
-			return _wave(0.16, func(t: float, _n: float) -> float:
-				return (
-					sin(TAU * 820.0 * t) * 0.5 * _fall(t, 0.16, 26.0)
-					+ sin(TAU * 1930.0 * t) * 0.3 * _fall(t, 0.16, 40.0)
-					+ _noise(t) * 0.6 * _fall(t, 0.16, 80.0)
-				)
-			)
-		Cue.KNOCK:
-			# A bola de 7 kg entrando no triângulo: grave e longo.
-			var low := [0.0]
-			return _wave(0.32, func(t: float, _n: float) -> float:
-				low[0] += 0.2 * (_noise(t) - low[0])
-				return (
-					sin(TAU * 95.0 * t) * 0.6 * _fall(t, 0.32, 10.0)
-					+ low[0] * 1.6 * _fall(t, 0.32, 14.0)
-				)
-			)
 	return _wave(0.02, func(_t: float, _n: float) -> float: return 0.0)
 
 
 # --- laços ----------------------------------------------------------------------
 
 
-## Roda na thread: gera os quatro laços e entrega ao nó no quadro seguinte.
+## Roda na thread: gera os laços e entrega ao nó no quadro seguinte.
 func _bake_loops() -> void:
 	var baked := {
 		Loop.MUSIC: _music_loop(),
-		Loop.HALL: _hall_loop(),
-		Loop.ROLL: _roll_loop(),
-		Loop.GUTTER: _gutter_loop(),
 	}
 	_loops_ready.call_deferred(baked)
 
@@ -442,75 +403,6 @@ func _music_loop() -> AudioStreamWAV:
 			pluck += (sin(TAU * note * since) + 0.3 * sin(TAU * note * 2.0 * since)) * envelope
 		out[index] = pad + pluck * 0.22
 	return _pcm(_normalized(out, 0.7), true)
-
-
-## Salão de boliche: murmúrio (ruído na faixa da voz, com a intensidade
-## variando devagar, como conversa) e dois estrondos de pinos em pistas longe.
-func _hall_loop() -> AudioStreamWAV:
-	const LENGTH := 8.0
-	var crashes := [1.9, 5.6]
-	var out := _seamless(LENGTH, func(t: float, state: Array) -> float:
-		var noise := _noise(t)
-		state[0] += 0.16 * (noise - state[0])
-		state[1] += 0.02 * (noise - state[1])
-		var babble := 0.65 + 0.35 * sin(TAU * 1.3 * t) * sin(TAU * 0.37 * t + 1.0)
-		var value: float = (state[0] - state[1]) * babble
-		state[2] += 0.3 * (noise - state[2])
-		for at: float in crashes:
-			var since := t - at
-			if since >= 0.0 and since < 1.0:
-				var clatter := 0.4 + 0.6 * absf(sin(TAU * 23.0 * since))
-				value += state[2] * 0.5 * clatter * exp(-since * 4.5) * minf(1.0, since / 0.01)
-		return value
-	)
-	return _pcm(_normalized(out, 0.6), true)
-
-
-## A bola rolando: ronco grave de madeira com um balanço leve, que é a bola
-## girando. Quem toca muda volume e altura pela velocidade.
-func _roll_loop() -> AudioStreamWAV:
-	var out := _seamless(1.5, func(t: float, state: Array) -> float:
-		var noise := _noise(t)
-		state[0] += 0.03 * (noise - state[0])
-		state[1] += 0.12 * (noise - state[1])
-		var wobble := 0.8 + 0.2 * sin(TAU * 3.0 * t)
-		return (state[0] * 1.0 + state[1] * 0.25 + sin(TAU * 62.0 * t) * 0.04) * wobble
-	)
-	return _pcm(_normalized(out, 0.8), true)
-
-
-## A canaleta: o mesmo ronco passando por um ressoador em ~180 Hz, que é o tubo
-## de metal oco em volta da bola.
-func _gutter_loop() -> AudioStreamWAV:
-	var w := TAU * 180.0 / RATE
-	var r := 0.996
-	var out := _seamless(1.5, func(t: float, state: Array) -> float:
-		var noise := _noise(t)
-		state[0] += 0.05 * (noise - state[0])
-		var ring: float = 2.0 * r * cos(w) * state[1] - r * r * state[2] + state[0] * 0.02
-		state[2] = state[1]
-		state[1] = ring
-		return ring + state[0] * 0.5
-	)
-	return _pcm(_normalized(out, 0.8), true)
-
-
-## Gera `seconds` de som que emenda sem estalo quando repete: gera um pouco
-## além do fim e funde essa sobra no começo. `shape(t, estado)` recebe um
-## `Array` de estado (filtros) que persiste entre as amostras.
-func _seamless(seconds: float, shape: Callable) -> PackedFloat32Array:
-	var count := int(seconds * RATE)
-	var blend := int(0.25 * RATE)
-	var state := [0.0, 0.0, 0.0, 0.0]
-	var raw := PackedFloat32Array()
-	raw.resize(count + blend)
-	for index in raw.size():
-		raw[index] = float(shape.call(float(index) / RATE, state))
-	var out := raw.slice(0, count)
-	for index in blend:
-		var weight := float(index) / blend
-		out[index] = raw[index] * weight + raw[count + index] * (1.0 - weight)
-	return out
 
 
 static func _normalized(samples: PackedFloat32Array, peak: float) -> PackedFloat32Array:
