@@ -7,6 +7,12 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.89
+
+- Loja de cara nova, mais fácil de entender. Peças e Perfil mostram uma categoria por vez (Formato, Acabamento, Moldura…), com uma frase dizendo o que cada uma muda.
+- Cada item mostra num selo se está em uso, se já é seu ou quanto custa, e cabem mais itens na tela.
+- Tocar num item abre ele em tamanho grande, com Comprar, Usar ou Presentear. Comprar agora é um toque só.
+
 ## 1.88
 
 - Corrigido: no treino de xadrez contra o bot, seus lances muitas vezes ficavam sem avaliação, porque o bot respondia antes de a nota sair. Agora todo lance é avaliado, em ordem.
