@@ -32,6 +32,10 @@ native=(
 	.github/workflows/release.yml
 	.github/actions/godot
 	':(glob)**/*.gdextension'
+	# O ícone do launcher (`launcher_icons/*` do preset) vira recurso nativo do
+	# APK no export: o .pck não o troca. A 1.84 trouxe ícone novo e saiu com base
+	# 1.83, e quem atualizou por pacote ficou com o ícone antigo.
+	assets/icon
 )
 
 # Muda a cada release só no número da versão; qualquer outra linha é nativa.
