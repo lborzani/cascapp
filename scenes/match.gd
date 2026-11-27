@@ -91,6 +91,8 @@ var _rating_elo := 0
 var _rating_delta := 0
 ## Selo e números do topo do fim de partida, e o confete por cima dele.
 var _result_header: ResultHeader = null
+## "Ver resultado": traz de volta o cartão de fim recolhido pelo "Ver tabuleiro".
+var _peek_back: Button = null
 ## "Bia quer revanche": a linha com a bolacha de quem pediu, acima do botão.
 var _invite_row: PanelContainer = null
 var _invite_coaster: Coaster = null
@@ -287,6 +289,7 @@ func _new_game() -> void:
 	set_process(Game.has_clock() or Game.mode == Game.Mode.SOLO)
 	%PromotionLayer.visible = false
 	%ResultLayer.visible = false
+	_peek(false)
 	_refresh_next_up()
 	_banner.hide_message()
 	_recompute()
@@ -964,8 +967,9 @@ func _recompute() -> void:
 ## decide a partida é o que o jogador mais quer ver, e é justamente o que um
 ## painel imediato esconderia.
 func _show_result() -> void:
-	# No treino o fim é só um aviso: o tabuleiro continua ali para desfazer.
-	if Game.training:
+	# No treino o empate é só um aviso; o mate ganha o cartão, e o "Ver tabuleiro"
+	# dele devolve a mesa para desfazer.
+	if Game.training and _outcome == Ruleset.Outcome.DRAW:
 		_banner.show_message(_ruleset.outcome_text(_outcome), Banner.Kind.ALERT, true)
 		return
 	# Na hora, e não depois da animação: quem fecha o app no lance do mate não
@@ -983,7 +987,7 @@ func _show_result() -> void:
 		await get_tree().create_timer(wait).timeout
 		if _abandoned or _outcome == Ruleset.Outcome.ONGOING or _state.ply != expected:
 			return
-	_show_overlay(_ruleset.outcome_text(_outcome), _result_detail(), true)
+	_show_overlay(_ruleset.outcome_text(_outcome), _result_detail(), not Game.training)
 
 
 ## Um único painel para todo fim de partida — vitória, empate ou abandono. Sair
@@ -993,6 +997,7 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	# Todo fim de partida passa aqui. Sem isto, aceitar um cartão que sobrou na tela
 	# trocaria por empate uma partida já decidida no tempo ou por abandono.
 	_clear_draw_offer()
+	_peek(false)
 	%ResultTitle.text = title
 	# O painel reabre (convite de revanche, oponente que sai); o Elo que já
 	# chegou não pode sumir dele.
@@ -1001,7 +1006,9 @@ func _show_overlay(title: String, detail: String, allow_rematch: bool) -> void:
 	# com o texto, sem selo nem números.
 	_result_header.visible = _winner != NO_RESULT
 	_result_header.show_result(_result_mood(), _result_stats())
-	_record_game(title, detail)
+	# O treino desfaz lances: a partida não é uma que aconteceu.
+	if not Game.training:
+		_record_game(title, detail)
 	# Quem assiste não pede revanche: ele segue a dos jogadores, se ela vier.
 	allow_rematch = allow_rematch and not Net.is_spectator
 	%RematchButton.visible = allow_rematch
@@ -1199,6 +1206,7 @@ func _on_rated(ratings: Array) -> void:
 func _build_result_header() -> void:
 	_result_header = ResultHeader.attach(%ResultTitle, %ResultDetail, %ResultLayer)
 	_build_invite_row()
+	_build_peek()
 
 
 ## A linha do pedido de revanche, como no protótipo: a bolacha de quem pediu e
@@ -1232,6 +1240,39 @@ func _build_invite_row() -> void:
 	column.move_child(_invite_row, %RematchButton.get_index())
 
 
+## "Ver tabuleiro" no cartão de fim e, com o cartão recolhido, "Ver resultado"
+## embaixo da faixa de lances para trazê-lo de volta.
+func _build_peek() -> void:
+	var view := Button.new()
+	view.text = "Ver tabuleiro"
+	view.theme_type_variation = &"GhostButton"
+	view.custom_minimum_size.y = 52
+	view.pressed.connect(_peek.bind(true))
+	var foot: Control = %ResultExitButton.get_parent()
+	foot.get_parent().add_child(view)
+	foot.get_parent().move_child(view, foot.get_index())
+	_peek_back = Button.new()
+	_peek_back.text = "Ver resultado"
+	_peek_back.theme_type_variation = &"PrimaryButton"
+	_peek_back.custom_minimum_size.y = 52
+	_peek_back.visible = false
+	_peek_back.pressed.connect(_peek.bind(false))
+
+
+## Recolhe o cartão sem encerrar o fim de partida: a camada continua "visível"
+## (é ela que diz que a partida acabou), só some o desenho e deixa os toques
+## passarem para a mesa.
+func _peek(on: bool) -> void:
+	if _peek_back == null:
+		return
+	if on:
+		Sound.play(Sound.Cue.TAP)
+	%ResultLayer.mouse_filter = Control.MOUSE_FILTER_IGNORE if on else Control.MOUSE_FILTER_STOP
+	%ResultLayer.get_node("Dim").visible = not on
+	%ResultLayer.get_node("Center").visible = not on
+	_peek_back.visible = on
+
+
 ## Para quem é a festa. Quem assiste e quem joga no mesmo celular sempre vê o
 ## troféu: alguém da mesa venceu. Contra o bot e online, depende do lado.
 func _result_mood() -> ResultHeader.Mood:
@@ -1263,6 +1304,8 @@ func _build_move_strip() -> void:
 	_moves_strip = MoveStrip.new()
 	column.add_child(_moves_strip)
 	column.move_child(_moves_strip, %Board.get_parent().get_index() + 1)
+	column.add_child(_peek_back)
+	column.move_child(_peek_back, _moves_strip.get_index() + 1)
 	_end_row = HBoxContainer.new()
 	_end_row.add_theme_constant_override("separation", AppTheme.SPACE_S)
 	column.add_child(_end_row)
@@ -1592,6 +1635,10 @@ func _undo() -> void:
 	_conceded = -1
 	_agreed = false
 	_banner.hide_message()
+	# Desfazer o mate reabre a partida: o cartão dele sai junto.
+	%ResultLayer.visible = false
+	_peek(false)
+	_winner = NO_RESULT
 	_replay(_state.history.slice(0, target))
 	Sound.play(Sound.Cue.MOVE)
 	_recompute()
@@ -1769,6 +1816,7 @@ func _attach_live() -> void:
 		return
 	_live = LiveReview.new()
 	_live.board = _board
+	_live.judged.connect(func() -> void: _moves_strip.verdicts = _live.verdicts.duplicate())
 	add_child(_live)
 	# A barra vai logo abaixo do cartão de cima, antes do último lance.
 	var column := %TopLastMoveSlot.get_parent()
@@ -2031,6 +2079,7 @@ func _refresh_last_move() -> void:
 	%BottomLastMoveSlot.visible = _bottom_last_move.has_move()
 	_moves_strip.visible = not _table_mode
 	_moves_strip.moves = _notation
+	_moves_strip.verdicts = _live.verdicts.duplicate() if _live != null else {}
 	_moves_strip.check = _board.check_square != Board.NO_SQUARE
 	_refresh_end_row()
 	_fit_board()

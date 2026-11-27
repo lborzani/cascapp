@@ -13,6 +13,12 @@ extends Node
 ## Entrada da revisão (formato de `GameReview.analyse`) do último lance; vazia
 ## sem lance, sem motor ou até a busca dele terminar.
 var entry := {}
+## O veredito (`GameReview.Verdict`) de cada lance já julgado, pelo índice no
+## histórico. A faixa de lances (`MoveStrip.verdicts`) mostra o símbolo de cada um.
+var verdicts := {}
+
+## Um lance acabou de ser julgado: `verdicts` mudou.
+signal judged
 
 ## Onde o veredito vai: o selo na casa de destino do último lance.
 var board: BoardView = null
@@ -46,6 +52,11 @@ func follow(history: Array) -> void:
 		return
 	_history = history.duplicate()
 	entry = {}
+	# O último lance é novo (ou o desfazer o expôs de novo): o que valia para essa
+	# casa do histórico já não vale, e a busca dele vem a seguir.
+	for index: int in verdicts.keys():
+		if index >= _history.size() - 1:
+			verdicts.erase(index)
 	_paint()
 	_kick()
 
@@ -63,10 +74,7 @@ func _paint() -> void:
 		return
 	board.badge_square = Board.NO_SQUARE
 	if not entry.is_empty():
-		# Mate perdido é sempre erro grave, como na revisão.
-		var verdict: int = entry["verdict"]
-		if entry["missed_mate"]:
-			verdict = maxi(verdict, GameReview.Verdict.BLUNDER)
+		var verdict: int = verdicts[_judged.size() - 1]
 		var path := PackedInt32Array(_judged[_judged.size() - 1]["p"])
 		board.badge_square = path[path.size() - 1]
 		board.badge_color = ReviewPanel.VERDICT_COLOR[verdict]
@@ -93,7 +101,13 @@ func _process(_delta: float) -> void:
 	if _asked == _history:
 		entry = result
 		_judged = _asked
+		# Mate perdido é sempre erro grave, como na revisão.
+		var verdict: int = entry["verdict"]
+		if entry["missed_mate"]:
+			verdict = maxi(verdict, GameReview.Verdict.BLUNDER)
+		verdicts[_judged.size() - 1] = verdict
 		_paint()
+		judged.emit()
 	_kick()
 
 

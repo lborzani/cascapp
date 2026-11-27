@@ -13,11 +13,19 @@ const HEIGHT := 44.0
 const PAD := 14.0
 const GAP := 12.0
 const FONT_SIZE := 14
+const SYMBOL_GAP := 2.0
 
 ## Um lance por meio-lance, na notação do jogo (`Ruleset.notation`).
 var moves := PackedStringArray():
 	set(value):
 		moves = value
+		queue_redraw()
+## A qualidade de cada lance (`GameReview.Verdict`) pelo índice, quando há quem
+## julgue (`LiveReview`: treino e quem assiste). O símbolo vai colado no lance, na
+## cor do veredito, como na revisão; o lance bom não leva símbolo.
+var verdicts := {}:
+	set(value):
+		verdicts = value
 		queue_redraw()
 ## O último lance deu xeque.
 var check := false:
@@ -69,11 +77,15 @@ func _draw() -> void:
 	for index in range(parts.size() - 1, -1, -1):
 		var text: String = parts[index]
 		var width := face.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
+		var symbol: String = GameReview.SYMBOL[verdicts[index]] if verdicts.has(index) else ""
+		var text_width := width
+		if not symbol.is_empty():
+			width += SYMBOL_GAP + face.get_string_size(symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
 		var pill := 16.0 if index == parts.size() - 1 else 0.0
 		if x - width - pill < PAD:
 			break
 		x -= width + pill
-		placed.push_front([x, text, index == parts.size() - 1, width])
+		placed.push_front([x, text, index == parts.size() - 1, width, symbol, text_width, index])
 		x -= GAP
 	# Coube tudo: a faixa começa da esquerda, como se lê. Só quando falta espaço
 	# ela encosta à direita e deixa o começo da partida sair.
@@ -96,3 +108,11 @@ func _draw() -> void:
 			face, Vector2(at, size.y * 0.5 + 5.0), entry[1],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, ink
 		)
+		var symbol: String = entry[4]
+		if not symbol.is_empty():
+			# Sobre o fundo coral do xeque, a cor do veredito sumiria: vai na tinta.
+			var tint: Color = ink if last and check else ReviewPanel.VERDICT_COLOR[verdicts[entry[6]]]
+			draw_string(
+				face, Vector2(at + float(entry[5]) + SYMBOL_GAP, size.y * 0.5 + 5.0), symbol,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, tint
+			)

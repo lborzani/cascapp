@@ -114,10 +114,11 @@ func set_stats(stats: Array) -> void:
 ## A partida contra bot ou online paga moedas, e o que entrou vira o último bloco
 ## da fileira. Uma vez por partida: a conta guarda a última que pagou, então o
 ## cartão que reabre não cobra de novo. Mesmo aparelho não paga, senão o jogador
-## venceria a si mesmo por moedas; quem assiste também não.
+## venceria a si mesmo por moedas; quem assiste também não; treino, com desfazer,
+## também não.
 func _claim_reward() -> void:
 	var key := _match_key()
-	if key == _reward_key or not visible or Game.mode == Game.Mode.HOTSEAT or Net.is_spectator:
+	if key == _reward_key or not visible or Game.mode == Game.Mode.HOTSEAT or Net.is_spectator or Game.training:
 		return
 	_reward_key = key
 	var granted: int = await Account.reward(Game.game_id, RESULTS[mood], key)

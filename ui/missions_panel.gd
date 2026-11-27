@@ -85,8 +85,19 @@ func _ready() -> void:
 	scroll.add_child(_rows)
 
 	_toast = Banner.new()
-	# Na folha, o aviso vai na raiz: dentro do corpo ele viraria uma linha da lista.
-	(self if sheet else column.get_parent()).add_child(_toast)
+	if sheet:
+		# Na folha, o aviso vai na raiz: dentro do corpo ele viraria uma linha da
+		# lista. A raiz não é contêiner, então a margem segura dá a largura e o
+		# topo; sem ela o aviso nascia com largura zero, torto na borda esquerda.
+		var safe := SafeAreaMargin.new()
+		safe.mouse_filter = MOUSE_FILTER_IGNORE
+		for side in ["left", "top", "right"]:
+			safe.add_theme_constant_override("margin_" + side, 16)
+		safe.set_anchors_and_offsets_preset(PRESET_TOP_WIDE)
+		add_child(safe)
+		safe.add_child(_toast)
+	else:
+		column.get_parent().add_child(_toast)
 
 	Account.missions_changed.connect(_fill)
 	_fill()
