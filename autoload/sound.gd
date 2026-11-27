@@ -523,7 +523,18 @@ static func _normalized(samples: PackedFloat32Array, peak: float) -> PackedFloat
 	return samples
 
 
+## Margem, em amostras, em volta de um laço. O resampler do Godot lê amostras
+## vizinhas além de `loop_end` (e antes de `loop_begin`): com o laço colado nas
+## pontas do buffer ele lia fora da memória e o app fechava na primeira volta da
+## música (SIGSEGV na thread de áudio, 1.84). A margem repete o outro lado do
+## laço, então a interpolação continua sem emenda.
+const LOOP_PAD := 16
+
+
 static func _pcm(samples: PackedFloat32Array, looped: bool) -> AudioStreamWAV:
+	var count := samples.size()
+	if looped:
+		samples = samples.slice(count - LOOP_PAD) + samples + samples.slice(0, LOOP_PAD)
 	var bytes := PackedByteArray()
 	bytes.resize(samples.size() * 2)
 	for index in samples.size():
@@ -535,8 +546,8 @@ static func _pcm(samples: PackedFloat32Array, looped: bool) -> AudioStreamWAV:
 	stream.data = bytes
 	if looped:
 		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		stream.loop_begin = 0
-		stream.loop_end = samples.size()
+		stream.loop_begin = LOOP_PAD
+		stream.loop_end = LOOP_PAD + count
 	return stream
 
 

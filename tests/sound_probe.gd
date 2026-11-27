@@ -28,6 +28,11 @@ func _run() -> void:
 		await tree.process_frame
 		waited = (Time.get_ticks_msec() - started) / 1000.0
 	_check(Sound.loop(Sound.Loop.HALL) != null, "laços prontos (%.1f s)" % waited)
+	# Laço colado nas pontas do buffer derrubava o app no Android (1.84).
+	for which: int in Sound.Loop.values():
+		var wav := Sound.loop(which)
+		var frames := wav.data.size() / 2
+		_check(wav.loop_begin >= Sound.LOOP_PAD and wav.loop_end <= frames - Sound.LOOP_PAD, "laço %d tem margem no buffer" % which)
 	await _probe_music(tree)
 	await _probe_bowling(tree)
 	print("sound_probe: %s" % ("OK" if _failures == 0 else "%d falhas" % _failures))
