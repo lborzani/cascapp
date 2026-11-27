@@ -423,13 +423,22 @@ func _juice(delta: float) -> void:
 		var on_lane := at.y > Lane.BALL_R * 0.5 and at.z > -Lane.HEAD_PIN
 		if on_lane and (_trail_points.is_empty() or _trail_points[-1][0].distance_to(at) > TRAIL_STEP):
 			_trail_points.append([Vector3(at.x, 0.004, at.z), 0.0])
-		if not _impacted and at.z < -(Lane.HEAD_PIN - 0.15):
+		if not _impacted and _hits_pin(at):
 			_impacted = true
 			_shake = SHAKE * clampf(speed / Lane.FULL_SPEED, 0.3, 1.0)
 	_draw_trail()
 	_shake = 0.0 if _shake < 0.001 else _shake * exp(-SHAKE_DECAY * delta)
 	_camera.h_offset = randf_range(-1.0, 1.0) * _shake
 	_camera.v_offset = randf_range(-1.0, 1.0) * _shake
+
+
+## A bola encosta num pino (raio do pino ~6 cm na barriga). Bola na canaleta
+## passa a uns 19 cm do pino do canto: não treme.
+func _hits_pin(at: Vector3) -> bool:
+	for pin in lane.pins:
+		if pin != null and Vector2(pin.global_position.x - at.x, pin.global_position.z - at.z).length() < Lane.BALL_R + 0.06:
+			return true
+	return false
 
 
 func _draw_trail() -> void:
