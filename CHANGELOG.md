@@ -7,6 +7,10 @@ aba Você. `tools/release.sh` não cria versão sem a seção dela aqui.
 Uma seção por versão (`## 1.31`), a mais nova em cima, uma linha `- ` por
 novidade.
 
+## 1.85
+
+- Corrigido: o app fechava sozinho cerca de um minuto depois de abrir.
+
 ## 1.84
 
 - O app ganhou som: os botões fazem um clique suave, e as folhas fazem um sopro ao subir.
